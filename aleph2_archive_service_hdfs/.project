@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>aleph2_archive_service_hdfs</name>
+	<name>aleph2_storage_service_hdfs</name>
 	<comment></comment>
 	<projects>
 	</projects>
