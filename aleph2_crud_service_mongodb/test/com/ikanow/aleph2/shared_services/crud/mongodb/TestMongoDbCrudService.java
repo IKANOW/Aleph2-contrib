@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared_services.crud.mongodb;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
@@ -210,7 +211,9 @@ public class TestMongoDbCrudService {
 		// 3) Insertion with dups - fail and stop
 
 		final List<TestBean> l3 = IntStream.rangeClosed(1, 200).boxed()
-				.map(i -> ObjectTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done())
+				.map(i -> ObjectTemplateUtils.build(TestBean.class)
+						.with("_id", "id" + i).
+						with("test_string", "test_string" + i).done())
 				.collect(Collectors.toList());
 		
 		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_3 = service.storeObjects(l3);
@@ -244,6 +247,58 @@ public class TestMongoDbCrudService {
 	
 	// RETRIEVAL
 	
+	@Test
+	public void testIndexes() throws InterruptedException, ExecutionException {		
+		
+		final MockMongoDbCrudService<TestBean, String> service = 
+				new MockMongoDbCrudService<TestBean, String>("test", "test", "testIndexes", 
+						TestBean.class, String.class, Optional.empty(), Optional.empty(), Optional.empty());
+
+		// Insert some objects to index
+		
+		final List<TestBean> l = IntStream.rangeClosed(1, 1000).boxed()
+				.map(i -> ObjectTemplateUtils.build(TestBean.class).with("test_string", "test_string" + i).done())
+				.collect(Collectors.toList());
+
+		service.storeObjects(l);
+		
+		assertEquals(1000, service._state.orig_coll.count());
+		
+		// 1) Add a new index
+		
+		final List<DBObject> initial_indexes = service._state.orig_coll.getIndexInfo();
+		assertEquals("[{ \"v\" : 1 , \"key\" : { \"_id\" : 1} , \"ns\" : \"test.testIndexes\" , \"name\" : \"_id_\"}]", initial_indexes.toString());
+		
+		Future<Boolean> done = service.optimizeQuery(Arrays.asList("test_string", "_id"));
+		
+		assertEquals(true, done.get());
+
+		final List<DBObject> new_indexes = service._state.orig_coll.getIndexInfo();		
+		
+		final BasicDBObject expected_index_nested = new BasicDBObject("test_string", 1);
+		expected_index_nested.put("_id", 1);
+		final BasicDBObject expected_index = new BasicDBObject("v", 1);
+		expected_index.put("key", expected_index_nested);
+		expected_index.put("ns", "test.testIndexes");
+		expected_index.put( "name", "test_string_1__id_1");
+		expected_index.put("background", true);
+		
+		final List<DBObject> expected_new_indexes = Arrays.asList(initial_indexes.get(0), expected_index);
+		
+		assertEquals(expected_new_indexes.toString(), new_indexes.toString());
+		
+		// 2) Add a new index (alternative format)
+		
+		//TODO
+		
+		// 3) Remove an index that doesn't exist
+		
+		//TODO
+		
+		// 4) Remove the index we just added
+		
+		//TODO
+	}
 	
 	//TODO I think we'll want some tests that run from main and actually connect to a MongoDB so we can test some
 	// of the MongoDB specific behavior...

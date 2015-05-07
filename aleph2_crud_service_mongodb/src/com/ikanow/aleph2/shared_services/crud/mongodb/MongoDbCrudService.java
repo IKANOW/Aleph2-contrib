@@ -40,8 +40,10 @@ import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.MultiQueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCollectionProxyFactory;
 import com.mongodb.DBObject;
@@ -228,25 +230,39 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	
 	// *R*ETRIEVE
 	
+	/** Registers that you wish to optimize specific queries
+	 * @param ordered_field_list a list of the fields in the query
+	 * @return a future describing if the optimization was successfully completed - accessing the future will also report on errors via ExecutionException
+	 */
 	@Override
 	@NonNull
-	public Future<Boolean> optimizeQuery(
-			@NonNull List<String> ordered_field_list) {
-		// TODO Auto-generated method stub
-		return null;
+	public Future<Boolean> optimizeQuery(@NonNull List<String> ordered_field_list) {
+		
+		return CompletableFuture.supplyAsync(() -> {
+			final BasicDBObject index_keys = new BasicDBObject(
+					ordered_field_list.stream().collect(Collectors.toMap(f -> f, f -> 1))
+					);
+			
+			_state.orig_coll.createIndex(index_keys, new BasicDBObject("background", true));
+			
+			return true;
+		});
+	}
+
+	/** Registers that you wish to optimize specific queries
+	 * @param A specification that must be initialized via CrudUtils.anyOf(...) and then the desired fields added via .exists(<field or getter>)
+	 * @return a future describing if the optimization was successfully completed - accessing the future will also report on errors via ExecutionException
+	 */
+	@Override
+	@NonNull
+	public Future<Boolean> optimizeQuery(@NonNull SingleQueryComponent<O> spec) {
+		final List<String> l = spec.getAll().keySet().stream().collect(Collectors.toList());
+		return optimizeQuery(l);
 	}
 
 	@Override
 	@NonNull
-	public Future<Boolean> optimizeQuery(@NonNull QueryComponent<O> spec) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	@NonNull
-	public boolean deregisterOptimizedQuery(
-			@NonNull List<String> ordered_field_list) {
+	public boolean deregisterOptimizedQuery(@NonNull List<String> ordered_field_list) {
 		// TODO Auto-generated method stub
 		return false;
 	}
@@ -260,34 +276,28 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 
 	@Override
 	@NonNull
-	public Future<Optional<O>> getObjectBySpec(
-			@NonNull QueryComponent<O> unique_spec) {
+	public Future<Optional<O>> getObjectBySpec(@NonNull QueryComponent<O> unique_spec) {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	@NonNull
-	public Future<Optional<O>> getObjectBySpec(
-			@NonNull QueryComponent<O> unique_spec,
-			@NonNull List<String> field_list) {
+	public Future<Optional<O>> getObjectBySpec(@NonNull QueryComponent<O> unique_spec, @NonNull List<String> field_list) {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	@NonNull
-	public Future<Optional<O>> getObjectBySpec(
-			@NonNull MultiQueryComponent<O> unique_multi_spec) {
+	public Future<Optional<O>> getObjectBySpec(@NonNull MultiQueryComponent<O> unique_multi_spec) {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	@NonNull
-	public Future<Optional<O>> getObjectBySpec(
-			@NonNull MultiQueryComponent<O> unique_multi_spec,
-			@NonNull List<String> field_list) {
+	public Future<Optional<O>> getObjectBySpec(@NonNull MultiQueryComponent<O> unique_multi_spec, @NonNull List<String> field_list) {
 		// TODO Auto-generated method stub
 		return null;
 	}
@@ -309,8 +319,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 
 	@Override
 	@NonNull
-	public Future<Iterable<O>> getObjectsBySpec(
-			@NonNull QueryComponent<O> spec, @NonNull List<String> field_list) {
+	public Future<Iterable<O>> getObjectsBySpec(@NonNull QueryComponent<O> spec, @NonNull List<String> field_list) {
 		// TODO Auto-generated method stub
 		return null;
 	}
@@ -324,25 +333,21 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 
 	@Override
 	@NonNull
-	public Future<Iterable<O>> getObjectsBySpec(
-			@NonNull MultiQueryComponent<O> multi_spec,
-			@NonNull List<String> field_list) {
+	public Future<Iterable<O>> getObjectsBySpec(@NonNull MultiQueryComponent<O> multi_spec, @NonNull List<String> field_list) {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	@NonNull
-	public Future<Iterable<O>> getObjectsBySpec(
-			@NonNull MultiQueryComponent<O> multi_spec) {
+	public Future<Iterable<O>> getObjectsBySpec(@NonNull MultiQueryComponent<O> multi_spec) {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	@NonNull
-	public Future<Long> countObjectsBySpec(@NonNull QueryComponent<O> spec,
-			@NonNull List<String> field_list) {
+	public Future<Long> countObjectsBySpec(@NonNull QueryComponent<O> spec, @NonNull List<String> field_list) {
 		// TODO Auto-generated method stub
 		return null;
 	}
@@ -354,6 +359,10 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		return null;
 	}
 
+	//////////////////////////////////////////////////////
+	
+	// *U*PDATE
+	
 	@Override
 	@NonNull
 	public Future<Boolean> updateObjectById(String id, Optional<O> set,
