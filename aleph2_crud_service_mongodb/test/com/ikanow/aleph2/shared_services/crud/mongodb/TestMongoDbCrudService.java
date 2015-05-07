@@ -1,0 +1,250 @@
+/*******************************************************************************
+ * Copyright 2015, The IKANOW Open Source Project.
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
+package com.ikanow.aleph2.shared_services.crud.mongodb;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import org.bson.types.ObjectId;
+import org.junit.Test;
+
+import scala.Tuple2;
+import static org.hamcrest.CoreMatchers.instanceOf;
+
+import com.ikanow.aleph2.data_model.utils.ObjectTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBObject;
+import com.mongodb.MongoException;
+
+import static org.junit.Assert.*;
+
+public class TestMongoDbCrudService {
+
+	public static class TestBean {
+		public String _id() { return _id; }
+		public String test_string() { return test_string; }
+
+		String _id;
+		String test_string;
+		Boolean test_bool;
+		Long test_long;
+		List<String> test_string_list;
+		Set<NestedTestBean> test_object_set;
+		LinkedHashMap<String, Long> test_map;
+		
+		public static class NestedTestBean {
+			String test_string;			
+		}
+	}
+	
+	////////////////////////////////////////////////
+	
+	// CREATION
+	
+	@Test
+	public void testCreateSingleObject() throws InterruptedException, ExecutionException {
+		
+		final MockMongoDbCrudService<TestBean, String> service = 
+				new MockMongoDbCrudService<TestBean, String>("test", "test", "testCreateSingleObject", 
+						TestBean.class, String.class, Optional.empty(), Optional.empty(), Optional.empty());
+
+		assertEquals(0, service._state.orig_coll.count());		
+		
+		// 1) Add a new object to an empty DB
+		
+		final TestBean test = new TestBean();
+		test._id = "_id_1";
+		test.test_string = "test_string_1";
+		
+		final Future<Supplier<Object>> result = service.storeObject(test);
+		
+		final Supplier<Object> val = result.get();
+		
+		assertEquals("_id_1", val.get());
+		
+		final DBObject retval = service._state.orig_coll.findOne();
+		
+		assertEquals(1, service._state.orig_coll.count());
+		
+		assertEquals("{ \"_id\" : \"_id_1\" , \"test_string\" : \"test_string_1\"}", retval.toString());
+		
+		// 2) Add the _id again, should fail
+		
+		final TestBean test2 = ObjectTemplateUtils.clone(test).with("test_string", "test_string_2").done();
+		
+		final Future<Supplier<Object>> result2 = service.storeObject(test2);
+				
+		Exception expected_ex = null;
+		try {
+			result2.get();
+			fail("Should have thrown exception on duplicate insert");
+		}
+		catch (Exception e) {
+			expected_ex = e;
+		}
+		assertThat(expected_ex.getCause(), instanceOf(MongoException.class));
+		
+		assertEquals(1, service._state.orig_coll.count());
+		
+		final DBObject retval2 = service._state.orig_coll.findOne();		
+		
+		assertEquals("{ \"_id\" : \"_id_1\" , \"test_string\" : \"test_string_1\"}", retval2.toString());		
+
+		// 3) Add the same with override set 
+		
+		@SuppressWarnings("unused")
+		final Future<Supplier<Object>> result3 = service.storeObject(test2, true);
+		
+		assertEquals(1, service._state.orig_coll.count());
+		
+		final DBObject retval3 = service._state.orig_coll.findOne();		
+		
+		assertEquals("{ \"_id\" : \"_id_1\" , \"test_string\" : \"test_string_2\"}", retval3.toString());		
+		
+		//4) add with no id
+		
+		final TestBean test4 = new TestBean();
+		test4.test_string = "test_string_4";
+		
+		final Future<Supplier<Object>> result4 = service.storeObject(test4, true);
+		
+		assertEquals(2, service._state.orig_coll.count());
+		
+		final String id = result4.get().get().toString();
+		
+		final DBObject retval4 = service._state.orig_coll.findOne(id);
+		
+		assertEquals("test_string_4", retval4.get("test_string"));
+	}
+	
+	public static class TestObjectIdBean {
+		ObjectId _id;
+	}
+
+	@Test
+	public void testCreateSingleObject_ObjectId() throws InterruptedException, ExecutionException {
+		
+		final MockMongoDbCrudService<TestObjectIdBean, ObjectId> service = 
+				new MockMongoDbCrudService<TestObjectIdBean, ObjectId>("test", "test", "testCreateSingleObject_ObjectId", 
+						TestObjectIdBean.class, ObjectId.class, Optional.empty(), Optional.empty(), Optional.empty());
+
+		assertEquals(0, service._state.orig_coll.count());		
+		
+		// 1) Add a new object to an empty DB
+		
+		final TestObjectIdBean test = new TestObjectIdBean();
+		
+		final Future<Supplier<Object>> result = service.storeObject(test);
+		
+		assertEquals(1, service._state.orig_coll.count());
+		
+		final Supplier<Object> val = result.get();
+		
+		ObjectId id = (ObjectId)val.get();
+		
+		final DBObject retval = service._state.orig_coll.findOne(id);
+		
+		assertEquals(new BasicDBObject("_id", id), retval);		
+	}	
+	
+	@Test
+	public void testCreateMultipleObjects() throws InterruptedException, ExecutionException {
+		
+		final MockMongoDbCrudService<TestBean, String> service = 
+				new MockMongoDbCrudService<TestBean, String>("test", "test", "testCreateMultipleObjects", 
+						TestBean.class, String.class, Optional.empty(), Optional.empty(), Optional.empty());
+
+		// 1) Insertion without ids
+		
+		final List<TestBean> l = IntStream.rangeClosed(1, 10).boxed()
+				.map(i -> ObjectTemplateUtils.build(TestBean.class).with("test_string", "test_string" + i).done())
+				.collect(Collectors.toList());
+
+		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result = service.storeObjects(l);
+		
+		assertEquals(10, service._state.orig_coll.count());
+		assertEquals((Long)(long)10, result.get()._2().get());
+		
+		final List<Object> ids = result.get()._1().get();
+		IntStream.rangeClosed(1, 10).boxed().map(i -> Tuples._2T(i, ids.get(i-1)))
+					.forEach(io -> {
+						final DBObject val = service._state.orig_coll.findOne(io._2());
+						assertNotEquals(null, val);
+						assertEquals("test_string" + io._1(), val.get("test_string"));
+					});
+		
+		// 2) Insertion with ids
+		
+		service._state.orig_coll.drop();
+
+		final List<TestBean> l2 = IntStream.rangeClosed(51, 100).boxed()
+								.map(i -> ObjectTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done())
+								.collect(Collectors.toList());
+				
+		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_2 = service.storeObjects(l2);
+		
+		assertEquals(50, service._state.orig_coll.count());
+		assertEquals((Long)(long)50, result_2.get()._2().get());
+		
+		// 3) Insertion with dups - fail and stop
+
+		final List<TestBean> l3 = IntStream.rangeClosed(1, 200).boxed()
+				.map(i -> ObjectTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done())
+				.collect(Collectors.toList());
+		
+		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_3 = service.storeObjects(l3);
+
+		Exception expected_ex = null;
+		try {
+			result_3.get();
+			fail("Should have thrown exception on duplicate insert");
+		}
+		catch (Exception e) {
+			expected_ex = e;
+		}
+		assertThat(expected_ex.getCause(), instanceOf(MongoException.class));		
+		
+		// Yikes - it has inserted objects up to the error though...
+		assertEquals(100, service._state.orig_coll.count());		
+		
+		// 4) Insertion with dups - fail and continue
+		
+		final List<TestBean> l4 = IntStream.rangeClosed(21, 120).boxed()
+				.map(i -> ObjectTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done())
+				.collect(Collectors.toList());
+		
+		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_4 = service.storeObjects(l4, true);
+
+		assertEquals(100L, (long)result_4.get()._2().get());		
+		assertEquals(120, service._state.orig_coll.count());		
+	}
+
+	////////////////////////////////////////////////
+	
+	// RETRIEVAL
+	
+	
+	//TODO I think we'll want some tests that run from main and actually connect to a MongoDB so we can test some
+	// of the MongoDB specific behavior...
+}
