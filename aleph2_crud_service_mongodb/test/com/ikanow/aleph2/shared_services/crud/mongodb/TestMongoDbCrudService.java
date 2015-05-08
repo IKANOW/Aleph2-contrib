@@ -25,6 +25,7 @@ import java.util.concurrent.Future;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.StreamSupport;
 
 import org.bson.types.ObjectId;
 import org.junit.Test;
@@ -33,9 +34,11 @@ import org.mongojack.JacksonDBCollection;
 import scala.Tuple2;
 import static org.hamcrest.CoreMatchers.instanceOf;
 
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.ObjectTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
@@ -327,8 +330,6 @@ public class TestMongoDbCrudService {
 				new MockMongoDbCrudService<TestBean, String>("test", "test", "singleObjectRetrieve", 
 						TestBean.class, String.class, Optional.empty(), Optional.empty(), Optional.empty());
 
-		// 1) Insertion without ids
-		
 		final List<TestBean> l = IntStream.rangeClosed(1, 10).boxed()
 				.map(i -> ObjectTemplateUtils.build(TestBean.class)
 								.with("_id", "id" + i)
@@ -383,7 +384,7 @@ public class TestMongoDbCrudService {
 		
 		// 4) Get object by spec, exists
 		
-		QueryComponent<TestBean> query = CrudUtils.allOf(TestBean.class)
+		final QueryComponent<TestBean> query = CrudUtils.allOf(TestBean.class)
 					.when("_id", "id4")
 					.withAny("test_string", Arrays.asList("test_string1", "test_string4"))
 					.withPresent("test_long");
@@ -400,7 +401,7 @@ public class TestMongoDbCrudService {
 				
 		// 6) Get object by spec, doesn't exist
 
-		QueryComponent<TestBean> query6 = CrudUtils.allOf(TestBean.class)
+		final QueryComponent<TestBean> query6 = CrudUtils.allOf(TestBean.class)
 				.when("_id", "id3")
 				.withAny("test_string", Arrays.asList("test_string1", "test_string4"))
 				.withPresent("test_long");
@@ -410,9 +411,148 @@ public class TestMongoDbCrudService {
 		assertEquals(false, obj6.get().isPresent());
 	}
 
-	//TODO counting
+	@Test
+	public void multiObjectRetrieve() throws InterruptedException, ExecutionException {
+		
+		final MockMongoDbCrudService<TestBean, String> service = 
+				new MockMongoDbCrudService<TestBean, String>("test", "test", "multiObjectRetrieve", 
+						TestBean.class, String.class, Optional.empty(), Optional.empty(), Optional.empty());
+
+		final List<TestBean> l = IntStream.rangeClosed(0, 9).boxed()
+				.map(i -> ObjectTemplateUtils.build(TestBean.class)
+								.with("_id", "id" + i)
+								.with("test_string", "test_string" + i)
+								.with("test_long", (Long)(long)i)
+								.done())
+				.collect(Collectors.toList());
+
+		service.storeObjects(l);
+		
+		assertEquals(10, service._state.orig_coll.count());
+		
+		service.optimizeQuery(Arrays.asList("test_string")).get(); // (The get() waits for completion)
+		
+		// For asserting vs strings where possible:
+		final JacksonDBCollection<TestBean, String> mapper = service._state.coll;
+
+		// 1) Simple retrieve, no fields specified - sort
+
+		final QueryComponent<TestBean> query = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("_id", "id4", true)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_string", -1));
+		
+		try (Cursor<TestBean> cursor = service.getObjectsBySpec(query).get()) {
+		
+			assertEquals(5, cursor.count());
+			
+			final List<TestBean> objs = StreamSupport.stream(Optionals.ofNullable(cursor).spliterator(), false).collect(Collectors.toList());
+			
+			assertEquals(5, objs.size());
+			
+			final DBObject first_obj = mapper.convertToDbObject(objs.get(0));
+			
+			assertEquals("{ \"_id\" : \"id9\" , \"test_string\" : \"test_string9\" , \"test_long\" : 9}", first_obj.toString());			
+		} 
+		catch (Exception e) {
+			//(fail on close, normally carry on - but here error out)
+			fail("getObjectsBySpec errored on close"); 
+		}
+		
+		// 2) Simple retrieve, field specified (exclusive) - sort and limit
+
+		final QueryComponent<TestBean> query_2 = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("_id", "id4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", 1)).limit(4);
+		
+		try (Cursor<TestBean> cursor = service.getObjectsBySpec(query_2, Arrays.asList("test_string"), false).get()) {
+		
+			assertEquals(6, cursor.count()); // (count ignores limit)
+			
+			final List<TestBean> objs = StreamSupport.stream(Optionals.ofNullable(cursor).spliterator(), false).collect(Collectors.toList());
+			
+			assertEquals(4, objs.size());
+			
+			final DBObject first_obj = mapper.convertToDbObject(objs.get(0));
+			
+			assertEquals("{ \"_id\" : \"id4\" , \"test_long\" : 4}", first_obj.toString());			
+		} 
+		catch (Exception e) {
+			//(fail on close, normally carry on - but here error out)
+			fail("getObjectsBySpec errored on close"); 
+		}
+		
+		// 3) Simple retrieve, no docs returned
+		
+		final QueryComponent<TestBean> query_3 = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("_id", "id9", true)
+				.withPresent("test_long")
+				.limit(4);
+		
+		try (Cursor<TestBean> cursor = service.getObjectsBySpec(query_3, Arrays.asList("test_string"), false).get()) {
+			final List<TestBean> objs = StreamSupport.stream(Optionals.ofNullable(cursor).spliterator(), false).collect(Collectors.toList());
+			
+			assertEquals(0, objs.size());
+		}
+		catch (Exception e) {
+			//(fail on close, normally carry on - but here error out)
+			fail("getObjectsBySpec errored on close"); 
+		}
+	}
 	
-	//TODO multiple objects
+	@Test
+	public void testCounting() throws InterruptedException, ExecutionException {
+		
+		final MockMongoDbCrudService<TestBean, String> service = 
+				new MockMongoDbCrudService<TestBean, String>("test", "test", "testCounting", 
+						TestBean.class, String.class, Optional.empty(), Optional.empty(), Optional.empty());
+
+		final List<TestBean> l = IntStream.rangeClosed(0, 9).boxed()
+				.map(i -> ObjectTemplateUtils.build(TestBean.class)
+								.with("_id", "id" + i)
+								.with("test_string", "test_string" + i)
+								.with("test_long", (Long)(long)i)
+								.done())
+				.collect(Collectors.toList());
+
+		service.storeObjects(l);
+		
+		assertEquals(10, service._state.orig_coll.count());
+		
+		service.optimizeQuery(Arrays.asList("test_string")).get(); // (The get() waits for completion)
+		
+		// 1) all docs
+		
+		assertEquals(10L, (long)service.countObjects().get());
+		
+		// 2) count subset of docs
+
+		final QueryComponent<TestBean> query_2 = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("_id", "id4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", 1));
+
+		assertEquals(6L, (long)service.countObjectsBySpec(query_2).get());		
+		
+		// 3) subset of docs (limit)
+		
+		final QueryComponent<TestBean> query_3 = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("_id", "id4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", 1)).limit(4);
+
+		assertEquals(4L, (long)service.countObjectsBySpec(query_3).get());
+		
+		// 4) no docs
+		
+		final QueryComponent<TestBean> query_4 = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("_id", "id99", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", 1)).limit(4);
+
+		assertEquals(0L, (long)service.countObjectsBySpec(query_4).get());
+	}
 	
 	//TODO (updates)
 	
