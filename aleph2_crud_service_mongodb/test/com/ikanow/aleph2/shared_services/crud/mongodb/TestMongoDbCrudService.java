@@ -28,10 +28,13 @@ import java.util.stream.IntStream;
 
 import org.bson.types.ObjectId;
 import org.junit.Test;
+import org.mongojack.JacksonDBCollection;
 
 import scala.Tuple2;
 import static org.hamcrest.CoreMatchers.instanceOf;
 
+import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.ObjectTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.mongodb.BasicDBObject;
@@ -309,4 +312,112 @@ public class TestMongoDbCrudService {
 		
 		assertEquals(expected_new_indexes_4.toString(), final_indexes.toString());
 	}
+	
+	protected String copyableOutput(Object o) {
+		return o.toString().replace("\"", "\\\"");
+	}
+	protected void sysOut(String s) {
+		System.out.println(copyableOutput(s));
+	}
+	
+	@Test
+	public void singleObjectRetrieve() throws InterruptedException, ExecutionException {
+		
+		final MockMongoDbCrudService<TestBean, String> service = 
+				new MockMongoDbCrudService<TestBean, String>("test", "test", "singleObjectRetrieve", 
+						TestBean.class, String.class, Optional.empty(), Optional.empty(), Optional.empty());
+
+		// 1) Insertion without ids
+		
+		final List<TestBean> l = IntStream.rangeClosed(1, 10).boxed()
+				.map(i -> ObjectTemplateUtils.build(TestBean.class)
+								.with("_id", "id" + i)
+								.with("test_string", "test_string" + i)
+								.with("test_long", (Long)(long)i)
+								.done())
+				.collect(Collectors.toList());
+
+		service.storeObjects(l);
+		
+		assertEquals(10, service._state.orig_coll.count());
+		
+		service.optimizeQuery(Arrays.asList("test_string")).get(); // (The get() waits for completion)
+		
+		// For asserting vs strings where possible:
+		final JacksonDBCollection<TestBean, String> mapper = service._state.coll;
+
+		// 1) Get object by _id, exists
+		
+		final Future<Optional<TestBean>> obj1 = service.getObjectById("id1");
+		
+		//DEBUG
+		//sysOut(mapper.convertToDbObject(obj1.get().get()).toString());
+		
+		assertEquals("{ \"_id\" : \"id1\" , \"test_string\" : \"test_string1\" , \"test_long\" : 1}", mapper.convertToDbObject(obj1.get().get()).toString());
+		
+		// 2) Get object by _id, exists, subset of fields
+
+		// 2a) inclusive:
+		
+		final Future<Optional<TestBean>> obj2a = service.getObjectById("id2", Arrays.asList("_id", "test_string"), true);		
+		
+		//DEBUG
+		//sysOut(mapper.convertToDbObject(obj2a.get().get()).toString());
+		
+		assertEquals("{ \"_id\" : \"id2\" , \"test_string\" : \"test_string2\"}", mapper.convertToDbObject(obj2a.get().get()).toString());
+		
+		// 2b) exclusive:
+
+		final Future<Optional<TestBean>> obj2b = service.getObjectById("id3", Arrays.asList("_id", "test_string"), false);		
+		
+		//DEBUG
+		//sysOut(mapper.convertToDbObject(obj2b.get().get()).toString());
+		
+		assertEquals("{ \"test_long\" : 3}", mapper.convertToDbObject(obj2b.get().get()).toString());
+		
+		// 3) Get object by _id, doesn't exist
+		
+		final Future<Optional<TestBean>> obj3 = service.getObjectById("id100", Arrays.asList("_id", "test_string"), false);		
+		
+		assertEquals(false, obj3.get().isPresent());
+		
+		// 4) Get object by spec, exists
+		
+		QueryComponent<TestBean> query = CrudUtils.allOf(TestBean.class)
+					.when("_id", "id4")
+					.withAny("test_string", Arrays.asList("test_string1", "test_string4"))
+					.withPresent("test_long");
+		
+		final Future<Optional<TestBean>> obj4 = service.getObjectBySpec(query);
+		
+		assertEquals("{ \"_id\" : \"id4\" , \"test_string\" : \"test_string4\" , \"test_long\" : 4}", mapper.convertToDbObject(obj4.get().get()).toString());
+		
+		// 5) Get object by spec, exists, subset of fields
+		
+		final Future<Optional<TestBean>> obj5 = service.getObjectBySpec(query, Arrays.asList("_id", "test_string"), true);
+		
+		assertEquals("{ \"_id\" : \"id4\" , \"test_string\" : \"test_string4\"}", mapper.convertToDbObject(obj5.get().get()).toString());
+				
+		// 6) Get object by spec, doesn't exist
+
+		QueryComponent<TestBean> query6 = CrudUtils.allOf(TestBean.class)
+				.when("_id", "id3")
+				.withAny("test_string", Arrays.asList("test_string1", "test_string4"))
+				.withPresent("test_long");
+	
+		
+		final Future<Optional<TestBean>> obj6 = service.getObjectBySpec(query6, Arrays.asList("_id", "test_string"), false);		
+		assertEquals(false, obj6.get().isPresent());
+	}
+
+	//TODO counting
+	
+	//TODO multiple objects
+	
+	//TODO (updates)
+	
+	//TODO (find and modify)
+	
+	//TODO (deletes)
+	
 }

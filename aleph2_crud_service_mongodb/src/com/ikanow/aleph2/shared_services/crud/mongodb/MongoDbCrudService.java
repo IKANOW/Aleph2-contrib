@@ -308,7 +308,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 				return CompletableFuture.completedFuture(Optional.ofNullable(_state.coll.findOne(MongoDbUtils.convertToMongoQuery(unique_spec)._1())));				
 			}
 			else {
-				final BasicDBObject fields = new BasicDBObject(field_list.stream().collect(Collectors.toMap(f -> f, f -> 1)));
+				final BasicDBObject fields = new BasicDBObject(field_list.stream().collect(Collectors.toMap(f -> f, f -> include ? 1 : 0)));
 				return CompletableFuture.completedFuture(Optional.ofNullable(_state.coll.findOne(MongoDbUtils.convertToMongoQuery(unique_spec)._1(), fields)));
 			}
 		}
@@ -342,7 +342,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 				return CompletableFuture.completedFuture(Optional.ofNullable(_state.coll.findOneById((K)id)));				
 			}
 			else {
-				final BasicDBObject fields = new BasicDBObject(field_list.stream().collect(Collectors.toMap(f -> f, f -> 1)));
+				final BasicDBObject fields = new BasicDBObject(field_list.stream().collect(Collectors.toMap(f -> f, f -> include ? 1 : 0)));
 				return CompletableFuture.completedFuture(Optional.ofNullable(_state.coll.findOneById((K)id, fields)));
 			}
 		}
@@ -377,7 +377,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 						.<DBCursor<O>>andReturn()
 						.when(qm -> field_list.isEmpty(), qm -> _state.coll.find(qm._1()))
 						.otherwise(qm -> {
-							final BasicDBObject fs = new BasicDBObject(field_list.stream().collect(Collectors.toMap(f -> f, f -> 1)));
+							final BasicDBObject fs = new BasicDBObject(field_list.stream().collect(Collectors.toMap(f -> f, f -> include ? 1 : 0)));
 							return _state.coll.find(qm._1(), fs);
 						}))
 						// (now we're processing on a cursor "c")
