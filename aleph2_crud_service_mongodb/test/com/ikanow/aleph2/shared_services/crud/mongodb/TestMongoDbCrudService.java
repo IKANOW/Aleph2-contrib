@@ -269,7 +269,7 @@ public class TestMongoDbCrudService {
 		final List<DBObject> initial_indexes = service._state.orig_coll.getIndexInfo();
 		assertEquals("[{ \"v\" : 1 , \"key\" : { \"_id\" : 1} , \"ns\" : \"test.testIndexes\" , \"name\" : \"_id_\"}]", initial_indexes.toString());
 		
-		Future<Boolean> done = service.optimizeQuery(Arrays.asList("test_string", "_id"));
+		final Future<Boolean> done = service.optimizeQuery(Arrays.asList("test_string", "_id"));
 		
 		assertEquals(true, done.get());
 
@@ -287,19 +287,26 @@ public class TestMongoDbCrudService {
 		
 		assertEquals(expected_new_indexes.toString(), new_indexes.toString());
 		
-		// 2) Add a new index (alternative format)
-		
-		//TODO
-		
 		// 3) Remove an index that doesn't exist
 		
-		//TODO
+		final boolean index_existed = service.deregisterOptimizedQuery(Arrays.asList("test_string", "test_long"));
+		
+		assertEquals(false, index_existed);
+
+		final List<DBObject> nearly_final_indexes = service._state.orig_coll.getIndexInfo();		
+		
+		assertEquals(expected_new_indexes.toString(), nearly_final_indexes.toString());		
 		
 		// 4) Remove the index we just added
 		
-		//TODO
+		final boolean index_existed_4 = service.deregisterOptimizedQuery(Arrays.asList("test_string", "_id"));
+		
+		assertEquals(true, index_existed_4);
+		
+		final List<DBObject> expected_new_indexes_4 = Arrays.asList(initial_indexes.get(0), expected_index);
+		
+		final List<DBObject> final_indexes = service._state.orig_coll.getIndexInfo();		
+		
+		assertEquals(expected_new_indexes_4.toString(), final_indexes.toString());
 	}
-	
-	//TODO I think we'll want some tests that run from main and actually connect to a MongoDB so we can test some
-	// of the MongoDB specific behavior...
 }
