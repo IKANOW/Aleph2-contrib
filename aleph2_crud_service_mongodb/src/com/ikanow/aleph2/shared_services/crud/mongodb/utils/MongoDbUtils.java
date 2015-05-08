@@ -15,13 +15,8 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared_services.crud.mongodb.utils;
 
-import java.util.EnumSet;
-import java.util.Set;
-import java.util.function.BiConsumer;
-import java.util.function.BinaryOperator;
-import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collector;
+import java.util.stream.Collector.Characteristics;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -54,17 +49,19 @@ public class MongoDbUtils {
 		
 		final String andVsOr = getOperatorName(query_in.getOp());
 		
-		final DBObject query_out = Patterns.matchAndReturn(query_in, DBObject.class)
+		final DBObject query_out = Patterns.match(query_in)
+				.<DBObject>andReturn()
 				.when((Class<SingleQueryComponent<T>>)(Class<?>)SingleQueryComponent.class, q -> convertToMongoQuery_single(andVsOr, q))
 				.when((Class<MultiQueryComponent<T>>)(Class<?>)MultiQueryComponent.class, q -> convertToMongoQuery_multi(andVsOr, q))
-				.otherwise(q -> (DBObject)new BasicDBObject());
+				.otherwise(() -> (DBObject)new BasicDBObject());
 		
 		// Meta commands
 		
 		final BasicDBObject meta = new BasicDBObject();
 		
 		if (null != query_in.getLimit()) meta.put("$limit", query_in.getLimit());
-		final BasicDBObject sort = (BasicDBObject) Patterns.matchAndReturn(query_in.getOrderBy())
+		final BasicDBObject sort = Patterns.match(query_in.getOrderBy())
+									.<BasicDBObject>andReturn()
 									.when(l -> l == null, l -> null)
 									.otherwise(l -> {
 												BasicDBObject s = new BasicDBObject();
@@ -87,7 +84,7 @@ public class MongoDbUtils {
 	 */
 	@NonNull
 	protected static BasicDBObject operatorToMongoKey(@NonNull String field, @NonNull Tuple2<Operator, Tuple2<Object, Object>> operator_args) {
-		return Patterns.matchAndReturn(operator_args)
+		return Patterns.match(operator_args).<BasicDBObject>andReturn()
 				.when(op_args -> Operator.exists == op_args._1(), op_args -> new BasicDBObject(field, new BasicDBObject("$exists", op_args._2()._1())) )
 				
 				.when(op_args -> (Operator.any_of == op_args._1()), op_args -> new BasicDBObject(field, new BasicDBObject("$in", op_args._2()._1())) )
@@ -100,25 +97,25 @@ public class MongoDbUtils {
 					QueryBuilder qb = QueryBuilder.start(field);
 					if (null != op_args._2()._1()) qb = qb.greaterThan(op_args._2()._1());
 					if (null != op_args._2()._2()) qb = qb.lessThan(op_args._2()._2());
-					return qb.get(); 
+					return (BasicDBObject) qb.get(); 
 				})
 				.when(op_args -> Operator.range_open_closed == op_args._1(), op_args -> {
 					QueryBuilder qb = QueryBuilder.start(field);
 					if (null != op_args._2()._1()) qb = qb.greaterThan(op_args._2()._1());
 					if (null != op_args._2()._2()) qb = qb.lessThanEquals(op_args._2()._2());
-					return qb.get(); 
+					return (BasicDBObject) qb.get(); 
 				})
 				.when(op_args -> Operator.range_closed_closed == op_args._1(), op_args -> {
 					QueryBuilder qb = QueryBuilder.start(field);
 					if (null != op_args._2()._1()) qb = qb.greaterThanEquals(op_args._2()._1());
 					if (null != op_args._2()._2()) qb = qb.lessThanEquals(op_args._2()._2());
-					return qb.get(); 
+					return (BasicDBObject) qb.get(); 
 				})
 				.when(op_args -> Operator.range_closed_open == op_args._1(), op_args -> {
 					QueryBuilder qb = QueryBuilder.start(field);
 					if (null != op_args._2()._1()) qb = qb.greaterThanEquals(op_args._2()._1());
 					if (null != op_args._2()._2()) qb = qb.lessThan(op_args._2()._2());
-					return qb.get(); 
+					return (BasicDBObject) qb.get(); 
 				})
 				.otherwise(op_args -> new BasicDBObject());
 	}
@@ -129,7 +126,7 @@ public class MongoDbUtils {
 	 */
 	@NonNull
 	protected static String getOperatorName(@NonNull Operator op_in) {		
-		return Patterns.matchAndReturn(op_in)
+		return Patterns.match(op_in).<String>andReturn()
 				.when(op -> Operator.any_of == op, op -> "$or")
 				.when(op -> Operator.all_of == op, op -> "$and")
 				.otherwise(op -> "$and");
@@ -143,26 +140,18 @@ public class MongoDbUtils {
 	@NonNull
 	protected static <T> DBObject convertToMongoQuery_multi(@NonNull String andVsOr, @NonNull MultiQueryComponent<T> query_in) {
 		
-		return Patterns.matchAndReturn(query_in.getElements()).when(f -> f.isEmpty(), f -> new BasicDBObject())
+		return Patterns.match(query_in.getElements())
+				.<DBObject>andReturn()
+				.when(f -> f.isEmpty(), f -> new BasicDBObject())
 				.otherwise(f -> f.stream().collect(
-						new Collector<SingleQueryComponent<T>, BasicDBList, DBObject>() {
-							@Override
-							public Supplier<BasicDBList> supplier() {
-								return BasicDBList::new;
-							}	
-							@Override
-							public BiConsumer<BasicDBList,SingleQueryComponent<T>> accumulator() {
-								return (acc, entry) -> {
-									acc.add(convertToMongoQuery_single(getOperatorName(entry.getOp()), entry));
-								};
-							}	
-							@Override
-							public BinaryOperator<BasicDBList> combiner() { return (a, b) -> { a.addAll(b); return a; } ; }	
-							@Override
-							public Function<BasicDBList, DBObject> finisher() { return acc -> (DBObject)new BasicDBObject(andVsOr, acc); }
-							@Override
-							public Set<java.util.stream.Collector.Characteristics> characteristics() { return EnumSet.of(Characteristics.UNORDERED); }
-						} )); 
+					Collector.of( 
+						BasicDBList::new,
+						(acc, entry) -> {
+							acc.add(convertToMongoQuery_single(getOperatorName(entry.getOp()), entry));
+						},
+						(a, b) -> { a.addAll(b); return a; },
+						acc -> (DBObject)new BasicDBObject(andVsOr, acc),
+						Characteristics.UNORDERED))); 
 	}	
 	
 	/** Creates a big $and/$or list of the list of fields in the single query component
@@ -176,38 +165,26 @@ public class MongoDbUtils {
 		
 		// The actual query:
 
-		return Patterns.matchAndReturn(fields).when(f -> f.isEmpty(), f -> new BasicDBObject())
+		return Patterns.match(fields).<DBObject>andReturn()
+				.when(f -> f.isEmpty(), f -> new BasicDBObject())
 				.otherwise(f -> f.asMap().entrySet().stream()
 					.<Tuple2<String, Tuple2<Operator, Tuple2<Object, Object>>>>
 						flatMap(entry -> entry.getValue().stream().map( val -> Tuples._2T(entry.getKey(), val) ) )
-					.collect(		
-						new Collector<Tuple2<String, Tuple2<Operator, Tuple2<Object, Object>>>, BasicDBObject, DBObject>() {
-							@Override
-							public Supplier<BasicDBObject> supplier() {
-								return BasicDBObject::new;
-							}	
-							@Override
-							public BiConsumer<BasicDBObject, Tuple2<String, Tuple2<Operator, Tuple2<Object, Object>>>> accumulator() {
-								return (acc, entry) -> {
-									Patterns.matchAndAct(acc.get(andVsOr))
-										.when(l -> (null == l), l -> {
-											BasicDBList dbl = new BasicDBList();
-											dbl.add(operatorToMongoKey(entry._1(), entry._2()));
-											acc.put(andVsOr, dbl);
-										})
-										.when(BasicDBList.class, l -> l.add(operatorToMongoKey(entry._1(), entry._2())))
-										.otherwise(l -> {});
-								};
-							}	
-							// Boilerplate:
-							@Override
-							public BinaryOperator<BasicDBObject> combiner() { return (a, b) -> { a.putAll(b.toMap()); return a; } ; }	
-							@Override
-							public Function<BasicDBObject, DBObject> finisher() { return acc -> acc; }
-							@Override
-							public Set<java.util.stream.Collector.Characteristics> characteristics() { return EnumSet.of(Characteristics.UNORDERED); }
-						} ) 
-					);		
+					.collect(	
+						Collector.of(
+							BasicDBObject::new,
+							(acc, entry) -> {
+								Patterns.match(acc.get(andVsOr)).andAct()
+									.when(l -> (null == l), l -> {
+										BasicDBList dbl = new BasicDBList();
+										dbl.add(operatorToMongoKey(entry._1(), entry._2()));
+										acc.put(andVsOr, dbl);
+									})
+									.when(BasicDBList.class, l -> l.add(operatorToMongoKey(entry._1(), entry._2())))
+									.otherwise(() -> {});
+							},
+							(a, b) -> { a.putAll(b.toMap()); return a; },
+							Characteristics.UNORDERED)));		
 	}
 
 }
