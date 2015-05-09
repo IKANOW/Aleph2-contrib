@@ -78,8 +78,6 @@ public class TestMongoDbUtils {
 		
 		final Tuple2<DBObject, DBObject> query_meta_1 = MongoDbUtils.convertToMongoQuery(query_comp_1);
 
-		assertEquals(null, query_comp_1.getExtra());						
-		
 		assertEquals("{ }", query_meta_1._1().toString());
 		assertEquals("{ }", query_meta_1._2().toString());
 		
@@ -90,8 +88,6 @@ public class TestMongoDbUtils {
 		final SingleQueryComponent<TestBean> query_comp_2 = CrudUtils.anyOf(template2)
 													.orderBy(Tuples._2T("test_field_1", 1), Tuples._2T("test_field_2", -1));		
 
-		assertEquals(template2, query_comp_2.getElement());				
-		
 		final Tuple2<DBObject, DBObject> query_meta_2 = MongoDbUtils.convertToMongoQuery(query_comp_2);
 		
 		assertEquals("{ }", query_meta_2._1().toString());
@@ -230,15 +226,15 @@ public class TestMongoDbUtils {
 		
 		final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(TestBean.class)
 														.when(TestBean::string_field, "a")
-														.withPresent("long_field")
 														.nested(TestBean::nested_list, 
 																CrudUtils.anyOf(TestBean.NestedTestBean.class)
 																	.when(TestBean.NestedTestBean::nested_string_field, "x")
-																	.rangeIn("nested_string_field", "ccc", false, "ddd", true)
 																	.withAny(TestBean.NestedTestBean::nested_string_field, Arrays.asList("x", "y"))
+																	.rangeIn("nested_string_field", "ccc", false, "ddd", true)
 																	.limit(1000) // (should be ignored)
 																	.orderBy(Tuples._2T("test_field_1", 1)) // (should be ignored)
 														)
+														.withPresent("long_field")
 														.limit(5) 
 														.orderBy(Tuples._2T("test_field_2", -1));
 														
@@ -247,10 +243,10 @@ public class TestMongoDbUtils {
 				
 		final DBObject expected_1 = QueryBuilder.start().and(
 				QueryBuilder.start("string_field").is("a").get(),
-				QueryBuilder.start("long_field").exists(true).get(),
 				QueryBuilder.start("nested_list.nested_string_field").is("x").get(),
+				QueryBuilder.start("nested_list.nested_string_field").in(Arrays.asList("x", "y")).get(),
 				QueryBuilder.start("nested_list.nested_string_field").greaterThanEquals("ccc").lessThan("ddd").get(),
-				QueryBuilder.start("nested_list.nested_string_field").in(Arrays.asList("x", "y")).get()				
+				QueryBuilder.start("long_field").exists(true).get()
 				).get();		
 		
 		final BasicDBObject expected_meta_nested = new BasicDBObject("test_field_2", -1);
@@ -266,7 +262,6 @@ public class TestMongoDbUtils {
 		
 		final SingleQueryComponent<TestBean> query_comp_2 = CrudUtils.allOf(TestBean.class)
 				.when(TestBean::string_field, "a")
-				.withPresent("long_field")
 				.nested(TestBean::nested_list, 
 						CrudUtils.anyOf(nestedBean)
 							.when(TestBean.NestedTestBean::nested_string_field, "y")
@@ -277,21 +272,22 @@ public class TestMongoDbUtils {
 										.limit(1000) // (should be ignored)
 										.orderBy(Tuples._2T("test_field_1", 1)) // (should be ignored)
 									)
-							.rangeIn("nested_string_field", "ccc", false, "ddd", true)
 							.withAny(TestBean.NestedTestBean::nested_string_field, Arrays.asList("x", "y"))
-				);
+							.rangeIn("nested_string_field", "ccc", false, "ddd", true)
+				)
+				.withPresent("long_field");
 				
 		final Tuple2<DBObject, DBObject> query_meta_2 = MongoDbUtils.convertToMongoQuery(query_comp_2);
 		
 		final DBObject expected_2 = QueryBuilder.start().and(
 				QueryBuilder.start("string_field").is("a").get(),
-				QueryBuilder.start("long_field").exists(true).get(),
 				QueryBuilder.start("nested_list.nested_string_field").is("x").get(),
 				QueryBuilder.start("nested_list.nested_string_field").is("y").get(),
-				QueryBuilder.start("nested_list.nested_string_field").greaterThanEquals("ccc").lessThan("ddd").get(),
 				QueryBuilder.start("nested_list.nested_string_field").in(Arrays.asList("x", "y")).get(),	
+				QueryBuilder.start("nested_list.nested_string_field").greaterThanEquals("ccc").lessThan("ddd").get(),
 				QueryBuilder.start("nested_list.nested_object.nested_nested_string_field").is("z").get(),
-				QueryBuilder.start("nested_list.nested_object.nested_nested_string_field").exists(false).get()
+				QueryBuilder.start("nested_list.nested_object.nested_nested_string_field").exists(false).get(),
+				QueryBuilder.start("long_field").exists(true).get()
 				).get();		
 		
 		assertEquals(expected_2.toString(), query_meta_2._1().toString());
@@ -353,7 +349,6 @@ public class TestMongoDbUtils {
 		
 		final SingleQueryComponent<TestBean> query_comp_2 = CrudUtils.allOf(TestBean.class)
 				.when(TestBean::string_field, "a")
-				.withPresent("long_field")
 				.nested(TestBean::nested_list, 
 						CrudUtils.anyOf(TestBean.NestedTestBean.class)
 							.when(TestBean.NestedTestBean::nested_string_field, "x")
@@ -364,9 +359,10 @@ public class TestMongoDbUtils {
 										.limit(1000) // (should be ignored)
 										.orderBy(Tuples._2T("test_field_1", 1)) // (should be ignored)
 									)
-							.rangeIn("nested_string_field", "ccc", false, "ddd", true)
 							.withAny(TestBean.NestedTestBean::nested_string_field, Arrays.asList("x", "y"))
-				);
+							.rangeIn("nested_string_field", "ccc", false, "ddd", true)
+				)
+				.withPresent("long_field");
 		
 		final MultiQueryComponent<TestBean> multi_query_3 = CrudUtils.allOf(query_comp_1, query_comp_2).limit(5);
 		final MultiQueryComponent<TestBean> multi_query_4 = CrudUtils.anyOf(query_comp_1, query_comp_2).orderBy(Tuples._2T("test_field_2", -1));
@@ -382,12 +378,12 @@ public class TestMongoDbUtils {
 		
 		final QueryBuilder expected_2 = QueryBuilder.start().and(
 				QueryBuilder.start("string_field").is("a").get(),
-				QueryBuilder.start("long_field").exists(true).get(),
 				QueryBuilder.start("nested_list.nested_string_field").is("x").get(),
-				QueryBuilder.start("nested_list.nested_string_field").greaterThanEquals("ccc").lessThan("ddd").get(),
 				QueryBuilder.start("nested_list.nested_string_field").in(Arrays.asList("x", "y")).get(),	
+				QueryBuilder.start("nested_list.nested_string_field").greaterThanEquals("ccc").lessThan("ddd").get(),
 				QueryBuilder.start("nested_list.nested_object.nested_nested_string_field").is("z").get(),
-				QueryBuilder.start("nested_list.nested_object.nested_nested_string_field").exists(false).get()
+				QueryBuilder.start("nested_list.nested_object.nested_nested_string_field").exists(false).get(),
+				QueryBuilder.start("long_field").exists(true).get()
 				);		
 		
 		final DBObject multi_expected_3 = QueryBuilder.start().and((DBObject)expected_1.get(), (DBObject)expected_2.get()).get();
