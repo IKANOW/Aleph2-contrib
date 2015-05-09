@@ -202,7 +202,7 @@ public class MongoDbUtils {
 	 * @param remove decrements numbers of removes from sets/lists
 	 * @return
 	 */
-	public static <O> DBObject createUpdateObject(Optional<O> set, Optional<O> add, Optional<O> remove) {
+	public static <O> DBObject createUpdateObject(Optional<O> set, Optional<QueryComponent<O>> add, Optional<QueryComponent<O>> remove) {
 
 		final BasicDBObject update_object = new BasicDBObject();
 		
@@ -227,7 +227,11 @@ public class MongoDbUtils {
 		// list - $pullAll
 		// empty list - $pop
 		
-		//TODO: $bit, $mul, $, $slice ($push), $min, $max 
+		//TODO: 
+		// fields
+		// numeric - $bit, $mul, $min, $max, $currentDate, $setOnInsert
+		// array - $, 
+		// modifiers - $slice ($push), $sort ($push), $position ($sort) 
 		
 		//TODO
 		return update_object;
