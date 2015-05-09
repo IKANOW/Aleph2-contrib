@@ -65,6 +65,10 @@ public class TestMongoDbUtils {
 		private Map<String, String> map;
 	}
 	
+	///////////////////////////////////////////////
+	
+	// QUERY CREATION TESTING
+	
 	@Test
 	public void emptyQuery() {
 		
@@ -402,4 +406,9 @@ public class TestMongoDbUtils {
 		assertEquals("{ \"$limit\" : 5}", query_meta_5._2().toString());		
 		assertEquals(expected_meta_2.toString(), query_meta_6._2().toString());
 	}
+	
+	///////////////////////////////////////////////
+	
+	// UPDATE CREATION TESTING
+	
 }

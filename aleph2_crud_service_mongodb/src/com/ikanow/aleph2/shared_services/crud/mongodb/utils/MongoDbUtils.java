@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared_services.crud.mongodb.utils;
 
+import java.util.Optional;
 import java.util.stream.Collector;
 import java.util.stream.Collector.Characteristics;
 
@@ -23,6 +24,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import scala.Tuple2;
 
 import com.google.common.collect.LinkedHashMultimap;
+import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.MultiQueryComponent;
@@ -39,6 +41,10 @@ import com.mongodb.QueryBuilder;
  */
 public class MongoDbUtils {
 
+	////////////////////////////////////////////////////////////////////////////////////////
+	
+	// CREATE QUERY
+	
 	/** Top-level entry point to convert a generic Aleph2 CRUD component into a function MongoDB query
 	 * @param query_in the generic query component
 	 * @return a tuple2, first element is the query, second element contains the meta ("$skip", "$limit")
@@ -185,6 +191,46 @@ public class MongoDbUtils {
 							},
 							(a, b) -> { a.putAll(b.toMap()); return a; },
 							Characteristics.UNORDERED)));		
+	}
+	////////////////////////////////////////////////////////////////////////////////////////
+	
+	// CREATE UPDATE
+	
+	/** Create a MongoDB ipdate object
+	 * @param set overwrites any fields
+	 * @param add increments numbers or adds to sets/lists
+	 * @param remove decrements numbers of removes from sets/lists
+	 * @return
+	 */
+	public static <O> DBObject createUpdateObject(Optional<O> set, Optional<O> add, Optional<O> remove) {
+
+		final BasicDBObject update_object = new BasicDBObject();
+		
+		// Set is the easy one:
+		update_object.put("$set", 
+				CrudUtils.allOf(set).getAll().entries().stream().collect(
+						Collector.of(
+								BasicDBObject::new,
+								((acc, kv) -> acc.put(kv.getKey(), kv.getValue()._1())),
+								(a, b) -> { a.putAll(b.toMap()); return a; },
+								Characteristics.UNORDERED))); 
+		
+		// For add:
+		// value - numeric ... $inc
+		// value - other $push
+		// list $push: $each
+		// set $addToSet: $each
+		
+		// For remove
+		// whenNotExists - $unset
+		// value - $pull
+		// list - $pullAll
+		// empty list - $pop
+		
+		//TODO: $bit, $mul, $, $slice ($push), $min, $max 
+		
+		//TODO
+		return update_object;
 	}
 
 }
