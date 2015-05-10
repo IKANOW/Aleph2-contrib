@@ -64,6 +64,21 @@ public class TestMongoDbCrudService {
 			String test_string;			
 		}
 	}
+
+	////////////////////////////////////////////////
+
+	// UTILS
+	
+	public static <O, K> MongoDbCrudService<O, K> getTestService(String test_name, Class<O> bean_clazz, Class<K> key_clazz) {
+		
+		final MockMongoDbCrudService<O, K> service = 
+				new MockMongoDbCrudService<O, K>("test_db_cluster", "test_db", test_name, 
+						bean_clazz, key_clazz, Optional.empty(), Optional.empty(), Optional.empty());
+
+		service._state.orig_coll.drop();
+		
+		return service;
+	}
 	
 	////////////////////////////////////////////////
 	
@@ -72,9 +87,7 @@ public class TestMongoDbCrudService {
 	@Test
 	public void testCreateSingleObject() throws InterruptedException, ExecutionException {
 		
-		final MockMongoDbCrudService<TestBean, String> service = 
-				new MockMongoDbCrudService<TestBean, String>("test", "test", "testCreateSingleObject", 
-						TestBean.class, String.class, Optional.empty(), Optional.empty(), Optional.empty());
+		final MongoDbCrudService<TestBean, String> service = getTestService("testCreateSingleObject", TestBean.class, String.class);
 
 		assertEquals(0, service._state.orig_coll.count());		
 		
@@ -152,10 +165,8 @@ public class TestMongoDbCrudService {
 	@Test
 	public void testCreateSingleObject_ObjectId() throws InterruptedException, ExecutionException {
 		
-		final MockMongoDbCrudService<TestObjectIdBean, ObjectId> service = 
-				new MockMongoDbCrudService<TestObjectIdBean, ObjectId>("test", "test", "testCreateSingleObject_ObjectId", 
-						TestObjectIdBean.class, ObjectId.class, Optional.empty(), Optional.empty(), Optional.empty());
-
+		final MongoDbCrudService<TestObjectIdBean, ObjectId> service = getTestService("testCreateSingleObject_ObjectId", TestObjectIdBean.class, ObjectId.class);
+		
 		assertEquals(0, service._state.orig_coll.count());		
 		
 		// 1) Add a new object to an empty DB
@@ -178,10 +189,8 @@ public class TestMongoDbCrudService {
 	@Test
 	public void testCreateMultipleObjects() throws InterruptedException, ExecutionException {
 		
-		final MockMongoDbCrudService<TestBean, String> service = 
-				new MockMongoDbCrudService<TestBean, String>("test", "test", "testCreateMultipleObjects", 
-						TestBean.class, String.class, Optional.empty(), Optional.empty(), Optional.empty());
-
+		final MongoDbCrudService<TestBean, String> service = getTestService("testCreateMultipleObjects", TestBean.class, String.class);
+		
 		// 1) Insertion without ids
 		
 		final List<TestBean> l = IntStream.rangeClosed(1, 10).boxed()
@@ -256,9 +265,7 @@ public class TestMongoDbCrudService {
 	@Test
 	public void testIndexes() throws InterruptedException, ExecutionException {		
 		
-		final MockMongoDbCrudService<TestBean, String> service = 
-				new MockMongoDbCrudService<TestBean, String>("test", "test", "testIndexes", 
-						TestBean.class, String.class, Optional.empty(), Optional.empty(), Optional.empty());
+		final MongoDbCrudService<TestBean, String> service = getTestService("testIndexes", TestBean.class, String.class);
 
 		// Insert some objects to index
 		
@@ -273,7 +280,7 @@ public class TestMongoDbCrudService {
 		// 1) Add a new index
 		
 		final List<DBObject> initial_indexes = service._state.orig_coll.getIndexInfo();
-		assertEquals("[{ \"v\" : 1 , \"key\" : { \"_id\" : 1} , \"ns\" : \"test.testIndexes\" , \"name\" : \"_id_\"}]", initial_indexes.toString());
+		assertEquals("[{ \"v\" : 1 , \"key\" : { \"_id\" : 1} , \"ns\" : \"test_db.testIndexes\" , \"name\" : \"_id_\"}]", initial_indexes.toString());
 		
 		final Future<Boolean> done = service.optimizeQuery(Arrays.asList("test_string", "_id"));
 		
@@ -285,7 +292,7 @@ public class TestMongoDbCrudService {
 		expected_index_nested.put("_id", 1);
 		final BasicDBObject expected_index = new BasicDBObject("v", 1);
 		expected_index.put("key", expected_index_nested);
-		expected_index.put("ns", "test.testIndexes");
+		expected_index.put("ns", "test_db.testIndexes");
 		expected_index.put( "name", "test_string_1__id_1");
 		expected_index.put("background", true);
 		
@@ -326,9 +333,7 @@ public class TestMongoDbCrudService {
 	@Test
 	public void singleObjectRetrieve() throws InterruptedException, ExecutionException {
 		
-		final MockMongoDbCrudService<TestBean, String> service = 
-				new MockMongoDbCrudService<TestBean, String>("test", "test", "singleObjectRetrieve", 
-						TestBean.class, String.class, Optional.empty(), Optional.empty(), Optional.empty());
+		final MongoDbCrudService<TestBean, String> service = getTestService("singleObjectRetrieve", TestBean.class, String.class);
 
 		final List<TestBean> l = IntStream.rangeClosed(1, 10).boxed()
 				.map(i -> ObjectTemplateUtils.build(TestBean.class)
@@ -414,10 +419,8 @@ public class TestMongoDbCrudService {
 	@Test
 	public void multiObjectRetrieve() throws InterruptedException, ExecutionException {
 		
-		final MockMongoDbCrudService<TestBean, String> service = 
-				new MockMongoDbCrudService<TestBean, String>("test", "test", "multiObjectRetrieve", 
-						TestBean.class, String.class, Optional.empty(), Optional.empty(), Optional.empty());
-
+		final MongoDbCrudService<TestBean, String> service = getTestService("multiObjectRetrieve", TestBean.class, String.class);
+		
 		final List<TestBean> l = IntStream.rangeClosed(0, 9).boxed()
 				.map(i -> ObjectTemplateUtils.build(TestBean.class)
 								.with("_id", "id" + i)
@@ -504,9 +507,7 @@ public class TestMongoDbCrudService {
 	@Test
 	public void testCounting() throws InterruptedException, ExecutionException {
 		
-		final MockMongoDbCrudService<TestBean, String> service = 
-				new MockMongoDbCrudService<TestBean, String>("test", "test", "testCounting", 
-						TestBean.class, String.class, Optional.empty(), Optional.empty(), Optional.empty());
+		final MongoDbCrudService<TestBean, String> service = getTestService("testCounting", TestBean.class, String.class);
 
 		final List<TestBean> l = IntStream.rangeClosed(0, 9).boxed()
 				.map(i -> ObjectTemplateUtils.build(TestBean.class)
@@ -558,6 +559,196 @@ public class TestMongoDbCrudService {
 	
 	//TODO (find and modify)
 	
-	//TODO (deletes)
+	////////////////////////////////////////////////
 	
+	// DELETION
+
+	protected static void replenishDocsForDeletion(MongoDbCrudService<TestBean, String> service) {
+		
+		final List<TestBean> l = IntStream.rangeClosed(0, 9).boxed()
+				.map(i -> ObjectTemplateUtils.build(TestBean.class)
+								.with("_id", "id" + i)
+								.with("test_string", "test_string" + i)
+								.with("test_long", (Long)(long)i)
+								.done())
+				.collect(Collectors.toList());
+
+		service.storeObjects(l, true);
+		
+		assertEquals(10, service._state.orig_coll.count());
+	}
+	
+	@Test
+	public void testDeletion() throws InterruptedException, ExecutionException {
+		
+		final MongoDbCrudService<TestBean, String> service = getTestService("testDeletion", TestBean.class, String.class);
+
+		service.optimizeQuery(Arrays.asList("test_string")).get(); // (The get() waits for completion)
+		
+		// 1) Doc by id
+		
+		// 1a) No such doc exists
+		
+		replenishDocsForDeletion(service);
+		
+		assertEquals(false, service.deleteObjectById("hgfhghfg").get());
+		
+		assertEquals(10L, (long)service._state.coll.count());		
+		
+		// 1b) Deletes doc
+		
+		assertEquals(true, service.deleteObjectById("id3").get());
+
+		assertEquals(9L, (long)service._state.coll.count());		
+		
+		assertEquals(Optional.empty(), service.getObjectById("id3").get());
+		
+		// 2) Doc by spec
+
+		// 2a) Does match
+		
+		replenishDocsForDeletion(service);
+
+		assertEquals(false, service.deleteObjectBySpec(CrudUtils.allOf(TestBean.class).when("_id", "fhgfhjg")).get());
+		
+		assertEquals(10L, (long)service._state.coll.count());		
+		
+		// 2b) Matches >1, only deletes the first
+		
+		assertEquals(true, service.deleteObjectBySpec(CrudUtils.allOf(TestBean.class).rangeAbove("_id", "id1", false)).get());
+		
+		assertEquals(9L, (long)service._state.coll.count());		
+		
+		// 3) all docs
+		
+		replenishDocsForDeletion(service);
+		
+		assertEquals(10L, (long)service.deleteObjectsBySpec(CrudUtils.anyOf(TestBean.class)).get());
+		
+		assertEquals(0L, (long)service._state.coll.count());		
+		
+		// (check index is still present)
+		
+		assertEquals(2, service._state.coll.getIndexInfo().size());
+		
+		// 4) subset of docs
+
+		replenishDocsForDeletion(service);
+		
+		final QueryComponent<TestBean> query_4 = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("_id", "id4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", 1));
+
+		assertEquals(6L, (long)service.deleteObjectsBySpec(query_4).get());		
+
+		assertEquals(4L, (long)service._state.coll.count());		
+
+		// 5) subset of docs (limit and sort combos)
+		
+		// 5a) Sort - no limit
+		
+		replenishDocsForDeletion(service);
+		
+		final QueryComponent<TestBean> query_5a = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("_id", "id4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", -1));
+
+		assertEquals(6L, (long)service.deleteObjectsBySpec(query_5a).get());		
+		
+		assertEquals(4L, (long)service._state.coll.count());		
+
+		assertEquals(Optional.empty(), service.getObjectById("id9").get());
+		
+		// 5b) Limit - no sort
+		
+		replenishDocsForDeletion(service);
+		
+		final QueryComponent<TestBean> query_5b = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("_id", "id4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", 1)).limit(4);
+
+		assertEquals(4L, (long)service.deleteObjectsBySpec(query_5b).get());
+		
+		assertEquals(6L, (long)service._state.coll.count());				
+		
+		// 5c) Limit and sort
+		
+		replenishDocsForDeletion(service);
+		
+		final QueryComponent<TestBean> query_5c = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("_id", "id4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_string", 1)).limit(3);
+
+		assertEquals(3L, (long)service.deleteObjectsBySpec(query_5c).get());		
+		
+		assertEquals(7L, (long)service._state.coll.count());		
+
+		assertEquals(Optional.empty(), service.getObjectById("id4").get());
+		assertEquals(Optional.empty(), service.getObjectById("id5").get());
+		assertEquals(Optional.empty(), service.getObjectById("id6").get());
+				
+		// 6) no docs
+		
+		replenishDocsForDeletion(service);
+		
+		final QueryComponent<TestBean> query_6 = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("_id", "id99", false)
+				.withPresent("test_long");
+
+		assertEquals(0L, (long)service.deleteObjectsBySpec(query_6).get());
+		
+		assertEquals(10L, (long)service._state.coll.count());				
+		
+		// 7) erase data store
+		
+		replenishDocsForDeletion(service);
+		
+		service.deleteDatastore().get();
+		
+		assertEquals(0L, (long)service._state.coll.count());		
+		
+		// (check index is still present)
+		
+		assertEquals(1, service._state.coll.getIndexInfo().size());
+	}
+	
+	@Test
+	public void testMiscFunctions() throws InterruptedException, ExecutionException {
+		
+		final MongoDbCrudService<TestBean, String> service = getTestService("testMiscFunctions", TestBean.class, String.class);
+
+		service.optimizeQuery(Arrays.asList("test_string")).get(); // (The get() waits for completion)
+		
+		replenishDocsForDeletion(service);
+		
+		// Search service - currently not implemented
+		
+		assertEquals(Optional.empty(), service.getSearchService());
+		
+		// Mongo DB collection
+		
+		final com.mongodb.DBCollection dbc = service.getUnderlyingPlatformDriver(com.mongodb.DBCollection.class, Optional.empty());
+		
+		assertEquals(2, dbc.getIndexInfo().size());
+
+		// Mongojack DB collection
+		
+		final JacksonDBCollection<?, ?> dbc2 = service.getUnderlyingPlatformDriver(JacksonDBCollection.class, Optional.empty());
+
+		assertEquals(10, dbc2.count());		
+
+		// Nothing else
+		
+		final String fail = service.getUnderlyingPlatformDriver(String.class, Optional.empty());
+		
+		assertEquals(null, fail);
+		
+		// JSON service - more complicated, tested below...
+	}
+	
+	//TODO (ALEPH-22): Test JSON raw service
 }
