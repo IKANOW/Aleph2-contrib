@@ -15,8 +15,13 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared_services.crud.mongodb.utils;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
 import java.util.Optional;
 import java.util.stream.Collector;
+import java.util.stream.Collectors;
 import java.util.stream.Collector.Characteristics;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -202,6 +207,7 @@ public class MongoDbUtils {
 	 * @param remove decrements numbers of removes from sets/lists
 	 * @return
 	 */
+	@SuppressWarnings("unchecked")
 	public static <O> DBObject createUpdateObject(Optional<O> set, Optional<QueryComponent<O>> add, Optional<QueryComponent<O>> remove) {
 
 		final BasicDBObject update_object = new BasicDBObject();
@@ -215,11 +221,29 @@ public class MongoDbUtils {
 								(a, b) -> { a.putAll(b.toMap()); return a; },
 								Characteristics.UNORDERED))); 
 		
-		// For add:
-		// value - numeric ... $inc
-		// value - other $push
-		// list $push: $each
-		// set $addToSet: $each
+		if (add.isPresent()) {
+			Patterns.match(add.get())
+					// Phase 1: get a list of all the entries
+					.<Collection<Map.Entry<String, Tuple2<Operator, Tuple2<Object, Object>>>>>andReturn()
+					.when((Class<SingleQueryComponent<O>>)(Class<?>)SingleQueryComponent.class, q -> q.getAll().entries())
+					.when((Class<MultiQueryComponent<O>>)(Class<?>)MultiQueryComponent.class, mq -> {
+						return mq.getElements().stream().flatMap(sq -> sq.getAll().entries().stream()).collect(Collectors.toList());
+					})
+					.otherwise(() -> Collections.emptyList()).stream()
+					// Phase 2: 
+					// - numeric .. $inc
+					// - non numeric ... $push
+					// - set ... $addToSet: { $each
+					// - collection ... $push: { $each
+					.forEach(kv -> {
+						Patterns.match(kv).andAct()
+							.when(Number.class, n -> nestedPut(update_object, "$inc", kv.getKey(), n)) 
+							.when(Set.class, s -> nestedPut(update_object, "$addToSet", kv.getKey(), new BasicDBObject("$each", s)))
+							.when(Collection.class, c -> nestedPut(update_object, "$push", kv.getKey(), new BasicDBObject("$each", c)))
+							.otherwise(o -> nestedPut(update_object, "$push", kv.getKey(), o))
+							;
+					});			
+		}
 		
 		// For remove
 		// whenNotExists - $unset
@@ -237,4 +261,16 @@ public class MongoDbUtils {
 		return update_object;
 	}
 
+	protected static void nestedPut(BasicDBObject mutable, String parent, String nested, Object to_insert) {
+		final DBObject dbo = (DBObject) mutable.get(parent);
+		if (null != dbo) {
+			dbo.put(nested, to_insert);
+		}
+		else {
+			BasicDBObject new_dbo = new BasicDBObject();
+			new_dbo.put(nested, to_insert);
+			mutable.put(parent, new_dbo);
+		}
+	}
+	
 }
