@@ -33,7 +33,7 @@ public class DBCollectionProxyFactory {
 	 * @return - the enhanced collection
 	 */
 	@NonNull 
-	public static DBCollection get(@NonNull DBCollection dbc) {
+	public static DBCollection get(final @NonNull DBCollection dbc) {
 		return get(dbc.getDB(), dbc.getName());
 	}
 	/** Get the enhanced DB collection from the provided one 
@@ -43,7 +43,7 @@ public class DBCollectionProxyFactory {
 	 */
 	@SuppressWarnings("deprecation")
 	@NonNull 
-	public static DBCollection get(@NonNull DB db, @NonNull String name) {
+	public static DBCollection get(final @NonNull DB db, final @NonNull String name) {
 		
 		Enhancer collectionEnhancer = new Enhancer();
 		collectionEnhancer.setSuperclass(com.mongodb.DBCollectionImpl.class);
@@ -52,8 +52,8 @@ public class DBCollectionProxyFactory {
 			boolean _top_level = true;
 			
 			@Override
-			public Object intercept(Object object, Method method,
-					Object[] args, MethodProxy methodProxy )
+			public Object intercept(final Object object, final Method method,
+					final Object[] args, final MethodProxy methodProxy )
 					throws Throwable
 			{
 				if (_top_level) {
@@ -99,7 +99,8 @@ public class DBCollectionProxyFactory {
 	
 	//DO THE SAME FOR DBCURSOR (BASICALLY ONLY CARE ABOUT next()/hasNext())
 	//(ACTUALLY DOESN'T SEEM TO BE NEEDED)
-	protected static DBCursor getCursor(DBCursor from) {
+	@NonNull 
+	protected static DBCursor getCursor(final DBCursor from) {
 		Enhancer dbcursorEnhancer = new Enhancer();
 		dbcursorEnhancer.setSuperclass(com.mongodb.DBCursor.class);
 		MethodInterceptor collectionMi = new MethodInterceptor() {

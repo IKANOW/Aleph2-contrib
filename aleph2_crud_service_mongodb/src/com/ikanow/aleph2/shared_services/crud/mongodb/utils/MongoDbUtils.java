@@ -56,7 +56,7 @@ public class MongoDbUtils {
 	 */
 	@SuppressWarnings("unchecked")
 	@NonNull
-	public static <T> Tuple2<DBObject,DBObject> convertToMongoQuery(@NonNull QueryComponent<T> query_in) {
+	public static <T> Tuple2<DBObject,DBObject> convertToMongoQuery(final @NonNull QueryComponent<T> query_in) {
 		
 		final String andVsOr = getOperatorName(query_in.getOp());
 		
@@ -94,7 +94,7 @@ public class MongoDbUtils {
 	 * @return the MongoDB clause
 	 */
 	@NonNull
-	protected static BasicDBObject operatorToMongoKey(@NonNull String field, @NonNull Tuple2<Operator, Tuple2<Object, Object>> operator_args) {
+	protected static BasicDBObject operatorToMongoKey(final @NonNull String field, final @NonNull Tuple2<Operator, Tuple2<Object, Object>> operator_args) {
 		return Patterns.match(operator_args).<BasicDBObject>andReturn()
 				.when(op_args -> Operator.exists == op_args._1(), op_args -> new BasicDBObject(field, new BasicDBObject("$exists", op_args._2()._1())) )
 				
@@ -136,7 +136,7 @@ public class MongoDbUtils {
 	 * @return - the mongodb operator
 	 */
 	@NonNull
-	protected static String getOperatorName(@NonNull Operator op_in) {		
+	protected static String getOperatorName(final @NonNull Operator op_in) {		
 		return Patterns.match(op_in).<String>andReturn()
 				.when(op -> Operator.any_of == op, op -> "$or")
 				.when(op -> Operator.all_of == op, op -> "$and")
@@ -149,7 +149,7 @@ public class MongoDbUtils {
 	 * @return the MongoDB query object (no meta - that is added above)
 	 */
 	@NonNull
-	protected static <T> DBObject convertToMongoQuery_multi(@NonNull String andVsOr, @NonNull MultiQueryComponent<T> query_in) {
+	protected static <T> DBObject convertToMongoQuery_multi(final @NonNull String andVsOr, final @NonNull MultiQueryComponent<T> query_in) {
 		
 		return Patterns.match(query_in.getElements())
 				.<DBObject>andReturn()
@@ -171,7 +171,7 @@ public class MongoDbUtils {
 	 * @return the MongoDB query object (no meta - that is added above)
 	 */
 	@NonNull
-	protected static <T> DBObject convertToMongoQuery_single(@NonNull String andVsOr, @NonNull SingleQueryComponent<T> query_in) {
+	protected static <T> DBObject convertToMongoQuery_single(final @NonNull String andVsOr, final @NonNull SingleQueryComponent<T> query_in) {
 		final LinkedHashMultimap<String, Tuple2<Operator, Tuple2<Object, Object>>> fields = query_in.getAll();
 		
 		// The actual query:
@@ -208,7 +208,7 @@ public class MongoDbUtils {
 	 * @return
 	 */
 	@SuppressWarnings("unchecked")
-	public static <O> DBObject createUpdateObject(Optional<O> set, Optional<QueryComponent<O>> add, Optional<QueryComponent<O>> remove) {
+	public static <O> DBObject createUpdateObject(final Optional<O> set, final Optional<QueryComponent<O>> add, final Optional<QueryComponent<O>> remove) {
 
 		final BasicDBObject update_object = new BasicDBObject();
 		

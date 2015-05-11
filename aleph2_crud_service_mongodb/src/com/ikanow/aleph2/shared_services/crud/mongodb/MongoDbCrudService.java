@@ -74,7 +74,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 * @param <O>
 	 */
 	public static class MongoDbCursor<O> extends Cursor<O> {
-		protected MongoDbCursor(DBCursor<O> cursor) {
+		protected MongoDbCursor(final @NonNull DBCursor<O> cursor) {
 			_cursor = cursor;
 		}
 		protected final DBCursor<O> _cursor;
@@ -86,11 +86,13 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}
 
 		@Override
+		@NonNull
 		public Iterator<O> iterator() {
 			return _cursor.iterator();
 		}
 
 		@Override
+		@NonNull
 		public long count() {
 			return _cursor.count();
 		}		
@@ -109,14 +111,17 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 * @param auth - optionally, an authorization overlay added to each query
 	 * @param project - optionally, a project overlay added to each query
 	 */
-	MongoDbCrudService(@NonNull Class<O> bean_clazz, @NonNull Class<K> key_clazz, @NonNull DBCollection coll, Optional<String> auth_fieldname, Optional<AuthorizationBean> auth, Optional<ProjectBean> project) {
+	MongoDbCrudService(final @NonNull Class<O> bean_clazz, final @NonNull Class<K> key_clazz, 
+						final @NonNull DBCollection coll, 
+						final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project) {
 		_state = new State(bean_clazz, key_clazz, coll, auth_fieldname, auth, project);
 	}
 	
 	/** Immutable state for the service 
 	 */
 	protected class State {
-		State(Class<O> bean_clazz_, Class<K> key_clazz_, DBCollection coll_, Optional<String> auth_fieldname_, Optional<AuthorizationBean> auth_, Optional<ProjectBean> project_) {
+		State(final Class<O> bean_clazz_, final Class<K> key_clazz_, final DBCollection coll_, 
+				final Optional<String> auth_fieldname_, final Optional<AuthorizationBean> auth_, final Optional<ProjectBean> project_) {
 			// Setup some Jackson overrides:
 			ObjectMapper my_mapper = new ObjectMapper();
 			MongoJackModule.configure(my_mapper);
@@ -163,7 +168,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 * @param bean the object to convert
 	 * @return the converted BSON (possibly with _id inserted)
 	 */
-	protected DBObject convertToBson(@NonNull O bean) {
+	@NonNull
+	protected DBObject convertToBson(final @NonNull O bean) {
 		final DBObject dbo = _state.coll.convertToDbObject(bean);
 		if (null != _state.string_id_field) {
 			if (!dbo.containsField(_ID)) dbo.put(_ID, new ObjectId().toString());
@@ -175,7 +181,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 * @param e - the underlying exception
 	 * @return a future that errors when touched
 	 */
-	protected static <T> Future<T> returnError(Exception e) {
+	@NonNull
+	protected static <T> Future<T> returnError(final @NonNull Exception e) {
 		return new CompletableFuture<T>() {
 			@Override public T get() throws ExecutionException {
 				throw new ExecutionException(e);
@@ -196,9 +203,9 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	@Override
 	@NonNull
 	public ICrudService<O> getFilteredRepo(
-								@NonNull String authorization_fieldname,
-								Optional<AuthorizationBean> client_auth,
-								Optional<ProjectBean> project_auth)
+								final @NonNull String authorization_fieldname,
+								final Optional<AuthorizationBean> client_auth,
+								final Optional<ProjectBean> project_auth)
 	{
 		return new MongoDbCrudService<O, K>(_state.bean_clazz, _state.key_clazz, _state.orig_coll, Optional.of(authorization_fieldname), client_auth, project_auth);
 	}
@@ -215,7 +222,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Supplier<Object>> storeObject(O new_object, boolean replace_if_present) {
+	public Future<Supplier<Object>> storeObject(final @NonNull O new_object, final boolean replace_if_present) {
 		try {
 			final DBObject dbo = convertToBson(new_object);
 			@SuppressWarnings("unused")
@@ -234,7 +241,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Supplier<Object>> storeObject(O new_object) {
+	public Future<Supplier<Object>> storeObject(final @NonNull O new_object) {
 		return storeObject(new_object, false);
 	}
 
@@ -244,7 +251,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 * @return a future containing the list of objects and the number actually inserted
 	 */
 	@NonNull 
-	public Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(@NonNull List<O> new_objects, boolean continue_on_error) {
+	public Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final @NonNull List<O> new_objects, final boolean continue_on_error) {
 		try {
 			final List<DBObject> l = new_objects.stream().map(o -> convertToBson(o)).collect(Collectors.toList());
 
@@ -269,7 +276,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 * @return a future containing the list of objects and the number actually inserted
 	 */
 	@NonNull 
-	public Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(@NonNull List<O> new_objects) {
+	public Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final @NonNull List<O> new_objects) {
 		return storeObjects(new_objects, false);
 	}
 	
@@ -283,7 +290,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Boolean> optimizeQuery(@NonNull List<String> ordered_field_list) {
+	public Future<Boolean> optimizeQuery(final @NonNull List<String> ordered_field_list) {
 		
 		return CompletableFuture.supplyAsync(() -> {
 			final BasicDBObject index_keys = new BasicDBObject(
@@ -303,7 +310,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public boolean deregisterOptimizedQuery(@NonNull List<String> ordered_field_list) {
+	public final boolean deregisterOptimizedQuery(final @NonNull List<String> ordered_field_list) {
 		try {
 			final BasicDBObject index_keys = new BasicDBObject(
 					ordered_field_list.stream().collect(
@@ -333,7 +340,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Optional<O>> getObjectBySpec(@NonNull QueryComponent<O> unique_spec) {
+	public Future<Optional<O>> getObjectBySpec(final @NonNull QueryComponent<O> unique_spec) {
 		return getObjectBySpec(unique_spec, Collections.<String>emptyList(), false);
 	}
 
@@ -345,7 +352,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull 
-	public Future<Optional<O>> getObjectBySpec(@NonNull QueryComponent<O> unique_spec, @NonNull List<String> field_list, boolean include) {
+	public Future<Optional<O>> getObjectBySpec(final @NonNull QueryComponent<O> unique_spec, final @NonNull List<String> field_list, final boolean include) {
 		try {			
 			if (field_list.isEmpty()) {
 				return CompletableFuture.completedFuture(Optional.ofNullable(_state.coll.findOne(MongoDbUtils.convertToMongoQuery(unique_spec)._1())));				
@@ -366,7 +373,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Optional<O>> getObjectById(@NonNull Object id) {
+	public Future<Optional<O>> getObjectById(final @NonNull Object id) {
 		return getObjectById(id, Collections.<String>emptyList(), false);
 	}
 
@@ -379,7 +386,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	@SuppressWarnings("unchecked")
 	@Override
 	@NonNull
-	public Future<Optional<O>> getObjectById(@NonNull Object id, @NonNull List<String> field_list, boolean include) {
+	public Future<Optional<O>> getObjectById(final @NonNull Object id, final @NonNull List<String> field_list, final boolean include) {
 		try {			
 			if (field_list.isEmpty()) {
 				return CompletableFuture.completedFuture(Optional.ofNullable(_state.coll.findOneById((K)id)));				
@@ -400,7 +407,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Cursor<O>> getObjectsBySpec(@NonNull QueryComponent<O> spec) {
+	public Future<Cursor<O>> getObjectsBySpec(final @NonNull QueryComponent<O> spec) {
 		return getObjectsBySpec(spec, Collections.<String>emptyList(), false);
 	}
 
@@ -412,7 +419,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Cursor<O>> getObjectsBySpec(@NonNull QueryComponent<O> spec, @NonNull List<String> field_list, boolean include) {
+	public Future<Cursor<O>> getObjectsBySpec(final @NonNull QueryComponent<O> spec, final @NonNull List<String> field_list, final boolean include) {
 		try {	
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(spec);
 			final DBCursor<O> cursor = 
@@ -447,7 +454,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Long> countObjectsBySpec(@NonNull QueryComponent<O> spec) {
+	public Future<Long> countObjectsBySpec(final @NonNull QueryComponent<O> spec) {
 		try {			
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(spec);
 			final Long limit = (Long)query_and_meta._2().get("$limit");
@@ -489,7 +496,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Boolean> updateObjectById(Object id, Optional<O> set, Optional<QueryComponent<O>> add, Optional<QueryComponent<O>> remove) {
+	public Future<Boolean> updateObjectById(Object id, final Optional<O> set, final Optional<QueryComponent<O>> add, final Optional<QueryComponent<O>> remove) {
 		return updateObjectBySpec(CrudUtils.allOf(_state.bean_clazz).when("_id", id), Optional.of(false), set, add, remove);
 	}
 
@@ -503,7 +510,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Boolean> updateObjectBySpec(@NonNull QueryComponent<O> unique_spec, Optional<Boolean> upsert, Optional<O> set, Optional<QueryComponent<O>> add, Optional<QueryComponent<O>> remove)
+	public Future<Boolean> updateObjectBySpec(final @NonNull QueryComponent<O> unique_spec, final Optional<Boolean> upsert, final Optional<O> set, final Optional<QueryComponent<O>> add, final Optional<QueryComponent<O>> remove)
 	{
 		try {			
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(unique_spec);
@@ -528,8 +535,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Long> updateObjectsBySpec(@NonNull QueryComponent<O> spec, Optional<Boolean> upsert, 
-												Optional<O> set, Optional<QueryComponent<O>> add, Optional<QueryComponent<O>> remove)
+	public Future<Long> updateObjectsBySpec(final @NonNull QueryComponent<O> spec, final Optional<Boolean> upsert, 
+												final Optional<O> set, final Optional<QueryComponent<O>> add, final Optional<QueryComponent<O>> remove)
 	{
 		try {			
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(spec);
@@ -558,9 +565,9 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	@Override
 	@NonNull
 	public Future<Optional<O>> updateAndReturnObjectBySpec(
-								@NonNull QueryComponent<O> unique_spec, Optional<Boolean> upsert, 
-								Optional<O> set, Optional<QueryComponent<O>> add, Optional<QueryComponent<O>> remove,
-								Optional<Boolean> before_updated, @NonNull List<String> field_list, boolean include)
+								@NonNull QueryComponent<O> unique_spec, final Optional<Boolean> upsert, 
+								final Optional<O> set, final Optional<QueryComponent<O>> add, final Optional<QueryComponent<O>> remove,
+								final Optional<Boolean> before_updated, final @NonNull List<String> field_list, final boolean include)
 	{
 		try {			
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(unique_spec);
@@ -590,7 +597,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	@SuppressWarnings("unchecked")
 	@Override
 	@NonNull
-	public Future<Boolean> deleteObjectById(@NonNull Object id) {
+	public Future<Boolean> deleteObjectById(final @NonNull Object id) {
 		try {			
 			final WriteResult<O, K> wr = _state.coll.removeById((K)id);
 			return CompletableFuture.completedFuture(wr.getN() > 0);
@@ -606,7 +613,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Boolean> deleteObjectBySpec(@NonNull QueryComponent<O> unique_spec) {
+	public Future<Boolean> deleteObjectBySpec(final @NonNull QueryComponent<O> unique_spec) {
 		try {			
 			// Delete and return the object
 			final Future<Optional<O>> ret_val =
@@ -631,7 +638,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Long> deleteObjectsBySpec(@NonNull QueryComponent<O> spec) {
+	public Future<Long> deleteObjectsBySpec(final @NonNull QueryComponent<O> spec) {
 		try {			
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(spec);
 			final Long limit = (Long) query_and_meta._2().get("$limit");
@@ -696,7 +703,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Optional<IBasicSearchService<O>> getSearchService() {
+	public final Optional<IBasicSearchService<O>> getSearchService() {
 		// TODO (ALEPH-22): Handle search service via either $text or elasticsearch
 		return Optional.empty();
 	}
@@ -710,9 +717,9 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	@SuppressWarnings("unchecked")
 	@Override
 	@NonNull
-	public <T> T getUnderlyingPlatformDriver(Class<T> driver_class, Optional<String> driver_options) {
-		if (JacksonDBCollection.class == driver_class) return (@NonNull T) _state.coll;
-		else if (DBCollection.class == driver_class) return (@NonNull T) _state.orig_coll;
+	public <T> T getUnderlyingPlatformDriver(Class<T> driver_class, final Optional<String> driver_options) {
+		if (JacksonDBCollection.class == driver_class) return (T) _state.coll;
+		else if (DBCollection.class == driver_class) return (T) _state.orig_coll;
 		else return null;
 	}
 

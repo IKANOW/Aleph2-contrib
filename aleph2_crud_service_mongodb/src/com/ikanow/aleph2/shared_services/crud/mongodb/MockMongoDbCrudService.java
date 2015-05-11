@@ -24,8 +24,9 @@ import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 
 public class MockMongoDbCrudService<O, K> extends MongoDbCrudService<O, K> {
 	
-	public MockMongoDbCrudService(@NonNull String mock_name, @NonNull String db_name, @NonNull String coll_name, 
-			@NonNull Class<O> bean_clazz, @NonNull Class<K> key_clazz, Optional<String> auth_fieldname, Optional<AuthorizationBean> auth, Optional<ProjectBean> project) {
+	public MockMongoDbCrudService(final @NonNull String mock_name, final @NonNull String db_name, final @NonNull String coll_name, 
+			final @NonNull Class<O> bean_clazz, final @NonNull Class<K> key_clazz, 
+			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project) {
 		super(bean_clazz, key_clazz, new Fongo(mock_name).getDB(db_name).getCollection(coll_name), auth_fieldname, auth, project);
 	}
 }
