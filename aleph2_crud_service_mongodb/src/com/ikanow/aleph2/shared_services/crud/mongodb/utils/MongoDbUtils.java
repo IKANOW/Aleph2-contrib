@@ -23,6 +23,7 @@ import java.util.Optional;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Collector.Characteristics;
+import java.util.stream.Stream;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -207,7 +208,6 @@ public class MongoDbUtils {
 	 * @param remove decrements numbers of removes from sets/lists
 	 * @return
 	 */
-	@SuppressWarnings("unchecked")
 	public static <O> DBObject createUpdateObject(final Optional<O> set, final Optional<QueryComponent<O>> add, final Optional<QueryComponent<O>> remove) {
 
 		final BasicDBObject update_object = new BasicDBObject();
@@ -222,46 +222,70 @@ public class MongoDbUtils {
 								Characteristics.UNORDERED))); 
 		
 		if (add.isPresent()) {
-			Patterns.match(add.get())
-					// Phase 1: get a list of all the entries
-					.<Collection<Map.Entry<String, Tuple2<Operator, Tuple2<Object, Object>>>>>andReturn()
-					.when((Class<SingleQueryComponent<O>>)(Class<?>)SingleQueryComponent.class, q -> q.getAll().entries())
-					.when((Class<MultiQueryComponent<O>>)(Class<?>)MultiQueryComponent.class, mq -> {
-						return mq.getElements().stream().flatMap(sq -> sq.getAll().entries().stream()).collect(Collectors.toList());
-					})
-					.otherwise(() -> Collections.emptyList()).stream()
-					// Phase 2: 
-					// - numeric .. $inc
-					// - non numeric ... $push
-					// - set ... $addToSet: { $each
-					// - collection ... $push: { $each
-					.forEach(kv -> {
-						Patterns.match(kv).andAct()
-							.when(Number.class, n -> nestedPut(update_object, "$inc", kv.getKey(), n)) 
-							.when(Set.class, s -> nestedPut(update_object, "$addToSet", kv.getKey(), new BasicDBObject("$each", s)))
-							.when(Collection.class, c -> nestedPut(update_object, "$push", kv.getKey(), new BasicDBObject("$each", c)))
-							.otherwise(o -> nestedPut(update_object, "$push", kv.getKey(), o))
-							;
-					});			
+			getSpecStream(add.get())
+				// Phase 2: 
+				// - numeric .. $inc
+				// - non numeric ... $push
+				// - set ... $addToSet: { $each
+				// - collection ... $push: { $each
+				.forEach(kv -> {
+					Patterns.match(kv.getValue()._2()._1()).andAct()
+						.when(Number.class, n -> nestedPut(update_object, "$inc", kv.getKey(), n)) 
+						.when(Set.class, s -> nestedPut(update_object, "$addToSet", kv.getKey(), new BasicDBObject("$each", s)))
+						.when(Collection.class, c -> nestedPut(update_object, "$push", kv.getKey(), new BasicDBObject("$each", c)))
+						.otherwise(o -> nestedPut(update_object, "$push", kv.getKey(), o))
+						;
+				});		
+		}
+
+		if (remove.isPresent()) {
+			getSpecStream(remove.get())
+				// Phase 2: 
+				// collection - $pullAll
+				// whenNotExists - $unset
+				// value - $pull
+				.forEach(kv -> {
+					Patterns.match(kv.getValue()._2()._1()).andAct()
+						.when(Collection.class, c -> nestedPut(update_object, "pullAll", kv.getKey(), c))
+						.when(() -> kv.getValue()._1() == Operator.exists, () -> nestedPut(update_object, "$unset", kv.getKey(), 1)) 
+						.otherwise(o -> nestedPut(update_object, "$pull", kv.getKey(), o))
+						;
+				});			
 		}
 		
-		// For remove
-		// whenNotExists - $unset
-		// value - $pull
-		// list - $pullAll
-		// empty list - $pop
-		
-		//TODO: 
-		// fields
+
+		// Here's some MongoDB operators I left because they seemed a bit too MongoDB-specific
 		// numeric - $bit, $mul, $min, $max, $currentDate, $setOnInsert
-		// array - $, 
+		// array - $, $pop
 		// modifiers - $slice ($push), $sort ($push), $position ($sort) 
 		
-		//TODO
 		return update_object;
 	}
 
-	protected static void nestedPut(BasicDBObject mutable, String parent, String nested, Object to_insert) {
+	/** Converts a single or multi component into the stream of (fieldname, component_spec)s
+	 * @param component_role
+	 * @return
+	 */
+	@SuppressWarnings("unchecked")
+	@NonNull
+	protected static <O> Stream<Map.Entry<String, Tuple2<Operator, Tuple2<Object, Object>>>> getSpecStream(final @NonNull QueryComponent<O> component_role) {
+		return Patterns.match(component_role)
+			// Phase 1: get a list of all the entries
+			.<Collection<Map.Entry<String, Tuple2<Operator, Tuple2<Object, Object>>>>>andReturn()
+			.when((Class<SingleQueryComponent<O>>)(Class<?>)SingleQueryComponent.class, q -> q.getAll().entries())
+			.when((Class<MultiQueryComponent<O>>)(Class<?>)MultiQueryComponent.class, mq -> {
+				return mq.getElements().stream().flatMap(sq -> sq.getAll().entries().stream()).collect(Collectors.toList());
+			})
+			.otherwise(() -> Collections.emptyList()).stream();		
+	}
+	
+	/** Inserts an object into field1.field2, creating objects along the way
+	 * @param mutable the mutable object into which the the nested field is inserted
+	 * @param parent the top level fieldname
+	 * @param nested the nested fieldname 
+	 * @param to_insert the object to insert
+	 */
+	protected static void nestedPut(final @NonNull BasicDBObject mutable, final @NonNull String parent, final @NonNull String nested, final @NonNull Object to_insert) {
 		final DBObject dbo = (DBObject) mutable.get(parent);
 		if (null != dbo) {
 			dbo.put(nested, to_insert);
