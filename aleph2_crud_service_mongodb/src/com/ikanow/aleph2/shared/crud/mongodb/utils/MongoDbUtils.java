@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
-package com.ikanow.aleph2.shared_services.crud.mongodb.utils;
+package com.ikanow.aleph2.shared.crud.mongodb.utils;
 
 import java.util.Collection;
 import java.util.Collections;

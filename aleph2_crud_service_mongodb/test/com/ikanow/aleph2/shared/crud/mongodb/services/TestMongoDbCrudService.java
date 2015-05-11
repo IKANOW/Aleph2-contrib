@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
-package com.ikanow.aleph2.shared_services.crud.mongodb;
+package com.ikanow.aleph2.shared.crud.mongodb.services;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -28,6 +28,7 @@ import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
 import org.bson.types.ObjectId;
+import org.junit.Before;
 import org.junit.Test;
 import org.mongojack.JacksonDBCollection;
 
@@ -40,6 +41,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.ObjectTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.shared.crud.mongodb.services.MongoDbCrudService;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import com.mongodb.MongoException;
@@ -69,12 +71,22 @@ public class TestMongoDbCrudService {
 
 	// UTILS
 	
-	public static <O, K> MongoDbCrudService<O, K> getTestService(String test_name, Class<O> bean_clazz, Class<K> key_clazz) {
+	@Before
+	public void setupCrudServiceFactor() {
+		if (null == _factory) {
+			_factory = new MockMongoDbCrudServiceFactory();
+		}
+	}
+	
+	protected IMongoDbCrudServiceFactory _factory = null; 
+	
+	public <O, K> MongoDbCrudService<O, K> getTestService(String test_name, Class<O> bean_clazz, Class<K> key_clazz) {
 		
-		final MockMongoDbCrudService<O, K> service = 
-				new MockMongoDbCrudService<O, K>("test_db_cluster", "test_db", test_name, 
-						bean_clazz, key_clazz, Optional.empty(), Optional.empty(), Optional.empty());
-
+		final MongoDbCrudService<O, K> service = _factory.getMongoDbCrudService(
+				bean_clazz, key_clazz, 
+				_factory.getMongoDbCollection("test_db", test_name),
+				Optional.empty(), Optional.empty(), Optional.empty());
+		
 		service._state.orig_coll.drop();
 		
 		return service;
