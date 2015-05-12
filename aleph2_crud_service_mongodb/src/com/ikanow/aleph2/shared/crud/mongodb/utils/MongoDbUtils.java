@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared.crud.mongodb.utils;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -28,6 +29,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import scala.Tuple2;
 
 import com.google.common.collect.LinkedHashMultimap;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateOperator;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.MultiQueryComponent;
@@ -206,73 +208,49 @@ public class MongoDbUtils {
 	 * @param remove decrements numbers of removes from sets/lists
 	 * @return the mongodb object
 	 */
+	@SuppressWarnings("unchecked")
 	public static <O> DBObject createUpdateObject(final @NonNull UpdateComponent<O> update) {
-		//TODO
-		// ($unset: null removes the object, only possible via the UpdateComponent.deleteObject call)
-		BasicDBObject dbo = new BasicDBObject("$unset", null);
-		return dbo;
+		
+		return update.getAll().entries().stream().collect(
+					Collector.of(
+						BasicDBObject::new,
+						(acc, kv) -> {
+							Patterns.match(kv.getValue()._2()).andAct()
+								// Delete operator, bunch of things have to happen for safety
+								.when(o -> ((UpdateOperator.unset == kv.getValue()._1()) && kv.getKey().isEmpty() && (null == kv.getValue()._2())), 
+										o -> acc.put("$unset", null))
+								//Increment
+								.when(Number.class, n -> (UpdateOperator.increment == kv.getValue()._1()), 
+										n -> nestedPut(acc, "$inc", kv.getKey(), n))
+								// Set
+								.when(o -> (UpdateOperator.set == kv.getValue()._1()), 
+										o -> nestedPut(acc, "$set", kv.getKey(), o))
+								// Unset
+								.when(o -> (UpdateOperator.unset == kv.getValue()._1()), 
+										o -> nestedPut(acc, "$unset", kv.getKey(), 1))
+								// Add items/item to list
+								.when(Collection.class, c -> (UpdateOperator.add == kv.getValue()._1()), 
+										c -> nestedPut(acc, "$push", kv.getKey(), new BasicDBObject("$each", c)))
+								.when(o -> (UpdateOperator.add == kv.getValue()._1()), 
+										o -> nestedPut(acc, "$push", kv.getKey(), o))
+								// Add item/items to set
+								.when(Collection.class, c -> (UpdateOperator.add_deduplicate == kv.getValue()._1()), 
+										c -> nestedPut(acc, "$addToSet", kv.getKey(), new BasicDBObject("$each", c)))
+								.when(o -> (UpdateOperator.add_deduplicate == kv.getValue()._1()), 
+										o -> nestedPut(acc, "$addToSet", kv.getKey(), o))
+								// Remove items from list by query
+								.when(QueryComponent.class, q -> (UpdateOperator.remove == kv.getValue()._1()), 
+										q -> nestedPut(acc, "$pull", kv.getKey(), convertToMongoQuery(q)._1()))
+								// Remove items/item from list
+								.when(Collection.class, c -> (UpdateOperator.remove == kv.getValue()._1()), 
+										c -> nestedPut(acc, "$pullAll", kv.getKey(), c))
+								.when(o -> (UpdateOperator.remove == kv.getValue()._1()), 
+										o -> nestedPut(acc, "$pullAll", kv.getKey(), Arrays.asList(o)))
+								.otherwise(() -> {}); // (do nothing)
+						},
+						(a, b) -> { a.putAll(b.toMap()); return a; },
+						Characteristics.UNORDERED)); 
 	}
-	//
-	
-	/** Create a MongoDB update object
-	 * @param set overwrites any fields
-	 * @param add increments numbers or adds to sets/lists
-	 * @param remove decrements numbers of removes from sets/lists
-	 * @return
-	 */
-//	public static <O> DBObject createUpdateObject(final Optional<O> set, final Optional<QueryComponent<O>> add, final Optional<QueryComponent<O>> remove) {
-//
-//		final BasicDBObject update_object = new BasicDBObject();
-//		
-//		// Set is the easy one:
-//		update_object.put("$set", 
-//				CrudUtils.allOf(set).getAll().entries().stream().collect(
-//						Collector.of(
-//								BasicDBObject::new,
-//								((acc, kv) -> acc.put(kv.getKey(), kv.getValue()._1())),
-//								(a, b) -> { a.putAll(b.toMap()); return a; },
-//								Characteristics.UNORDERED))); 
-//		
-//		if (add.isPresent()) {
-//			getSpecStream(add.get())
-//				// Phase 2: 
-//				// - numeric .. $inc
-//				// - non numeric ... $push
-//				// - set ... $addToSet: { $each
-//				// - collection ... $push: { $each
-//				.forEach(kv -> {
-//					Patterns.match(kv.getValue()._2()._1()).andAct()
-//						.when(Number.class, n -> nestedPut(update_object, "$inc", kv.getKey(), n)) 
-//						.when(Set.class, s -> nestedPut(update_object, "$addToSet", kv.getKey(), new BasicDBObject("$each", s)))
-//						.when(Collection.class, c -> nestedPut(update_object, "$push", kv.getKey(), new BasicDBObject("$each", c)))
-//						.otherwise(o -> nestedPut(update_object, "$push", kv.getKey(), o))
-//						;
-//				});		
-//		}
-//
-//		if (remove.isPresent()) {
-//			getSpecStream(remove.get())
-//				// Phase 2: 
-//				// collection - $pullAll
-//				// whenNotExists - $unset
-//				// value - $pull
-//				.forEach(kv -> {
-//					Patterns.match(kv.getValue()._2()._1()).andAct()
-//						.when(Collection.class, c -> nestedPut(update_object, "pullAll", kv.getKey(), c))
-//						.when(() -> kv.getValue()._1() == Operator.exists, () -> nestedPut(update_object, "$unset", kv.getKey(), 1)) 
-//						.otherwise(o -> nestedPut(update_object, "$pull", kv.getKey(), o))
-//						;
-//				});			
-//		}
-//		
-//
-//		// Here's some MongoDB operators I left because they seemed a bit too MongoDB-specific
-//		// numeric - $bit, $mul, $min, $max, $currentDate, $setOnInsert
-//		// array - $, $pop
-//		// modifiers - $slice ($push), $sort ($push), $position ($sort) 
-//		
-//		return update_object;
-//	}
 
 	/** Converts a single or multi component into the stream of (fieldname, component_spec)s
 	 * @param component_role
