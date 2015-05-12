@@ -15,23 +15,28 @@
  ******************************************************************************/
 package com.ikanow.aleph2.management_db.mongodb.services;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 import com.google.inject.Inject;
+import com.google.inject.Module;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
+import com.ikanow.aleph2.management_db.mongodb.module.MongoDbManagementDbModule;
 import com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory;
 
 /** Implementation of the management DB service using MongoDB (or mock MongoDB) 
  * @author acp
  *
  */
-public class MongoDbManagementDbService implements IManagementDbService {
+public class MongoDbManagementDbService implements IManagementDbService, IExtraDependencyLoader  {
 
 	protected IMongoDbCrudServiceFactory _crud_factory;
 	
@@ -114,4 +119,18 @@ public class MongoDbManagementDbService implements IManagementDbService {
 		return null;
 	}
 
+	/** This service needs to load some additional classes via Guice. Here's the module that defines the bindings
+	 * @return
+	 */
+	public List<Module> getDependencyModules() {
+		return Arrays.asList((Module)new MongoDbManagementDbModule());
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader#youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules()
+	 */
+	@Override
+	public void youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules() {
+		// (done see above)		
+	}
 }
