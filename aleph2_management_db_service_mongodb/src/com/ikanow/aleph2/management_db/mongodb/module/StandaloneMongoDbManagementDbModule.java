@@ -32,6 +32,8 @@ import com.ikanow.aleph2.management_db.mongodb.services.MongoDbManagementDbServi
  */
 public class StandaloneMongoDbManagementDbModule extends AbstractModule {
 
+	//TODO (ALEPH-19): This is the "old" style of doing things, update to the nicer way once the data_model has been updated
+	
 	// (will have one of these 2 only)
 	protected IManagementDbService _management_db_service;
 	protected Injector _injector;
