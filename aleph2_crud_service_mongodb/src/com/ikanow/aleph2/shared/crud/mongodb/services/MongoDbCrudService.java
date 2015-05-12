@@ -47,6 +47,7 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -465,8 +466,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Boolean> updateObjectById(Object id, final Optional<O> set, final Optional<QueryComponent<O>> add, final Optional<QueryComponent<O>> remove) {
-		return updateObjectBySpec(CrudUtils.allOf(_state.bean_clazz).when("_id", id), Optional.of(false), set, add, remove);
+	public Future<Boolean> updateObjectById(final @NonNull Object id, final @NonNull UpdateComponent<O> update) {
+		return updateObjectBySpec(CrudUtils.allOf(_state.bean_clazz).when("_id", id), Optional.of(false), update);
 	}
 
 	/* (non-Javadoc)
@@ -474,11 +475,11 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Boolean> updateObjectBySpec(final @NonNull QueryComponent<O> unique_spec, final Optional<Boolean> upsert, final Optional<O> set, final Optional<QueryComponent<O>> add, final Optional<QueryComponent<O>> remove)
+	public Future<Boolean> updateObjectBySpec(final @NonNull QueryComponent<O> unique_spec, final Optional<Boolean> upsert, final @NonNull UpdateComponent<O> update)
 	{
 		try {			
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(unique_spec);
-			final DBObject update_object = MongoDbUtils.createUpdateObject(set, add, remove);
+			final DBObject update_object = MongoDbUtils.createUpdateObject(update);
 			
 			final WriteResult<O, K> wr = _state.coll.update(query_and_meta._1(), update_object, false, upsert.orElse(false));
 			
@@ -494,12 +495,11 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Long> updateObjectsBySpec(final @NonNull QueryComponent<O> spec, final Optional<Boolean> upsert, 
-												final Optional<O> set, final Optional<QueryComponent<O>> add, final Optional<QueryComponent<O>> remove)
+	public Future<Long> updateObjectsBySpec(final @NonNull QueryComponent<O> spec, final Optional<Boolean> upsert, final @NonNull UpdateComponent<O> update)
 	{
 		try {			
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(spec);
-			final DBObject update_object = MongoDbUtils.createUpdateObject(set, add, remove);
+			final DBObject update_object = MongoDbUtils.createUpdateObject(update);
 			
 			final WriteResult<O, K> wr = _state.coll.update(query_and_meta._1(), update_object, true, false);
 			
@@ -517,16 +517,17 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	@NonNull
 	public Future<Optional<O>> updateAndReturnObjectBySpec(
 								@NonNull QueryComponent<O> unique_spec, final Optional<Boolean> upsert, 
-								final Optional<O> set, final Optional<QueryComponent<O>> add, final Optional<QueryComponent<O>> remove,
+								final @NonNull UpdateComponent<O> update,
 								final Optional<Boolean> before_updated, final @NonNull List<String> field_list, final boolean include)
 	{
 		try {			
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(unique_spec);
-			final DBObject update_object = MongoDbUtils.createUpdateObject(set, add, remove);
+			final DBObject update_object = MongoDbUtils.createUpdateObject(update);
 			
 			final BasicDBObject fields = new BasicDBObject(field_list.stream().collect(Collectors.toMap(f -> f, f -> include ? 1 : 0)));
 			
-			final boolean do_remove = !set.isPresent() && !add.isPresent() && !remove.isPresent();
+			// ($unset: null removes the object, only possible via the UpdateComponent.deleteObject call) 
+			final boolean do_remove = update_object.containsField("$unset") && (null == update_object.get("$unset"));
 			
 			final O ret_val = _state.coll.findAndModify(query_and_meta._1(), fields, (DBObject)query_and_meta._2().get("$sort"), do_remove, update_object, !before_updated.orElse(false), upsert.orElse(false));
 			
@@ -566,7 +567,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		try {			
 			// Delete and return the object
 			final Future<Optional<O>> ret_val =
-					updateAndReturnObjectBySpec(unique_spec, Optional.of(false), Optional.empty(), Optional.empty(), Optional.empty(),
+					updateAndReturnObjectBySpec(unique_spec, Optional.of(false), CrudUtils.update(_state.bean_clazz).deleteObject(),
 													Optional.of(true), Arrays.asList("_id"), true); 					
 
 			// Return a future that just wraps ret_val - ie returns true if the doc is present, ie was just deleted

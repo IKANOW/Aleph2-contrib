@@ -18,8 +18,6 @@ package com.ikanow.aleph2.shared.crud.mongodb.utils;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
-import java.util.Optional;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Collector.Characteristics;
@@ -30,13 +28,13 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import scala.Tuple2;
 
 import com.google.common.collect.LinkedHashMultimap;
-import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.MultiQueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.Operator;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
@@ -201,66 +199,80 @@ public class MongoDbUtils {
 	////////////////////////////////////////////////////////////////////////////////////////
 	
 	// CREATE UPDATE
+
+	/** Create a MongoDB update object
+	 * @param update - the generic specification
+	 * @param add increments numbers or adds to sets/lists
+	 * @param remove decrements numbers of removes from sets/lists
+	 * @return the mongodb object
+	 */
+	public static <O> DBObject createUpdateObject(final @NonNull UpdateComponent<O> update) {
+		//TODO
+		// ($unset: null removes the object, only possible via the UpdateComponent.deleteObject call)
+		BasicDBObject dbo = new BasicDBObject("$unset", null);
+		return dbo;
+	}
+	//
 	
-	/** Create a MongoDB ipdate object
+	/** Create a MongoDB update object
 	 * @param set overwrites any fields
 	 * @param add increments numbers or adds to sets/lists
 	 * @param remove decrements numbers of removes from sets/lists
 	 * @return
 	 */
-	public static <O> DBObject createUpdateObject(final Optional<O> set, final Optional<QueryComponent<O>> add, final Optional<QueryComponent<O>> remove) {
-
-		final BasicDBObject update_object = new BasicDBObject();
-		
-		// Set is the easy one:
-		update_object.put("$set", 
-				CrudUtils.allOf(set).getAll().entries().stream().collect(
-						Collector.of(
-								BasicDBObject::new,
-								((acc, kv) -> acc.put(kv.getKey(), kv.getValue()._1())),
-								(a, b) -> { a.putAll(b.toMap()); return a; },
-								Characteristics.UNORDERED))); 
-		
-		if (add.isPresent()) {
-			getSpecStream(add.get())
-				// Phase 2: 
-				// - numeric .. $inc
-				// - non numeric ... $push
-				// - set ... $addToSet: { $each
-				// - collection ... $push: { $each
-				.forEach(kv -> {
-					Patterns.match(kv.getValue()._2()._1()).andAct()
-						.when(Number.class, n -> nestedPut(update_object, "$inc", kv.getKey(), n)) 
-						.when(Set.class, s -> nestedPut(update_object, "$addToSet", kv.getKey(), new BasicDBObject("$each", s)))
-						.when(Collection.class, c -> nestedPut(update_object, "$push", kv.getKey(), new BasicDBObject("$each", c)))
-						.otherwise(o -> nestedPut(update_object, "$push", kv.getKey(), o))
-						;
-				});		
-		}
-
-		if (remove.isPresent()) {
-			getSpecStream(remove.get())
-				// Phase 2: 
-				// collection - $pullAll
-				// whenNotExists - $unset
-				// value - $pull
-				.forEach(kv -> {
-					Patterns.match(kv.getValue()._2()._1()).andAct()
-						.when(Collection.class, c -> nestedPut(update_object, "pullAll", kv.getKey(), c))
-						.when(() -> kv.getValue()._1() == Operator.exists, () -> nestedPut(update_object, "$unset", kv.getKey(), 1)) 
-						.otherwise(o -> nestedPut(update_object, "$pull", kv.getKey(), o))
-						;
-				});			
-		}
-		
-
-		// Here's some MongoDB operators I left because they seemed a bit too MongoDB-specific
-		// numeric - $bit, $mul, $min, $max, $currentDate, $setOnInsert
-		// array - $, $pop
-		// modifiers - $slice ($push), $sort ($push), $position ($sort) 
-		
-		return update_object;
-	}
+//	public static <O> DBObject createUpdateObject(final Optional<O> set, final Optional<QueryComponent<O>> add, final Optional<QueryComponent<O>> remove) {
+//
+//		final BasicDBObject update_object = new BasicDBObject();
+//		
+//		// Set is the easy one:
+//		update_object.put("$set", 
+//				CrudUtils.allOf(set).getAll().entries().stream().collect(
+//						Collector.of(
+//								BasicDBObject::new,
+//								((acc, kv) -> acc.put(kv.getKey(), kv.getValue()._1())),
+//								(a, b) -> { a.putAll(b.toMap()); return a; },
+//								Characteristics.UNORDERED))); 
+//		
+//		if (add.isPresent()) {
+//			getSpecStream(add.get())
+//				// Phase 2: 
+//				// - numeric .. $inc
+//				// - non numeric ... $push
+//				// - set ... $addToSet: { $each
+//				// - collection ... $push: { $each
+//				.forEach(kv -> {
+//					Patterns.match(kv.getValue()._2()._1()).andAct()
+//						.when(Number.class, n -> nestedPut(update_object, "$inc", kv.getKey(), n)) 
+//						.when(Set.class, s -> nestedPut(update_object, "$addToSet", kv.getKey(), new BasicDBObject("$each", s)))
+//						.when(Collection.class, c -> nestedPut(update_object, "$push", kv.getKey(), new BasicDBObject("$each", c)))
+//						.otherwise(o -> nestedPut(update_object, "$push", kv.getKey(), o))
+//						;
+//				});		
+//		}
+//
+//		if (remove.isPresent()) {
+//			getSpecStream(remove.get())
+//				// Phase 2: 
+//				// collection - $pullAll
+//				// whenNotExists - $unset
+//				// value - $pull
+//				.forEach(kv -> {
+//					Patterns.match(kv.getValue()._2()._1()).andAct()
+//						.when(Collection.class, c -> nestedPut(update_object, "pullAll", kv.getKey(), c))
+//						.when(() -> kv.getValue()._1() == Operator.exists, () -> nestedPut(update_object, "$unset", kv.getKey(), 1)) 
+//						.otherwise(o -> nestedPut(update_object, "$pull", kv.getKey(), o))
+//						;
+//				});			
+//		}
+//		
+//
+//		// Here's some MongoDB operators I left because they seemed a bit too MongoDB-specific
+//		// numeric - $bit, $mul, $min, $max, $currentDate, $setOnInsert
+//		// array - $, $pop
+//		// modifiers - $slice ($push), $sort ($push), $position ($sort) 
+//		
+//		return update_object;
+//	}
 
 	/** Converts a single or multi component into the stream of (fieldname, component_spec)s
 	 * @param component_role
