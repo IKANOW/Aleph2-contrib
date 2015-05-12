@@ -20,6 +20,7 @@ import java.util.Optional;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
@@ -48,7 +49,7 @@ public class MongoDbManagementDbService implements IManagementDbService {
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getSharedLibraryStore()
 	 */
-	public ICrudService<SharedLibraryBean> getSharedLibraryStore() {
+	public IManagementCrudService<SharedLibraryBean> getSharedLibraryStore() {
 		// TODO Auto-generated method stub
 		return null;
 	}
@@ -65,7 +66,7 @@ public class MongoDbManagementDbService implements IManagementDbService {
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getDataBucketStore()
 	 */
-	public ICrudService<DataBucketBean> getDataBucketStore() {
+	public IManagementCrudService<DataBucketBean> getDataBucketStore() {
 		// TODO Auto-generated method stub
 		return null;
 	}
@@ -73,7 +74,7 @@ public class MongoDbManagementDbService implements IManagementDbService {
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getDataBucketStatusStore()
 	 */
-	public ICrudService<DataBucketStatusBean> getDataBucketStatusStore() {
+	public IManagementCrudService<DataBucketStatusBean> getDataBucketStatusStore() {
 		// TODO Auto-generated method stub
 		return null;
 	}
@@ -90,7 +91,7 @@ public class MongoDbManagementDbService implements IManagementDbService {
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getAnalyticThreadStore()
 	 */
-	public ICrudService<AnalyticThreadBean> getAnalyticThreadStore() {
+	public IManagementCrudService<AnalyticThreadBean> getAnalyticThreadStore() {
 		// TODO Auto-generated method stub
 		return null;
 	}
