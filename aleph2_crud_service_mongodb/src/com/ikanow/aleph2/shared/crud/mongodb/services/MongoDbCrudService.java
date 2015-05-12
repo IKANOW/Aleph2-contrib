@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
-package com.ikanow.aleph2.shared_services.crud.mongodb;
+package com.ikanow.aleph2.shared.crud.mongodb.services;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
@@ -50,7 +50,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
-import com.ikanow.aleph2.shared_services.crud.mongodb.utils.MongoDbUtils;
+import com.ikanow.aleph2.shared.crud.mongodb.utils.MongoDbUtils;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCollectionProxyFactory;
@@ -194,11 +194,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 
 	// Authorization and project filtering:
 	
-	/** Returns a copy of the CRUD service that is filtered based on the client (user) and project rights
-	 * @param authorization_fieldname the fieldname in the bean that determines where the per-bean authorization is held
-	 * @param client_auth Optional specification of the user's access rights
-	 * @param project_auth Optional specification of the projects's access rights
-	 * @return The filtered CRUD repo
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getFilteredRepo(java.lang.String, java.util.Optional, java.util.Optional)
 	 */
 	@Override
 	@NonNull
@@ -214,11 +211,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	
 	// *C*REATE
 	
-	/** Stores the specified object in the database, optionally failing if it is already present
-	 *  If the "_id" field of the object is not set then it is assigned
-	 * @param new_object
-	 * @param replace_if_present if true then any object with the specified _id is overwritten
-	 * @return A future containing the _id (filled in if not present in the object) - accessing the future will also report on errors via ExecutionException 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#storeObject(java.lang.Object, boolean)
 	 */
 	@Override
 	@NonNull
@@ -234,10 +228,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}
 	}
 
-	/** Stores the specified object in the database, failing if it is already present
-	 *  If the "_id" field of the object is not set then it is assigned
-	 * @param new_object
-	 * @return An optional containing the object, or Optional.empty() if not present 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#storeObject(java.lang.Object)
 	 */
 	@Override
 	@NonNull
@@ -245,10 +237,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		return storeObject(new_object, false);
 	}
 
-	/**
-	 * @param objects - a list of objects to insert
-	 * @param continue_on_error if true then duplicate objects are ignored (not inserted) but the store continues
-	 * @return a future containing the list of objects and the number actually inserted
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#storeObjects(java.util.List, boolean)
 	 */
 	@NonNull 
 	public Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final @NonNull List<O> new_objects, final boolean continue_on_error) {
@@ -271,9 +261,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}		
 	}
 	
-	/**
-	 * @param objects - a list of objects to insert, failing out as soon as a duplicate is inserted 
-	 * @return a future containing the list of objects and the number actually inserted
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#storeObjects(java.util.List)
 	 */
 	@NonNull 
 	public Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final @NonNull List<O> new_objects) {
@@ -284,9 +273,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	
 	// *R*ETRIEVE
 	
-	/** Registers that you wish to optimize specific queries
-	 * @param ordered_field_list a list of the fields in the query
-	 * @return a future describing if the optimization was successfully completed - accessing the future will also report on errors via ExecutionException
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#optimizeQuery(java.util.List)
 	 */
 	@Override
 	@NonNull
@@ -304,9 +292,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		});
 	}
 
-	/** Inform the system that a specific query optimization is no longer required
-	 * @param ordered_field_list a list of the fields in the query
-	 * @return whether this optimization was registered in the first place
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#deregisterOptimizedQuery(java.util.List)
 	 */
 	@Override
 	@NonNull
@@ -334,9 +321,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}
 	}
 	
-	/** Returns the object (in optional form to handle its not existing) given a simple object template that contains a unique search field (but other params are allowed)
-	 * @param unique_spec A specification (must describe at most one object) generated by CrudUtils.allOf(...) (all fields must be match) or CrudUtils.anyOf(...) (any fields must match) together with extra fields generated by .withAny(..), .withAll(..), present(...) or notPresent(...)   
-	 * @return A future containing an optional containing the object, or Optional.empty() - accessing the future will also report on errors via ExecutionException 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getObjectBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent)
 	 */
 	@Override
 	@NonNull
@@ -344,11 +330,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		return getObjectBySpec(unique_spec, Collections.<String>emptyList(), false);
 	}
 
-	/** Returns the object (in optional form to handle its not existing) given a simple object template that contains a unique search field (but other params are allowed)
-	 * @param unique_spec A specification (must describe at most one object) generated by CrudUtils.allOf(...) (all fields must be match) or CrudUtils.anyOf(...) (any fields must match) together with extra fields generated by .withAny(..), .withAll(..), present(...) or notPresent(...)   
-	 * @param field_list list of fields to return, supports "." nesting
-	 * @param include - if true, the field list is to be included; if false, to be excluded
-	 * @return A future containing an optional containing the object, or Optional.empty() - accessing the future will also report on errors via ExecutionException
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getObjectBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent, java.util.List, boolean)
 	 */
 	@Override
 	@NonNull 
@@ -367,9 +350,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}		
 	}
 	
-	/** Returns the object given the id
-	 * @param id the id of the object
-	 * @return A future containing an optional containing the object, or Optional.empty() - accessing the future will also report on errors via ExecutionException
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getObjectById(java.lang.Object)
 	 */
 	@Override
 	@NonNull
@@ -377,11 +359,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		return getObjectById(id, Collections.<String>emptyList(), false);
 	}
 
-	/** Returns the object given the id
-	 * @param id the id of the object
-	 * @param field_list List of fields to return, supports "." nesting
-	 * @param include - if true, the field list is to be included; if false, to be excluded
-	 * @return A future containing an optional containing the object, or Optional.empty() - accessing the future will also report on errors via ExecutionException 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getObjectById(java.lang.Object, java.util.List, boolean)
 	 */
 	@SuppressWarnings("unchecked")
 	@Override
@@ -401,9 +380,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}		
 	}
 
-	/** Returns the list of objects specified by the spec (all fields returned)
-	 * @param spec A specification generated by CrudUtils.allOf(...) (all fields must be match) or CrudUtils.anyOf(...) (any fields must match) together with extra fields generated by .withAny(..), .withAll(..), present(...) or notPresent(...)   
-	 * @return A future containing a (possibly empty) list of Os - accessing the future will also report on errors via ExecutionException 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getObjectsBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent)
 	 */
 	@Override
 	@NonNull
@@ -411,11 +389,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		return getObjectsBySpec(spec, Collections.<String>emptyList(), false);
 	}
 
-	/** Returns the list of objects/order/limit specified by the spec. Note that the resulting object should be run within a try-with-resources or read fully.
-	 * @param spec A specification generated by CrudUtils.allOf(...) (all fields must be match) or CrudUtils.anyOf(...) (any fields must match) together with extra fields generated by .withAny(..), .withAll(..), present(...) or notPresent(...)   
-	 * @param field_list List of fields to return, supports "." nesting
-	 * @param include - if true, the field list is to be included; if false, to be excluded
-	 * @return A future containing a (possibly empty) list of Os - accessing the future will also report on errors via ExecutionException 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getObjectsBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent, java.util.List, boolean)
 	 */
 	@Override
 	@NonNull
@@ -448,9 +423,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}		
 	}
 
-	/** Counts the number of objects specified by the spec (all fields returned)
-	 * @param spec A specification generated by CrudUtils.allOf(...) (all fields must be match) or CrudUtils.anyOf(...) (any fields must match) together with extra fields generated by .withAny(..), .withAll(..), present(...) or notPresent(...)   
-	 * @return A future containing the number of matching objects - accessing the future will also report on errors via ExecutionException 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#countObjectsBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent)
 	 */
 	@Override
 	@NonNull
@@ -473,9 +447,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}		
 	}
 
-	/** Counts the number of objects in the data store
-	 * @param spec A specification generated by CrudUtils.allOf(...) (all fields must be match) or CrudUtils.anyOf(...) (any fields must match) together with extra fields generated by .withAny(..), .withAll(..), present(...) or notPresent(...)   
-	 * @return A future containing the number of matching objects - accessing the future will also report on errors via ExecutionException 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#countObjects()
 	 */
 	@NonNull 
 	public Future<Long> countObjects() {
@@ -487,12 +460,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	
 	// *U*PDATE
 	
-	/** Updates the specified object
-	 * @param id the id of the object to update
-	 * @param set overwrites any fields
-	 * @param add increments numbers or adds to sets/lists
-	 * @param remove decrements numbers of removes from sets/lists
-	 * @return a future describing if the update was successful - accessing the future will also report on errors via ExecutionException
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#updateObjectById(java.lang.Object, java.util.Optional, java.util.Optional, java.util.Optional)
 	 */
 	@Override
 	@NonNull
@@ -500,13 +469,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		return updateObjectBySpec(CrudUtils.allOf(_state.bean_clazz).when("_id", id), Optional.of(false), set, add, remove);
 	}
 
-	/** Updates the specified object
-	 * @param unique_spec A specification (must describe at most one object) generated by CrudUtils.allOf(...) (all fields must be match) or CrudUtils.anyOf(...) (any fields must match) together with extra fields generated by .withAny(..), .withAll(..), present(...) or notPresent(...)   
-	 * @param upsert if specified and true then inserts the object if it doesn't exist
-	 * @param set overwrites any fields
-	 * @param add increments numbers or adds to sets/lists
-	 * @param remove decrements numbers of removes from sets/lists
-	 * @return a future describing if the update was successful - accessing the future will also report on errors via ExecutionException
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#updateObjectBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent, java.util.Optional, java.util.Optional, java.util.Optional, java.util.Optional)
 	 */
 	@Override
 	@NonNull
@@ -525,13 +489,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}		
 	}
 
-	/** Updates the specified object
-	 * @param spec A specification generated by CrudUtils.allOf(...) (all fields must be match) or CrudUtils.anyOf(...) (any fields must match) together with extra fields generated by .withAny(..), .withAll(..), present(...) or notPresent(...)   
-	 * @param upsert if specified and true then inserts the object if it doesn't exist
-	 * @param set overwrites any fields
-	 * @param add increments numbers or adds to sets/lists
-	 * @param remove decrements numbers of removes from sets/lists
-	 * @return a future describing the number of objects updated - accessing the future will also report on errors via ExecutionException
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#updateObjectsBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent, java.util.Optional, java.util.Optional, java.util.Optional, java.util.Optional)
 	 */
 	@Override
 	@NonNull
@@ -551,16 +510,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}		
 	}
 
-	/** Updates the specified object, returning the updated version. all 3 update types to be Optional.empty() to delete the object.
-	 * @param unique_spec A specification (must describe at most one object) generated by CrudUtils.allOf(...) (all fields must be match) or CrudUtils.anyOf(...) (any fields must match) together with extra fields generated by .withAny(..), .withAll(..), present(...) or notPresent(...). orderBy can  be used to sort.   
-	 * @param upsert if specified and true then inserts the object if it doesn't exist
-	 * @param set overwrites any fields
-	 * @param add increments numbers or adds to sets/lists
-	 * @param remove decrements numbers of removes from sets/lists
-	 * @param before_updated if specified and "true" then returns the object _before_ it is modified
-	 * @param field_list List of fields to return, supports "." nesting
-	 * @param include - if true, the field list is to be included; if false, to be excluded
-	 * @return a future containing the object, if found (or upserted) - accessing the future will also report on errors via ExecutionException
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#updateAndReturnObjectBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent, java.util.Optional, java.util.Optional, java.util.Optional, java.util.Optional, java.util.Optional, java.util.List, boolean)
 	 */
 	@Override
 	@NonNull
@@ -590,9 +541,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	
 	// *D*ELETE
 	
-	/** Deletes the specific object
-	 * @param id the id of the object to update
-	 * @return a future describing if the delete was successful - accessing the future will also report on errors via ExecutionException
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#deleteObjectById(java.lang.Object)
 	 */
 	@SuppressWarnings("unchecked")
 	@Override
@@ -607,9 +557,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}		
 	}
 
-	/** Deletes the specific object
-	 * @param unique_spec A specification (must describe at most one object) generated by CrudUtils.allOf(...) (all fields must be match) or CrudUtils.anyOf(...) (any fields must match) together with extra fields generated by .withAny(..), .withAll(..), present(...) or notPresent(...)   
-	 * @return a future describing if the delete was successful - accessing the future will also report on errors via ExecutionException
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#deleteObjectBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent)
 	 */
 	@Override
 	@NonNull
@@ -632,9 +581,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}		
 	}
 
-	/** Deletes the specific object
-	 * @param A specification that must be initialized via CrudUtils.anyOf(...) and then the desired fields added via .exists(<field or getter>)
-	 * @return a future describing the number of objects updated - accessing the future will also report on errors via ExecutionException
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#deleteObjectsBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent)
 	 */
 	@Override
 	@NonNull
@@ -671,8 +619,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}		
 	}
 
-	/** Deletes the entire datastore and all documents, including mappings/indexes/metdata etc
-	 * @return a future describing if the delete was successful - accessing the future will also report on errors via ExecutionException
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#deleteDatastore()
 	 */
 	@NonNull 
 	public Future<Boolean> deleteDatastore() {
@@ -689,17 +637,16 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	
 	// Misc
 	
-	/** Returns an identical version of this CRUD service but using JsonNode instead of beans (which may save serialization)
-	 * @return the JsonNode-genericized version of this same CRUD service
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getRawCrudService()
 	 */
 	@NonNull
 	public ICrudService<JsonNode> getRawCrudService() {
 		return new MongoDbCrudService<JsonNode, K>(JsonNode.class, _state.key_clazz, _state.orig_coll, _state.auth_fieldname, _state.auth, _state.project);
 	}
 	
-	/** Returns a simple searchable ("Lucene-like") view of the data
-	 * NOT IMPLEMENTED
-	 * @return a search service
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getSearchService()
 	 */
 	@Override
 	@NonNull
@@ -708,11 +655,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		return Optional.empty();
 	}
 
-	/** USE WITH CARE: this returns the driver to the underlying technology
-	 *  shouldn't be used unless absolutely necessary!
-	 * @param driver_class the class of the driver
-	 * @param a string containing options in some technology-specific format
-	 * @return a driver to the underlying technology. Will exception if you pick the wrong one!
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getUnderlyingPlatformDriver(java.lang.Class, java.util.Optional)
 	 */
 	@SuppressWarnings("unchecked")
 	@Override
