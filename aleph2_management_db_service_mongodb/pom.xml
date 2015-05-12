@@ -33,4 +33,23 @@
       </plugin>
     </plugins>
   </build>
+
+  <dependencies>
+  	<dependency>
+  		<groupId>junit</groupId>
+  		<artifactId>junit</artifactId>
+  		<version>4.12</version>
+  		<scope>test</scope>
+  	</dependency>
+  	<dependency>
+  		<groupId>com.google.inject</groupId>
+  		<artifactId>guice</artifactId>
+  		<version>3.0</version>
+  	</dependency>
+  	<dependency>
+  		<groupId>com.ikanow.aleph2</groupId>
+  		<artifactId>aleph2_crud_service_mongodb</artifactId>
+  		<version>0.0.1-SNAPSHOT</version>
+  	</dependency>
+  </dependencies>
 </project>
