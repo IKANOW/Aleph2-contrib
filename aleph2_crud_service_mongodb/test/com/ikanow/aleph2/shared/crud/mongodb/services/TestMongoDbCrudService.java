@@ -38,7 +38,7 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
-import com.ikanow.aleph2.data_model.utils.ObjectTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.mongodb.services.MongoDbCrudService;
@@ -123,7 +123,7 @@ public class TestMongoDbCrudService {
 		
 		// 2) Add the _id again, should fail
 		
-		final TestBean test2 = ObjectTemplateUtils.clone(test).with("test_string", "test_string_2").done();
+		final TestBean test2 = BeanTemplateUtils.clone(test).with("test_string", "test_string_2").done();
 		
 		final Future<Supplier<Object>> result2 = service.storeObject(test2);
 				
@@ -206,7 +206,7 @@ public class TestMongoDbCrudService {
 		// 1) Insertion without ids
 		
 		final List<TestBean> l = IntStream.rangeClosed(1, 10).boxed()
-				.map(i -> ObjectTemplateUtils.build(TestBean.class).with("test_string", "test_string" + i).done())
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("test_string", "test_string" + i).done().get())
 				.collect(Collectors.toList());
 
 		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result = service.storeObjects(l);
@@ -227,7 +227,7 @@ public class TestMongoDbCrudService {
 		service._state.orig_coll.drop();
 
 		final List<TestBean> l2 = IntStream.rangeClosed(51, 100).boxed()
-								.map(i -> ObjectTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done())
+								.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done().get())
 								.collect(Collectors.toList());
 				
 		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_2 = service.storeObjects(l2);
@@ -238,9 +238,9 @@ public class TestMongoDbCrudService {
 		// 3) Insertion with dups - fail and stop
 
 		final List<TestBean> l3 = IntStream.rangeClosed(1, 200).boxed()
-				.map(i -> ObjectTemplateUtils.build(TestBean.class)
+				.map(i -> BeanTemplateUtils.build(TestBean.class)
 						.with("_id", "id" + i).
-						with("test_string", "test_string" + i).done())
+						with("test_string", "test_string" + i).done().get())
 				.collect(Collectors.toList());
 		
 		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_3 = service.storeObjects(l3);
@@ -261,7 +261,7 @@ public class TestMongoDbCrudService {
 		// 4) Insertion with dups - fail and continue
 		
 		final List<TestBean> l4 = IntStream.rangeClosed(21, 120).boxed()
-				.map(i -> ObjectTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done())
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done().get())
 				.collect(Collectors.toList());
 		
 		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_4 = service.storeObjects(l4, true);
@@ -282,7 +282,7 @@ public class TestMongoDbCrudService {
 		// Insert some objects to index
 		
 		final List<TestBean> l = IntStream.rangeClosed(1, 1000).boxed()
-				.map(i -> ObjectTemplateUtils.build(TestBean.class).with("test_string", "test_string" + i).done())
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("test_string", "test_string" + i).done().get())
 				.collect(Collectors.toList());
 
 		service.storeObjects(l);
@@ -348,11 +348,11 @@ public class TestMongoDbCrudService {
 		final MongoDbCrudService<TestBean, String> service = getTestService("singleObjectRetrieve", TestBean.class, String.class);
 
 		final List<TestBean> l = IntStream.rangeClosed(1, 10).boxed()
-				.map(i -> ObjectTemplateUtils.build(TestBean.class)
+				.map(i -> BeanTemplateUtils.build(TestBean.class)
 								.with("_id", "id" + i)
 								.with("test_string", "test_string" + i)
 								.with("test_long", (Long)(long)i)
-								.done())
+								.done().get())
 				.collect(Collectors.toList());
 
 		service.storeObjects(l);
@@ -434,11 +434,11 @@ public class TestMongoDbCrudService {
 		final MongoDbCrudService<TestBean, String> service = getTestService("multiObjectRetrieve", TestBean.class, String.class);
 		
 		final List<TestBean> l = IntStream.rangeClosed(0, 9).boxed()
-				.map(i -> ObjectTemplateUtils.build(TestBean.class)
+				.map(i -> BeanTemplateUtils.build(TestBean.class)
 								.with("_id", "id" + i)
 								.with("test_string", "test_string" + i)
 								.with("test_long", (Long)(long)i)
-								.done())
+								.done().get())
 				.collect(Collectors.toList());
 
 		service.storeObjects(l);
@@ -522,11 +522,11 @@ public class TestMongoDbCrudService {
 		final MongoDbCrudService<TestBean, String> service = getTestService("testCounting", TestBean.class, String.class);
 
 		final List<TestBean> l = IntStream.rangeClosed(0, 9).boxed()
-				.map(i -> ObjectTemplateUtils.build(TestBean.class)
+				.map(i -> BeanTemplateUtils.build(TestBean.class)
 								.with("_id", "id" + i)
 								.with("test_string", "test_string" + i)
 								.with("test_long", (Long)(long)i)
-								.done())
+								.done().get())
 				.collect(Collectors.toList());
 
 		service.storeObjects(l);
@@ -578,11 +578,11 @@ public class TestMongoDbCrudService {
 	protected static void replenishDocsForDeletion(MongoDbCrudService<TestBean, String> service) {
 		
 		final List<TestBean> l = IntStream.rangeClosed(0, 9).boxed()
-				.map(i -> ObjectTemplateUtils.build(TestBean.class)
+				.map(i -> BeanTemplateUtils.build(TestBean.class)
 								.with("_id", "id" + i)
 								.with("test_string", "test_string" + i)
 								.with("test_long", (Long)(long)i)
-								.done())
+								.done().get())
 				.collect(Collectors.toList());
 
 		service.storeObjects(l, true);

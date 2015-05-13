@@ -28,7 +28,8 @@ import scala.Tuple2;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.MultiQueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
-import com.ikanow.aleph2.data_model.utils.ObjectTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils.BeanTemplate;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.mongodb.utils.MongoDbUtils;
 import com.mongodb.BasicDBObject;
@@ -75,7 +76,7 @@ public class TestMongoDbUtils {
 		
 		// No meta:
 		
-		final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(new TestBean()); 
+		final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(BeanTemplate.of(new TestBean())); 
 		
 		final Tuple2<DBObject, DBObject> query_meta_1 = MongoDbUtils.convertToMongoQuery(query_comp_1);
 
@@ -84,7 +85,7 @@ public class TestMongoDbUtils {
 		
 		// Meta fields
 		
-		TestBean template2 = ObjectTemplateUtils.build(TestBean.class).with(TestBean::string_field, null).done();
+		BeanTemplate<TestBean> template2 = BeanTemplateUtils.build(TestBean.class).with(TestBean::string_field, null).done();
 		
 		final SingleQueryComponent<TestBean> query_comp_2 = CrudUtils.anyOf(template2)
 													.orderBy(Tuples._2T("test_field_1", 1), Tuples._2T("test_field_2", -1));		
@@ -105,7 +106,7 @@ public class TestMongoDbUtils {
 		
 		// Very simple
 
-		TestBean template1 = ObjectTemplateUtils.build(TestBean.class).with(TestBean::string_field, "string_field").done();
+		BeanTemplate<TestBean> template1 = BeanTemplateUtils.build(TestBean.class).with(TestBean::string_field, "string_field").done();
 		
 		final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(template1).when(TestBean::bool_field, true);
 		
@@ -259,7 +260,7 @@ public class TestMongoDbUtils {
 		
 		// 2 levels of nesting
 
-		TestBean.NestedTestBean nestedBean = ObjectTemplateUtils.build(TestBean.NestedTestBean.class).with("nested_string_field", "x").done();
+		BeanTemplate<TestBean.NestedTestBean> nestedBean = BeanTemplateUtils.build(TestBean.NestedTestBean.class).with("nested_string_field", "x").done();
 		
 		final SingleQueryComponent<TestBean> query_comp_2 = CrudUtils.allOf(TestBean.class)
 				.when(TestBean::string_field, "a")
