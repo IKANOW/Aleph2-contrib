@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -183,7 +182,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 * @return a future that errors when touched
 	 */
 	@NonNull
-	protected static <T> Future<T> returnError(final @NonNull Exception e) {
+	protected static <T> CompletableFuture<T> returnError(final @NonNull Exception e) {
 		return new CompletableFuture<T>() {
 			@Override public T get() throws ExecutionException {
 				throw new ExecutionException(e);
@@ -217,7 +216,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Supplier<Object>> storeObject(final @NonNull O new_object, final boolean replace_if_present) {
+	public CompletableFuture<Supplier<Object>> storeObject(final @NonNull O new_object, final boolean replace_if_present) {
 		try {
 			final DBObject dbo = convertToBson(new_object);
 			@SuppressWarnings("unused")
@@ -234,7 +233,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Supplier<Object>> storeObject(final @NonNull O new_object) {
+	public CompletableFuture<Supplier<Object>> storeObject(final @NonNull O new_object) {
 		return storeObject(new_object, false);
 	}
 
@@ -242,7 +241,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#storeObjects(java.util.List, boolean)
 	 */
 	@NonNull 
-	public Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final @NonNull List<O> new_objects, final boolean continue_on_error) {
+	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final @NonNull List<O> new_objects, final boolean continue_on_error) {
 		try {
 			final List<DBObject> l = new_objects.stream().map(o -> convertToBson(o)).collect(Collectors.toList());
 
@@ -266,7 +265,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#storeObjects(java.util.List)
 	 */
 	@NonNull 
-	public Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final @NonNull List<O> new_objects) {
+	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final @NonNull List<O> new_objects) {
 		return storeObjects(new_objects, false);
 	}
 	
@@ -279,7 +278,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Boolean> optimizeQuery(final @NonNull List<String> ordered_field_list) {
+	public CompletableFuture<Boolean> optimizeQuery(final @NonNull List<String> ordered_field_list) {
 		
 		return CompletableFuture.supplyAsync(() -> {
 			final BasicDBObject index_keys = new BasicDBObject(
@@ -327,7 +326,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Optional<O>> getObjectBySpec(final @NonNull QueryComponent<O> unique_spec) {
+	public CompletableFuture<Optional<O>> getObjectBySpec(final @NonNull QueryComponent<O> unique_spec) {
 		return getObjectBySpec(unique_spec, Collections.<String>emptyList(), false);
 	}
 
@@ -336,7 +335,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull 
-	public Future<Optional<O>> getObjectBySpec(final @NonNull QueryComponent<O> unique_spec, final @NonNull List<String> field_list, final boolean include) {
+	public CompletableFuture<Optional<O>> getObjectBySpec(final @NonNull QueryComponent<O> unique_spec, final @NonNull List<String> field_list, final boolean include) {
 		try {			
 			if (field_list.isEmpty()) {
 				return CompletableFuture.completedFuture(Optional.ofNullable(_state.coll.findOne(MongoDbUtils.convertToMongoQuery(unique_spec)._1())));				
@@ -356,7 +355,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Optional<O>> getObjectById(final @NonNull Object id) {
+	public CompletableFuture<Optional<O>> getObjectById(final @NonNull Object id) {
 		return getObjectById(id, Collections.<String>emptyList(), false);
 	}
 
@@ -366,7 +365,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	@SuppressWarnings("unchecked")
 	@Override
 	@NonNull
-	public Future<Optional<O>> getObjectById(final @NonNull Object id, final @NonNull List<String> field_list, final boolean include) {
+	public CompletableFuture<Optional<O>> getObjectById(final @NonNull Object id, final @NonNull List<String> field_list, final boolean include) {
 		try {			
 			if (field_list.isEmpty()) {
 				return CompletableFuture.completedFuture(Optional.ofNullable(_state.coll.findOneById((K)id)));				
@@ -386,7 +385,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Cursor<O>> getObjectsBySpec(final @NonNull QueryComponent<O> spec) {
+	public CompletableFuture<Cursor<O>> getObjectsBySpec(final @NonNull QueryComponent<O> spec) {
 		return getObjectsBySpec(spec, Collections.<String>emptyList(), false);
 	}
 
@@ -395,7 +394,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Cursor<O>> getObjectsBySpec(final @NonNull QueryComponent<O> spec, final @NonNull List<String> field_list, final boolean include) {
+	public CompletableFuture<Cursor<O>> getObjectsBySpec(final @NonNull QueryComponent<O> spec, final @NonNull List<String> field_list, final boolean include) {
 		try {	
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(spec);
 			final DBCursor<O> cursor = 
@@ -429,7 +428,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Long> countObjectsBySpec(final @NonNull QueryComponent<O> spec) {
+	public CompletableFuture<Long> countObjectsBySpec(final @NonNull QueryComponent<O> spec) {
 		try {			
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(spec);
 			final Long limit = (Long)query_and_meta._2().get("$limit");
@@ -452,7 +451,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#countObjects()
 	 */
 	@NonNull 
-	public Future<Long> countObjects() {
+	public CompletableFuture<Long> countObjects() {
 		return countObjectsBySpec(CrudUtils.allOf(_state.bean_clazz));
 	}
 	
@@ -466,7 +465,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Boolean> updateObjectById(final @NonNull Object id, final @NonNull UpdateComponent<O> update) {
+	public CompletableFuture<Boolean> updateObjectById(final @NonNull Object id, final @NonNull UpdateComponent<O> update) {
 		return updateObjectBySpec(CrudUtils.allOf(_state.bean_clazz).when("_id", id), Optional.of(false), update);
 	}
 
@@ -475,7 +474,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Boolean> updateObjectBySpec(final @NonNull QueryComponent<O> unique_spec, final Optional<Boolean> upsert, final @NonNull UpdateComponent<O> update)
+	public CompletableFuture<Boolean> updateObjectBySpec(final @NonNull QueryComponent<O> unique_spec, final Optional<Boolean> upsert, final @NonNull UpdateComponent<O> update)
 	{
 		try {			
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(unique_spec);
@@ -495,7 +494,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Long> updateObjectsBySpec(final @NonNull QueryComponent<O> spec, final Optional<Boolean> upsert, final @NonNull UpdateComponent<O> update)
+	public CompletableFuture<Long> updateObjectsBySpec(final @NonNull QueryComponent<O> spec, final Optional<Boolean> upsert, final @NonNull UpdateComponent<O> update)
 	{
 		try {			
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(spec);
@@ -515,7 +514,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Optional<O>> updateAndReturnObjectBySpec(
+	public CompletableFuture<Optional<O>> updateAndReturnObjectBySpec(
 								@NonNull QueryComponent<O> unique_spec, final Optional<Boolean> upsert, 
 								final @NonNull UpdateComponent<O> update,
 								final Optional<Boolean> before_updated, final @NonNull List<String> field_list, final boolean include)
@@ -548,7 +547,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	@SuppressWarnings("unchecked")
 	@Override
 	@NonNull
-	public Future<Boolean> deleteObjectById(final @NonNull Object id) {
+	public CompletableFuture<Boolean> deleteObjectById(final @NonNull Object id) {
 		try {			
 			final WriteResult<O, K> wr = _state.coll.removeById((K)id);
 			return CompletableFuture.completedFuture(wr.getN() > 0);
@@ -563,10 +562,10 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Boolean> deleteObjectBySpec(final @NonNull QueryComponent<O> unique_spec) {
+	public CompletableFuture<Boolean> deleteObjectBySpec(final @NonNull QueryComponent<O> unique_spec) {
 		try {			
 			// Delete and return the object
-			final Future<Optional<O>> ret_val =
+			final CompletableFuture<Optional<O>> ret_val =
 					updateAndReturnObjectBySpec(unique_spec, Optional.of(false), CrudUtils.update(_state.bean_clazz).deleteObject(),
 													Optional.of(true), Arrays.asList("_id"), true); 					
 
@@ -587,7 +586,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	@NonNull
-	public Future<Long> deleteObjectsBySpec(final @NonNull QueryComponent<O> spec) {
+	public CompletableFuture<Long> deleteObjectsBySpec(final @NonNull QueryComponent<O> spec) {
 		try {			
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(spec);
 			final Long limit = (Long) query_and_meta._2().get("$limit");
@@ -624,7 +623,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#deleteDatastore()
 	 */
 	@NonNull 
-	public Future<Boolean> deleteDatastore() {
+	public CompletableFuture<Boolean> deleteDatastore() {
 		try {			
 			_state.orig_coll.drop();
 			return CompletableFuture.completedFuture((Boolean)(true));
