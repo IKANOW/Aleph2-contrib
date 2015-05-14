@@ -66,6 +66,6 @@ public class MockMongoDbCrudServiceFactory implements IMongoDbCrudServiceFactory
 			final @NonNull DBCollection coll, 
 			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project)
 	{
-		return new MockMongoDbCrudService<O, K>(bean_clazz, key_clazz, coll, auth_fieldname, auth, project);
+		return new MongoDbCrudService<O, K>(bean_clazz, key_clazz, coll, auth_fieldname, auth, project);
 	}
 }

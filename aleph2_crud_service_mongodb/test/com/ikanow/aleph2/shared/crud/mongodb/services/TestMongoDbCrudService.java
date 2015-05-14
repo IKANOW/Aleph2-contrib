@@ -567,6 +567,10 @@ public class TestMongoDbCrudService {
 		assertEquals(0L, (long)service.countObjectsBySpec(query_4).get());
 	}
 	
+	////////////////////////////////////////////////
+	
+	// UPDATES
+
 	//TODO (updates)
 	
 	//TODO (find and modify)
