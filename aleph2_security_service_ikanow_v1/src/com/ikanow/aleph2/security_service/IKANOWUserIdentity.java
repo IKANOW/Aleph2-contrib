@@ -40,17 +40,17 @@ public class IKANOWUserIdentity implements Identity {
 	
 	public boolean hasPermission(Object resource, String operation) {
 		//check the security service if there is a rule for this identity/resource/operation
-		ISecurityService security_service = ContextUtils.getAccessContext().getSecurityService();
+		ISecurityService security_service = ContextUtils.getServiceContext().getSecurityService();
 		return security_service.hasPermission(this, resource.getClass(), null, operation);		
 	}
 	
 	public boolean hasPermission(Class<?> resourceClass, String identifier, String operation) {
-		ISecurityService security_service = ContextUtils.getAccessContext().getSecurityService();
+		ISecurityService security_service = ContextUtils.getServiceContext().getSecurityService();
 		return security_service.hasPermission(this, resourceClass, identifier, operation);
 	}
 	
 	public boolean hasPermission(String resourceName, String identifier, String operation) {
-		ISecurityService security_service = ContextUtils.getAccessContext().getSecurityService();
+		ISecurityService security_service = ContextUtils.getServiceContext().getSecurityService();
 		return security_service.hasPermission(this, resourceName, identifier, operation);
 	}
 }
