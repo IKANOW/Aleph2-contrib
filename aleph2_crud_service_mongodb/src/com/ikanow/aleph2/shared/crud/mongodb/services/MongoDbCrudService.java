@@ -53,6 +53,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.shared.crud.mongodb.utils.ErrorUtils;
 import com.ikanow.aleph2.shared.crud.mongodb.utils.MongoDbUtils;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
@@ -138,7 +139,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 					string_id_field.setAccessible(true);
 				}
 				catch (Exception e) {
-					throw new RuntimeException("Internal logic error: get String _id field for " + bean_clazz, e);
+					throw new RuntimeException(ErrorUtils.get(ErrorUtils.INTERNAL_LOGIC_ERROR_NO_ID_FIELD, bean_clazz), e);
 				}
 			}
 			else {
@@ -313,7 +314,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 															.filter(dbo -> index_keys_str.equals(dbo.get("key").toString()))
 															.collect(Collectors.toList());
 				if (matching_indexes.isEmpty()) {
-					throw new MongoException("index " + index_keys_str + " didn't exist");
+					throw new MongoException(ErrorUtils.get(ErrorUtils.MISSING_MONGODB_INDEX_KEY, index_keys_str));
 				}				
 			}			
 			return true;
