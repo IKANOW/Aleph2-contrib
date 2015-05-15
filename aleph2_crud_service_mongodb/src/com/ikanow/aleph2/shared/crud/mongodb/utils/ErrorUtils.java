@@ -15,6 +15,9 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared.crud.mongodb.utils;
 
+/** MongoDB CRUD service errors
+ * @author acp
+ */
 public class ErrorUtils extends com.ikanow.aleph2.data_model.utils.ErrorUtils {
 
 	public static final String INTERNAL_LOGIC_ERROR_NO_ID_FIELD = "Internal logic error: get String _id field for {0}";
