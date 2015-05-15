@@ -1,6 +1,22 @@
+/*******************************************************************************
+ * Copyright 2015, The IKANOW Open Source Project.
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.ikanow.aleph2.shared.crud.mongodb.services;
 
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -9,10 +25,19 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.mongojack.internal.MongoJackModule;
+import org.mongojack.internal.object.BsonObjectGenerator;
+import org.mongojack.internal.object.BsonObjectTraversingParser;
 
 import scala.Tuple2;
 
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Function;
+import com.google.common.collect.Lists;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
@@ -21,7 +46,10 @@ import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
+import com.ikanow.aleph2.shared.crud.mongodb.utils.MongoDbUtils;
+import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
+import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
 import com.mongodb.FongoDBCollection;
 import com.mongodb.InsertOptions;
@@ -31,15 +59,17 @@ public class MongoDbCrudService_Json<O, K> extends MongoDbCrudService<JsonNode, 
 
 	protected final MongoDbCrudService<O, K> _parent;
 	protected final Class<O> _parent_bean_clazz;
+	protected final ObjectMapper _object_mapper;
 
 	/** For convenience, maps the JsonNode back to an object so we can use it in the original code (low performance code only) 
 	 * @param j
 	 * @return
+	 * @throws JsonProcessingException 
 	 */
+	@SuppressWarnings("unchecked")
 	@NonNull
-	protected O mapJsonToBean(final @NonNull JsonNode j) {
-		//TODO
-		return null;
+	protected O mapJsonToBean(final @NonNull JsonNode j) throws JsonProcessingException {
+		return _object_mapper.treeToValue(j, (Class<O>)_parent_bean_clazz.getClass());
 	}
 	
 	/** Maps the bean to a JsonNode since that's what the client is expecting (low performance code only)
@@ -48,19 +78,105 @@ public class MongoDbCrudService_Json<O, K> extends MongoDbCrudService<JsonNode, 
 	 */
 	@NonNull 
 	protected JsonNode mapBeanToJson(final @NonNull O bean) {
-		//TODO
-		return null;
+		return _object_mapper.valueToTree(bean);
 	}
 	
-	/** For higher performance code - lazily wraps 
+	/** For higher performance code - lazily wraps a list of JsonNodes with a DBObject
 	 * @param bean_list
 	 * @return
 	 */
 	@NonNull 
 	protected List<DBObject> wrapJsonListAsDbObjects(final @NonNull List<JsonNode> bean_list) {
-		//TODO
-		return null;
+		return Lists.transform(bean_list, new Function<JsonNode, DBObject>() {
+			@Override
+			public DBObject apply(JsonNode j) {
+				try (BsonObjectGenerator generator = new BsonObjectGenerator()) {
+					_object_mapper.writeTree(generator, j);
+					return generator.getDBObject();
+				} catch (Exception e) {
+					return new BasicDBObject();
+				} 
+			}
+			
+		});
 	}
+	
+	/** A wrapper for a DBCursor that is auto-closeable
+	 * @param <O>
+	 */
+	public class MongoDbToJsonNodeCursor extends Cursor<JsonNode> {
+		/**
+		 * @param cursor
+		 */
+		protected MongoDbToJsonNodeCursor(final @NonNull DBCursor cursor) {
+			_cursor = cursor;
+		}
+		protected final DBCursor _cursor;
+		
+		/* (non-Javadoc)
+		 * @see java.lang.AutoCloseable#close()
+		 */
+		@Override
+		public void close() throws Exception {
+			_cursor.close();
+			
+		}
+
+		/* (non-Javadoc)
+		 * @see java.lang.Iterable#iterator()
+		 */
+		@Override
+		@NonNull
+		public Iterator<JsonNode> iterator() {
+			return new MongoDbToJsonNodeIterator(_cursor.iterator());
+		}
+
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor#count()
+		 */
+		@Override
+		@NonNull
+		public long count() {
+			return _cursor.count();
+		}		
+	}
+	/**A wrapper for a DBCursor iterator 
+	 * @author acp
+	 *
+	 */
+	public class MongoDbToJsonNodeIterator implements Iterator<JsonNode> {
+
+		protected final Iterator<DBObject> _cursor_iterator;
+		
+		/** Creates a wrapping iterator DBObject -> JsonNode
+		 * @param cursor_iterator
+		 */
+		protected MongoDbToJsonNodeIterator(Iterator<DBObject> cursor_iterator) {
+			_cursor_iterator = cursor_iterator;
+		}
+		
+		/* (non-Javadoc)
+		 * @see java.util.Iterator#hasNext()
+		 */
+		@Override
+		public boolean hasNext() {
+			return _cursor_iterator.hasNext();
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Iterator#next()
+		 */
+		@Override
+		public JsonNode next() {
+			final DBObject dbo = _cursor_iterator.next();
+			try (BsonObjectTraversingParser parser = new BsonObjectTraversingParser(_state.coll, dbo, _object_mapper)) {
+				return _object_mapper.readTree(parser);
+			} catch (Exception e) {
+				return _object_mapper.createObjectNode();
+			}
+		}		
+	}
+	
 	
 	/** (Low performance code) wraps an optional single bean future in one that translates to a JsonNode
 	 * @param bean_version
@@ -103,7 +219,8 @@ public class MongoDbCrudService_Json<O, K> extends MongoDbCrudService<JsonNode, 
 		_parent_bean_clazz = bean_clazz;
 		_parent = parent;
 		
-		//TODO mapper
+		_object_mapper = MongoJackModule.configure(new ObjectMapper());
+		_object_mapper.setVisibility(PropertyAccessor.FIELD, Visibility.ANY);		
 	}
 
 	/* (non-Javadoc)
@@ -122,7 +239,12 @@ public class MongoDbCrudService_Json<O, K> extends MongoDbCrudService<JsonNode, 
 	 */
 	public @NonNull CompletableFuture<Supplier<Object>> storeObject(
 			@NonNull JsonNode new_object, boolean replace_if_present) {
-		return _parent.storeObject(mapJsonToBean(new_object), replace_if_present);
+		try {
+			return _parent.storeObject(mapJsonToBean(new_object), replace_if_present);
+		}
+		catch (Exception e) {
+			return MongoDbCrudService.returnError(e);
+		}
 	}
 
 	/* (non-Javadoc)
@@ -130,7 +252,12 @@ public class MongoDbCrudService_Json<O, K> extends MongoDbCrudService<JsonNode, 
 	 */
 	public @NonNull CompletableFuture<Supplier<Object>> storeObject(
 			@NonNull JsonNode new_object) {
-		return _parent.storeObject(mapJsonToBean(new_object));
+		try {
+			return _parent.storeObject(mapJsonToBean(new_object));
+		}
+		catch (Exception e) {
+			return MongoDbCrudService.returnError(e);
+		}
 	}
 
 	/* (non-Javadoc)
@@ -217,8 +344,7 @@ public class MongoDbCrudService_Json<O, K> extends MongoDbCrudService<JsonNode, 
 	 */
 	public @NonNull CompletableFuture<Cursor<JsonNode>> getObjectsBySpec(
 			@NonNull QueryComponent<JsonNode> spec) {
-		//TODO
-		return null;
+		return this.getObjectsBySpec(spec, Collections.<String>emptyList(), false);
 	}
 
 	/* (non-Javadoc)
@@ -227,8 +353,33 @@ public class MongoDbCrudService_Json<O, K> extends MongoDbCrudService<JsonNode, 
 	public @NonNull CompletableFuture<Cursor<JsonNode>> getObjectsBySpec(
 			@NonNull QueryComponent<JsonNode> spec, @NonNull List<String> field_list,
 			boolean include) {
-		//TODO
-		return null;
+		//c/p from bean version
+		try {	
+			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(spec);
+			final DBCursor cursor = 
+					Optional.of(Patterns.match(query_and_meta)
+						.<DBCursor>andReturn()
+						.when(qm -> field_list.isEmpty(), qm -> _state.orig_coll.find(qm._1()))
+						.otherwise(qm -> {
+							final BasicDBObject fs = new BasicDBObject(field_list.stream().collect(Collectors.toMap(f -> f, f -> include ? 1 : 0)));
+							return _state.orig_coll.find(qm._1(), fs);
+						}))
+						// (now we're processing on a cursor "c")
+						.map(c -> {
+							final DBObject sort = (DBObject)query_and_meta._2().get("$sort");
+							return (null != sort) ? c.sort(sort) : c; 
+						})
+						.map(c -> {
+							final Long limit = (Long)query_and_meta._2().get("$limit");
+							return (null != limit) ? c.limit(limit.intValue()) : c; 
+						})
+						.get();
+			
+			return CompletableFuture.completedFuture(new MongoDbToJsonNodeCursor(cursor));
+		}
+		catch (Exception e) {			
+			return MongoDbCrudService.<Cursor<JsonNode>>returnError(e);
+		}		
 	}
 
 	/* (non-Javadoc)

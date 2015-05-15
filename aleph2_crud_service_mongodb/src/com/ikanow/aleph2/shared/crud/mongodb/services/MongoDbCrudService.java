@@ -28,6 +28,9 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import org.apache.metamodel.DataContext;
+import org.apache.metamodel.mongodb.MongoDbDataContext;
+import org.apache.metamodel.schema.Table;
 import org.bson.types.ObjectId;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.mongojack.DBCursor;
@@ -68,6 +71,8 @@ import com.mongodb.WriteConcern;
  */
 public class MongoDbCrudService<O, K> implements ICrudService<O> {
 
+	//TODO: handle auth and project overlay
+	
 	/** A wrapper for a Jackson DBCursor that is auto-closeable
 	 * @author acp
 	 *
@@ -97,9 +102,6 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			return _cursor.count();
 		}		
 	}
-	
-	//TODO (ALEPH-22): add T==JsonNode as a special case (insert/query/cursor)
-	// query isn't great because of query component - perhaps you can just have a query component that is JsonNode specific?
 	
 	public final static String _ID = "_id";
 	
@@ -642,8 +644,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@NonNull
 	public ICrudService<JsonNode> getRawCrudService() {
-		//TODO this is going to be a bit cleverer
-		return new MongoDbCrudService<JsonNode, K>(JsonNode.class, _state.key_clazz, _state.orig_coll, _state.auth_fieldname, _state.auth, _state.project);
+		return new MongoDbCrudService_Json<O, K>(_state.bean_clazz, _state.key_clazz, _state.orig_coll, _state.auth_fieldname, _state.auth, _state.project, this);
 	}
 	
 	/* (non-Javadoc)
@@ -665,7 +666,39 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	public <T> T getUnderlyingPlatformDriver(Class<T> driver_class, final Optional<String> driver_options) {
 		if (JacksonDBCollection.class == driver_class) return (T) _state.coll;
 		else if (DBCollection.class == driver_class) return (T) _state.orig_coll;
+		else if (IMetaModel.class == driver_class) return (T) ((null == _meta_model) 
+														? (_meta_model = new MongoDbMetaModel(_state.orig_coll)) : _meta_model);
 		else return null;
 	}
 
+	
+	/** A table-level interface to the CRUD store using the open MetaModel library
+	 * MongoDB implementation
+	 * @author acp
+	 */
+	public static class MongoDbMetaModel implements IMetaModel {
+		protected MongoDbMetaModel(DBCollection coll) {
+			_context = new MongoDbDataContext(coll.getDB());
+			_table = _context.getTableByQualifiedLabel(coll.getFullName());
+		}
+		public final DataContext _context; 
+		public final Table _table; 
+		
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.IMetaModel#getContext()
+		 */
+		@NonNull 
+		public DataContext getContext() {
+			return _context;
+		}
+		
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.IMetaModel#getTable()
+		 */
+		@NonNull 
+		public Table getTable() {
+			return _table;
+		}
+	}
+	protected MongoDbMetaModel _meta_model = null;
 }
