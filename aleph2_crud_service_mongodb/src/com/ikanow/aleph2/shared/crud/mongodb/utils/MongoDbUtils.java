@@ -15,20 +15,29 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared.crud.mongodb.utils;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Map;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Collector.Characteristics;
-import java.util.stream.Stream;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.mongojack.internal.MongoJackModule;
+import org.mongojack.internal.object.BsonObjectGenerator;
 
 import scala.Tuple2;
 
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
+import com.fasterxml.jackson.core.JsonGenerationException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.LinkedHashMultimap;
+import com.google.common.collect.Maps;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils.BeanTemplate;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateOperator;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -202,73 +211,116 @@ public class MongoDbUtils {
 	
 	// CREATE UPDATE
 
+	/** Create a DB object from a bean template
+	 * @param bean_template
+	 * @return
+	 * @throws IOException 
+	 * @throws JsonMappingException 
+	 * @throws JsonGenerationException 
+	 */
+	public static DBObject convertBeanTemplate(BeanTemplate<Object> bean_template, ObjectMapper object_mapper) {
+		try {
+			final BsonObjectGenerator generator = new BsonObjectGenerator();
+	        object_mapper.writeValue(generator, bean_template.get());
+	        return generator.getDBObject();
+		}
+		catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+	}
+	
+	/** Create a DB object from a JsonNode
+	 * @param bean_template
+	 * @return
+	 * @throws IOException 
+	 * @throws JsonMappingException 
+	 * @throws JsonGenerationException 
+	 */
+	public static DBObject convertJsonBean(JsonNode json, ObjectMapper object_mapper) {
+		try {
+			final BsonObjectGenerator generator = new BsonObjectGenerator();
+	        object_mapper.writeTree(generator, json);
+	        return generator.getDBObject();
+		}
+		catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+	}
+	
 	/** Create a MongoDB update object
 	 * @param update - the generic specification
 	 * @param add increments numbers or adds to sets/lists
 	 * @param remove decrements numbers of removes from sets/lists
 	 * @return the mongodb object
+	 * @throws IOException 
+	 * @throws JsonMappingException 
+	 * @throws JsonGenerationException 
 	 */
 	@SuppressWarnings("unchecked")
 	public static <O> DBObject createUpdateObject(final @NonNull UpdateComponent<O> update) {
+		final ObjectMapper object_mapper = MongoJackModule.configure(new ObjectMapper());
+		object_mapper.setVisibility(PropertyAccessor.FIELD, Visibility.ANY);		
 		
-		return update.getAll().entries().stream().collect(
-					Collector.of(
-						BasicDBObject::new,
-						(acc, kv) -> {
-							Patterns.match(kv.getValue()._2()).andAct()
-								// Delete operator, bunch of things have to happen for safety
-								.when(o -> ((UpdateOperator.unset == kv.getValue()._1()) && kv.getKey().isEmpty() && (null == kv.getValue()._2())), 
-										o -> acc.put("$unset", null))
-								//Increment
-								.when(Number.class, n -> (UpdateOperator.increment == kv.getValue()._1()), 
-										n -> nestedPut(acc, "$inc", kv.getKey(), n))
-								// Set
-								.when(o -> (UpdateOperator.set == kv.getValue()._1()), 
-										o -> nestedPut(acc, "$set", kv.getKey(), o))
-								// Unset
-								.when(o -> (UpdateOperator.unset == kv.getValue()._1()), 
-										o -> nestedPut(acc, "$unset", kv.getKey(), 1))
-								// Add items/item to list
-								.when(Collection.class, c -> (UpdateOperator.add == kv.getValue()._1()), 
-										c -> nestedPut(acc, "$push", kv.getKey(), new BasicDBObject("$each", c)))
-								.when(o -> (UpdateOperator.add == kv.getValue()._1()), 
-										o -> nestedPut(acc, "$push", kv.getKey(), o))
-								// Add item/items to set
-								.when(Collection.class, c -> (UpdateOperator.add_deduplicate == kv.getValue()._1()), 
-										c -> nestedPut(acc, "$addToSet", kv.getKey(), new BasicDBObject("$each", c)))
-								.when(o -> (UpdateOperator.add_deduplicate == kv.getValue()._1()), 
-										o -> nestedPut(acc, "$addToSet", kv.getKey(), o))
-								// Remove items from list by query
-								.when(QueryComponent.class, q -> (UpdateOperator.remove == kv.getValue()._1()), 
-										q -> nestedPut(acc, "$pull", kv.getKey(), convertToMongoQuery(q)._1()))
-								// Remove items/item from list
-								.when(Collection.class, c -> (UpdateOperator.remove == kv.getValue()._1()), 
-										c -> nestedPut(acc, "$pullAll", kv.getKey(), c))
-								.when(o -> (UpdateOperator.remove == kv.getValue()._1()), 
-										o -> nestedPut(acc, "$pullAll", kv.getKey(), Arrays.asList(o)))
-								.otherwise(() -> {}); // (do nothing)
-						},
-						(a, b) -> { a.putAll(b.toMap()); return a; },
-						Characteristics.UNORDERED)); 
+		return update.getAll().entries().stream()
+					.map(kv -> Patterns.match(kv.getValue()._2())
+								.<Map.Entry<String, Tuple2<UpdateOperator, Object>>>andReturn()
+								// Special case, handle bean template
+								.when(e -> null == e, __ -> kv)
+								.when(JsonNode.class, j -> 
+									Maps.immutableEntry(kv.getKey(),  Tuples._2T(kv.getValue()._1(), convertJsonBean(j, object_mapper))))
+								.when(BeanTemplate.class, e -> 
+									Maps.immutableEntry(kv.getKey(),  Tuples._2T(kv.getValue()._1(), convertBeanTemplate(e, object_mapper))))
+								// Special case, handle list of bean templates
+								.when(Collection.class, l -> !l.isEmpty() && (l.iterator().next() instanceof JsonNode),
+										l -> Maps.immutableEntry(kv.getKey(),  Tuples._2T(kv.getValue()._1(), 
+												l.stream().map(j -> convertJsonBean((JsonNode)j, object_mapper))
+															.collect(Collectors.toList()))))								
+								.when(Collection.class, l -> !l.isEmpty() && (l.iterator().next() instanceof BeanTemplate),
+										l -> Maps.immutableEntry(kv.getKey(),  Tuples._2T(kv.getValue()._1(), 
+												l.stream().map(e -> convertBeanTemplate((BeanTemplate<Object>)e, object_mapper))
+															.collect(Collectors.toList()))))								
+								.otherwise(() -> kv))
+					.collect(
+						Collector.of(
+							BasicDBObject::new,
+							(acc, kv) -> {
+								Patterns.match(kv.getValue()._2()).andAct()
+									// Delete operator, bunch of things have to happen for safety
+									.when(o -> ((UpdateOperator.unset == kv.getValue()._1()) && kv.getKey().isEmpty() && (null == kv.getValue()._2())), 
+											o -> acc.put("$unset", null))
+									//Increment
+									.when(Number.class, n -> (UpdateOperator.increment == kv.getValue()._1()), 
+											n -> nestedPut(acc, "$inc", kv.getKey(), n))
+									// Set
+									.when(o -> (UpdateOperator.set == kv.getValue()._1()), 
+											o -> nestedPut(acc, "$set", kv.getKey(), o))
+									// Unset
+									.when(o -> (UpdateOperator.unset == kv.getValue()._1()), 
+											o -> nestedPut(acc, "$unset", kv.getKey(), 1))
+									// Add items/item to list
+									.when(Collection.class, c -> (UpdateOperator.add == kv.getValue()._1()), 
+											c -> nestedPut(acc, "$push", kv.getKey(), new BasicDBObject("$each", c)))
+									.when(o -> (UpdateOperator.add == kv.getValue()._1()), 
+											o -> nestedPut(acc, "$push", kv.getKey(), o))
+									// Add item/items to set
+									.when(Collection.class, c -> (UpdateOperator.add_deduplicate == kv.getValue()._1()), 
+											c -> nestedPut(acc, "$addToSet", kv.getKey(), new BasicDBObject("$each", c)))
+									.when(o -> (UpdateOperator.add_deduplicate == kv.getValue()._1()), 
+											o -> nestedPut(acc, "$addToSet", kv.getKey(), o))
+									// Remove items from list by query
+									.when(QueryComponent.class, q -> (UpdateOperator.remove == kv.getValue()._1()), 
+											q -> nestedPut(acc, "$pull", kv.getKey(), convertToMongoQuery(q)._1()))
+									// Remove items/item from list
+									.when(Collection.class, c -> (UpdateOperator.remove == kv.getValue()._1()), 
+											c -> nestedPut(acc, "$pullAll", kv.getKey(), c))
+									.when(o -> (UpdateOperator.remove == kv.getValue()._1()), 
+											o -> nestedPut(acc, "$pullAll", kv.getKey(), Arrays.asList(o)))
+									.otherwise(() -> {}); // (do nothing)
+							},
+							(a, b) -> { a.putAll(b.toMap()); return a; },
+							Characteristics.UNORDERED)); 
 	}
 
-	/** Converts a single or multi component into the stream of (fieldname, component_spec)s
-	 * @param component_role
-	 * @return
-	 */
-	@SuppressWarnings("unchecked")
-	@NonNull
-	protected static <O> Stream<Map.Entry<String, Tuple2<Operator, Tuple2<Object, Object>>>> getSpecStream(final @NonNull QueryComponent<O> component_role) {
-		return Patterns.match(component_role)
-			// Phase 1: get a list of all the entries
-			.<Collection<Map.Entry<String, Tuple2<Operator, Tuple2<Object, Object>>>>>andReturn()
-			.when((Class<SingleQueryComponent<O>>)(Class<?>)SingleQueryComponent.class, q -> q.getAll().entries())
-			.when((Class<MultiQueryComponent<O>>)(Class<?>)MultiQueryComponent.class, mq -> {
-				return mq.getElements().stream().flatMap(sq -> sq.getAll().entries().stream()).collect(Collectors.toList());
-			})
-			.otherwise(() -> Collections.emptyList()).stream();		
-	}
-	
 	/** Inserts an object into field1.field2, creating objects along the way
 	 * @param mutable the mutable object into which the the nested field is inserted
 	 * @param parent the top level fieldname
@@ -286,5 +338,4 @@ public class MongoDbUtils {
 			mutable.put(parent, new_dbo);
 		}
 	}
-	
 }
