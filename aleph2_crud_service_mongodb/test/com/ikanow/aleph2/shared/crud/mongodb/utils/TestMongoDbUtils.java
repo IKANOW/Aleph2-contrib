@@ -22,12 +22,19 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Test;
+import org.mongojack.internal.MongoJackModule;
 
 import scala.Tuple2;
 
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableMap;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.MultiQueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils.BeanTemplate;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -49,22 +56,28 @@ public class TestMongoDbUtils {
 		public static class NestedTestBean {
 			public String nested_string_field() { return nested_string_field; }
 			public NestedNestedTestBean nested_object() { return nested_object; }
+			public List<String> nested_string_list() { return nested_string_list; }
 			
+			private List<String> nested_string_list;
 			private String nested_string_field;
 			private NestedNestedTestBean nested_object;
 		}		
 		public String string_field() { return string_field; }
+		public List<String> string_fields() { return string_fields; }
 		public Boolean bool_field() { return bool_field; }
 		public Long long_field() { return long_field; }
 		public List<NestedTestBean> nested_list() { return nested_list; }
 		public Map<String, String> map() { return map; }
+		public NestedTestBean nested_object() { return nested_object; }
 		
 		protected TestBean() {}
 		private String string_field;
+		private List<String> string_fields;
 		private Boolean bool_field;
 		private Long long_field;
 		private List<NestedTestBean> nested_list;
 		private Map<String, String> map;
+		private NestedTestBean nested_object;
 	}
 	
 	///////////////////////////////////////////////
@@ -408,5 +421,256 @@ public class TestMongoDbUtils {
 	///////////////////////////////////////////////
 	
 	// UPDATE CREATION TESTING
+	
+	///////////////////////////////////////////////////////////////////////	
+	///////////////////////////////////////////////////////////////////////	
+	///////////////////////////////////////////////////////////////////////	
+
+//	public static class TestBean {
+//		public static class NestedNestedTestBean {
+//			public String nested_nested_string_field() { return nested_nested_string_field; }
+//			
+//			private String nested_nested_string_field;
+//		}
+//		public static class NestedTestBean {
+//			public String nested_string_field() { return nested_string_field; }
+//			public NestedNestedTestBean nested_object() { return nested_object; }
+//			
+//			private String nested_string_field;
+//			private NestedNestedTestBean nested_object;
+//		}		
+//		public String string_field() { return string_field; }
+//		public Boolean bool_field() { return bool_field; }
+//		public Long long_field() { return long_field; }
+//		public List<NestedTestBean> nested_list() { return nested_list; }
+//		public Map<String, String> map() { return map; }
+//		public NestedTestBean nested_object() { return nested_object; }
+//		
+//		protected TestBean() {}
+//		private String string_field;
+//		private Boolean bool_field;
+//		private Long long_field;
+//		private List<NestedTestBean> nested_list;
+//		private NestedTestBean nested_object;
+//		private Map<String, String> map;
+//	}
+	
+	
+	// UPDATE TESTING - BEAN 
+	
+	@Test
+	public void updateBeanTest() {
+		
+		// Test 1 - getter fields
+		
+		final BeanTemplate<TestBean.NestedTestBean> nested1 = BeanTemplateUtils.build(TestBean.NestedTestBean.class)
+																	.with("nested_string_field", "test1").done(); //(2)
+		final UpdateComponent<TestBean> test1 = 
+				CrudUtils.update(TestBean.class)
+					.add(TestBean::string_fields, "AA", false) //(0)
+					.increment(TestBean::long_field, 4) //(1)
+					.nested(TestBean::nested_list, 
+							CrudUtils.update(nested1) //(2)
+								.unset(TestBean.NestedTestBean::nested_string_field) //(3a)
+								.remove(TestBean.NestedTestBean::nested_string_list, Arrays.asList("x", "y", "z")) //(4)
+								.add(TestBean.NestedTestBean::nested_string_list, "A", true) // (5)
+							)
+					.unset(TestBean::bool_field) //(3b)
+					.unset(TestBean::nested_object) //(3c)
+					.remove(TestBean::nested_list, CrudUtils.allOf(TestBean.NestedTestBean.class).when("nested_string_field", "1")) //6)
+					;
+		
+		final DBObject result1 = MongoDbUtils.createUpdateObject(test1);
+		
+		final String expected1 = "{ \"$push\" : { \"string_fields\" : \"AA\"} , \"$inc\" : { \"long_field\" : 4} , \"$set\" : { \"nested_list.nested_string_field\" : \"test1\"} , \"$unset\" : { \"nested_list.nested_string_field\" : 1 , \"bool_field\" : 1 , \"nested_object\" : 1} , \"$pullAll\" : { \"nested_list.nested_string_list\" : [ \"x\" , \"y\" , \"z\"]} , \"$addToSet\" : { \"nested_list.nested_string_list\" : \"A\"} , \"$pull\" : { \"nested_list\" : { \"$and\" : [ { \"nested_string_field\" : \"1\"}]}}}";
+		// (see above for analysis of results) 
+		
+		assertEquals(expected1, result1.toString());
+		
+		// Test 1b - string fields
+		
+		final BeanTemplate<TestBean.NestedTestBean> nested1b = BeanTemplateUtils.build(TestBean.NestedTestBean.class)
+																	.with("nested_string_field", "test1").done(); //(2)
+		final UpdateComponent<TestBean> test1b = 
+				CrudUtils.update(TestBean.class)
+					.add("string_fields", "AA", false) //(0)
+					.increment("long_field", 4) //(1)
+					.nested("nested_list", 
+							CrudUtils.update(nested1b) //(2)
+								.unset("nested_string_field") //(3a)
+								.remove("nested_string_list", Arrays.asList("x", "y", "z")) //(4)
+								.add("nested_string_list", "A", true) // (5)
+							)
+					.unset("bool_field") //(3b)
+					.unset("nested_object") //(3c)
+					.remove("nested_list", CrudUtils.allOf(TestBean.NestedTestBean.class).when("nested_string_field", "1")) //6)
+					;
+		
+		final DBObject result1b = MongoDbUtils.createUpdateObject(test1b);
+		
+		final String expected1b = "{ \"$push\" : { \"string_fields\" : \"AA\"} , \"$inc\" : { \"long_field\" : 4} , \"$set\" : { \"nested_list.nested_string_field\" : \"test1\"} , \"$unset\" : { \"nested_list.nested_string_field\" : 1 , \"bool_field\" : 1 , \"nested_object\" : 1} , \"$pullAll\" : { \"nested_list.nested_string_list\" : [ \"x\" , \"y\" , \"z\"]} , \"$addToSet\" : { \"nested_list.nested_string_list\" : \"A\"} , \"$pull\" : { \"nested_list\" : { \"$and\" : [ { \"nested_string_field\" : \"1\"}]}}}";
+		// (see above for analysis of results) 
+		
+		assertEquals(expected1b, result1b.toString());
+		
+		// Test2 - more coverage
+		
+		final BeanTemplate<TestBean> testbean2 = BeanTemplateUtils.build(TestBean.class).with(TestBean::map, ImmutableMap.<String, String>builder().put("a", "b").build()).done();
+		
+		final UpdateComponent<TestBean> test2 = 
+				CrudUtils.update(testbean2) //(3)
+					.set(TestBean::string_fields, "A")
+					.add(TestBean::string_fields, Arrays.asList("a", "b", "c"), true) //(1)
+					.set("long_field", 1L)
+					.nested("nested_list",
+							CrudUtils.update(TestBean.NestedTestBean.class) 
+								.add(TestBean.NestedTestBean::nested_string_list, "A", false) // (will be overwritten)
+							)
+					.add("nested_list.nested_string_list", Arrays.asList("x", "y"), false); //(2)
+		
+		final DBObject result2 = MongoDbUtils.createUpdateObject(test2);
+		
+		final String expected2 = "{ \"$set\" : { \"string_fields\" : \"A\" , \"long_field\" : 1 , \"map\" : { \"a\" : \"b\"}} , \"$addToSet\" : { \"string_fields\" : { \"$each\" : [ \"a\" , \"b\" , \"c\"]}} , \"$push\" : { \"nested_list.nested_string_list\" : { \"$each\" : [ \"x\" , \"y\"]}}}";
+		// (see above for analysis of results) 
+		
+		assertEquals(expected2, result2.toString());
+				
+		// Test3 - delete object
+		
+		final UpdateComponent<TestBean> test3 = CrudUtils.update(TestBean.class).deleteObject();
+		
+		final DBObject result3 = MongoDbUtils.createUpdateObject(test3);
+		
+		assertEquals("{ \"$unset\" :  null }", result3.toString());				
+		
+		// Test4 - bean templates as JsonNode (see _json for the other way round!)
+
+		final BeanTemplate<TestBean.NestedTestBean> nested4a = BeanTemplateUtils.build(TestBean.NestedTestBean.class)
+				.with("nested_string_field", "test4a").done(); //(2)
+
+		final BeanTemplate<TestBean.NestedTestBean> nested4b = BeanTemplateUtils.build(TestBean.NestedTestBean.class)
+				.with("nested_string_field", "test4b").done(); //(2)
+		
+		//convert to JsonNode:
+		final ObjectMapper object_mapper = MongoJackModule.configure(new ObjectMapper());
+		object_mapper.setVisibility(PropertyAccessor.FIELD, Visibility.ANY);		
+		JsonNode nested4a_json = object_mapper.valueToTree(nested4a.get());
+		JsonNode nested4b_json = object_mapper.valueToTree(nested4b.get());
+		
+		final UpdateComponent<TestBean> test4 = 
+				CrudUtils.update(TestBean.class)
+					.set(TestBean::nested_object, nested4a_json)
+					.add(TestBean::nested_list, Arrays.asList(nested4a_json, nested4b_json), false);
+				
+		final DBObject result4 = MongoDbUtils.createUpdateObject(test4);
+		
+		assertEquals("{ \"$set\" : { \"nested_object\" : { \"nested_string_field\" : \"test4a\"}} , \"$push\" : { \"nested_list\" : { \"$each\" : [ { \"nested_string_field\" : \"test4a\"} , { \"nested_string_field\" : \"test4b\"}]}}}", result4.toString());
+	}
+		
+	//////////////////////////
+	
+	@Test
+	public void updateBeanTest_json() {
+		
+		// Test 1 - getters
+		
+		final BeanTemplate<TestBean.NestedTestBean> nested1 = BeanTemplateUtils.build(TestBean.NestedTestBean.class)
+																	.with("nested_string_field", "test1").done(); //(2)
+		final UpdateComponent<JsonNode> test1 = 
+				CrudUtils.update_json(TestBean.class)
+					.add(TestBean::string_fields, "AA", false) //(0)
+					.increment(TestBean::long_field, 4) //(1)
+					.nested(TestBean::nested_list, 
+							CrudUtils.update(nested1) //(2)
+								.unset(TestBean.NestedTestBean::nested_string_field) //(3a)
+								.remove(TestBean.NestedTestBean::nested_string_list, Arrays.asList("x", "y", "z")) //(4)
+								.add(TestBean.NestedTestBean::nested_string_list, "A", true) // (5)
+							)
+					.unset(TestBean::bool_field) //(3b)
+					.unset(TestBean::nested_object) //(3c)
+					.remove(TestBean::nested_list, CrudUtils.allOf(TestBean.NestedTestBean.class).when("nested_string_field", "1")) //6)
+					;
+		
+		final DBObject result1 = MongoDbUtils.createUpdateObject(test1);
+		
+		final String expected1 = "{ \"$push\" : { \"string_fields\" : \"AA\"} , \"$inc\" : { \"long_field\" : 4} , \"$set\" : { \"nested_list.nested_string_field\" : \"test1\"} , \"$unset\" : { \"nested_list.nested_string_field\" : 1 , \"bool_field\" : 1 , \"nested_object\" : 1} , \"$pullAll\" : { \"nested_list.nested_string_list\" : [ \"x\" , \"y\" , \"z\"]} , \"$addToSet\" : { \"nested_list.nested_string_list\" : \"A\"} , \"$pull\" : { \"nested_list\" : { \"$and\" : [ { \"nested_string_field\" : \"1\"}]}}}";
+		// (see above for analysis of results) 
+		
+		assertEquals(expected1, result1.toString());
+		
+		// Test 1b - string fields
+		
+		final BeanTemplate<TestBean.NestedTestBean> nested1b = BeanTemplateUtils.build(TestBean.NestedTestBean.class)
+																	.with("nested_string_field", "test1").done(); //(2)
+		final UpdateComponent<JsonNode> test1b = 
+				CrudUtils.update_json(TestBean.class)
+					.add("string_fields", "AA", false) //(0)
+					.increment("long_field", 4) //(1)
+					.nested("nested_list", 
+							CrudUtils.update(nested1b) //(2)
+								.unset("nested_string_field") //(3a)
+								.remove("nested_string_list", "x") //(4)
+								.add("nested_string_list", "A", true) // (5)
+							)
+					.unset("bool_field") //(3b)
+					.unset("nested_object") //(3c)
+					.remove("nested_list", CrudUtils.allOf(TestBean.NestedTestBean.class).when("nested_string_field", "1")) //6)
+					;
+		
+		final DBObject result1b = MongoDbUtils.createUpdateObject(test1b);
+		
+		final String expected1b = "{ \"$push\" : { \"string_fields\" : \"AA\"} , \"$inc\" : { \"long_field\" : 4} , \"$set\" : { \"nested_list.nested_string_field\" : \"test1\"} , \"$unset\" : { \"nested_list.nested_string_field\" : 1 , \"bool_field\" : 1 , \"nested_object\" : 1} , \"$pullAll\" : { \"nested_list.nested_string_list\" : [ \"x\"]} , \"$addToSet\" : { \"nested_list.nested_string_list\" : \"A\"} , \"$pull\" : { \"nested_list\" : { \"$and\" : [ { \"nested_string_field\" : \"1\"}]}}}";
+		// (see above for analysis of results) 
+		
+		assertEquals(expected1b, result1b.toString());
+		
+		// Test2 - More coverage
+		
+		final BeanTemplate<TestBean> testbean2 = BeanTemplateUtils.build(TestBean.class).with(TestBean::map, ImmutableMap.<String, String>builder().put("a", "b").build()).done();
+		
+		final UpdateComponent<JsonNode> test2 = 
+				CrudUtils.update_json(testbean2) //(3)
+					.set(TestBean::string_fields, "A")
+					.add(TestBean::string_fields, Arrays.asList("a", "b", "c"), true) //(1)
+					.set("long_field", 1L)
+					.nested("nested_list",
+							CrudUtils.update(TestBean.NestedTestBean.class) 
+								.add(TestBean.NestedTestBean::nested_string_list, "A", false) // (will be overwritten)
+							)
+					.add("nested_list.nested_string_list", Arrays.asList("x", "y"), false); //(2)
+		
+		final DBObject result2 = MongoDbUtils.createUpdateObject(test2);
+		
+		final String expected2 = "{ \"$set\" : { \"string_fields\" : \"A\" , \"long_field\" : 1 , \"map\" : { \"a\" : \"b\"}} , \"$addToSet\" : { \"string_fields\" : { \"$each\" : [ \"a\" , \"b\" , \"c\"]}} , \"$push\" : { \"nested_list.nested_string_list\" : { \"$each\" : [ \"x\" , \"y\"]}}}";
+		// (see above for analysis of results) 
+		
+		assertEquals(expected2, result2.toString());
+				
+		// Test3 - delete object
+		
+		final UpdateComponent<JsonNode> test3 = CrudUtils.update_json(TestBean.class).deleteObject();
+		
+		final DBObject result3 = MongoDbUtils.createUpdateObject(test3);
+		
+		assertEquals("{ \"$unset\" :  null }", result3.toString());
+		
+		// Test4 - bean templates
+
+		final BeanTemplate<TestBean.NestedTestBean> nested4a = BeanTemplateUtils.build(TestBean.NestedTestBean.class)
+				.with("nested_string_field", "test4a").done(); //(2)
+
+		final BeanTemplate<TestBean.NestedTestBean> nested4b = BeanTemplateUtils.build(TestBean.NestedTestBean.class)
+				.with("nested_string_field", "test4b").done(); //(2)
+
+		
+		final UpdateComponent<JsonNode> test4 = 
+				CrudUtils.update_json(TestBean.class)
+					.set(TestBean::nested_object, nested4a)
+					.add(TestBean::nested_list, Arrays.asList(nested4a, nested4b), false);
+				
+		final DBObject result4 = MongoDbUtils.createUpdateObject(test4);
+		
+		assertEquals("{ \"$set\" : { \"nested_object\" : { \"nested_string_field\" : \"test4a\"}} , \"$push\" : { \"nested_list\" : { \"$each\" : [ { \"nested_string_field\" : \"test4a\"} , { \"nested_string_field\" : \"test4b\"}]}}}", result4.toString());
+	}
 	
 }

@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
+import org.apache.metamodel.data.DataSet;
 import org.bson.types.ObjectId;
 import org.junit.Before;
 import org.junit.Test;
@@ -35,6 +36,7 @@ import org.mongojack.JacksonDBCollection;
 import scala.Tuple2;
 import static org.hamcrest.CoreMatchers.instanceOf;
 
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
@@ -567,6 +569,10 @@ public class TestMongoDbCrudService {
 		assertEquals(0L, (long)service.countObjectsBySpec(query_4).get());
 	}
 	
+	////////////////////////////////////////////////
+	
+	// UPDATES
+
 	//TODO (updates)
 	
 	//TODO (find and modify)
@@ -759,7 +765,34 @@ public class TestMongoDbCrudService {
 		
 		assertEquals(null, fail);
 		
-		// JSON service - more complicated, tested below...
+		// Meta model - more complicated, tested below
+		// JSON service - more complicated, tested below...		
+	}
+	
+	@Test
+	public void testMetaModelInterface() throws InterruptedException, ExecutionException {
+		
+		final MongoDbCrudService<TestBean, String> service = getTestService("testMetaModelInterface", TestBean.class, String.class);
+
+		service.optimizeQuery(Arrays.asList("test_string")).get(); // (The get() waits for completion)
+		
+		replenishDocsForDeletion(service);
+			
+		final ICrudService.IMetaModel meta_model_1 = service.getUnderlyingPlatformDriver(ICrudService.IMetaModel.class, Optional.empty());	
+		final ICrudService.IMetaModel meta_model_2 = service.getUnderlyingPlatformDriver(ICrudService.IMetaModel.class, Optional.empty());
+		
+		// Check the object is created just once
+		assertEquals(meta_model_1, meta_model_2);
+
+		DataSet data = meta_model_1.getContext().query().from(meta_model_1.getTable()).select(meta_model_1.getTable().getColumns()).where("_id").greaterThan("id5").execute();
+
+		int count = 0;
+		while (data.next()) {			
+		    org.apache.metamodel.data.Row row = data.getRow();
+		    assertEquals(row.getValue(2), "test_string" + (count + 6));
+		    count++;
+		}		
+		assertEquals(4,count);
 	}
 	
 	//TODO (ALEPH-22): Test JSON raw service
