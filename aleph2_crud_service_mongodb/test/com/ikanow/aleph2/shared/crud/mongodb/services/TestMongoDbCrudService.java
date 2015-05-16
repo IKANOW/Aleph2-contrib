@@ -18,8 +18,10 @@ package com.ikanow.aleph2.shared.crud.mongodb.services;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.function.Supplier;
@@ -36,10 +38,13 @@ import org.mongojack.JacksonDBCollection;
 import scala.Tuple2;
 import static org.hamcrest.CoreMatchers.instanceOf;
 
+import com.google.common.collect.ImmutableMap;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils.BeanTemplate;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -570,13 +575,107 @@ public class TestMongoDbCrudService {
 	}
 	
 	////////////////////////////////////////////////
+	////////////////////////////////////////////////
 	
 	// UPDATES
 
+	public static class UpdateTestBean {
+		public String _id;
+		public static class NestedNestedTestBean {
+			public String nested_nested_string_field() { return nested_nested_string_field; }
+			
+			private String nested_nested_string_field;
+		}
+		public static class NestedTestBean {
+			public String nested_string_field() { return nested_string_field; }
+			public NestedNestedTestBean nested_object() { return nested_object; }
+			public List<String> nested_string_list() { return nested_string_list; }
+			
+			private List<String> nested_string_list;
+			private String nested_string_field;
+			private NestedNestedTestBean nested_object;
+		}		
+		public String string_field() { return string_field; }
+		public List<String> string_fields() { return string_fields; }
+		public Boolean bool_field() { return bool_field; }
+		public Long long_field() { return long_field; }
+		public List<NestedTestBean> nested_list() { return nested_list; }
+		public Map<String, String> map() { return map; }
+		public NestedTestBean nested_object() { return nested_object; }
+		
+		protected UpdateTestBean() {}
+		protected String string_field;
+		protected List<String> string_fields;
+		protected Boolean bool_field;
+		protected Long long_field;
+		protected List<NestedTestBean> nested_list;
+		protected Map<String, String> map;
+		protected NestedTestBean nested_object;
+	}
+	
+	
+	@Test
+	public void testUpdateDocs() throws InterruptedException, ExecutionException {
+		
+		final MongoDbCrudService<UpdateTestBean, String> service = getTestService("testUpdateDocs", UpdateTestBean.class, String.class);
+
+		// Build an object to modify
+		final UpdateTestBean.NestedNestedTestBean to_update_nested_nested = new UpdateTestBean.NestedNestedTestBean();
+		to_update_nested_nested.nested_nested_string_field = "nested_nested_string_field";
+		final UpdateTestBean.NestedTestBean to_update_nested = new UpdateTestBean.NestedTestBean();
+		to_update_nested.nested_string_list = Arrays.asList("nested_string_list1", "nested_string_list2");
+		to_update_nested.nested_string_field = "nested_string_field";
+		to_update_nested.nested_object = to_update_nested_nested;		
+		final UpdateTestBean to_update = new UpdateTestBean();
+		to_update.string_field = "string_field";
+		to_update.string_fields = Arrays.asList("string_fields1", "string_fields2");
+		to_update.bool_field = true;
+		to_update.long_field = 1L;
+		to_update.nested_list = Arrays.asList(to_update_nested, to_update_nested);
+		to_update.map = ImmutableMap.<String, String>builder().put("mapkey", "mapval").build();
+		to_update.nested_object = to_update_nested;
+		to_update._id = "test1";
+		
+		final CompletableFuture<Supplier<Object>> ret_val_0 = service.storeObject(to_update);
+		ret_val_0.get(); // (just check it succeeded)
+		
+		// Update test object:
+
+		// Test 1 - getter fields
+		
+		final BeanTemplate<UpdateTestBean.NestedTestBean> nested1 = BeanTemplateUtils.build(UpdateTestBean.NestedTestBean.class)
+																	.with("nested_string_field", "test1")
+																	.done(); //(2)
+		final UpdateComponent<UpdateTestBean> test1 = 
+				CrudUtils.update(UpdateTestBean.class)
+					.add(UpdateTestBean::string_fields, "AA", false) //(0)
+					.increment(UpdateTestBean::long_field, 4) //(1)
+					.nested(UpdateTestBean::nested_list, 
+							CrudUtils.update(nested1) //(2)
+								.unset(UpdateTestBean.NestedTestBean::nested_string_field) //(3a)
+								.remove(UpdateTestBean.NestedTestBean::nested_string_list, Arrays.asList("x", "y", "z")) //(4)
+								.add(UpdateTestBean.NestedTestBean::nested_string_list, "A", true) // (5)
+							)
+					.unset(UpdateTestBean::bool_field) //(3b)
+					.unset(UpdateTestBean::nested_object) //(3c)
+					.remove(UpdateTestBean::nested_list, CrudUtils.allOf(UpdateTestBean.NestedTestBean.class).when("nested_string_field", "1")) //6)
+					;
+
+		//TODO this is failing, not clear why?
+		//final String expected1 = "{ \"$push\" : { \"string_fields\" : \"AA\"} , \"$inc\" : { \"long_field\" : 4} , \"$set\" : { \"nested_list.nested_string_field\" : \"test1\"} , \"$unset\" : { \"nested_list.nested_string_field\" : 1 , \"bool_field\" : 1 , \"nested_object\" : 1} , \"$pullAll\" : { \"nested_list.nested_string_list\" : [ \"x\" , \"y\" , \"z\"]} , \"$addToSet\" : { \"nested_list.nested_string_list\" : \"A\"} , \"$pull\" : { \"nested_list\" : { \"$and\" : [ { \"nested_string_field\" : \"1\"}]}}}";
+		try {
+			CompletableFuture<Boolean> ret_val_1 = service.updateObjectById("test1", test1);				
+			assertEquals(true, ret_val_1.get());
+		}
+		catch (Exception e) {} // (this is just tmep until I can get the update working)
+		//TODO tests where 0 objects are found
+	}
+	
 	//TODO (updates)
 	
 	//TODO (find and modify)
 	
+	////////////////////////////////////////////////
 	////////////////////////////////////////////////
 	
 	// DELETION

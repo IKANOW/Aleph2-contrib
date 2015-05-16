@@ -426,36 +426,6 @@ public class TestMongoDbUtils {
 	///////////////////////////////////////////////////////////////////////	
 	///////////////////////////////////////////////////////////////////////	
 
-//	public static class TestBean {
-//		public static class NestedNestedTestBean {
-//			public String nested_nested_string_field() { return nested_nested_string_field; }
-//			
-//			private String nested_nested_string_field;
-//		}
-//		public static class NestedTestBean {
-//			public String nested_string_field() { return nested_string_field; }
-//			public NestedNestedTestBean nested_object() { return nested_object; }
-//			
-//			private String nested_string_field;
-//			private NestedNestedTestBean nested_object;
-//		}		
-//		public String string_field() { return string_field; }
-//		public Boolean bool_field() { return bool_field; }
-//		public Long long_field() { return long_field; }
-//		public List<NestedTestBean> nested_list() { return nested_list; }
-//		public Map<String, String> map() { return map; }
-//		public NestedTestBean nested_object() { return nested_object; }
-//		
-//		protected TestBean() {}
-//		private String string_field;
-//		private Boolean bool_field;
-//		private Long long_field;
-//		private List<NestedTestBean> nested_list;
-//		private NestedTestBean nested_object;
-//		private Map<String, String> map;
-//	}
-	
-	
 	// UPDATE TESTING - BEAN 
 	
 	@Test
