@@ -1,0 +1,3 @@
+[submodule "core_dependencies"]
+	path = core_dependencies
+	url = git://github.com/IKANOW/Aleph2.git
