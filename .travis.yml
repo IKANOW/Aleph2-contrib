@@ -11,5 +11,5 @@ env:
 
 script: cd $TEST_DIR && mvn install -DskipTests=true && mvn test
 
-#after_success:
-# - mvn clean test jacoco:report coveralls:report
+after_success:
+ - mvn clean test jacoco:report coveralls:report
