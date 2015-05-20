@@ -606,6 +606,7 @@ public class TestMongoDbCrudService {
 		protected UpdateTestBean() {}
 		protected String string_field;
 		protected List<String> string_fields;
+		protected List<String> string_fields2;
 		protected Boolean bool_field;
 		protected Long long_field;
 		protected List<NestedTestBean> nested_list;
@@ -625,13 +626,16 @@ public class TestMongoDbCrudService {
 		final UpdateTestBean.NestedTestBean to_update_nested = new UpdateTestBean.NestedTestBean();
 		to_update_nested.nested_string_list = Arrays.asList("nested_string_list1", "nested_string_list2");
 		to_update_nested.nested_string_field = "nested_string_field";
-		to_update_nested.nested_object = to_update_nested_nested;		
+		to_update_nested.nested_object = to_update_nested_nested;
+		final UpdateTestBean.NestedTestBean to_update_nested2 = BeanTemplateUtils.clone(to_update_nested)
+																	.with("nested_string_field", "nested_string_field2").done(); 
 		final UpdateTestBean to_update = new UpdateTestBean();
 		to_update.string_field = "string_field";
 		to_update.string_fields = Arrays.asList("string_fields1", "string_fields2");
+		to_update.string_fields2 = Arrays.asList("string_fields2_1", "string_fields2_2");
 		to_update.bool_field = true;
 		to_update.long_field = 1L;
-		to_update.nested_list = Arrays.asList(to_update_nested, to_update_nested);
+		to_update.nested_list = Arrays.asList(to_update_nested, to_update_nested2);
 		to_update.map = ImmutableMap.<String, String>builder().put("mapkey", "mapval").build();
 		to_update.nested_object = to_update_nested;
 		to_update._id = "test1";
@@ -641,34 +645,73 @@ public class TestMongoDbCrudService {
 		
 		// Update test object:
 
-		// Test 1 - getter fields
+		// Test 1 - getter fields ... update this will error 
 		
 		final BeanTemplate<UpdateTestBean.NestedTestBean> nested1 = BeanTemplateUtils.build(UpdateTestBean.NestedTestBean.class)
 																	.with("nested_string_field", "test1")
-																	.done(); //(2)
+																	.done(); 
+		
+		// Lots of things break here: attempt to do any operations on nested_list.*, multiple atomic operations
 		final UpdateComponent<UpdateTestBean> test1 = 
 				CrudUtils.update(UpdateTestBean.class)
-					.add(UpdateTestBean::string_fields, "AA", false) //(0)
-					.increment(UpdateTestBean::long_field, 4) //(1)
+					.add(UpdateTestBean::string_fields, "AA", false) 
+					.increment(UpdateTestBean::long_field, 4) 
 					.nested(UpdateTestBean::nested_list, 
-							CrudUtils.update(nested1) //(2)
-								.unset(UpdateTestBean.NestedTestBean::nested_string_field) //(3a)
-								.remove(UpdateTestBean.NestedTestBean::nested_string_list, Arrays.asList("x", "y", "z")) //(4)
-								.add(UpdateTestBean.NestedTestBean::nested_string_list, "A", true) // (5)
+							CrudUtils.update(nested1) 
+								.unset(UpdateTestBean.NestedTestBean::nested_string_field) 
+								.remove(UpdateTestBean.NestedTestBean::nested_string_list, Arrays.asList("x", "y", "z")) 
+								.add(UpdateTestBean.NestedTestBean::nested_string_list, "A", true) 
 							)
-					.unset(UpdateTestBean::bool_field) //(3b)
-					.unset(UpdateTestBean::nested_object) //(3c)
+					.unset(UpdateTestBean::bool_field) 
+					.unset(UpdateTestBean::nested_object) 
 					.remove(UpdateTestBean::nested_list, CrudUtils.allOf(UpdateTestBean.NestedTestBean.class).when("nested_string_field", "1")) //6)
 					;
 
-		//TODO this is failing, not clear why?
-		//final String expected1 = "{ \"$push\" : { \"string_fields\" : \"AA\"} , \"$inc\" : { \"long_field\" : 4} , \"$set\" : { \"nested_list.nested_string_field\" : \"test1\"} , \"$unset\" : { \"nested_list.nested_string_field\" : 1 , \"bool_field\" : 1 , \"nested_object\" : 1} , \"$pullAll\" : { \"nested_list.nested_string_list\" : [ \"x\" , \"y\" , \"z\"]} , \"$addToSet\" : { \"nested_list.nested_string_list\" : \"A\"} , \"$pull\" : { \"nested_list\" : { \"$and\" : [ { \"nested_string_field\" : \"1\"}]}}}";
 		try {
-			CompletableFuture<Boolean> ret_val_1 = service.updateObjectById("test1", test1);				
-			assertEquals(true, ret_val_1.get());
+			CompletableFuture<Boolean> ret_val_1 = service.updateObjectById("test1", test1);		
+			ret_val_1.get();
+			assertFalse("Should have thrown an exception", true);
 		}
 		catch (Exception e) {} // (this is just tmep until I can get the update working)
-		//TODO tests where 0 objects are found
+		
+		// TEST 2 - Same but will succeed
+		
+		final QueryComponent<UpdateTestBean> query2 = CrudUtils.allOf(UpdateTestBean.class).when("_id", "test1");
+		
+		final BeanTemplate<UpdateTestBean.NestedTestBean> nested2 = BeanTemplateUtils.build(UpdateTestBean.NestedTestBean.class)
+				.with("nested_string_field", "test1")
+				.done(); //(2)
+				
+		// Tested: addToSet (collection) add (single val), set, unset, nested, increment, pull
+		//TODO: pullAll
+		final UpdateComponent<UpdateTestBean> test2 = 
+				CrudUtils.update(UpdateTestBean.class)
+					.add(UpdateTestBean::string_fields, Arrays.asList("AA", "string_fields1"), true) 
+					.increment(UpdateTestBean::long_field, 4) 
+					.nested(UpdateTestBean::nested_object, 
+							CrudUtils.update(nested2) 
+								.add(UpdateTestBean.NestedTestBean::nested_string_list, "A", false) 
+							)
+					.unset(UpdateTestBean::bool_field) 
+					.remove(UpdateTestBean::nested_list, CrudUtils.allOf(UpdateTestBean.NestedTestBean.class).when("nested_string_field", "nested_string_field"))
+					.remove("string_fields2", Arrays.asList("XXX", "string_fields2_1"))
+					;
+
+		//DEBUG
+		//System.out.println(service._state.orig_coll.findOne().toString());
+		//System.out.println(MongoDbUtils.createUpdateObject(test2));
+		
+		CompletableFuture<Boolean> ret_val_2 = service.updateObjectBySpec(query2, Optional.of(false), test2);		
+		assertTrue("update succeeded", ret_val_2.get());
+		
+		final String expected_2 = "{ \"_id\" : \"test1\" , \"string_field\" : \"string_field\" , \"string_fields\" : [ \"string_fields1\" , \"string_fields2\" , \"AA\"] , \"string_fields2\" : [ \"string_fields2_2\"] , \"long_field\" : 5 , \"nested_list\" : [ { \"nested_string_list\" : [ \"nested_string_list1\" , \"nested_string_list2\"] , \"nested_string_field\" : \"nested_string_field2\" , \"nested_object\" : { \"nested_nested_string_field\" : \"nested_nested_string_field\"}}] , \"map\" : { \"mapkey\" : \"mapval\"} , \"nested_object\" : { \"nested_string_list\" : [ \"nested_string_list1\" , \"nested_string_list2\" , \"A\"] , \"nested_string_field\" : \"test1\" , \"nested_object\" : { \"nested_nested_string_field\" : \"nested_nested_string_field\"}}}";
+		
+		assertEquals(1L, (long)service.countObjects().get());
+		assertEquals(expected_2, service._state.orig_coll.findOne().toString());
+		
+		//TODO tests where 0 objects are found (fail + upsert)
+		
+		
 	}
 	
 	//TODO (updates)
