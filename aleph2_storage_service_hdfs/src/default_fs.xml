@@ -1,0 +1,12 @@
+<configuration>
+<property>
+  <name>fs.hdfs.impl</name>
+  <value>org.apache.hadoop.hdfs.DistributedFileSystem</value>
+  <final>true</final>
+</property>
+<property>
+  <name>fs.AbstractFileSystem.hdfs.impl</name>
+  <value>org.apache.hadoop.fs.Hdfs</value>
+  <final>true</final>
+</property>
+</configuration>
