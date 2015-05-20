@@ -5,6 +5,7 @@ import static org.junit.Assert.*;
 import java.util.Optional;
 
 import org.apache.hadoop.fs.FileContext;
+import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.junit.Test;
 
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
@@ -22,6 +23,9 @@ public class HDFSStorageSystemTest {
 			FileContext fs1 = storageService.getUnderlyingPlatformDriver(FileContext.class, Optional.<String>empty());
 			assertNotNull(fs1);
 
+			RawLocalFileSystem fs2 = storageService.getUnderlyingPlatformDriver(org.apache.hadoop.fs.RawLocalFileSystem.class,Optional.<String>empty());
+			assertNotNull(fs2); 
+			
 	}
 
 }

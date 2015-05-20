@@ -616,7 +616,7 @@ public class TestMongoDbCrudService {
 	
 	
 	@Test
-	public void testUpdateSingleDoc() throws InterruptedException, ExecutionException {
+	public void testUpdateDocs() throws InterruptedException, ExecutionException {
 		
 		final MongoDbCrudService<UpdateTestBean, String> service = getTestService("testUpdateDocs", UpdateTestBean.class, String.class);
 

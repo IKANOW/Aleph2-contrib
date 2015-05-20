@@ -53,7 +53,15 @@ public class HDFSStorageService implements IStorageService {
 		T driver = null;
 		try {
 		if(driver_class!=null){
-			if(driver_class.isAssignableFrom(FileContext.class)){
+			if (driver_class.isAssignableFrom(AbstractFileSystem.class)) {
+
+				URI uri = driver_options.isPresent() ? new URI(driver_options.get()) : getUri();
+
+				AbstractFileSystem fs = AbstractFileSystem.createFileSystem(uri, getConfiguration());
+				
+				return (@NonNull T) fs;
+			}			
+			else if(driver_class.isAssignableFrom(FileContext.class)){
 				URI uri = getUri();
 				final Configuration config = getConfiguration();
 				FileContext fs = FileContext.getFileContext(AbstractFileSystem.createFileSystem(uri, config), config);
