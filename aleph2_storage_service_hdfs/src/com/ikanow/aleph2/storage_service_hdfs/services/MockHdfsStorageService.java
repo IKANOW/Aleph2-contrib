@@ -14,8 +14,6 @@
 * limitations under the License.
 ******************************************************************************/
 package com.ikanow.aleph2.storage_service_hdfs.services;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.Optional;
 
 import org.apache.log4j.Logger;
@@ -25,19 +23,17 @@ import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.FileContext;
+import org.apache.hadoop.conf.Configuration;
 
-public class HDFSStorageService implements IStorageService {
+public class MockHdfsStorageService implements IStorageService {
 
-	private static final Logger logger = Logger.getLogger(HDFSStorageService.class);
+	private static final Logger logger = Logger.getLogger(MockHdfsStorageService.class);
 
-	
 	final protected GlobalPropertiesBean _globals;
 	
 	@Inject 
-	HDFSStorageService(GlobalPropertiesBean globals) {
+	MockHdfsStorageService(GlobalPropertiesBean globals) {
 		_globals = globals;	
 	}
 	
@@ -54,52 +50,19 @@ public class HDFSStorageService implements IStorageService {
 		try {
 		if(driver_class!=null){
 			if(driver_class.isAssignableFrom(FileContext.class)){
-				URI uri = getUri();
-				final Configuration config = getConfiguration();
-				FileContext fs = FileContext.getFileContext(AbstractFileSystem.createFileSystem(uri, config), config);
+				FileContext fs = FileContext.getLocalFSFileContext(new Configuration());
 				return (@NonNull T) fs;
 			}
 			try {
 				driver = driver_class.newInstance();
 			} catch (Exception e) {
-				logger.error("Error instamciating driver class",e);
+				logger.error("Error instanciating driver class",e);
 			}
 		} // !=null
 		} catch (Exception e) {
 			logger.error("Caught Exception:",e);
 		}
 		return driver;
-	}
-
-	/** 
-	 * Override this function with system specific configuration
-	 * @return
-	 */
-	protected Configuration getConfiguration(){
-		Configuration config = new Configuration();
-		
-		// TODO DEBUG Comment in for debugging environment settings
-		//Map<String, String> m = System.getenv();
-		String hadoopConfDir = System.getenv("HADOOP_CONF_DIR");
-		if(hadoopConfDir!=null){
-			
-			config.addResource(_globals +"hdfs-site.xml");
-		}else{
-			// add resource from classpath
-			config.addResource("default_fs.xml");			
-		}
-		return config;
-		
-	}
-
-	protected URI getUri(){
-		URI uri = null;
-		try {
-			uri = new URI("hdfs://localhost:7000");
-		} catch (URISyntaxException e) {
-			logger.error("Caught Exception:",e);
-		}
-		return uri;
 	}
 
 }
