@@ -33,7 +33,7 @@ public class MockHdfsStorageService implements IStorageService {
 	final protected GlobalPropertiesBean _globals;
 	
 	@Inject 
-	MockHdfsStorageService(GlobalPropertiesBean globals) {
+	public MockHdfsStorageService(GlobalPropertiesBean globals) {
 		_globals = globals;	
 	}
 	
