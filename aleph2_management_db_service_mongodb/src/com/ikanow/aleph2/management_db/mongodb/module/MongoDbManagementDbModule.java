@@ -17,8 +17,15 @@ package com.ikanow.aleph2.management_db.mongodb.module;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.Inject;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.ModuleUtils;
+import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
+import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
+import com.ikanow.aleph2.shared.crud.mongodb.data_model.MongoDbConfigurationBean;
 import com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory;
 import com.ikanow.aleph2.shared.crud.mongodb.services.MongoDbCrudServiceFactory;
+import com.typesafe.config.Config;
 
 /** A module to instantiate private services in the MongoDB "underlying" management DB service
  * @author acp
@@ -49,6 +56,18 @@ public class MongoDbManagementDbModule extends AbstractModule {
 	 * @see com.google.inject.AbstractModule#configure()
 	 */
 	public void configure() {		
+		Config config = ModuleUtils.getStaticConfig();				
+		MongoDbConfigurationBean bean;
+		try {
+			bean = BeanTemplateUtils.from(PropertiesUtils.getSubConfig(config, MongoDbManagementDbConfigBean.PROPERTIES_ROOT).orElse(null), MongoDbManagementDbConfigBean.class);
+		} 
+		catch (Exception e) {
+			throw new RuntimeException(ErrorUtils.get(ErrorUtils.INVALID_CONFIG_ERROR,
+					MongoDbConfigurationBean.class.toString(),
+					config.getConfig(MongoDbManagementDbConfigBean.PROPERTIES_ROOT)
+					), e);
+		}
+		this.bind(MongoDbConfigurationBean.class).toInstance(bean);
 		this.bind(IMongoDbCrudServiceFactory.class).to(MongoDbCrudServiceFactory.class);
 	}
 	

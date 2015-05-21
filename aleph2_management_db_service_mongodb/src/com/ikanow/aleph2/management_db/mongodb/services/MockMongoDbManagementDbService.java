@@ -38,7 +38,7 @@ public class MockMongoDbManagementDbService extends MongoDbManagementDbService {
 	/** This service needs to load some additional classes via Guice. Here's the module that defines the bindings
 	 * @return
 	 */
-	public List<Module> getDependencyModules() {
+	public static List<Module> getExtraDependencyModules() {
 		return Arrays.asList((Module)new MockMongoDbManagementDbModule());
 	}
 	

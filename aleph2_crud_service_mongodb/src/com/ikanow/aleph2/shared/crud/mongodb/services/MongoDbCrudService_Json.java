@@ -69,7 +69,12 @@ public class MongoDbCrudService_Json<O, K> extends MongoDbCrudService<JsonNode, 
 	@SuppressWarnings("unchecked")
 	@NonNull
 	protected O mapJsonToBean(final @NonNull JsonNode j) throws JsonProcessingException {
-		return _object_mapper.treeToValue(j, (Class<O>)_parent_bean_clazz.getClass());
+		if (_parent_bean_clazz == JsonNode.class) {
+			return (O)j;
+		}
+		else {
+			return _object_mapper.treeToValue(j, (Class<O>)_parent_bean_clazz.getClass());
+		}
 	}
 	
 	/** Maps the bean to a JsonNode since that's what the client is expecting (low performance code only)

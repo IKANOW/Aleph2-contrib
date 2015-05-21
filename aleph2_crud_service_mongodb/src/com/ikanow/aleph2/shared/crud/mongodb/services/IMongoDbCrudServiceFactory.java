@@ -34,7 +34,7 @@ public interface IMongoDbCrudServiceFactory {
 	 * @return the DB driver
 	 */
 	@NonNull
-	DB getMongoDb(String db_name);
+	DB getMongoDb(final @NonNull String db_name);
 
 	/**Get the MongoDB DB collection instance for the given names
 	 * @param db_name - the DB name
@@ -42,7 +42,7 @@ public interface IMongoDbCrudServiceFactory {
 	 * @return the DBCollection driver
 	 */
 	@NonNull
-	DBCollection getMongoDbCollection(String db_name, String collection_name);
+	DBCollection getMongoDbCollection(final @NonNull String db_name, final @NonNull String collection_name);
 
 	/** A factory to obtain a CrudService
 	 * @param bean_clazz - the class to which this CRUD service is being mapped

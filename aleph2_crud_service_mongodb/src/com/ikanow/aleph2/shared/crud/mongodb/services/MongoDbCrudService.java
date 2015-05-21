@@ -49,6 +49,7 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.Patterns;
@@ -72,7 +73,7 @@ import com.mongodb.WriteConcern;
  */
 public class MongoDbCrudService<O, K> implements ICrudService<O> {
 
-	//TODO: handle auth and project overlay
+	//TODO (ALEPH-22): handle auth and project overlay
 	
 	/** A wrapper for a Jackson DBCursor that is auto-closeable
 	 * @author acp
@@ -191,6 +192,20 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 				throw new ExecutionException(e);
 			}
 		};		
+	}
+	
+	/** Creates an empty query that handles the JsonNode case
+	 * @return
+	 */
+	@SuppressWarnings("unchecked")
+	@NonNull
+	private static <O> SingleQueryComponent<O> emptyQuery(final @NonNull Class<O> bean_clazz) {
+		if (JsonNode.class == bean_clazz) {
+			return (SingleQueryComponent<O>) CrudUtils.allOf();
+		}
+		else {
+			return CrudUtils.allOf(bean_clazz);
+		}
 	}
 	
 	//////////////////////////////////////////////////////
@@ -455,7 +470,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@NonNull 
 	public CompletableFuture<Long> countObjects() {
-		return countObjectsBySpec(CrudUtils.allOf(_state.bean_clazz));
+		return countObjectsBySpec(emptyQuery(_state.bean_clazz));
 	}
 	
 	
@@ -469,7 +484,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	@Override
 	@NonNull
 	public CompletableFuture<Boolean> updateObjectById(final @NonNull Object id, final @NonNull UpdateComponent<O> update) {
-		return updateObjectBySpec(CrudUtils.allOf(_state.bean_clazz).when("_id", id), Optional.of(false), update);
+		return updateObjectBySpec(emptyQuery(_state.bean_clazz).when("_id", id), Optional.of(false), update);
 	}
 
 	/* (non-Javadoc)
@@ -614,7 +629,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 				
 				final List<Object> ids = StreamSupport.stream(cursor.spliterator(), false).map(o -> o.get("_id")).collect(Collectors.toList());
 				
-				return deleteObjectsBySpec(CrudUtils.allOf(_state.bean_clazz).withAny("_id", ids));
+				return deleteObjectsBySpec(emptyQuery(_state.bean_clazz).withAny("_id", ids));
 			}			
 		}
 		catch (Exception e) {			
