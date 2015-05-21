@@ -15,7 +15,7 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared.crud.mongodb.data_model;
 
-import com.sun.istack.internal.Nullable;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** The configuration bean for MongoDB
  * @author acp
