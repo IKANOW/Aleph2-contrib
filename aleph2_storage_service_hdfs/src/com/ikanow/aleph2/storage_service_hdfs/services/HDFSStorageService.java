@@ -53,16 +53,15 @@ public class HDFSStorageService implements IStorageService {
 		T driver = null;
 		try {
 		if(driver_class!=null){
+			Configuration configuration = getConfiguration();
+			URI uri = driver_options.isPresent() ? new URI(driver_options.get()) : getUri(configuration);
 			if (driver_class.isAssignableFrom(AbstractFileSystem.class)) {
 
-				URI uri = driver_options.isPresent() ? new URI(driver_options.get()) : getUri();
-
-				AbstractFileSystem fs = AbstractFileSystem.createFileSystem(uri, getConfiguration());
+				AbstractFileSystem fs = AbstractFileSystem.createFileSystem(uri, configuration);
 				
 				return (@NonNull T) fs;
 			}			
 			else if(driver_class.isAssignableFrom(FileContext.class)){
-				URI uri = getUri();
 				final Configuration config = getConfiguration();
 				FileContext fs = FileContext.getFileContext(AbstractFileSystem.createFileSystem(uri, config), config);
 				return (@NonNull T) fs;
@@ -100,10 +99,15 @@ public class HDFSStorageService implements IStorageService {
 		
 	}
 
-	protected URI getUri(){
+	protected URI getUri(Configuration configuration){
 		URI uri = null;
 		try {
-			uri = new URI("hdfs://localhost:7000");
+			String uriStr = configuration.get("fs.default.name");
+			if(uriStr==null){
+				// default with localhost
+				uriStr = "hdfs://localhost:8020";
+			}
+			uri = new URI(uriStr);
 		} catch (URISyntaxException e) {
 			logger.error("Caught Exception:",e);
 		}
