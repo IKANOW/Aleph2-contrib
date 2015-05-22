@@ -57,6 +57,8 @@ import com.mongodb.WriteConcern;
 
 public class MongoDbCrudService_Json<O, K> extends MongoDbCrudService<JsonNode, K> {
 
+	//TODO: handle the case where O is a JsonNode (see also MongoDbCrudService normal)
+	
 	protected final MongoDbCrudService<O, K> _parent;
 	protected final Class<O> _parent_bean_clazz;
 	protected final ObjectMapper _object_mapper;

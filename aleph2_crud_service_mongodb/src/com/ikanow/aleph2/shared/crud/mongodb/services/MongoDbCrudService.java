@@ -37,6 +37,7 @@ import org.mongojack.DBCursor;
 import org.mongojack.JacksonDBCollection;
 import org.mongojack.WriteResult;
 import org.mongojack.internal.MongoJackModule;
+import org.mongojack.internal.object.BsonObjectGenerator;
 
 import scala.Tuple2;
 
@@ -119,6 +120,9 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 						final @NonNull DBCollection coll, 
 						final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project) {
 		_state = new State(bean_clazz, key_clazz, coll, auth_fieldname, auth, project);
+		
+		_object_mapper = MongoJackModule.configure(new ObjectMapper());
+		_object_mapper.setVisibility(PropertyAccessor.FIELD, Visibility.ANY);				
 	}
 	
 	/** Immutable state for the service 
@@ -134,7 +138,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			bean_clazz = bean_clazz_;
 			key_clazz = key_clazz_;
 			
-			if (key_clazz == String.class) {
+			if ((key_clazz == String.class) && (JsonNode.class != bean_clazz)) {
 				try {
 					string_id_field = bean_clazz.getDeclaredField(_ID);
 					string_id_field.setAccessible(true);
@@ -167,6 +171,9 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		final Field string_id_field;
 	}
 	protected final State _state;
+	protected final ObjectMapper _object_mapper;
+	
+	//TODO: currently I don't do this if it's JSON but I'm not sure why? (There was some reflection issues but looks like i do it at the DB level so can remove that)
 	
 	/** creates a new object and inserts an _id field if needed
 	 * @param bean the object to convert
@@ -174,11 +181,21 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@NonNull
 	protected DBObject convertToBson(final @NonNull O bean) {
-		final DBObject dbo = _state.coll.convertToDbObject(bean);
-		if (null != _state.string_id_field) {
-			if (!dbo.containsField(_ID)) dbo.put(_ID, new ObjectId().toString());
+		if (JsonNode.class != _state.bean_clazz) {
+			final DBObject dbo = _state.coll.convertToDbObject(bean);
+			if (null != _state.string_id_field) {
+				if (!dbo.containsField(_ID)) dbo.put(_ID, new ObjectId().toString());
+			}
+			return dbo;
 		}
-		return dbo;
+		else {
+			try (BsonObjectGenerator generator = new BsonObjectGenerator()) {
+				_object_mapper.writeTree(generator, (JsonNode)bean);
+				return generator.getDBObject();
+			} catch (Exception e) {
+				return new BasicDBObject();
+			} 			
+		}
 	}
 	
 	/** Generates a future that will error as soon as it's touched

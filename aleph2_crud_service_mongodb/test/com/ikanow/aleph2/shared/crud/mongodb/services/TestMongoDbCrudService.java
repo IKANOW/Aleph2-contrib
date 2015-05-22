@@ -38,6 +38,7 @@ import org.mongojack.JacksonDBCollection;
 import scala.Tuple2;
 import static org.hamcrest.CoreMatchers.instanceOf;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableMap;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
@@ -738,6 +739,22 @@ public class TestMongoDbCrudService {
 		assertEquals(10, service._state.orig_coll.count());
 	}
 	
+	protected static void replenishDocsForDeletion_JSON(MongoDbCrudService<JsonNode, String> service) {
+		
+		final List<JsonNode> l = IntStream.rangeClosed(0, 9).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class)
+								.with("_id", "id" + i)
+								.with("test_string", "test_string" + i)
+								.with("test_long", (Long)(long)i)
+								.done().get())
+				.map(b -> BeanTemplateUtils.toJson(b))
+				.collect(Collectors.toList());
+
+		service.storeObjects(l, true);
+		
+		assertEquals(10, service._state.orig_coll.count());
+	}
+	
 	@Test
 	public void testDeletion() throws InterruptedException, ExecutionException {
 		
@@ -874,6 +891,28 @@ public class TestMongoDbCrudService {
 		// (check index is still present)
 		
 		assertEquals(1, service._state.coll.getIndexInfo().size());
+	}
+	
+	
+	//(you could make a strong case for just reproducing every one of these tests with a JsonNode version) 
+	@Test
+	public void testJsonRepositoryCalls() throws InterruptedException, ExecutionException {
+		final MongoDbCrudService<JsonNode, String> service = getTestService("testJsonRepositoryCalls", JsonNode.class, String.class);
+		
+		replenishDocsForDeletion_JSON(service);
+		
+		assertEquals(10L, (long)service.countObjects().get());				
+		
+		final QueryComponent<JsonNode> query_5b = CrudUtils.allOf()
+				.rangeAbove("_id", "id4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", 1)).limit(4);
+
+		assertEquals(4L, (long)service.deleteObjectsBySpec(query_5b).get());
+		
+		assertEquals(6L, (long)service._state.coll.count());				
+		
+		//TODO: also need to do an updateById (I think call)
 	}
 	
 	@Test
