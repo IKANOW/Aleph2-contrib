@@ -20,14 +20,13 @@ import static org.junit.Assert.*;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.junit.Test;
 import org.mongojack.internal.MongoJackModule;
 
 import scala.Tuple2;
 
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
@@ -522,8 +521,7 @@ public class TestMongoDbUtils {
 				.with("nested_string_field", "test4b").done(); //(2)
 		
 		//convert to JsonNode:
-		final ObjectMapper object_mapper = MongoJackModule.configure(new ObjectMapper());
-		object_mapper.setVisibility(PropertyAccessor.FIELD, Visibility.ANY);		
+		final ObjectMapper object_mapper = MongoJackModule.configure(BeanTemplateUtils.configureMapper(Optional.empty()));
 		JsonNode nested4a_json = object_mapper.valueToTree(nested4a.get());
 		JsonNode nested4b_json = object_mapper.valueToTree(nested4b.get());
 		

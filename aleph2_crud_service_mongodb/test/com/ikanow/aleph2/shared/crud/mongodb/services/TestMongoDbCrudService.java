@@ -893,13 +893,53 @@ public class TestMongoDbCrudService {
 		assertEquals(1, service._state.coll.getIndexInfo().size());
 	}
 	
-	
-	//(you could make a strong case for just reproducing every one of these tests with a JsonNode version) 
 	@Test
 	public void testJsonRepositoryCalls() throws InterruptedException, ExecutionException {
-		final MongoDbCrudService<JsonNode, String> service = getTestService("testJsonRepositoryCalls", JsonNode.class, String.class);
+		final MongoDbCrudService<TestBean, String> bean_service = getTestService("testJsonRepositoryCalls", TestBean.class, String.class);
+		final MongoDbCrudService<JsonNode, String> json_service = getTestService("testJsonRepositoryCalls", JsonNode.class, String.class);
 		
-		replenishDocsForDeletion_JSON(service);
+		replenishDocsForDeletion_JSON(json_service);
+
+		testJsonRepositoryCalls_common(json_service, json_service);
+
+		replenishDocsForDeletion(bean_service);
+		
+		testJsonRepositoryCalls_common(bean_service.getRawCrudService(), json_service);
+	}
+	
+	public void testJsonRepositoryCalls_common(final ICrudService<JsonNode> service,  MongoDbCrudService<JsonNode, String> original) throws InterruptedException, ExecutionException {
+		
+		// Single object get
+
+		final Future<Optional<JsonNode>> obj1 = service.getObjectById("id1");
+
+		assertEquals("{ \"_id\" : \"id1\" , \"test_string\" : \"test_string1\" , \"test_long\" : 1}", original.convertToBson(obj1.get().get()).toString());
+
+		// Multi object get
+		
+		final QueryComponent<JsonNode> query_2 = CrudUtils.allOf()
+				.rangeAbove("_id", "id4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", 1)).limit(4);
+		
+		try (Cursor<JsonNode> cursor = service.getObjectsBySpec(query_2, Arrays.asList("test_string"), false).get()) {
+		
+			assertEquals(6, cursor.count()); // (count ignores limit)
+			
+			final List<JsonNode> objs = StreamSupport.stream(Optionals.ofNullable(cursor).spliterator(), false).collect(Collectors.toList());
+			
+			assertEquals(4, objs.size());
+			
+			final DBObject first_obj = original.convertToBson(objs.get(0));
+			
+			assertEquals("{ \"_id\" : \"id4\" , \"test_long\" : 4}", first_obj.toString());			
+		} 
+		catch (Exception e) {
+			//(fail on close, normally carry on - but here error out)
+			fail("getObjectsBySpec errored on close"); 
+		}
+		
+		// Delete
 		
 		assertEquals(10L, (long)service.countObjects().get());				
 		
@@ -910,11 +950,9 @@ public class TestMongoDbCrudService {
 
 		assertEquals(4L, (long)service.deleteObjectsBySpec(query_5b).get());
 		
-		assertEquals(6L, (long)service._state.coll.count());				
+		assertEquals(6L, (long)original._state.coll.count());				
 		
-		//TODO: also need to do an updateById (I think call)
-		
-		//TODO: also need to handle storeObject code?
+		//TODO: also need to do an update and a findAndModify
 	}
 	
 	@Test
@@ -977,6 +1015,4 @@ public class TestMongoDbCrudService {
 		}		
 		assertEquals(4,count);
 	}
-	
-	//TODO (ALEPH-22): Test JSON raw service
 }

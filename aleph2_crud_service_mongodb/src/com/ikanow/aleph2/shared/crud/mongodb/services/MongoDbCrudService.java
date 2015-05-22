@@ -40,8 +40,6 @@ import org.mongojack.internal.object.BsonObjectGenerator;
 
 import scala.Tuple2;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IBasicSearchService;
@@ -51,6 +49,7 @@ import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -120,8 +119,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 						final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project) {
 		_state = new State(bean_clazz, key_clazz, coll, auth_fieldname, auth, project);
 		
-		_object_mapper = MongoJackModule.configure(new ObjectMapper());
-		_object_mapper.setVisibility(PropertyAccessor.FIELD, Visibility.ANY);				
+		_object_mapper = MongoJackModule.configure(BeanTemplateUtils.configureMapper(Optional.empty()));
 	}
 	
 	/** Immutable state for the service 
@@ -130,9 +128,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		State(final Class<O> bean_clazz_, final Class<K> key_clazz_, final DBCollection coll_, 
 				final Optional<String> auth_fieldname_, final Optional<AuthorizationBean> auth_, final Optional<ProjectBean> project_) {
 			// Setup some Jackson overrides:
-			ObjectMapper my_mapper = new ObjectMapper();
+			ObjectMapper my_mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 			MongoJackModule.configure(my_mapper);
-			my_mapper.setVisibility(PropertyAccessor.FIELD, Visibility.ANY);
 			
 			bean_clazz = bean_clazz_;
 			key_clazz = key_clazz_;
@@ -666,7 +663,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@NonNull
 	public ICrudService<JsonNode> getRawCrudService() {
-		return new MongoDbCrudService_Json<O, K>(_state.bean_clazz, _state.key_clazz, _state.orig_coll, _state.auth_fieldname, _state.auth, _state.project, this);
+		return new MongoDbCrudService<JsonNode, K>(JsonNode.class, _state.key_clazz, _state.orig_coll, _state.auth_fieldname, _state.auth, _state.project); 
 	}
 	
 	/* (non-Javadoc)

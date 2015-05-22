@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Collector.Characteristics;
@@ -29,8 +30,6 @@ import org.mongojack.internal.object.BsonObjectGenerator;
 
 import scala.Tuple2;
 
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
 import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -39,6 +38,7 @@ import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Maps;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils.BeanTemplate;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateOperator;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.MultiQueryComponent;
@@ -258,8 +258,7 @@ public class MongoDbUtils {
 	 */
 	@SuppressWarnings("unchecked")
 	public static <O> DBObject createUpdateObject(final @NonNull UpdateComponent<O> update) {
-		final ObjectMapper object_mapper = MongoJackModule.configure(new ObjectMapper());
-		object_mapper.setVisibility(PropertyAccessor.FIELD, Visibility.ANY);		
+		final ObjectMapper object_mapper = MongoJackModule.configure(BeanTemplateUtils.configureMapper(Optional.empty()));
 		
 		return update.getAll().entries().stream()
 					.map(kv -> Patterns.match(kv.getValue()._2())
