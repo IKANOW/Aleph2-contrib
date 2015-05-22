@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared.crud.mongodb.services;
 
+import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,6 +50,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.shared.crud.mongodb.data_model.MongoDbConfigurationBean;
 import com.ikanow.aleph2.shared.crud.mongodb.services.MongoDbCrudService;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
@@ -79,10 +81,20 @@ public class TestMongoDbCrudService {
 
 	// UTILS
 	
+	// Set this string to connect vs a real D
+	private String _real_mongodb_connection = null;
+	//private String _real_mongodb_connection = "localhost:4017";
+	
 	@Before
-	public void setupCrudServiceFactor() {
+	public void setupCrudServiceFactor() throws UnknownHostException {
 		if (null == _factory) {
-			_factory = new MockMongoDbCrudServiceFactory();
+			if (null == _real_mongodb_connection) {
+				_factory = new MockMongoDbCrudServiceFactory();
+			}
+			else {
+				MongoDbConfigurationBean config_bean = new MongoDbConfigurationBean(_real_mongodb_connection);
+				_factory = new MongoDbCrudServiceFactory(config_bean);
+			}
 		}
 	}
 	
@@ -213,6 +225,8 @@ public class TestMongoDbCrudService {
 		
 		// 1) Insertion without ids
 		
+		assertEquals(0, service._state.orig_coll.count());		
+		
 		final List<TestBean> l = IntStream.rangeClosed(1, 10).boxed()
 				.map(i -> BeanTemplateUtils.build(TestBean.class).with("test_string", "test_string" + i).done().get())
 				.collect(Collectors.toList());
@@ -274,8 +288,16 @@ public class TestMongoDbCrudService {
 		
 		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_4 = service.storeObjects(l4, true);
 
-		assertEquals(100L, (long)result_4.get()._2().get());		
-		assertEquals(120, service._state.orig_coll.count());		
+		try {
+			assertEquals(120, service._state.orig_coll.count());
+			assertEquals(100L, (long)result_4.get()._2().get());			
+			
+			// Fongo and Mongo behave differently here:
+			if (null != this._real_mongodb_connection) {
+				fail("Should have thrown exception on duplicate insert, even though docs have been inserted");
+			}
+		}
+		catch (Exception e) {}
 	}
 
 	////////////////////////////////////////////////
@@ -300,7 +322,12 @@ public class TestMongoDbCrudService {
 		// 1) Add a new index
 		
 		final List<DBObject> initial_indexes = service._state.orig_coll.getIndexInfo();
-		assertEquals("[{ \"v\" : 1 , \"key\" : { \"_id\" : 1} , \"ns\" : \"test_db.testIndexes\" , \"name\" : \"_id_\"}]", initial_indexes.toString());
+		if (null == this._real_mongodb_connection) { // slightly different format:
+			assertEquals("[{ \"v\" : 1 , \"key\" : { \"_id\" : 1} , \"ns\" : \"test_db.testIndexes\" , \"name\" : \"_id_\"}]", initial_indexes.toString());
+		}
+		else {
+			assertEquals("[{ \"v\" : 1 , \"key\" : { \"_id\" : 1} , \"name\" : \"_id_\" , \"ns\" : \"test_db.testIndexes\"}]", initial_indexes.toString());			
+		}
 		
 		final Future<Boolean> done = service.optimizeQuery(Arrays.asList("test_string", "_id"));
 		
@@ -312,8 +339,14 @@ public class TestMongoDbCrudService {
 		expected_index_nested.put("_id", 1);
 		final BasicDBObject expected_index = new BasicDBObject("v", 1);
 		expected_index.put("key", expected_index_nested);
-		expected_index.put("ns", "test_db.testIndexes");
-		expected_index.put( "name", "test_string_1__id_1");
+		if (null == this._real_mongodb_connection) { // slightly different format:
+			expected_index.put("ns", "test_db.testIndexes");
+			expected_index.put( "name", "test_string_1__id_1");
+		}
+		else {
+			expected_index.put( "name", "test_string_1__id_1");
+			expected_index.put("ns", "test_db.testIndexes");
+		}
 		expected_index.put("background", true);
 		
 		final List<DBObject> expected_new_indexes = Arrays.asList(initial_indexes.get(0), expected_index);
@@ -336,7 +369,7 @@ public class TestMongoDbCrudService {
 		
 		assertEquals(true, index_existed_4);
 		
-		final List<DBObject> expected_new_indexes_4 = Arrays.asList(initial_indexes.get(0), expected_index);
+		final List<DBObject> expected_new_indexes_4 = Arrays.asList(initial_indexes.get(0));
 		
 		final List<DBObject> final_indexes = service._state.orig_coll.getIndexInfo();		
 		
@@ -710,14 +743,63 @@ public class TestMongoDbCrudService {
 		assertEquals(1L, (long)service.countObjects().get());
 		assertEquals(expected_2, service._state.orig_coll.findOne().toString());
 		
-		//TODO tests where 0 objects are found (fail + upsert)
+		// Tests where no matching object is found
 		
+		// Fail
 		
+		final QueryComponent<UpdateTestBean> query3 = CrudUtils.allOf(UpdateTestBean.class).when("_id", "test2");
+		
+		CompletableFuture<Boolean> ret_val_3 = service.updateObjectBySpec(query3, Optional.of(false), test2);		
+		
+		assertEquals(1L, (long)service.countObjects().get());
+		assertFalse("update did nothing", ret_val_3.get());
+
+		// Upsert
+		
+		CompletableFuture<Boolean> ret_val_4 = service.updateObjectBySpec(query3, Optional.of(true), test2);		
+		
+		assertEquals(2L, (long)service.countObjects().get());
+		assertTrue("update upserted", ret_val_4.get());
+
+		// (clear out this object)
+		if (null == this._real_mongodb_connection) { // (upsert doens't work properly in fongo)
+			service.deleteObjectsBySpec(
+					CrudUtils.allOf(UpdateTestBean.class).whenNot("_id", "test1")
+					);
+		}
+		else {
+			assertTrue("Delete corrupted object I just inserted", service.deleteObjectById("test2").get());			
+		}
+		assertEquals(1L, (long)service.countObjects().get());
+		
+		// Multi updates:
+
+		for (int i = 2; i < 10; ++i) {
+			UpdateTestBean to_insert = BeanTemplateUtils.clone(to_update).with("_id", "test" + i).done();
+			final CompletableFuture<Supplier<Object>> ret_val = service.storeObject(to_insert);
+			ret_val.get(); // (just check it succeeded)
+		}
+		assertEquals(9L, (long)service.countObjects().get());
+		
+		final QueryComponent<UpdateTestBean> query5 = CrudUtils.allOf(UpdateTestBean.class).rangeAbove("_id", "test4", true);
+		
+		CompletableFuture<Long> ret_val_5 = service.updateObjectsBySpec(query5, Optional.of(false), test2);
+		
+		assertEquals(5L, (long)ret_val_5.get());
+	
+		// check one of the objects we updated was in fact updated
+		assertEquals(expected_2.replace("\"_id\" : \"test1\"", "\"_id\" : \"test6\"")
+				, service._state.orig_coll.findOne(new BasicDBObject("_id", "test6")).toString());
+		 
 	}
 	
-	//TODO (updates)
-	
-	//TODO (find and modify)
+	@Test
+	public void testUpdateAndReturnDocs() throws InterruptedException, ExecutionException {
+		
+		//TODO: upsert, before+after updated, delete doc, field_list/include, field_list/exclude
+		
+		//service.updateAndReturnObjectBySpec(unique_spec, upsert, update, before_updated, field_list, include)
+	}
 	
 	////////////////////////////////////////////////
 	////////////////////////////////////////////////
@@ -883,14 +965,16 @@ public class TestMongoDbCrudService {
 		// 7) erase data store
 		
 		replenishDocsForDeletion(service);
-		
+				
 		service.deleteDatastore().get();
 		
 		assertEquals(0L, (long)service._state.coll.count());		
 		
-		// (check index is still present)
-		
-		assertEquals(1, service._state.coll.getIndexInfo().size());
+		// (check index has gone)
+
+		if (null != this._real_mongodb_connection) { // (doesn't work with fongo?)
+			assertEquals(0, service._state.coll.getIndexInfo().size());
+		}
 	}
 	
 	@Test

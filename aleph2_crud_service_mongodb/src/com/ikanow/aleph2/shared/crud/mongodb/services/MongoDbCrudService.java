@@ -275,7 +275,11 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			
 			return CompletableFuture.completedFuture(
 					Tuples._2T(() -> l.stream().map(o -> (Object)_state.coll.convertFromDbId(o.get(_ID))).collect(Collectors.toList()),
-							() -> (Long)(long)orig_result.getN()));
+							() -> {
+								return Patterns.match(_state.orig_coll).<Long>andReturn()
+									.when(FongoDBCollection.class, () -> (Long)(long)orig_result.getN())
+									.otherwise(__ -> (long)l.size());
+							}));
 		}		
 		catch (Exception e) {			
 			return MongoDbCrudService.<Tuple2<Supplier<List<Object>>, Supplier<Long>>>returnError(e);
@@ -333,8 +337,10 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 															.collect(Collectors.toList());
 				if (matching_indexes.isEmpty()) {
 					throw new MongoException(ErrorUtils.get(ErrorUtils.MISSING_MONGODB_INDEX_KEY, index_keys_str));
-				}				
-			}			
+				}
+			}
+			_state.orig_coll.dropIndex(index_keys);
+
 			return true;
 		}
 		catch (MongoException ex) {
@@ -501,7 +507,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(unique_spec);
 			final DBObject update_object = MongoDbUtils.createUpdateObject(update);
 			
-			final WriteResult<O, K> wr = _state.coll.update(query_and_meta._1(), update_object, false, upsert.orElse(false));
+			final WriteResult<O, K> wr = _state.coll.update(query_and_meta._1(), update_object, upsert.orElse(false), false);
 			
 			return CompletableFuture.completedFuture(wr.getN() > 0);
 		}
@@ -521,7 +527,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(spec);
 			final DBObject update_object = MongoDbUtils.createUpdateObject(update);
 			
-			final WriteResult<O, K> wr = _state.coll.update(query_and_meta._1(), update_object, true, false);
+			final WriteResult<O, K> wr = _state.coll.update(query_and_meta._1(), update_object, upsert.orElse(false), true);
 			
 			return CompletableFuture.completedFuture((Long)(long)wr.getN());
 		}
@@ -549,7 +555,10 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			// ($unset: null removes the object, only possible via the UpdateComponent.deleteObject call) 
 			final boolean do_remove = update_object.containsField("$unset") && (null == update_object.get("$unset"));
 			
-			final O ret_val = _state.coll.findAndModify(query_and_meta._1(), fields, (DBObject)query_and_meta._2().get("$sort"), do_remove, update_object, !before_updated.orElse(false), upsert.orElse(false));
+			final O ret_val = do_remove
+					? _state.coll.findAndModify(query_and_meta._1(), fields, (DBObject)query_and_meta._2().get("$sort"), do_remove, (DBObject)null, false, false)
+					: _state.coll.findAndModify(query_and_meta._1(), fields, (DBObject)query_and_meta._2().get("$sort"), false, update_object, !before_updated.orElse(false), upsert.orElse(false))
+					;
 			
 			return CompletableFuture.completedFuture(Optional.ofNullable(ret_val));
 		}
@@ -571,6 +580,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	public CompletableFuture<Boolean> deleteObjectById(final @NonNull Object id) {
 		try {			
 			final WriteResult<O, K> wr = _state.coll.removeById((K)id);
+			
 			return CompletableFuture.completedFuture(wr.getN() > 0);
 		}
 		catch (Exception e) {			
