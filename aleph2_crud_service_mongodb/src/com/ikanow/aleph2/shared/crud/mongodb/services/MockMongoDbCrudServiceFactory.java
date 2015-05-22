@@ -48,6 +48,15 @@ public class MockMongoDbCrudServiceFactory implements IMongoDbCrudServiceFactory
 	}
 
 	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory#getMongoDbCollection(java.lang.String)
+	 */
+	@NonNull
+	public DBCollection getMongoDbCollection(final @NonNull String db_name_and_collection) {
+		final String[] db_coll = db_name_and_collection.split("\\s*[.]\\s*");
+		return getMongoDbCollection(db_coll[0], db_coll[1]);
+	}
+
+	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory#getMongoDbCollection(java.lang.String, java.lang.String)
 	 */
 	@NonNull

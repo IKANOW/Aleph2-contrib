@@ -19,6 +19,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
+import org.checkerframework.checker.nullness.qual.NonNull;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Inject;
 import com.google.inject.Module;
@@ -29,8 +31,12 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudSe
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
+import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
+import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.management_db.mongodb.module.MongoDbManagementDbModule;
+import com.ikanow.aleph2.management_db.utils.ManagementDbUtils;
 import com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
@@ -41,7 +47,14 @@ import com.mongodb.DBCollection;
  */
 public class MongoDbManagementDbService implements IManagementDbService, IExtraDependencyLoader  {
 
-	protected IMongoDbCrudServiceFactory _crud_factory;
+	public static final String SHARED_LIBRARY_STORE = "aleph2_shared.library";
+	public static final String DATA_BUCKET_STORE = "aleph2_data_import.bucket";
+	public static final String DATA_BUCKET_STATUS_STORE = "aleph2_data_import.bucket_status";
+	public static final String DATA_ANALYTIC_THREAD_STORE = "aleph2_analytics.thread";
+	
+	protected final IMongoDbCrudServiceFactory _crud_factory;
+	protected final Optional<AuthorizationBean> _auth;
+	protected final Optional<ProjectBean> _project;
 	
 	/** Guice generated constructor
 	 * @param crud_factory
@@ -49,17 +62,45 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	@Inject
 	public MongoDbManagementDbService(IMongoDbCrudServiceFactory crud_factory) {
 		_crud_factory = crud_factory;
+		_auth = Optional.empty();
+		_project = Optional.empty();
 
 		//DEBUG
 		//System.out.println("Hello world from: " + this.getClass() + ": underlying=" + crud_factory);
 	}
 	
+	/** User constructor for building a cloned version with different auth settings
+	 * @param crud_factory 
+	 * @param auth_fieldname
+	 * @param auth
+	 * @param project
+	 */
+	public MongoDbManagementDbService(IMongoDbCrudServiceFactory crud_factory, 
+			Optional<AuthorizationBean> auth, Optional<ProjectBean> project) {
+		_crud_factory = crud_factory;
+		_auth = auth;
+		_project = project;		
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getFilteredDb(java.lang.String, java.util.Optional, java.util.Optional)
+	 */
+	@NonNull 
+	public MongoDbManagementDbService getFilteredDb(final Optional<AuthorizationBean> client_auth, final Optional<ProjectBean> project_auth)
+	{
+		return new MongoDbManagementDbService(_crud_factory, client_auth, project_auth);
+	}
+	
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getSharedLibraryStore()
 	 */
 	public IManagementCrudService<SharedLibraryBean> getSharedLibraryStore() {
-		// TODO Auto-generated method stub
-		return null;
+		return ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
+				SharedLibraryBean.class, String.class, 
+				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.SHARED_LIBRARY_STORE), 
+				Optional.of(BeanTemplateUtils.from(SharedLibraryBean.class).field(SharedLibraryBean::access_rights)), 
+				_auth, _project));
 	}
 
 	/* (non-Javadoc)
@@ -67,24 +108,30 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	 */
 	public <T> ICrudService<T> getPerLibraryState(Class<T> clazz,
 			SharedLibraryBean library, Optional<String> sub_collection) {
-		// TODO Auto-generated method stub
-		return null;
+		//TODO (ALEPH-19)
+		throw new RuntimeException("This method is currently not supported");
 	}
 
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getDataBucketStore()
 	 */
 	public IManagementCrudService<DataBucketBean> getDataBucketStore() {
-		// TODO Auto-generated method stub
-		return null;
+		return ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
+				DataBucketBean.class, String.class, 
+				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.DATA_BUCKET_STORE), 
+				Optional.of(BeanTemplateUtils.from(DataBucketBean.class).field(DataBucketBean::access_rights)), 
+				_auth, _project));
 	}
 
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getDataBucketStatusStore()
 	 */
 	public IManagementCrudService<DataBucketStatusBean> getDataBucketStatusStore() {
-		// TODO Auto-generated method stub
-		return null;
+		return ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
+				DataBucketStatusBean.class, String.class, 
+				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.DATA_BUCKET_STATUS_STORE), 
+				Optional.empty(), 
+				_auth, _project));
 	}
 
 	/* (non-Javadoc)
@@ -92,16 +139,19 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	 */
 	public <T> ICrudService<T> getPerBucketState(Class<T> clazz,
 			DataBucketBean bucket, Optional<String> sub_collection) {
-		// TODO Auto-generated method stub
-		return null;
+		//TODO (ALEPH-19)
+		throw new RuntimeException("This method is currently not supported");
 	}
 
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getAnalyticThreadStore()
 	 */
 	public IManagementCrudService<AnalyticThreadBean> getAnalyticThreadStore() {
-		// TODO Auto-generated method stub
-		return null;
+		return ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
+				AnalyticThreadBean.class, String.class, 
+				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.DATA_ANALYTIC_THREAD_STORE), 
+				Optional.of(BeanTemplateUtils.from(DataBucketBean.class).field(DataBucketBean::access_rights)), 
+				_auth, _project));
 	}
 
 	/* (non-Javadoc)
@@ -109,8 +159,8 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	 */
 	public <T> ICrudService<T> getPerAnalyticThreadState(Class<T> clazz,
 			AnalyticThreadBean analytic_thread, Optional<String> sub_collection) {
-		// TODO Auto-generated method stub
-		return null;
+		//TODO (ALEPH-19)
+		throw new RuntimeException("This method is currently not supported");
 	}
 
 	/* (non-Javadoc)

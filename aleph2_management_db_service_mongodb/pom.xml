@@ -49,7 +49,12 @@
   	<dependency>
   		<groupId>com.ikanow.aleph2</groupId>
   		<artifactId>aleph2_crud_service_mongodb</artifactId>
-  		<version>0.0.1-SNAPSHOT</version>
+  		<version>[0.0,)</version>
+  	</dependency>
+  	<dependency>
+  		<groupId>com.ikanow.aleph2</groupId>
+  		<artifactId>aleph2_management_db_service</artifactId>
+  		<version>[0.0,)</version>
   	</dependency>
   </dependencies>
 </project>

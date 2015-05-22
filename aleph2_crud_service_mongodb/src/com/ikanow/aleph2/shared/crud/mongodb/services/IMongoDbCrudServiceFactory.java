@@ -44,6 +44,13 @@ public interface IMongoDbCrudServiceFactory {
 	@NonNull
 	DBCollection getMongoDbCollection(final @NonNull String db_name, final @NonNull String collection_name);
 
+	/**Get the MongoDB DB collection instance for the given names
+	 * @param db_name_and_collection - <the DB name>.<the collection name>
+	 * @return the DBCollection driver
+	 */
+	@NonNull
+	DBCollection getMongoDbCollection(final @NonNull String db_name_and_collection);
+
 	/** A factory to obtain a CrudService
 	 * @param bean_clazz - the class to which this CRUD service is being mapped
 	 * @param key_clazz - if you know the type of the _id then add this here, else use Object.class (or ObjectId to use MongoDB defaults)
