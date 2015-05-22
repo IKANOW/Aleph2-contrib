@@ -15,7 +15,6 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared.crud.mongodb.services;
 
-import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
@@ -138,17 +137,11 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			bean_clazz = bean_clazz_;
 			key_clazz = key_clazz_;
 			
-			if ((key_clazz == String.class) && (JsonNode.class != bean_clazz)) {
-				try {
-					string_id_field = bean_clazz.getDeclaredField(_ID);
-					string_id_field.setAccessible(true);
-				}
-				catch (Exception e) {
-					throw new RuntimeException(ErrorUtils.get(ErrorUtils.INTERNAL_LOGIC_ERROR_NO_ID_FIELD, bean_clazz), e);
-				}
+			if (key_clazz == String.class) {
+				insert_string_id_if_missing = true;
 			}
 			else {
-				string_id_field = null;				
+				insert_string_id_if_missing = false;
 			}
 			
 			orig_coll = Patterns.match(coll_).<DBCollection>andReturn()
@@ -167,13 +160,10 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		final Optional<String> auth_fieldname;
 		final Optional<AuthorizationBean> auth;
 		final Optional<ProjectBean> project;
-		
-		final Field string_id_field;
+		final boolean insert_string_id_if_missing;
 	}
 	protected final State _state;
 	protected final ObjectMapper _object_mapper;
-	
-	//TODO: currently I don't do this if it's JSON but I'm not sure why? (There was some reflection issues but looks like i do it at the DB level so can remove that)
 	
 	/** creates a new object and inserts an _id field if needed
 	 * @param bean the object to convert
@@ -181,21 +171,20 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@NonNull
 	protected DBObject convertToBson(final @NonNull O bean) {
-		if (JsonNode.class != _state.bean_clazz) {
-			final DBObject dbo = _state.coll.convertToDbObject(bean);
-			if (null != _state.string_id_field) {
-				if (!dbo.containsField(_ID)) dbo.put(_ID, new ObjectId().toString());
-			}
-			return dbo;
+		final DBObject dbo = Patterns.match().<DBObject>andReturn()
+				.when(() -> JsonNode.class != _state.bean_clazz, () -> _state.coll.convertToDbObject(bean))
+				.otherwise(() -> {
+					try (BsonObjectGenerator generator = new BsonObjectGenerator()) {
+						_object_mapper.writeTree(generator, (JsonNode)bean);
+						return generator.getDBObject();
+					} catch (Exception e) {
+						return new BasicDBObject();
+					} 								
+				});
+		if (_state.insert_string_id_if_missing) {
+			if (!dbo.containsField(_ID)) dbo.put(_ID, new ObjectId().toString());
 		}
-		else {
-			try (BsonObjectGenerator generator = new BsonObjectGenerator()) {
-				_object_mapper.writeTree(generator, (JsonNode)bean);
-				return generator.getDBObject();
-			} catch (Exception e) {
-				return new BasicDBObject();
-			} 			
-		}
+		return dbo;
 	}
 	
 	/** Generates a future that will error as soon as it's touched

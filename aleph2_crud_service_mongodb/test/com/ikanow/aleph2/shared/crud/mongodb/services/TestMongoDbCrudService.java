@@ -913,6 +913,8 @@ public class TestMongoDbCrudService {
 		assertEquals(6L, (long)service._state.coll.count());				
 		
 		//TODO: also need to do an updateById (I think call)
+		
+		//TODO: also need to handle storeObject code?
 	}
 	
 	@Test
