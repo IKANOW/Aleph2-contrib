@@ -35,8 +35,8 @@ import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.ManagementDbUtils;
 import com.ikanow.aleph2.management_db.mongodb.module.MongoDbManagementDbModule;
-import com.ikanow.aleph2.management_db.utils.ManagementDbUtils;
 import com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
@@ -51,6 +51,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	public static final String DATA_BUCKET_STORE = "aleph2_data_import.bucket";
 	public static final String DATA_BUCKET_STATUS_STORE = "aleph2_data_import.bucket_status";
 	public static final String DATA_ANALYTIC_THREAD_STORE = "aleph2_analytics.thread";
+	public static final String RETRY_DB = "aleph2_retry_store";
 	
 	protected final IMongoDbCrudServiceFactory _crud_factory;
 	protected final Optional<AuthorizationBean> _auth;
@@ -227,5 +228,17 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	@Override
 	public void youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules() {
 		// (done see above)		
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getRetryStore(java.lang.Class)
+	 */
+	@Override
+	public <T> ICrudService<T> getRetryStore(
+			@NonNull Class<T> retry_message_clazz) {
+			return (ICrudService<T>) _crud_factory.getMongoDbCrudService(
+				retry_message_clazz, String.class, 
+				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.RETRY_DB, retry_message_clazz.getSimpleName()), 
+				Optional.empty(), Optional.empty(), Optional.empty());
 	}
 }
