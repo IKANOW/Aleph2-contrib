@@ -51,6 +51,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.data_model.utils.FutureUtils;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.mongodb.utils.ErrorUtils;
@@ -184,19 +185,6 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		return dbo;
 	}
 	
-	/** Generates a future that will error as soon as it's touched
-	 * @param e - the underlying exception
-	 * @return a future that errors when touched
-	 */
-	@NonNull
-	protected static <T> CompletableFuture<T> returnError(final @NonNull Exception e) {
-		return new CompletableFuture<T>() {
-			@Override public T get() throws ExecutionException {
-				throw new ExecutionException(e);
-			}
-		};		
-	}
-	
 	/** Creates an empty query that handles the JsonNode case
 	 * @return
 	 */
@@ -245,7 +233,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			return CompletableFuture.completedFuture(() -> dbo.get(_ID));
 		}
 		catch (Exception e) {
-			return MongoDbCrudService.<Supplier<Object>>returnError(e);
+			return FutureUtils.<Supplier<Object>>returnError(e);
 		}
 	}
 
@@ -282,7 +270,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 							}));
 		}		
 		catch (Exception e) {			
-			return MongoDbCrudService.<Tuple2<Supplier<List<Object>>, Supplier<Long>>>returnError(e);
+			return FutureUtils.<Tuple2<Supplier<List<Object>>, Supplier<Long>>>returnError(e);
 		}		
 	}
 	
@@ -373,7 +361,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			}
 		}
 		catch (Exception e) {			
-			return MongoDbCrudService.<Optional<O>>returnError(e);
+			return FutureUtils.<Optional<O>>returnError(e);
 		}		
 	}
 	
@@ -403,7 +391,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			}
 		}
 		catch (Exception e) {			
-			return MongoDbCrudService.<Optional<O>>returnError(e);
+			return FutureUtils.<Optional<O>>returnError(e);
 		}		
 	}
 
@@ -446,7 +434,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			return CompletableFuture.completedFuture(new MongoDbCursor<O>(cursor));
 		}
 		catch (Exception e) {			
-			return MongoDbCrudService.<Cursor<O>>returnError(e);
+			return FutureUtils.<Cursor<O>>returnError(e);
 		}		
 	}
 
@@ -470,7 +458,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			}
 		}
 		catch (Exception e) {			
-			return MongoDbCrudService.<Long>returnError(e);
+			return FutureUtils.<Long>returnError(e);
 		}		
 	}
 
@@ -512,7 +500,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			return CompletableFuture.completedFuture(wr.getN() > 0);
 		}
 		catch (Exception e) {			
-			return MongoDbCrudService.<Boolean>returnError(e);
+			return FutureUtils.<Boolean>returnError(e);
 		}		
 	}
 
@@ -532,7 +520,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			return CompletableFuture.completedFuture((Long)(long)wr.getN());
 		}
 		catch (Exception e) {			
-			return MongoDbCrudService.<Long>returnError(e);
+			return FutureUtils.<Long>returnError(e);
 		}		
 	}
 
@@ -563,7 +551,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			return CompletableFuture.completedFuture(Optional.ofNullable(ret_val));
 		}
 		catch (Exception e) {			
-			return MongoDbCrudService.<Optional<O>>returnError(e);
+			return FutureUtils.<Optional<O>>returnError(e);
 		}		
 	}	
 	
@@ -584,7 +572,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			return CompletableFuture.completedFuture(wr.getN() > 0);
 		}
 		catch (Exception e) {			
-			return MongoDbCrudService.<Boolean>returnError(e);
+			return FutureUtils.<Boolean>returnError(e);
 		}		
 	}
 
@@ -608,7 +596,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			};		
 		}
 		catch (Exception e) {			
-			return MongoDbCrudService.<Boolean>returnError(e);
+			return FutureUtils.<Boolean>returnError(e);
 		}		
 	}
 
@@ -646,7 +634,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			}			
 		}
 		catch (Exception e) {			
-			return MongoDbCrudService.<Long>returnError(e);
+			return FutureUtils.<Long>returnError(e);
 		}		
 	}
 
@@ -660,7 +648,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			return CompletableFuture.completedFuture((Boolean)(true));
 		}
 		catch (Exception e) {			
-			return MongoDbCrudService.<Boolean>returnError(e);
+			return FutureUtils.<Boolean>returnError(e);
 		}				
 	}
 	
