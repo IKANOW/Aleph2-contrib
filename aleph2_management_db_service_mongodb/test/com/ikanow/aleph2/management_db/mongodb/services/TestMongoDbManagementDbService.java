@@ -103,8 +103,7 @@ public class TestMongoDbManagementDbService {
 						.getFullName());
 		
 		try {
-			management_db_service.getUnderlyingPlatformDriver(String.class, Optional.empty());
-			fail("Should have thrown an exception");
+			assertEquals(null, management_db_service.getUnderlyingPlatformDriver(String.class, Optional.empty()));
 		}
 		catch (Exception e) {}
 		

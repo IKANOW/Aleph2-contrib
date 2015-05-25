@@ -22,18 +22,38 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import com.github.fakemongo.Fongo;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
+import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
+import com.typesafe.config.Config;
 
 /** A factory for accessing the MongoDB instance and its generic wrapper - interface, mock version
  * @author acp
  */
 public class MockMongoDbCrudServiceFactory implements IMongoDbCrudServiceFactory {
 
-	private static Fongo _fongo;
+	// Compromize: create different fongos for each thread - that way within a thread/test it will work
+	// but different threads (/tests) will see different dbs
+	// Then have a config object that lets you hardwire it
+	private static Fongo _fongo_single = null;
+	private static ThreadLocal<Fongo> _fongo = new ThreadLocal<Fongo>() {
+		@Override protected Fongo initialValue() {
+			return _fongo_single == null ? new Fongo("aleph2") : _fongo_single;
+		}
+	};
 	
 	public MockMongoDbCrudServiceFactory() {
-		_fongo = new Fongo("aleph2");
+		try { // Option: create only one per app instead of per thread (enables multi-threaded testing)
+			Config static_config = ModuleUtils.getStaticConfig();
+			if (!static_config.getBoolean("MockMongoDbCrudServiceFactory.one_per_thread")) {
+				_fongo_single = new Fongo("aleph2");
+			}
+		}
+		catch (Exception e) {
+			// It's fine, it's not configured carry on
+		}
+		
+		//TODO check config param
 	}
 	
 	/* (non-Javadoc)
@@ -43,7 +63,7 @@ public class MockMongoDbCrudServiceFactory implements IMongoDbCrudServiceFactory
 	public
 	DB getMongoDb(String db_name) { 
 		synchronized (MockMongoDbCrudServiceFactory.class) {
-			return _fongo.getDB(db_name);
+			return _fongo.get().getDB(db_name);
 		}
 	}
 
@@ -63,7 +83,7 @@ public class MockMongoDbCrudServiceFactory implements IMongoDbCrudServiceFactory
 	public
 	DBCollection getMongoDbCollection(String db_name, String collection_name) {
 		synchronized (MockMongoDbCrudServiceFactory.class) {
-			return _fongo.getDB(db_name).getCollection(collection_name);
+			return _fongo.get().getDB(db_name).getCollection(collection_name);
 		}
 	}
 
