@@ -42,18 +42,14 @@ public class MockMongoDbCrudServiceFactory implements IMongoDbCrudServiceFactory
 		}
 	};
 	
-	public MockMongoDbCrudServiceFactory() {
-		try { // Option: create only one per app instead of per thread (enables multi-threaded testing)
-			Config static_config = ModuleUtils.getStaticConfig();
-			if (!static_config.getBoolean("MockMongoDbCrudServiceFactory.one_per_thread")) {
-				_fongo_single = new Fongo("aleph2");
-			}
-		}
-		catch (Exception e) {
-			// It's fine, it's not configured carry on
-		}
+	public final static String THREAD_CONFIG = "MockMongoDbCrudServiceFactory.one_per_thread";
+	
+	public MockMongoDbCrudServiceFactory() {		
+		Config static_config = ModuleUtils.getStaticConfig();
 		
-		//TODO check config param
+		if (!static_config.hasPath(THREAD_CONFIG) || !static_config.getBoolean(THREAD_CONFIG)) {
+			_fongo_single = new Fongo("aleph2");
+		}
 	}
 	
 	/* (non-Javadoc)
