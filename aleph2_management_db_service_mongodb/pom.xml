@@ -2,7 +2,10 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.ikanow.aleph2</groupId>
   <artifactId>aleph2_management_db_service_mongodb</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+    <version>${aleph2.version}</version>
+	<properties>
+        <aleph2.version>0.0.1-SNAPSHOT</aleph2.version>
+    </properties>
   <build>
     <sourceDirectory>src</sourceDirectory>
     <testSourceDirectory>test</testSourceDirectory>
@@ -49,7 +52,7 @@
   	<dependency>
   		<groupId>com.ikanow.aleph2</groupId>
   		<artifactId>aleph2_crud_service_mongodb</artifactId>
-  		<version>[0.0,)</version>
+  		<version>${aleph2.version}</version>
   	</dependency>
   </dependencies>
 </project>
