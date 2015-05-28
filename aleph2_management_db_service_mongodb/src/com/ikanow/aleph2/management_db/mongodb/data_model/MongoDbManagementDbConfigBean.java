@@ -15,6 +15,8 @@
  ******************************************************************************/
 package com.ikanow.aleph2.management_db.mongodb.data_model;
 
+import org.checkerframework.checker.nullness.qual.NonNull;
+
 import com.ikanow.aleph2.shared.crud.mongodb.data_model.MongoDbConfigurationBean;
 
 /** The configuration bean for MongoDB
@@ -23,4 +25,20 @@ import com.ikanow.aleph2.shared.crud.mongodb.data_model.MongoDbConfigurationBean
 public class MongoDbManagementDbConfigBean extends MongoDbConfigurationBean {
 
 	final public static String PROPERTIES_ROOT = "MongoDbManagementDbService";
+	
+	protected MongoDbManagementDbConfigBean() {}
+	
+	/**
+	 * @param v1_enabled
+	 */
+	public MongoDbManagementDbConfigBean(final @NonNull Boolean v1_enabled) {
+		this.v1_enabled = v1_enabled;
+	}
+	
+	/** Whether the v1 interface is enabled (defaults to false)
+	 * @return
+	 */
+	public Boolean v1_enabled() { return v1_enabled; }
+	
+	private Boolean v1_enabled;
 }

@@ -36,6 +36,7 @@ import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ManagementDbUtils;
+import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
 import com.ikanow.aleph2.management_db.mongodb.module.MongoDbManagementDbModule;
 import com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory;
 import com.mongodb.DB;
@@ -56,15 +57,21 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	protected final IMongoDbCrudServiceFactory _crud_factory;
 	protected final Optional<AuthorizationBean> _auth;
 	protected final Optional<ProjectBean> _project;
+	protected final MongoDbManagementDbConfigBean _properties;
 	
 	/** Guice generated constructor
 	 * @param crud_factory
 	 */
 	@Inject
-	public MongoDbManagementDbService(IMongoDbCrudServiceFactory crud_factory) {
+	public MongoDbManagementDbService(
+			final IMongoDbCrudServiceFactory crud_factory, 
+			final MongoDbManagementDbConfigBean properties,
+			final IkanowV1SyncService sync_service)
+	{
 		_crud_factory = crud_factory;
 		_auth = Optional.empty();
 		_project = Optional.empty();
+		_properties = properties;
 
 		//DEBUG
 		//System.out.println("Hello world from: " + this.getClass() + ": underlying=" + crud_factory);
@@ -77,10 +84,12 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	 * @param project
 	 */
 	public MongoDbManagementDbService(IMongoDbCrudServiceFactory crud_factory, 
-			Optional<AuthorizationBean> auth, Optional<ProjectBean> project) {
+			Optional<AuthorizationBean> auth, Optional<ProjectBean> project, final MongoDbManagementDbConfigBean properties)
+	{
 		_crud_factory = crud_factory;
 		_auth = auth;
 		_project = project;		
+		_properties = properties;
 	}
 	
 	/* (non-Javadoc)
@@ -89,7 +98,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	@NonNull 
 	public MongoDbManagementDbService getFilteredDb(final Optional<AuthorizationBean> client_auth, final Optional<ProjectBean> project_auth)
 	{
-		return new MongoDbManagementDbService(_crud_factory, client_auth, project_auth);
+		return new MongoDbManagementDbService(_crud_factory, client_auth, project_auth, _properties);
 	}
 	
 	

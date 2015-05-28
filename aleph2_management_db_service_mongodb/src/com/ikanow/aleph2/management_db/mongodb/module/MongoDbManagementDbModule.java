@@ -17,11 +17,13 @@ package com.ikanow.aleph2.management_db.mongodb.module;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.Inject;
+import com.google.inject.Scopes;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
 import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
+import com.ikanow.aleph2.management_db.mongodb.services.IkanowV1SyncService;
 import com.ikanow.aleph2.shared.crud.mongodb.data_model.MongoDbConfigurationBean;
 import com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory;
 import com.ikanow.aleph2.shared.crud.mongodb.services.MongoDbCrudServiceFactory;
@@ -56,8 +58,8 @@ public class MongoDbManagementDbModule extends AbstractModule {
 	 * @see com.google.inject.AbstractModule#configure()
 	 */
 	public void configure() {		
-		Config config = ModuleUtils.getStaticConfig();				
-		MongoDbConfigurationBean bean;
+		final Config config = ModuleUtils.getStaticConfig();				
+		MongoDbManagementDbConfigBean bean;
 		try {
 			bean = BeanTemplateUtils.from(PropertiesUtils.getSubConfig(config, MongoDbManagementDbConfigBean.PROPERTIES_ROOT).orElse(null), MongoDbManagementDbConfigBean.class);
 		} 
@@ -67,8 +69,10 @@ public class MongoDbManagementDbModule extends AbstractModule {
 					config.getConfig(MongoDbManagementDbConfigBean.PROPERTIES_ROOT)
 					), e);
 		}
-		this.bind(MongoDbConfigurationBean.class).toInstance(bean);
-		this.bind(IMongoDbCrudServiceFactory.class).to(MongoDbCrudServiceFactory.class);
+		this.bind(MongoDbConfigurationBean.class).toInstance(bean); // (for crud service)
+		this.bind(MongoDbManagementDbConfigBean.class).toInstance(bean); // (for mgmt db)
+		this.bind(IkanowV1SyncService.class).in(Scopes.SINGLETON);
+		this.bind(IMongoDbCrudServiceFactory.class).to(MongoDbCrudServiceFactory.class).in(Scopes.SINGLETON);
 	}
 	
 }

@@ -51,8 +51,19 @@
   	</dependency>
   	<dependency>
   		<groupId>com.ikanow.aleph2</groupId>
+  		<artifactId>aleph2_core_distributed_services_library</artifactId>
+  		<version>${aleph2.version}</version>
+  	</dependency>
+  	<dependency>
+  		<groupId>com.ikanow.aleph2</groupId>
   		<artifactId>aleph2_crud_service_mongodb</artifactId>
   		<version>${aleph2.version}</version>
+  	</dependency>
+  	<dependency>
+  		<groupId>com.ikanow.aleph2</groupId>
+  		<artifactId>aleph2_storage_service_hdfs</artifactId>
+  		<version>${aleph2.version}</version>
+  		<scope>test</scope>
   	</dependency>
   </dependencies>
 </project>

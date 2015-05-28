@@ -22,6 +22,7 @@ import java.util.Optional;
 import org.junit.Test;
 
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
 import com.ikanow.aleph2.shared.crud.mongodb.services.MockMongoDbCrudServiceFactory;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
@@ -34,7 +35,7 @@ public class TestMongoDbManagementDbService {
 		
 		MockMongoDbCrudServiceFactory mock_crud_service_factory = new MockMongoDbCrudServiceFactory();
 
-		MongoDbManagementDbService management_db_service = new MongoDbManagementDbService(mock_crud_service_factory);
+		MongoDbManagementDbService management_db_service = new MongoDbManagementDbService(mock_crud_service_factory, new MongoDbManagementDbConfigBean(false), null);
 		
 		assertEquals(MongoDbManagementDbService.DATA_ANALYTIC_THREAD_STORE,
 				management_db_service.getAnalyticThreadStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).getFullName());

@@ -25,10 +25,14 @@ public class MongoDbConfigurationBean {
 	final public static String PROPERTIES_ROOT = "MongoDbCrudService";
 	
 	protected MongoDbConfigurationBean() {}
+	
+	/** User constructor
+	 * @param mongodb_connection he connection string that is used to initialize the MongoDB
+	 */
 	public MongoDbConfigurationBean(final @Nullable String mongodb_connection) {
 		this.mongodb_connection = mongodb_connection;
 	}
-	/** The connection string that is used to initalize the MongoDB
+	/** The connection string that is used to initialize the MongoDB
 	 * @return
 	 */
 	@Nullable

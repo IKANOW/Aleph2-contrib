@@ -20,6 +20,7 @@ import java.util.List;
 
 import com.google.inject.Inject;
 import com.google.inject.Module;
+import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
 import com.ikanow.aleph2.management_db.mongodb.module.MockMongoDbManagementDbModule;
 import com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory;
 
@@ -29,8 +30,12 @@ public class MockMongoDbManagementDbService extends MongoDbManagementDbService {
 	 * @param crud_factory
 	 */
 	@Inject
-	public MockMongoDbManagementDbService(IMongoDbCrudServiceFactory crud_factory) {
-		super(crud_factory);
+	public MockMongoDbManagementDbService(
+			IMongoDbCrudServiceFactory crud_factory, 
+			final MongoDbManagementDbConfigBean properties,
+			final IkanowV1SyncService sync_service)
+	{
+		super(crud_factory, properties, sync_service);
 
 		//DEBUG
 		//System.out.println("Hello world from: " + this.getClass() + ": underlying=" + crud_factory);
