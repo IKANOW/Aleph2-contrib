@@ -269,10 +269,12 @@ public class TestIkanowV1SyncService {
 		
 		final Tuple2<Map<String, String>, Map<String, Date>> f_res = 
 				IkanowV1SyncService.compareSourcesToBuckets_get(bucket_db, v1_source_db).get();
-		
+				
 		assertEquals("{aleph...bucket.Template_V2_data_bucket.=May 25, 2015 01:52:01 PM UTC, aleph...bucket.Template_V2_data_bucket.2=May 25, 2015 01:52:01 PM UTC}", f_res._1().toString());
-		assertEquals("{aleph...bucket.Template_V2_data_bucket.=Mon May 25 09:52:01 EDT 2015, aleph...bucket.Template_V2_data_bucket.2=Mon May 25 09:52:01 EDT 2015}", f_res._2().toString());
 
+		assertEquals(2, f_res._2().size());
+		assertEquals(2, f_res._1().containsKey("aleph...bucket.Template_V2_data_bucket."));
+		assertEquals(2, f_res._1().containsKey("aleph...bucket.Template_V2_data_bucket.2"));		
 	}
 	
 	////////////////////////////////////////////////////
@@ -322,8 +324,8 @@ public class TestIkanowV1SyncService {
 		final Optional<JsonNode> res1 = v1_source_db.getObjectBySpec(CrudUtils.anyOf().when("key", "aleph...bucket.Template_V2_data_bucket.")).get();
 		
 		assertTrue("Got source", res1.isPresent());
-		assertEquals("{'harvest_status':'error','harvest_message':'[21 May 2015 02:38:23 GMT] Bucket synchronization:\\n[Wed May 20 22:37:23 EDT 2015] test_src1 (test_cmd1): INFO: test_msg1\\n[Wed May 20 22:37:23 EDT 2015] test_src2 (test_cmd2): ERROR: test_msg2'}", 
-				res1.get().get("harvest").toString().replace("\"", "'"));
+		assertEquals("{'harvest_status':'error','harvest_message':'[21 May 2015 02:38:23 GMT] Bucket synchronization:\\n[DATE] test_src1 (test_cmd1): INFO: test_msg1\\n[DATE] test_src2 (test_cmd2): ERROR: test_msg2'}", 
+				res1.get().get("harvest").toString().replace("\"", "'").replaceAll("\\[.*?\\]", "[DATE]"));
 		
 		// Test2 success
 		
@@ -340,8 +342,8 @@ public class TestIkanowV1SyncService {
 		final Optional<JsonNode> res2 = v1_source_db.getObjectBySpec(CrudUtils.anyOf().when("key", "aleph...bucket.Template_V2_data_bucket.")).get();
 		
 		assertTrue("Got source", res2.isPresent());
-		assertEquals("{'harvest_status':'success','harvest_message':'[21 May 2015 02:38:23 GMT] Bucket synchronization:\\n[Wed May 20 22:37:23 EDT 2015] test_src1 (test_cmd1): INFO: test_msg1\\n[Wed May 20 22:37:23 EDT 2015] test_src2 (test_cmd2): INFO: test_msg2'}", 
-				res2.get().get("harvest").toString().replace("\"", "'"));		
+		assertEquals("{'harvest_status':'success','harvest_message':'[21 May 2015 02:38:23 GMT] Bucket synchronization:\\n[DATE] test_src1 (test_cmd1): INFO: test_msg1\\n[DATE] test_src2 (test_cmd2): INFO: test_msg2'}", 
+				res2.get().get("harvest").toString().replace("\"", "'").replaceAll("\\[.*?\\]", "[DATE]"));		
 
 		// Test 3 empty message
 		
