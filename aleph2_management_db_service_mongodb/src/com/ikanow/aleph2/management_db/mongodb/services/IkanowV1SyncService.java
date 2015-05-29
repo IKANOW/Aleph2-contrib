@@ -43,7 +43,6 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
-import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
@@ -104,6 +103,18 @@ public class IkanowV1SyncService {
 			//TODO (ALEPH-19)
 		}
 	}
+	
+	/** Stop threads (just for testing I think)
+	 */
+	public void stop() {
+		_source_monitor_handle.get().cancel(true);
+	}
+	
+	////////////////////////////////////////////////////
+	////////////////////////////////////////////////////
+
+	// WORKER THREADS
+	
 	public class MutexMonitor implements Runnable {
 		protected final String _path;
 		protected final SetOnce<CuratorFramework> _curator = new SetOnce<CuratorFramework>();
@@ -174,6 +185,11 @@ public class IkanowV1SyncService {
 		}		
 	}
 	
+	////////////////////////////////////////////////////
+	////////////////////////////////////////////////////
+
+	// CONTROL LOGIC
+	
 	/** Top level logic for source synchronization
 	 * @param bucket_mgmt
 	 * @param source_db
@@ -189,6 +205,16 @@ public class IkanowV1SyncService {
 				return compareSourcesToBuckets_categorize(v1_v2);
 			})
 			.thenCompose(create_update_delete -> {
+				if (create_update_delete._1().isEmpty() && create_update_delete._2().isEmpty() && create_update_delete._3().isEmpty()) {
+					//(nothing to do)
+					return CompletableFuture.completedFuture(null);
+				}				
+				_logger.info(ErrorUtils.get("Found [create={0}, delete={1}, update={2}] sources", 
+						create_update_delete._1().size(),
+						create_update_delete._2().size(),
+						create_update_delete._3().size())
+						);
+				
 				final List<Tuple2<String, ManagementFuture<?>>> l1 = 
 					create_update_delete._1().stream().parallel()
 						.<Tuple2<String, ManagementFuture<?>>>map(id -> 
@@ -204,7 +230,7 @@ public class IkanowV1SyncService {
 						;
 					
 				final List<Tuple2<String, ManagementFuture<?>>> l3 = 
-						create_update_delete._2().stream().parallel()
+						create_update_delete._3().stream().parallel()
 							.<Tuple2<String, ManagementFuture<?>>>map(id -> 
 								Tuples._2T(id, updateBucket(id, bucket_mgmt, underlying_bucket_status_mgmt, source_db)))
 							.collect(Collectors.toList());
@@ -213,7 +239,7 @@ public class IkanowV1SyncService {
 				List<CompletableFuture<?>> retval = 
 						Arrays.asList(l1, l2, l3).stream().flatMap(l -> l.stream()).map(id_fres -> {
 							return id_fres._2().getManagementResults()
-								.thenAccept(res ->  updateV1SourceStatus(id_fres._1(), res, source_db));
+								.thenAccept(res ->  updateV1SourceStatus(new Date(), id_fres._1(), res, source_db));
 						})
 						.collect(Collectors.toList());
 						;
@@ -221,6 +247,51 @@ public class IkanowV1SyncService {
 				return CompletableFuture.allOf(retval.toArray(new CompletableFuture[0]));
 			});
 	}
+	
+	/** Want to end up with 3 lists:
+	 *  - v1 sources that don't exist in v2 (Create them)
+	 *  - v2 sources that don't exist in v1 (Delete them)
+	 *  - matching v1/v2 sources with different modified times (Update them)
+	 * @param to_compare
+	 * @returns a 3-tuple with "to create", "to delete", "to update"
+	 */
+	protected static Tuple3<Collection<String>, Collection<String>, Collection<String>> compareSourcesToBuckets_categorize(
+			final @NonNull Tuple2<Map<String, String>, Map<String, Date>> to_compare) {
+		
+		// Want to end up with 3 lists:
+		// - v1 sources that don't exist in v2 (Create them)
+		// - v2 sources that don't exist in v1 (Delete them)
+		// - matching v1/v2 sources with different modified times (Update them)
+		
+		final Set<String> v1_and_v2 = new HashSet<String>(to_compare._1().keySet());
+		v1_and_v2.retainAll(to_compare._2().keySet());
+		
+		final List<String> v1_and_v2_mod = v1_and_v2.stream()
+							.filter(id -> {
+								try {
+									final Date v1_date = parseJavaDate(to_compare._1().get(id));
+									final Date v2_date = to_compare._2().get(id);
+									return v1_date.getTime() > v2_date.getTime();
+								}
+								catch (Exception e) {
+									return false; // (just ignore)
+								}
+							})
+							.collect(Collectors.toList());
+		
+		final Set<String> v1_not_v2 = new HashSet<String>(to_compare._1().keySet());
+		v1_not_v2.removeAll(to_compare._2().keySet());
+		
+		final Set<String> v2_not_v1 = new HashSet<String>(to_compare._2().keySet());
+		v2_not_v1.removeAll(to_compare._1().keySet());
+		
+		return Tuples._3T(v1_not_v2, v2_not_v1, v1_and_v2_mod);
+	}
+
+	////////////////////////////////////////////////////
+	////////////////////////////////////////////////////
+
+	// DB MANIPULATION - READ
 	
 	/** Gets a list of _id,modified from v1 and a list matching _id,modified from V2
 	 * @param bucket_mgmt
@@ -247,8 +318,8 @@ public class IkanowV1SyncService {
 			})
 			.<Tuple2<Map<String, String>, Map<String, Date>>>
 			thenCompose(v1_id_datestr_map -> {
-				final QueryComponent<DataBucketBean> bucket_query = CrudUtils.anyOf(DataBucketBean.class)
-						.withAny(DataBucketBean::_id, v1_id_datestr_map.keySet().stream().collect(Collectors.toList()));
+				final SingleQueryComponent<DataBucketBean> bucket_query = CrudUtils.anyOf(DataBucketBean.class)
+						.rangeIn(DataBucketBean::_id, "aleph...bucket.", true, "aleph...bucket/", true);						
 				
 				return bucket_mgmt.getObjectsBySpec(bucket_query, Arrays.asList("_id", "modified"), true)
 						.<Tuple2<Map<String, String>, Map<String, Date>>>
@@ -265,6 +336,11 @@ public class IkanowV1SyncService {
 			});
 	}
 	
+	////////////////////////////////////////////////////
+	////////////////////////////////////////////////////
+
+	// DB MANIPULATION - WRITE
+	
 	/** Create a new bucket
 	 * @param id
 	 * @param bucket_mgmt
@@ -275,8 +351,7 @@ public class IkanowV1SyncService {
 	protected static ManagementFuture<Supplier<Object>> createNewBucket(final @NonNull String id,
 			final @NonNull IManagementCrudService<DataBucketBean> bucket_mgmt, 
 			final @NonNull IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
-			final @NonNull ICrudService<JsonNode> source_db
-			
+			final @NonNull ICrudService<JsonNode> source_db			
 			)
 	{
 		_logger.info(ErrorUtils.get("Found new source {0}, creating bucket", id));
@@ -361,13 +436,12 @@ public class IkanowV1SyncService {
 				final DataBucketBean new_object = getBucketFromV1Source(v1_source.get());
 
 				// (Update status in underlying status store so don't trip a spurious harvest call)
-				// (don't wait for this to respond, it's fine)
-				underlying_bucket_status_mgmt.updateObjectById(id, CrudUtils.update(DataBucketStatusBean.class)
+				CompletableFuture<?> update = underlying_bucket_status_mgmt.updateObjectById(id, CrudUtils.update(DataBucketStatusBean.class)
 																		.set(DataBucketStatusBean::suspended, is_now_suspended));
 
-				// Now update the management db
+				// Then update the management db
 				
-				return bucket_mgmt.storeObject(new_object, true);
+				return FutureUtils.denestManagementFuture(update.thenApply(__ -> bucket_mgmt.storeObject(new_object, true)));
 			}
 			catch (Exception e) {
 				return FutureUtils.<Supplier<Object>>createManagementFuture(
@@ -393,6 +467,7 @@ public class IkanowV1SyncService {
 	 * @param source_db
 	 */
 	protected static CompletableFuture<?> updateV1SourceStatus(
+			final @NonNull Date main_date,
 			final @NonNull String key,
 			final @NonNull Collection<BasicMessageBean> status_messages,
 			final @NonNull ICrudService<JsonNode> source_db
@@ -400,61 +475,29 @@ public class IkanowV1SyncService {
 	{
 		final String message_block = status_messages.stream()
 			.map(msg -> {
-				return "[" + msg.date() + "] " + msg.source() + "(" + msg.command() + "): " + (msg.success() ? "INFO" : "ERROR") + ": " + msg.message();
+				return "[" + msg.date() + "] " + msg.source() + " (" + msg.command() + "): " + (msg.success() ? "INFO" : "ERROR") + ": " + msg.message();
 			})
 			.collect(Collectors.joining("\n"))
 			;
 		
 		final boolean any_errors = status_messages.stream().anyMatch(msg -> !msg.success());
 		
+		@SuppressWarnings("deprecation")
 		final UpdateComponent<JsonNode> update = CrudUtils.update()
 				.set("harvest.harvest_status", (any_errors ? "error" : "success"))
-				.set("harvest.harvest_message", message_block);
+				.set("harvest.harvest_message",
+						"[" + main_date.toGMTString() + "] Bucket synchronization:\n" 
+						+ (message_block.isEmpty() ? "(no messages)" : message_block));
 		
 		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("key", key);
 		return source_db.updateObjectBySpec(v1_query, Optional.empty(), update);		
 	}
 	
-	/** Want to end up with 3 lists:
-	 *  - v1 sources that don't exist in v2 (Create them)
-	 *  - v2 sources that don't exist in v1 (Delete them)
-	 *  - matching v1/v2 sources with different modified times (Update them)
-	 * @param to_compare
-	 * @returns a 3-tuple with "to create", "to delete", "to update"
-	 */
-	protected static Tuple3<Collection<String>, Collection<String>, Collection<String>> compareSourcesToBuckets_categorize(
-			final @NonNull Tuple2<Map<String, String>, Map<String, Date>> to_compare) {
-		
-		// Want to end up with 3 lists:
-		// - v1 sources that don't exist in v2 (Create them)
-		// - v2 sources that don't exist in v1 (Delete them)
-		// - matching v1/v2 sources with different modified times (Update them)
-		
-		final Set<String> v1_and_v2 = new HashSet<String>(to_compare._1().keySet());
-		v1_and_v2.retainAll(to_compare._2().keySet());
-		
-		final List<String> v1_and_v2_mod = v1_and_v2.stream()
-							.filter(id -> {
-								try {
-									final Date v1_date = parseJavaDate(to_compare._1().get(id));
-									final Date v2_date = to_compare._2().get(id);
-									return v1_date.getTime() > v2_date.getTime();
-								}
-								catch (Exception e) {
-									return false; // (just ignore)
-								}
-							})
-							.collect(Collectors.toList());
-		
-		final Set<String> v1_not_v2 = new HashSet<String>(to_compare._1().keySet());
-		v1_not_v2.removeAll(to_compare._2().keySet());
-		
-		final Set<String> v2_not_v1 = new HashSet<String>(to_compare._2().keySet());
-		v2_not_v1.removeAll(to_compare._1().keySet());
-		
-		return Tuples._3T(v1_not_v2, v2_not_v1, v1_and_v2_mod);
-	}
+	////////////////////////////////////////////////////
+	////////////////////////////////////////////////////
 
+	// LOW LEVEL UTILS
+	
 	/** Builds a V2 bucket out of a V1 source
 	 * @param src_json
 	 * @return
@@ -501,12 +544,13 @@ public class IkanowV1SyncService {
 		return bucket;
 		
 	}
+	
 	/** Gets a JSON field that may not be present (justs an empty JsonNode if no)
 	 * @param fieldname
 	 * @param src
 	 * @return
 	 */
-	private static JsonNode safeJsonGet(String fieldname, JsonNode src) {
+	protected static JsonNode safeJsonGet(String fieldname, JsonNode src) {
 		final JsonNode j = Optional.ofNullable(src.get(fieldname)).orElse(JsonNodeFactory.instance.objectNode());
 		//DEBUG
 		//System.out.println(j);
@@ -517,8 +561,18 @@ public class IkanowV1SyncService {
 	 * @return
 	 * @throws ParseException
 	 */
-	private static Date parseJavaDate(String java_date_tostring_format) throws ParseException {
-		return new SimpleDateFormat("EEE MMM d HH:mm:ss zzz yyyy").parse(java_date_tostring_format);
+	protected static Date parseJavaDate(String java_date_tostring_format) throws ParseException {
+		try {
+			return new SimpleDateFormat("EEE MMM d HH:mm:ss zzz yyyy").parse(java_date_tostring_format);
+		}
+		catch (Exception e) {			
+			try {
+				return new SimpleDateFormat("MMM d, yyyy hh:mm:ss a zzz").parse(java_date_tostring_format);
+			}
+			catch (Exception ee) {
+				return new SimpleDateFormat("d MMM yyyy HH:mm:ss zzz").parse(java_date_tostring_format);				
+			}
+		}
 	}
 	
 }

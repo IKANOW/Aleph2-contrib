@@ -1,0 +1,80 @@
+{
+    "_id": "555d44e3347d336b3e8c4cbe",
+    "communityIds": ["50bcd6fffbf0fd0b27875a7c"],
+    "created": "May 21, 2015 02:37:23 AM UTC",
+    "description": "DESCRIPTION HERE.",
+    "extractType": "V2DataBucket",
+    "harvestBadSource": false,
+    "isApproved": true,
+    "isPublic": true,
+    "key": "aleph...bucket.Template_V2_data_bucket.",
+    "mediaType": "Record",
+    "modified": "May 25, 2015 01:52:01 PM UTC",
+    "ownerId": "506dc16dfbf042893dd6b8f2",
+    "processingPipeline": [{
+        "data_bucket": {
+            "aliases": [],
+            "batch_enrichment_configs": [{
+                "config": {"key1": "value1"},
+                "dependencies": [],
+                "enabled": false,
+                "library_ids_or_names": [],
+                "name": "batch_module_1"
+            }],
+            "data_schema": {
+                "columnar_schema": {
+                    "enabled": true,
+                    "field_exclude_list": [],
+                    "field_exclude_regex": "",
+                    "field_include_list": [],
+                    "field_include_regex": "",
+                    "field_type_exclude_list": [],
+                    "field_type_include_list": [],
+                    "technology_override_schema": {}
+                },
+                "document_schema": {
+                    "deduplicate": true,
+                    "deduplication_fields": ["url"],
+                    "enabled": false,
+                    "technology_override_schema": {}
+                },
+                "search_index_schema": {
+                    "enabled": true,
+                    "technology_override_schema": {}
+                },
+                "storage_schema": {
+                    "enabled": true,
+                    "raw_grouping_time_period": "week"
+                },
+                "temporal_schema": {
+                    "enabled": true,
+                    "exist_age_max": "month",
+                    "grouping_time_period": "day",
+                    "technology_override_schema": {}
+                }
+            },
+            "full_name": "/bucket/path/here",
+            "harvest_configs": [{
+                "config": {"key1": "value1_harvest"},
+                "enabled": true,
+                "library_ids_or_names": [],
+                "name": "harvester_1"
+            }],
+            "harvest_technology_name_or_id": "/app/aleph2/library/import/harvest/tech/XXX",
+            "master_enrichment_type": "streaming",
+            "multi_node_enabled": false,
+            "node_list_rules": [],
+            "streaming_enrichment_topology": {
+                "config": {"key1": "value1_streaming"},
+                "dependencies": [],
+                "enabled": true,
+                "library_ids_or_names": [],
+                "name": "streaming_topology_1"
+            }
+        },
+        "display": "Currently this is the only supported element in the pipeline (TODO: enable other elements to be added, and aggregate them into a single bucket)owner_id"
+    }],
+    "shah256Hash": "ucTavC5F69awgzMgA3zP4YU8Ve7+Hl5bf4ulm8yiSdc=",
+    "tags": ["test"],
+    "title": "Template V2 data bucket"
+}
