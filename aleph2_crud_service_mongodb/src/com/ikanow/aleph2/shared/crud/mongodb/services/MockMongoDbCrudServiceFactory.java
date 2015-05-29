@@ -48,7 +48,9 @@ public class MockMongoDbCrudServiceFactory implements IMongoDbCrudServiceFactory
 		Config static_config = ModuleUtils.getStaticConfig();
 		
 		if (!static_config.hasPath(THREAD_CONFIG) || !static_config.getBoolean(THREAD_CONFIG)) {
-			_fongo_single = new Fongo("aleph2");
+			if (null == _fongo_single) {
+				_fongo_single = new Fongo("aleph2");
+			}
 		}
 	}
 	
