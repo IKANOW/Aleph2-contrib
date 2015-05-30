@@ -22,7 +22,8 @@ import java.util.stream.StreamSupport;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.leader.LeaderLatch;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import scala.Tuple2;
@@ -57,9 +58,8 @@ import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbCon
 /** This service looks for changes to IKANOW sources that  
  * @author acp
  */
-public class IkanowV1SyncService {
-
-	public static final Logger _logger = Logger.getLogger(IkanowV1SyncService.class);		
+public class IkanowV1SyncService_Buckets {
+	private static final Logger _logger = LogManager.getLogger();	
 	
 	protected final MongoDbManagementDbConfigBean _config;
 	protected final IServiceContext _context;
@@ -82,7 +82,7 @@ public class IkanowV1SyncService {
 	 * @param service_context - the service context providing all the required dependencies
 	 */
 	@Inject
-	public IkanowV1SyncService(final MongoDbManagementDbConfigBean config, final IServiceContext service_context) {		
+	public IkanowV1SyncService_Buckets(final MongoDbManagementDbConfigBean config, final IServiceContext service_context) {		
 		_config = config;
 		_context = service_context;
 		_core_management_db = _context.getCoreManagementDbService();
@@ -96,12 +96,19 @@ public class IkanowV1SyncService {
 			
 			_source_mutex_monitor.set(new MutexMonitor(SOURCE_MONITOR_MUTEX));
 			_mutex_scheduler.schedule(_source_mutex_monitor.get(), 250L, TimeUnit.MILLISECONDS);
-			_source_monitor_handle.set(_source_scheduler.scheduleWithFixedDelay(new SourceMonitor(), 1L, 1L, TimeUnit.SECONDS));
+			_source_monitor_handle.set(_source_scheduler.scheduleWithFixedDelay(new SourceMonitor(), 10L, 2L, TimeUnit.SECONDS));
+				//(give it 10 seconds before starting, let everything else settle down - eg give the bucket choose handler time to register)
 			
 			// 2) Monitor files
 			
-			//TODO (ALEPH-19)
+			//TODO (ALEPH-19) - move this into a different place
 		}
+	}
+	/** Immediately start
+	 */
+	public void start() {
+		_source_monitor_handle.get().cancel(true);
+		_source_monitor_handle.set(_source_scheduler.scheduleWithFixedDelay(new SourceMonitor(), 1, 1L, TimeUnit.SECONDS));
 	}
 	
 	/** Stop threads (just for testing I think)
@@ -208,44 +215,81 @@ public class IkanowV1SyncService {
 				if (create_update_delete._1().isEmpty() && create_update_delete._2().isEmpty() && create_update_delete._3().isEmpty()) {
 					//(nothing to do)
 					return CompletableFuture.completedFuture(null);
-				}				
+				}							
 				_logger.info(ErrorUtils.get("Found [create={0}, delete={1}, update={2}] sources", 
 						create_update_delete._1().size(),
 						create_update_delete._2().size(),
 						create_update_delete._3().size())
 						);
 				
-				final List<Tuple2<String, ManagementFuture<?>>> l1 = 
+				final List<CompletableFuture<Boolean>> l1 = 
 					create_update_delete._1().stream().parallel()
 						.<Tuple2<String, ManagementFuture<?>>>map(id -> 
 							Tuples._2T(id, createNewBucket(id, bucket_mgmt, underlying_bucket_status_mgmt, source_db)))
+						.<CompletableFuture<Boolean>>map(id_fres -> 
+							updateV1SourceStatus_top(id_fres._1(), id_fres._2(), true, source_db))
 						.collect(Collectors.toList());
 					;
 					
-				final List<Tuple2<String, ManagementFuture<?>>> l2 = 
+				final List<CompletableFuture<Boolean>> l2 = 
 						create_update_delete._2().stream().parallel()
 							.<Tuple2<String, ManagementFuture<?>>>map(id -> 
 								Tuples._2T(id, deleteBucket(id, bucket_mgmt)))
+						.<CompletableFuture<Boolean>>map(id_fres -> 
+							CompletableFuture.completedFuture(true)) // (don't update source in delete case obviously)
 							.collect(Collectors.toList());
 						;
 					
-				final List<Tuple2<String, ManagementFuture<?>>> l3 = 
+				final List<CompletableFuture<Boolean>> l3 = 
 						create_update_delete._3().stream().parallel()
 							.<Tuple2<String, ManagementFuture<?>>>map(id -> 
 								Tuples._2T(id, updateBucket(id, bucket_mgmt, underlying_bucket_status_mgmt, source_db)))
+							.<CompletableFuture<Boolean>>map(id_fres -> 
+								updateV1SourceStatus_top(id_fres._1(), id_fres._2(), false, source_db))
 							.collect(Collectors.toList());
 						;
 						
 				List<CompletableFuture<?>> retval = 
-						Arrays.asList(l1, l2, l3).stream().flatMap(l -> l.stream()).map(id_fres -> {
-							return id_fres._2().getManagementResults()
-								.thenAccept(res ->  updateV1SourceStatus(new Date(), id_fres._1(), res, source_db));
-						})
+						Arrays.asList(l1, l2, l3).stream().flatMap(l -> l.stream())
 						.collect(Collectors.toList());
 						;
 						
 				return CompletableFuture.allOf(retval.toArray(new CompletableFuture[0]));
 			});
+	}
+	
+	/** Top level handler for update status based on the result
+	 * @param id
+	 * @param fres
+	 * @param disable_on_failure
+	 * @param source_db
+	 * @return
+	 */
+	protected CompletableFuture<Boolean> updateV1SourceStatus_top(final @NonNull String id, 
+			final @NonNull ManagementFuture<?> fres, boolean disable_on_failure,
+			ICrudService<JsonNode> source_db)
+	{		
+		return fres.getManagementResults()
+				.<Boolean>thenCompose(res ->  {
+					try {
+						fres.get(); // (check if the DB side call has failed)
+						return updateV1SourceStatus(new Date(), id, res, disable_on_failure, source_db);	
+					}
+					catch (Exception e) { // DB-side call has failed, create ad hoc error
+						final Collection<BasicMessageBean> db_error = Arrays.asList( 
+								new BasicMessageBean(
+										new Date(), 
+										false, 
+										"(unknown)", 
+										"(unknown)", 
+										null, 
+										ErrorUtils.getLongForm("{0}", e), 
+										null
+										)
+								);
+						return updateV1SourceStatus(new Date(), id, db_error, disable_on_failure, source_db);											
+					}
+				});
 	}
 	
 	/** Want to end up with 3 lists:
@@ -262,8 +306,19 @@ public class IkanowV1SyncService {
 		// - v1 sources that don't exist in v2 (Create them)
 		// - v2 sources that don't exist in v1 (Delete them)
 		// - matching v1/v2 sources with different modified times (Update them)
+
+		// (do delete first, then going to filter to_compare._1() on value==null)		
+		final Set<String> v2_not_v1 = new HashSet<String>(to_compare._2().keySet());
+		v2_not_v1.removeAll(to_compare._1().keySet());
 		
-		final Set<String> v1_and_v2 = new HashSet<String>(to_compare._1().keySet());
+		// OK not worried about deletes any more, not interested in isApproved:false
+		
+		final Set<String> to_compare_approved = 
+				to_compare._1().entrySet().stream()
+					.filter(kv -> null != kv.getValue() && !kv.getValue().isEmpty()).map(kv -> kv.getKey())
+					.collect(Collectors.toSet());
+		
+		final Set<String> v1_and_v2 = new HashSet<String>(to_compare_approved);
 		v1_and_v2.retainAll(to_compare._2().keySet());
 		
 		final List<String> v1_and_v2_mod = v1_and_v2.stream()
@@ -279,11 +334,8 @@ public class IkanowV1SyncService {
 							})
 							.collect(Collectors.toList());
 		
-		final Set<String> v1_not_v2 = new HashSet<String>(to_compare._1().keySet());
+		final Set<String> v1_not_v2 = new HashSet<String>(to_compare_approved);
 		v1_not_v2.removeAll(to_compare._2().keySet());
-		
-		final Set<String> v2_not_v1 = new HashSet<String>(to_compare._2().keySet());
-		v2_not_v1.removeAll(to_compare._1().keySet());
 		
 		return Tuples._3T(v1_not_v2, v2_not_v1, v1_and_v2_mod);
 	}
@@ -296,7 +348,7 @@ public class IkanowV1SyncService {
 	/** Gets a list of _id,modified from v1 and a list matching _id,modified from V2
 	 * @param bucket_mgmt
 	 * @param source_db
-	 * @return
+	 * @return tuple of id-vs-(date-or-null-if-not-approved) for v1, id-vs-date for v2
 	 */
 	protected static 
 	CompletableFuture<Tuple2<Map<String, String>, Map<String, Date>>> compareSourcesToBuckets_get(
@@ -306,24 +358,27 @@ public class IkanowV1SyncService {
 		// (could make this more efficient by having a regular "did something happen" query with a slower "get everything and resync)
 		// (don't forget to add "modified" to the compund index though)
 		CompletableFuture<Cursor<JsonNode>> f_v1_sources = 
-				source_db.getObjectsBySpec(CrudUtils.anyOf().when("extractType", "V2DataBucket"), Arrays.asList("key", "modified"), true);
+				source_db.getObjectsBySpec(
+						CrudUtils.allOf().when("extractType", "V2DataBucket"),
+						Arrays.asList("key", "modified", "isApproved"), true);
 		
 		return f_v1_sources
 			.<Map<String, String>>thenApply(v1_sources -> {
 				return StreamSupport.stream(v1_sources.spliterator(), false)
 					.collect(Collectors.toMap(
 							j -> safeJsonGet("key", j).asText(),
-							j -> safeJsonGet("modified", j).asText()
+							j -> safeJsonGet("isApproved", j).asBoolean() ? safeJsonGet("modified", j).asText() : ""
 							));
 			})
 			.<Tuple2<Map<String, String>, Map<String, Date>>>
 			thenCompose(v1_id_datestr_map -> {
-				final SingleQueryComponent<DataBucketBean> bucket_query = CrudUtils.anyOf(DataBucketBean.class)
-						.rangeIn(DataBucketBean::_id, "aleph...bucket.", true, "aleph...bucket/", true);						
+				final SingleQueryComponent<DataBucketBean> bucket_query = CrudUtils.allOf(DataBucketBean.class)
+						.rangeIn(DataBucketBean::_id, "aleph...bucket.", true, "aleph...bucket/", true)
+						;						
 				
 				return bucket_mgmt.getObjectsBySpec(bucket_query, Arrays.asList("_id", "modified"), true)
 						.<Tuple2<Map<String, String>, Map<String, Date>>>
-						thenApply(c -> {
+						thenApply(c -> {							
 							final Map<String, Date> v2_id_date_map = 
 									StreamSupport.stream(c.spliterator(), false)
 									.collect(Collectors.toMap(
@@ -372,9 +427,10 @@ public class IkanowV1SyncService {
 							.with(DataBucketStatusBean::suspended, is_now_suspended) 
 							.done().get();
 
-					return FutureUtils.denestManagementFuture(underlying_bucket_status_mgmt.storeObject(status_bean)
+					return FutureUtils.denestManagementFuture(underlying_bucket_status_mgmt.storeObject(status_bean, true)
 						.thenApply(__ -> {
-							return bucket_mgmt.storeObject(new_object);
+							final ManagementFuture<Supplier<Object>> ret = bucket_mgmt.storeObject(new_object);
+							return ret;
 						}));
 				}			
 				catch (Exception e) {
@@ -383,7 +439,7 @@ public class IkanowV1SyncService {
 							CompletableFuture.completedFuture(Arrays.asList(new BasicMessageBean(
 									new Date(),
 									false, 
-									"IkanowV1SyncService", 
+									"IkanowV1SyncService_Buckets", 
 									"updateBucket", 
 									null, 
 									ErrorUtils.getLongForm("{0}", e), 
@@ -449,7 +505,7 @@ public class IkanowV1SyncService {
 						CompletableFuture.completedFuture(Arrays.asList(new BasicMessageBean(
 								new Date(),
 								false, 
-								"IkanowV1SyncService", 
+								"IkanowV1SyncService_Buckets", 
 								"updateBucket", 
 								null, 
 								ErrorUtils.getLongForm("{0}", e), 
@@ -466,10 +522,11 @@ public class IkanowV1SyncService {
 	 * @param status_messages
 	 * @param source_db
 	 */
-	protected static CompletableFuture<?> updateV1SourceStatus(
+	protected static CompletableFuture<Boolean> updateV1SourceStatus(
 			final @NonNull Date main_date,
 			final @NonNull String key,
 			final @NonNull Collection<BasicMessageBean> status_messages,
+			final boolean disable_on_failure,
 			final @NonNull ICrudService<JsonNode> source_db
 			)
 	{
@@ -484,13 +541,16 @@ public class IkanowV1SyncService {
 		
 		@SuppressWarnings("deprecation")
 		final UpdateComponent<JsonNode> update = CrudUtils.update()
+				.set("isApproved", !any_errors || !disable_on_failure)
 				.set("harvest.harvest_status", (any_errors ? "error" : "success"))
 				.set("harvest.harvest_message",
 						"[" + main_date.toGMTString() + "] Bucket synchronization:\n" 
 						+ (message_block.isEmpty() ? "(no messages)" : message_block));
 		
 		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("key", key);
-		return source_db.updateObjectBySpec(v1_query, Optional.empty(), update);		
+		final CompletableFuture<Boolean> update_res = source_db.updateObjectBySpec(v1_query, Optional.empty(), update);
+		
+		return update_res;
 	}
 	
 	////////////////////////////////////////////////////

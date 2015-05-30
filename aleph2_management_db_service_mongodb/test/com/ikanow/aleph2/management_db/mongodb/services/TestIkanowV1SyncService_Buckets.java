@@ -26,6 +26,7 @@ import scala.Tuple3;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
@@ -50,7 +51,7 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
 
-public class TestIkanowV1SyncService {
+public class TestIkanowV1SyncService_Buckets {
 
 	////////////////////////////////////////////////////
 	////////////////////////////////////////////////////
@@ -61,7 +62,7 @@ public class TestIkanowV1SyncService {
 	protected IServiceContext _service_context = null;
 	
 	@Inject 
-	protected IkanowV1SyncService sync_service; 
+	protected IkanowV1SyncService_Buckets sync_service; 
 
 	@Inject 
 	protected MongoDbManagementDbConfigBean _service_config; 
@@ -108,21 +109,22 @@ public class TestIkanowV1SyncService {
 	@Test
 	public void testSynchronization() throws InterruptedException, ExecutionException {
 		
-		IkanowV1SyncService s1 = new IkanowV1SyncService(BeanTemplateUtils.clone(_service_config).with("v1_enabled", true).done(), 
+		IkanowV1SyncService_Buckets s1 = new IkanowV1SyncService_Buckets(BeanTemplateUtils.clone(_service_config).with("v1_enabled", true).done(), 
 				_service_context);
-		IkanowV1SyncService s2 = new IkanowV1SyncService(BeanTemplateUtils.clone(_service_config).with("v1_enabled", true).done(), 
+		IkanowV1SyncService_Buckets s2 = new IkanowV1SyncService_Buckets(BeanTemplateUtils.clone(_service_config).with("v1_enabled", true).done(), 
 				_service_context);
-		IkanowV1SyncService s3 = new IkanowV1SyncService(BeanTemplateUtils.clone(_service_config).with("v1_enabled", true).done(), 
+		IkanowV1SyncService_Buckets s3 = new IkanowV1SyncService_Buckets(BeanTemplateUtils.clone(_service_config).with("v1_enabled", true).done(), 
 				_service_context);
 		
-		int old = IkanowV1SyncService._num_leader_changes;
+		int old = IkanowV1SyncService_Buckets._num_leader_changes;
 		
+		s1.start(); s2.start(); s3.start();
 		for (int i = 0; i < 4; ++i) {
 			try { Thread.sleep(1000); } catch (Exception e) {}
 		}
 		s1.stop(); s2.stop(); s3.stop();
 		
-		assertEquals(old + 1, IkanowV1SyncService._num_leader_changes);
+		assertEquals(old + 1, IkanowV1SyncService_Buckets._num_leader_changes);
 		
 		@SuppressWarnings("unchecked")
 		final ICrudService<JsonNode> v1_config_db = _service_context.getCoreManagementDbService().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source"));				
@@ -143,7 +145,7 @@ public class TestIkanowV1SyncService {
 		final ObjectMapper mapper = BeanTemplateUtils.configureMapper(Optional.empty());		
 		final JsonNode v1_source = mapper.readTree(this.getClass().getResourceAsStream("test_v1_sync_sample_source.json"));
 		
-		final DataBucketBean bucket = IkanowV1SyncService.getBucketFromV1Source(v1_source);
+		final DataBucketBean bucket = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source);
 		
 		assertEquals("aleph...bucket.Template_V2_data_bucket.", bucket._id());
 		assertEquals(ImmutableMap.<String, String>builder().put("50bcd6fffbf0fd0b27875a7c", "rw").build(), bucket.access_rights().auth_token());
@@ -197,23 +199,26 @@ public class TestIkanowV1SyncService {
 		final Map<String, String> v1_side = ImmutableMap.<String, String>builder()
 										.put("v1_not_v2_1", new Date().toGMTString())
 										.put("v1_not_v2_2", new Date().toGMTString())
+										.put("v1_not_v2_3", "") //(ignored because null ie notApproved)
 										.put("v1_and_v2_same_1", same_date)
 										.put("v1_and_v2_same_2", same_date)
 										.put("v1_and_v2_mod_1", new Date().toGMTString())
 										.put("v1_and_v2_mod_2", new Date().toGMTString())
+										.put("v1_and_v2_ignore", "") //(ignored because null ie notApproved)
 										.build();
 
 		final Map<String, Date> v2_side = ImmutableMap.<String, Date>builder() 
 										.put("v2_not_v1_1", new Date())
 										.put("v2_not_v1_2", new Date())
-										.put("v1_and_v2_same_1", IkanowV1SyncService.parseJavaDate(same_date))
-										.put("v1_and_v2_same_2", IkanowV1SyncService.parseJavaDate(same_date))
-										.put("v1_and_v2_mod_1", IkanowV1SyncService.parseJavaDate(same_date))
-										.put("v1_and_v2_mod_2", IkanowV1SyncService.parseJavaDate(same_date))
+										.put("v1_and_v2_same_1", IkanowV1SyncService_Buckets.parseJavaDate(same_date))
+										.put("v1_and_v2_same_2", IkanowV1SyncService_Buckets.parseJavaDate(same_date))
+										.put("v1_and_v2_mod_1", IkanowV1SyncService_Buckets.parseJavaDate(same_date))
+										.put("v1_and_v2_mod_2", IkanowV1SyncService_Buckets.parseJavaDate(same_date))
+										.put("v1_and_v2_ignore", IkanowV1SyncService_Buckets.parseJavaDate(same_date))
 										.build();
 		
 		final Tuple3<Collection<String>, Collection<String>, Collection<String>> result = 
-				IkanowV1SyncService.compareSourcesToBuckets_categorize(Tuples._2T(v1_side, v2_side));
+				IkanowV1SyncService_Buckets.compareSourcesToBuckets_categorize(Tuples._2T(v1_side, v2_side));
 		
 		final List<String> expected_create = Arrays.asList("v1_not_v2_1", "v1_not_v2_2"); 
 		final List<String> expected_delete = Arrays.asList("v2_not_v1_2", "v2_not_v1_1");
@@ -248,18 +253,23 @@ public class TestIkanowV1SyncService {
 		
 		final JsonNode v1_source_1 = mapper.readTree(this.getClass().getResourceAsStream("test_v1_sync_sample_source.json"));
 		final JsonNode v1_source_2 = mapper.readTree(this.getClass().getResourceAsStream("test_v1_sync_sample_source.json"));
+		final JsonNode v1_source_3 = mapper.readTree(this.getClass().getResourceAsStream("test_v1_sync_sample_source.json"));
 		
 		((ObjectNode)v1_source_2).set("_id", null);
 		((ObjectNode)v1_source_2).set("key", new TextNode("aleph...bucket.Template_V2_data_bucket.2"));
+
+		((ObjectNode)v1_source_3).set("_id", null);
+		((ObjectNode)v1_source_3).set("key", new TextNode("aleph...bucket.Template_V2_data_bucket.3"));
+		((ObjectNode)v1_source_3).set("isApproved", BooleanNode.FALSE);
 		
 		assertEquals(0L, (long)v1_source_db.countObjects().get());
-		v1_source_db.storeObjects(Arrays.asList(v1_source_1, v1_source_2)).get();
-		assertEquals(2L, (long)v1_source_db.countObjects().get());
+		v1_source_db.storeObjects(Arrays.asList(v1_source_1, v1_source_2, v1_source_3)).get();
+		assertEquals(3L, (long)v1_source_db.countObjects().get());
 		
 		// Create 2 buckets
 		
-		final DataBucketBean bucket1 = IkanowV1SyncService.getBucketFromV1Source(v1_source_1);
-		final DataBucketBean bucket2 = IkanowV1SyncService.getBucketFromV1Source(v1_source_2);
+		final DataBucketBean bucket1 = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source_1);
+		final DataBucketBean bucket2 = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source_2);
 
 		assertEquals(0L, (long)bucket_db.countObjects().get());
 		bucket_db.storeObjects(Arrays.asList(bucket1, bucket2)).get();
@@ -268,9 +278,9 @@ public class TestIkanowV1SyncService {
 		// Run the function under test
 		
 		final Tuple2<Map<String, String>, Map<String, Date>> f_res = 
-				IkanowV1SyncService.compareSourcesToBuckets_get(bucket_db, v1_source_db).get();
+				IkanowV1SyncService_Buckets.compareSourcesToBuckets_get(bucket_db, v1_source_db).get();
 				
-		assertEquals("{aleph...bucket.Template_V2_data_bucket.=May 25, 2015 01:52:01 PM UTC, aleph...bucket.Template_V2_data_bucket.2=May 25, 2015 01:52:01 PM UTC}", f_res._1().toString());
+		assertEquals("{aleph...bucket.Template_V2_data_bucket.=May 25, 2015 01:52:01 PM UTC, aleph...bucket.Template_V2_data_bucket.3=, aleph...bucket.Template_V2_data_bucket.2=May 25, 2015 01:52:01 PM UTC}", f_res._1().toString());
 
 		assertEquals(2, f_res._2().size());
 		assertEquals(true, f_res._1().containsKey("aleph...bucket.Template_V2_data_bucket."));
@@ -285,13 +295,13 @@ public class TestIkanowV1SyncService {
 	private BasicMessageBean buildMessage(String source, String command, boolean success, String message) throws ParseException {
 		final String some_date = "21 May 2015 02:37:23 GMT";
 		return new BasicMessageBean(
-				IkanowV1SyncService.parseJavaDate(some_date), success, source, command, null, message, null
+				IkanowV1SyncService_Buckets.parseJavaDate(some_date), success, source, command, null, message, null
 				);
 	}
 	
 	@Test
 	public void test_updateV1SourceStatus() throws JsonProcessingException, IOException, InterruptedException, ExecutionException, ParseException {
-		final Date some_date_str = IkanowV1SyncService.parseJavaDate("21 May 2015 02:38:23 GMT");
+		final Date some_date_str = IkanowV1SyncService_Buckets.parseJavaDate("21 May 2015 02:38:23 GMT");
 		
 		@SuppressWarnings("unchecked")
 		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty())
@@ -309,7 +319,7 @@ public class TestIkanowV1SyncService {
 		v1_source_db.storeObjects(Arrays.asList(v1_source_1)).get();
 		assertEquals(1L, (long)v1_source_db.countObjects().get());
 
-		// Test1 failure
+		// Test1 failure - !disable on failure
 		
 		final Collection<BasicMessageBean> test1 = Arrays.asList(
 				buildMessage("test_src1", "test_cmd1", true, "test_msg1"),
@@ -317,16 +327,26 @@ public class TestIkanowV1SyncService {
 				);
 		
 		
-		IkanowV1SyncService.updateV1SourceStatus(some_date_str, "aleph...bucket.Template_V2_data_bucket.", test1, v1_source_db).get();
+		IkanowV1SyncService_Buckets.updateV1SourceStatus(some_date_str, "aleph...bucket.Template_V2_data_bucket.", test1, false, v1_source_db).get();
 		
 		assertEquals(1L, (long)v1_source_db.countObjects().get());
 		
 		final Optional<JsonNode> res1 = v1_source_db.getObjectBySpec(CrudUtils.anyOf().when("key", "aleph...bucket.Template_V2_data_bucket.")).get();
 		
 		assertTrue("Got source", res1.isPresent());
+		assertEquals(true, res1.get().get("isApproved").asBoolean());
 		assertEquals("{'harvest_status':'error','harvest_message':'[DATE] Bucket synchronization:\\n[DATE] test_src1 (test_cmd1): INFO: test_msg1\\n[DATE] test_src2 (test_cmd2): ERROR: test_msg2'}", 
 				res1.get().get("harvest").toString().replace("\"", "'").replaceAll("\\[.*?\\]", "[DATE]"));
+
+		// Test1b failure - disable on failure
 		
+		final Optional<JsonNode> res1b = v1_source_db.getObjectBySpec(CrudUtils.anyOf().when("key", "aleph...bucket.Template_V2_data_bucket.")).get();
+		
+		assertTrue("Got source", res1b.isPresent());
+		assertEquals(true, res1b.get().get("isApproved").asBoolean());
+		assertEquals("{'harvest_status':'error','harvest_message':'[DATE] Bucket synchronization:\\n[DATE] test_src1 (test_cmd1): INFO: test_msg1\\n[DATE] test_src2 (test_cmd2): ERROR: test_msg2'}", 
+				res1b.get().get("harvest").toString().replace("\"", "'").replaceAll("\\[.*?\\]", "[DATE]"));
+
 		// Test2 success
 		
 		final Collection<BasicMessageBean> test2 = Arrays.asList(
@@ -335,13 +355,14 @@ public class TestIkanowV1SyncService {
 				);
 		
 		
-		IkanowV1SyncService.updateV1SourceStatus(some_date_str, "aleph...bucket.Template_V2_data_bucket.", test2, v1_source_db).get();
+		IkanowV1SyncService_Buckets.updateV1SourceStatus(some_date_str, "aleph...bucket.Template_V2_data_bucket.", test2, true, v1_source_db).get();
 		
 		assertEquals(1L, (long)v1_source_db.countObjects().get());
 		
 		final Optional<JsonNode> res2 = v1_source_db.getObjectBySpec(CrudUtils.anyOf().when("key", "aleph...bucket.Template_V2_data_bucket.")).get();
 		
 		assertTrue("Got source", res2.isPresent());
+		assertEquals(true, res2.get().get("isApproved").asBoolean());
 		assertEquals("{'harvest_status':'success','harvest_message':'[DATE] Bucket synchronization:\\n[DATE] test_src1 (test_cmd1): INFO: test_msg1\\n[DATE] test_src2 (test_cmd2): INFO: test_msg2'}", 
 				res2.get().get("harvest").toString().replace("\"", "'").replaceAll("\\[.*?\\]", "[DATE]"));		
 
@@ -349,13 +370,14 @@ public class TestIkanowV1SyncService {
 		
 		final Collection<BasicMessageBean> test3 = Arrays.asList();
 		
-		IkanowV1SyncService.updateV1SourceStatus(some_date_str, "aleph...bucket.Template_V2_data_bucket.", test3, v1_source_db).get();
+		IkanowV1SyncService_Buckets.updateV1SourceStatus(some_date_str, "aleph...bucket.Template_V2_data_bucket.", test3, false, v1_source_db).get();
 		
 		assertEquals(1L, (long)v1_source_db.countObjects().get());
 		
 		final Optional<JsonNode> res3 = v1_source_db.getObjectBySpec(CrudUtils.anyOf().when("key", "aleph...bucket.Template_V2_data_bucket.")).get();
 		
 		assertTrue("Got source", res3.isPresent());
+		assertEquals(true, res3.get().get("isApproved").asBoolean());
 		assertEquals("{'harvest_status':'success','harvest_message':'[21 May 2015 02:38:23 GMT] Bucket synchronization:\\n(no messages)'}", 
 				res3.get().get("harvest").toString().replace("\"", "'"));		
 	}
@@ -387,8 +409,8 @@ public class TestIkanowV1SyncService {
 
 		// Create 2 buckets
 		
-		final DataBucketBean bucket1 = IkanowV1SyncService.getBucketFromV1Source(v1_source_1);
-		final DataBucketBean bucket2 = IkanowV1SyncService.getBucketFromV1Source(v1_source_2);
+		final DataBucketBean bucket1 = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source_1);
+		final DataBucketBean bucket2 = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source_2);
 
 		assertEquals(0L, (long)bucket_db.countObjects().get());
 		bucket_db.storeObjects(Arrays.asList(bucket1, bucket2)).get();
@@ -426,7 +448,7 @@ public class TestIkanowV1SyncService {
 		// Test1 - succeeds
 		
 		final ManagementFuture<Supplier<Object>> res_1 =
-				IkanowV1SyncService.updateBucket("aleph...bucket.Template_V2_data_bucket.", bucket_db, bucket_status_db, v1_source_db);
+				IkanowV1SyncService_Buckets.updateBucket("aleph...bucket.Template_V2_data_bucket.", bucket_db, bucket_status_db, v1_source_db);
 		
 		assertEquals(bucket1._id(), res_1.get().get());
 		assertEquals(0, res_1.getManagementResults().get().size());
@@ -446,7 +468,7 @@ public class TestIkanowV1SyncService {
 		// Test 2 - error because source_2 not in DB any more
 		
 		final ManagementFuture<Supplier<Object>> res_2 =
-				IkanowV1SyncService.updateBucket("aleph...bucket.Template_V2_data_bucket.2", bucket_db, bucket_status_db, v1_source_db);
+				IkanowV1SyncService_Buckets.updateBucket("aleph...bucket.Template_V2_data_bucket.2", bucket_db, bucket_status_db, v1_source_db);
 		
 		try {
 			res_2.get();
@@ -484,8 +506,8 @@ public class TestIkanowV1SyncService {
 
 		// Create 2 buckets
 		
-		final DataBucketBean bucket1 = IkanowV1SyncService.getBucketFromV1Source(v1_source_1);
-		final DataBucketBean bucket2 = IkanowV1SyncService.getBucketFromV1Source(v1_source_2);
+		final DataBucketBean bucket1 = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source_1);
+		final DataBucketBean bucket2 = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source_2);
 
 		assertEquals(0L, (long)bucket_db.countObjects().get());
 		bucket_db.storeObjects(Arrays.asList(bucket1, bucket2)).get();
@@ -509,7 +531,7 @@ public class TestIkanowV1SyncService {
 		bucket_status_db.storeObjects(Arrays.asList(bucket_status1, bucket_status2)).get();
 		assertEquals(2L, (long)bucket_status_db.countObjects().get());		
 		
-		final ManagementFuture<Boolean> f_res = IkanowV1SyncService.deleteBucket("aleph...bucket.Template_V2_data_bucket.", bucket_db);
+		final ManagementFuture<Boolean> f_res = IkanowV1SyncService_Buckets.deleteBucket("aleph...bucket.Template_V2_data_bucket.", bucket_db);
 		
 		assertEquals(true, f_res.get());
 		assertEquals(0, f_res.getManagementResults().get().size());
@@ -560,7 +582,7 @@ public class TestIkanowV1SyncService {
 		v1_source_db.storeObjects(Arrays.asList(v1_source_1, v1_source_2)).get(); 
 		assertEquals(2L, (long)v1_source_db.countObjects().get());
 		
-		final ManagementFuture<Supplier<Object>> f_res = IkanowV1SyncService.createNewBucket("aleph...bucket.Template_V2_data_bucket.", 
+		final ManagementFuture<Supplier<Object>> f_res = IkanowV1SyncService_Buckets.createNewBucket("aleph...bucket.Template_V2_data_bucket.", 
 																			bucket_db, bucket_status_db,
 																			v1_source_db
 				);
@@ -576,14 +598,14 @@ public class TestIkanowV1SyncService {
 
 		final Optional<DataBucketBean> bucket = bucket_db.getObjectById("aleph...bucket.Template_V2_data_bucket.").get();
 
-		final DataBucketBean exp_bucket = IkanowV1SyncService.getBucketFromV1Source(v1_source_1);
+		final DataBucketBean exp_bucket = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source_1);
 		//(check a couple of fields)
 		assertEquals(exp_bucket.description(), bucket.get().description());
 		assertEquals(exp_bucket.full_name(), bucket.get().full_name());
 		
 		// Error case
 		
-		final ManagementFuture<Supplier<Object>> res_2 = IkanowV1SyncService.createNewBucket("aleph...bucket.Template_V2_data_bucket.X", 
+		final ManagementFuture<Supplier<Object>> res_2 = IkanowV1SyncService_Buckets.createNewBucket("aleph...bucket.Template_V2_data_bucket.X", 
 				bucket_db, bucket_status_db,
 				v1_source_db
 		);
@@ -607,8 +629,8 @@ public class TestIkanowV1SyncService {
 
 		// Set up 3 different scenarios:
 		// 1 - doc to be deleted
-		// 1 - doc to be updated
-		// 1 - doc to be created
+		// 1 - doc to be updated (+1 that would be updated if it was non-approveD)
+		// 1 - doc to be created (+1 that would be created if it was non-approveD)
 		
 		
 		@SuppressWarnings("unchecked")
@@ -616,9 +638,6 @@ public class TestIkanowV1SyncService {
 										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source"));
 		
 		v1_source_db.deleteDatastore();
-		
-		/**/
-		System.out.println("??? " + v1_source_db.toString());		
 		
 		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).getDataBucketStore();		
 		bucket_db.deleteDatastore();
@@ -633,6 +652,8 @@ public class TestIkanowV1SyncService {
 		final JsonNode v1_source_1 = mapper.readTree(this.getClass().getResourceAsStream("test_v1_sync_sample_source.json"));
 		final JsonNode v1_source_2 = mapper.readTree(this.getClass().getResourceAsStream("test_v1_sync_sample_source.json"));
 		final JsonNode v1_source_3 = mapper.readTree(this.getClass().getResourceAsStream("test_v1_sync_sample_source.json"));
+		final JsonNode v1_source_4 = mapper.readTree(this.getClass().getResourceAsStream("test_v1_sync_sample_source.json"));
+		final JsonNode v1_source_5 = mapper.readTree(this.getClass().getResourceAsStream("test_v1_sync_sample_source.json"));
 		
 		((ObjectNode)v1_source_2).set("_id", null);
 		((ObjectNode)v1_source_2).set("key", new TextNode("aleph...bucket.Template_V2_data_bucket.2"));
@@ -641,14 +662,25 @@ public class TestIkanowV1SyncService {
 		((ObjectNode)v1_source_3).set("_id", null);
 		((ObjectNode)v1_source_3).set("key", new TextNode("aleph...bucket.Template_V2_data_bucket.3"));
 		
-		// Create 2 buckets
+		// (disabled one)
+		((ObjectNode)v1_source_4).set("_id", null);
+		((ObjectNode)v1_source_4).set("key", new TextNode("aleph...bucket.Template_V2_data_bucket.4"));
+		((ObjectNode)v1_source_4).set("isApproved", BooleanNode.FALSE);
+
+		// (disabled one with matching bucket)
+		((ObjectNode)v1_source_5).set("_id", null);
+		((ObjectNode)v1_source_5).set("key", new TextNode("aleph...bucket.Template_V2_data_bucket.5"));
+		((ObjectNode)v1_source_5).set("isApproved", BooleanNode.FALSE);
 		
-		final DataBucketBean bucket1 = IkanowV1SyncService.getBucketFromV1Source(v1_source_1);
-		final DataBucketBean bucket3 = IkanowV1SyncService.getBucketFromV1Source(v1_source_3);
+		// Create 3 buckets
+		
+		final DataBucketBean bucket1 = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source_1);
+		final DataBucketBean bucket3 = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source_3);
+		final DataBucketBean bucket5 = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source_5);
 
 		assertEquals(0L, (long)bucket_db.countObjects().get());
-		bucket_db.storeObjects(Arrays.asList(bucket1, bucket3)).get();
-		assertEquals(2L, (long)bucket_db.countObjects().get());
+		bucket_db.storeObjects(Arrays.asList(bucket1, bucket3, bucket5)).get();
+		assertEquals(3L, (long)bucket_db.countObjects().get());
 
 		//(store status)
 		
@@ -664,33 +696,42 @@ public class TestIkanowV1SyncService {
 				.with(DataBucketStatusBean::bucket_path, bucket3.full_name())
 				.done().get();
 
+		final DataBucketStatusBean bucket_status5 = BeanTemplateUtils.build(DataBucketStatusBean.class)
+				.with(DataBucketStatusBean::_id, bucket5._id())
+				.with(DataBucketStatusBean::suspended, true)
+				.with(DataBucketStatusBean::bucket_path, bucket5.full_name())
+				.done().get();
+		
 		assertEquals(0L, (long)bucket_status_db.countObjects().get());
-		bucket_status_db.storeObjects(Arrays.asList(bucket_status1, bucket_status3)).get();
-		assertEquals(2L, (long)bucket_status_db.countObjects().get());		
+		bucket_status_db.storeObjects(Arrays.asList(bucket_status1, bucket_status3, bucket_status5)).get();
+		assertEquals(3L, (long)bucket_status_db.countObjects().get());		
 		
 		// Mod + save sources
 		
 		((ObjectNode)v1_source_1).set("modified", new TextNode(new Date().toGMTString()));
 		((ObjectNode)v1_source_1).set("searchCycle_secs", new IntNode(-1));
 		((ObjectNode)v1_source_1).set("description", new TextNode("NEW DESCRIPTION"));
+
+		((ObjectNode)v1_source_5).set("modified", new TextNode(new Date().toGMTString()));
+		
 		
 		assertEquals(0L, (long)v1_source_db.countObjects().get());
-		v1_source_db.storeObjects(Arrays.asList(v1_source_1, v1_source_2)).get(); 
-		assertEquals(2L, (long)v1_source_db.countObjects().get());		
+		v1_source_db.storeObjects(Arrays.asList(v1_source_1, v1_source_2, v1_source_4, v1_source_5)).get(); 
+		assertEquals(4L, (long)v1_source_db.countObjects().get());		
 
 		// OK now fire off an instance of the runner
 		
-		IkanowV1SyncService s1 = new IkanowV1SyncService(BeanTemplateUtils.clone(_service_config).with("v1_enabled", true).done(), 
+		IkanowV1SyncService_Buckets s1 = new IkanowV1SyncService_Buckets(BeanTemplateUtils.clone(_service_config).with("v1_enabled", true).done(), 
 				_service_context);
 		
-		int old = IkanowV1SyncService._num_leader_changes;
-		
+		int old = IkanowV1SyncService_Buckets._num_leader_changes;
+		s1.start();
 		for (int i = 0; i < 4; ++i) {
 			try { Thread.sleep(1000); } catch (Exception e) {}
 		}
 		s1.stop();
 
-		assertEquals(old + 1, IkanowV1SyncService._num_leader_changes);
+		assertEquals(old + 1, IkanowV1SyncService_Buckets._num_leader_changes);
 		
 		// Check a few things have happened:
 		
@@ -715,10 +756,10 @@ public class TestIkanowV1SyncService {
 		
 		// 4) Check counts quickly
 		
-		assertEquals(3L, (long)bucket_status_db.countObjects().get());
-		//(this should be 2 but we're using the wrong db for maven reasons so the proxy doesn't occur)
-		assertEquals(2L, (long)bucket_db.countObjects().get());		
-		assertEquals(2L, (long)v1_source_db.countObjects().get());
+		assertEquals(4L, (long)bucket_status_db.countObjects().get());
+		//(this should be 3 but we're using the wrong db for maven reasons so the proxy doesn't occur)
+		assertEquals(3L, (long)bucket_db.countObjects().get());		
+		assertEquals(4L, (long)v1_source_db.countObjects().get());
 		
 		// 5) Check v1 statuses have been updated...
 		final Optional<JsonNode> res1 = v1_source_db.getObjectBySpec(CrudUtils.anyOf().when("key", "aleph...bucket.Template_V2_data_bucket.")).get();

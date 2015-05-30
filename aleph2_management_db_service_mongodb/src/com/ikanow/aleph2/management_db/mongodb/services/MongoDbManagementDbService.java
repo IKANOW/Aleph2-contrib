@@ -66,7 +66,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	public MongoDbManagementDbService(
 			final IMongoDbCrudServiceFactory crud_factory, 
 			final MongoDbManagementDbConfigBean properties,
-			final IkanowV1SyncService sync_service)
+			final IkanowV1SyncService_Buckets sync_service)
 	{
 		_crud_factory = crud_factory;
 		_auth = Optional.empty();

@@ -33,7 +33,7 @@ public class MockMongoDbManagementDbService extends MongoDbManagementDbService {
 	public MockMongoDbManagementDbService(
 			IMongoDbCrudServiceFactory crud_factory, 
 			final MongoDbManagementDbConfigBean properties,
-			final IkanowV1SyncService sync_service)
+			final IkanowV1SyncService_Buckets sync_service)
 	{
 		super(crud_factory, properties, sync_service);
 
