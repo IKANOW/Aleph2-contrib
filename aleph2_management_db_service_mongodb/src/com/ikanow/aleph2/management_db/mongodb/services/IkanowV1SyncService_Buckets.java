@@ -44,6 +44,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.CommonUpdateComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
@@ -276,18 +277,20 @@ public class IkanowV1SyncService_Buckets {
 						return updateV1SourceStatus(new Date(), id, res, disable_on_failure, source_db);	
 					}
 					catch (Exception e) { // DB-side call has failed, create ad hoc error
-						final Collection<BasicMessageBean> db_error = Arrays.asList( 
-								new BasicMessageBean(
-										new Date(), 
-										false, 
-										"(unknown)", 
-										"(unknown)", 
-										null, 
-										ErrorUtils.getLongForm("{0}", e), 
-										null
-										)
-								);
-						return updateV1SourceStatus(new Date(), id, db_error, disable_on_failure, source_db);											
+						final Collection<BasicMessageBean> errs = res.isEmpty()
+								? Arrays.asList(
+									new BasicMessageBean(
+											new Date(), 
+											false, 
+											"(unknown)", 
+											"(unknown)", 
+											null, 
+											ErrorUtils.getLongForm("{0}", e), 
+											null
+											)
+									)
+								: res;
+						return updateV1SourceStatus(new Date(), id, errs, disable_on_failure, source_db);											
 					}
 				});
 	}
@@ -472,6 +475,7 @@ public class IkanowV1SyncService_Buckets {
 	 * @param source_db
 	 * @return
 	 */
+	@SuppressWarnings("unchecked")
 	protected static ManagementFuture<Supplier<Object>> updateBucket(final @NonNull String id,
 			final @NonNull IManagementCrudService<DataBucketBean> bucket_mgmt, 
 			final @NonNull IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
@@ -482,11 +486,21 @@ public class IkanowV1SyncService_Buckets {
 		// Get the full source from V1
 		// .. and from V2: the existing bucket and the existing status
 		
+		// OK first off, we're immediately going to update the bucket's modified time
+		// since otherwise if the update fails then we'll get stuck updating it every iteration...
+		// (ie this is the reason we set isApproved:false in the create case)
+		final ICrudService<DataBucketBean> underlying_bucket_db = 
+				bucket_mgmt.getUnderlyingPlatformDriver(ICrudService.class, Optional.empty());
+		
+		//(this ugliness just handles the test case already running on the underlying service)
+		(null == underlying_bucket_db ? bucket_mgmt : underlying_bucket_db)
+			.updateObjectById(id, CrudUtils.update(DataBucketBean.class).set(DataBucketBean::modified, new Date()));		
+		
 		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("key", id);
 		final CompletableFuture<Optional<JsonNode>> f_v1_source = source_db.getObjectBySpec(v1_query);		
 
 		return FutureUtils.denestManagementFuture(f_v1_source.<ManagementFuture<Supplier<Object>>>thenApply(v1_source -> {			
-			try {
+			try {												
 				// Once we have all the queries back, get some more information
 				final boolean is_now_suspended = safeJsonGet("searchCycle_secs", v1_source.get()).asInt(1) < 0;
 				final DataBucketBean new_object = getBucketFromV1Source(v1_source.get());
@@ -526,7 +540,7 @@ public class IkanowV1SyncService_Buckets {
 			final @NonNull Date main_date,
 			final @NonNull String key,
 			final @NonNull Collection<BasicMessageBean> status_messages,
-			final boolean disable_on_failure,
+			final boolean set_approved_state,
 			final @NonNull ICrudService<JsonNode> source_db
 			)
 	{
@@ -540,12 +554,15 @@ public class IkanowV1SyncService_Buckets {
 		final boolean any_errors = status_messages.stream().anyMatch(msg -> !msg.success());
 		
 		@SuppressWarnings("deprecation")
-		final UpdateComponent<JsonNode> update = CrudUtils.update()
-				.set("isApproved", !any_errors || !disable_on_failure)
+		final CommonUpdateComponent<JsonNode> update_1 = CrudUtils.update()				
 				.set("harvest.harvest_status", (any_errors ? "error" : "success"))
 				.set("harvest.harvest_message",
 						"[" + main_date.toGMTString() + "] Bucket synchronization:\n" 
 						+ (message_block.isEmpty() ? "(no messages)" : message_block));
+		
+		final UpdateComponent<JsonNode> update = set_approved_state 
+				? update_1.set("isApproved", !any_errors)
+				: update_1;
 		
 		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("key", key);
 		final CompletableFuture<Boolean> update_res = source_db.updateObjectBySpec(v1_query, Optional.empty(), update);
