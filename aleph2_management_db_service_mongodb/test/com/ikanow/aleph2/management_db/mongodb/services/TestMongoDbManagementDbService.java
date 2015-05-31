@@ -35,7 +35,7 @@ public class TestMongoDbManagementDbService {
 		
 		MockMongoDbCrudServiceFactory mock_crud_service_factory = new MockMongoDbCrudServiceFactory();
 
-		MongoDbManagementDbService management_db_service = new MongoDbManagementDbService(mock_crud_service_factory, new MongoDbManagementDbConfigBean(false), null);
+		MongoDbManagementDbService management_db_service = new MongoDbManagementDbService(mock_crud_service_factory, new MongoDbManagementDbConfigBean(false), null, null);
 		
 		assertEquals(MongoDbManagementDbService.DATA_ANALYTIC_THREAD_STORE,
 				management_db_service.getAnalyticThreadStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).getFullName());

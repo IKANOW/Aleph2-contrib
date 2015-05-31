@@ -1,10 +1,13 @@
 package com.ikanow.aleph2.management_db.mongodb.services;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -22,9 +25,14 @@ import java.util.stream.StreamSupport;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.leader.LeaderLatch;
+import org.apache.hadoop.fs.CreateFlag;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileContext;
+import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.bson.types.ObjectId;
 
 import scala.Tuple2;
 import scala.Tuple3;
@@ -35,19 +43,19 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
-import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
-import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
+import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean.LibraryType;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.CommonUpdateComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
-import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
@@ -55,11 +63,13 @@ import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
 import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
+import com.mongodb.gridfs.GridFS;
+import com.mongodb.gridfs.GridFSDBFile;
 
-/** This service looks for changes to IKANOW sources and applies them to data bucket beans
+/** This service looks for changes to IKANOW binary shares and applies them to shared library beans
  * @author acp
  */
-public class IkanowV1SyncService_Buckets {
+public class IkanowV1SyncService_LibraryJars {
 	private static final Logger _logger = LogManager.getLogger();	
 	
 	protected final MongoDbManagementDbConfigBean _config;
@@ -67,51 +77,54 @@ public class IkanowV1SyncService_Buckets {
 	protected final IManagementDbService _core_management_db;
 	protected final IManagementDbService _underlying_management_db;
 	protected final ICoreDistributedServices _core_distributed_services;
+	protected final IStorageService _storage_service;
+	protected SetOnce<GridFS> _mongodb_distributed_fs = new SetOnce<GridFS>();
 	
-	protected final SetOnce<MutexMonitor> _source_mutex_monitor = new SetOnce<MutexMonitor>();
+	protected final SetOnce<MutexMonitor> _library_mutex_monitor = new SetOnce<MutexMonitor>();
 	
 	protected final ScheduledExecutorService _mutex_scheduler = Executors.newScheduledThreadPool(1);		
 	protected final ScheduledExecutorService _source_scheduler = Executors.newScheduledThreadPool(1);		
-	protected SetOnce<ScheduledFuture<?>> _source_monitor_handle = new SetOnce<ScheduledFuture<?>>(); 
+	protected SetOnce<ScheduledFuture<?>> _library_monitor_handle = new SetOnce<ScheduledFuture<?>>(); 
 	
 	protected static int _num_leader_changes = 0; // (just for debugging/testing)
 	
-	public final static String SOURCE_MONITOR_MUTEX = "/app/aleph2/locks/v1/sources";
+	public final static String LIBRARY_MONITOR_MUTEX = "/app/aleph2/locks/v1/library_jars";
 
 	/** guice constructor
 	 * @param config - the management db configuration, includes whether this service is enabled
 	 * @param service_context - the service context providing all the required dependencies
 	 */
 	@Inject
-	public IkanowV1SyncService_Buckets(final MongoDbManagementDbConfigBean config, final IServiceContext service_context) {		
+	public IkanowV1SyncService_LibraryJars(final MongoDbManagementDbConfigBean config, final IServiceContext service_context) {		
 		_config = config;
 		_context = service_context;
 		_core_management_db = _context.getCoreManagementDbService();
 		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty());
 		_core_distributed_services = _context.getService(ICoreDistributedServices.class, Optional.empty());
+		_storage_service = _context.getStorageService();
 		
 		if (Optional.ofNullable(_config.v1_enabled()).orElse(false)) {
 			// Launch the synchronization service
 			
 			// 1) Monitor sources
 			
-			_source_mutex_monitor.set(new MutexMonitor(SOURCE_MONITOR_MUTEX));
-			_mutex_scheduler.schedule(_source_mutex_monitor.get(), 250L, TimeUnit.MILLISECONDS);
-			_source_monitor_handle.set(_source_scheduler.scheduleWithFixedDelay(new SourceMonitor(), 10L, 2L, TimeUnit.SECONDS));
-				//(give it 10 seconds before starting, let everything else settle down - eg give the bucket choose handler time to register)			
+			_library_mutex_monitor.set(new MutexMonitor(LIBRARY_MONITOR_MUTEX));
+			_mutex_scheduler.schedule(_library_mutex_monitor.get(), 250L, TimeUnit.MILLISECONDS);
+			_library_monitor_handle.set(_source_scheduler.scheduleWithFixedDelay(new LibraryMonitor(), 10L, 2L, TimeUnit.SECONDS));
+				//(give it 10 seconds before starting, let everything else settle down - eg give the bucket choose handler time to register)
 		}
 	}
 	/** Immediately start
 	 */
 	public void start() {
-		_source_monitor_handle.get().cancel(true);
-		_source_monitor_handle.set(_source_scheduler.scheduleWithFixedDelay(new SourceMonitor(), 1, 1L, TimeUnit.SECONDS));
+		_library_monitor_handle.get().cancel(true);
+		_library_monitor_handle.set(_source_scheduler.scheduleWithFixedDelay(new LibraryMonitor(), 1, 1L, TimeUnit.SECONDS));
 	}
 	
 	/** Stop threads (just for testing I think)
 	 */
 	public void stop() {
-		_source_monitor_handle.get().cancel(true);
+		_library_monitor_handle.get().cancel(true);
 	}
 	
 	////////////////////////////////////////////////////
@@ -139,7 +152,7 @@ public class IkanowV1SyncService_Buckets {
 				catch (Exception e) {
 					_logger.error(ErrorUtils.getLongForm("{0}", e));
 				}
-				_logger.info("SourceMonitor: joined the leadership candidate cluster");
+				_logger.info("LibraryMonitor: joined the leadership candidate cluster");
 			}			
 		}
 		public boolean isLeader() {
@@ -148,7 +161,7 @@ public class IkanowV1SyncService_Buckets {
 	}
 
 	
-	public class SourceMonitor implements Runnable {
+	public class LibraryMonitor implements Runnable {
 		private final SetOnce<ICrudService<JsonNode>> _v1_db = new SetOnce<ICrudService<JsonNode>>();
 		private boolean _last_state = false;
 		
@@ -157,29 +170,33 @@ public class IkanowV1SyncService_Buckets {
 		 */
 		@Override
 		public void run() {
-			if (!_source_mutex_monitor.get().isLeader()) {
+			if (!_library_mutex_monitor.get().isLeader()) {
 				_last_state = false;
 				return;
 			}
 			if (!_last_state) {
-				_logger.info("SourceMonitor: now the leader");
+				_logger.info("LibraryMonitor: now the leader");
 				_num_leader_changes++;
 				_last_state = true;
 			}
 			if (!_v1_db.isSet()) {
 				@SuppressWarnings("unchecked")
-				final ICrudService<JsonNode> v1_config_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source"));				
-				_v1_db.set(v1_config_db);
-				
-				_v1_db.get().optimizeQuery(Arrays.asList("extractType"));
+				final ICrudService<JsonNode> v1_config_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("social.share"));				
+				_v1_db.set(v1_config_db);				
+				_v1_db.get().optimizeQuery(Arrays.asList("title"));
+			}
+			if (!_mongodb_distributed_fs.isSet()) {
+				final GridFS fs = _underlying_management_db.getUnderlyingPlatformDriver(GridFS.class, Optional.of("file.binary_shares"));
+				_mongodb_distributed_fs.set(fs);
 			}
 			
 			try {
 				// Synchronize
-				synchronizeSources(
-						_core_management_db.getDataBucketStore(), 
-						_underlying_management_db.getDataBucketStatusStore(), 
-						_v1_db.get())
+				synchronizeLibraryJars(
+						_core_management_db.getSharedLibraryStore(), 
+						_storage_service,
+						_v1_db.get(),
+						_mongodb_distributed_fs.get())
 						.get();
 					// (the get at the end just ensures that you don't get two of these scheduled results colliding)
 			}			
@@ -195,18 +212,19 @@ public class IkanowV1SyncService_Buckets {
 	// CONTROL LOGIC
 	
 	/** Top level logic for source synchronization
-	 * @param bucket_mgmt
-	 * @param source_db
+	 * @param library_mgmt
+	 * @param share_db
 	 */
-	protected CompletableFuture<?> synchronizeSources(
-			final @NonNull IManagementCrudService<DataBucketBean> bucket_mgmt, 
-			final @NonNull IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
-			final @NonNull ICrudService<JsonNode> source_db
+	protected CompletableFuture<?> synchronizeLibraryJars(
+			final @NonNull IManagementCrudService<SharedLibraryBean> library_mgmt,
+			final @NonNull IStorageService aleph2_fs,
+			final @NonNull ICrudService<JsonNode> share_db,
+			final @NonNull GridFS share_fs
 			)
 	{
-		return compareSourcesToBuckets_get(bucket_mgmt, source_db)
+		return compareJarsToLibaryBeans_get(library_mgmt, share_db)
 			.thenApply(v1_v2 -> {
-				return compareSourcesToBuckets_categorize(v1_v2);
+				return compareJarsToLibraryBeans_categorize(v1_v2);
 			})
 			.thenCompose(create_update_delete -> {
 				if (create_update_delete._1().isEmpty() && create_update_delete._2().isEmpty() && create_update_delete._3().isEmpty()) {
@@ -222,27 +240,27 @@ public class IkanowV1SyncService_Buckets {
 				final List<CompletableFuture<Boolean>> l1 = 
 					create_update_delete._1().stream().parallel()
 						.<Tuple2<String, ManagementFuture<?>>>map(id -> 
-							Tuples._2T(id, createNewBucket(id, bucket_mgmt, underlying_bucket_status_mgmt, source_db)))
+							Tuples._2T(id, createLibraryBean(id, library_mgmt, aleph2_fs, true, share_db, share_fs)))
 						.<CompletableFuture<Boolean>>map(id_fres -> 
-							updateV1SourceStatus_top(id_fres._1(), id_fres._2(), true, source_db))
+							updateV1ShareErrorStatus_top(id_fres._1(), id_fres._2(), share_db))
 						.collect(Collectors.toList());
 					;
 					
 				final List<CompletableFuture<Boolean>> l2 = 
 						create_update_delete._2().stream().parallel()
 							.<Tuple2<String, ManagementFuture<?>>>map(id -> 
-								Tuples._2T(id, deleteBucket(id, bucket_mgmt)))
+								Tuples._2T(id, deleteLibraryBean(id, library_mgmt)))
 						.<CompletableFuture<Boolean>>map(id_fres -> 
-							CompletableFuture.completedFuture(true)) // (don't update source in delete case obviously)
+							CompletableFuture.completedFuture(true)) 
 							.collect(Collectors.toList());
 						;
 					
 				final List<CompletableFuture<Boolean>> l3 = 
 						create_update_delete._3().stream().parallel()
 							.<Tuple2<String, ManagementFuture<?>>>map(id -> 
-								Tuples._2T(id, updateBucket(id, bucket_mgmt, underlying_bucket_status_mgmt, source_db)))
+								Tuples._2T(id, createLibraryBean(id, library_mgmt, aleph2_fs, false, share_db, share_fs)))
 							.<CompletableFuture<Boolean>>map(id_fres -> 
-								updateV1SourceStatus_top(id_fres._1(), id_fres._2(), false, source_db))
+								CompletableFuture.completedFuture(true)) 
 							.collect(Collectors.toList());
 						;
 						
@@ -259,18 +277,18 @@ public class IkanowV1SyncService_Buckets {
 	 * @param id
 	 * @param fres
 	 * @param disable_on_failure
-	 * @param source_db
+	 * @param share_db
 	 * @return
 	 */
-	protected CompletableFuture<Boolean> updateV1SourceStatus_top(final @NonNull String id, 
-			final @NonNull ManagementFuture<?> fres, boolean disable_on_failure,
-			ICrudService<JsonNode> source_db)
+	protected CompletableFuture<Boolean> updateV1ShareErrorStatus_top(final @NonNull String id, 
+			final @NonNull ManagementFuture<?> fres, 
+			ICrudService<JsonNode> share_db)
 	{		
 		return fres.getManagementResults()
 				.<Boolean>thenCompose(res ->  {
 					try {
 						fres.get(); // (check if the DB side call has failed)
-						return updateV1SourceStatus(new Date(), id, res, disable_on_failure, source_db);	
+						return updateV1ShareErrorStatus(new Date(), id, res, share_db);	
 					}
 					catch (Exception e) { // DB-side call has failed, create ad hoc error
 						final Collection<BasicMessageBean> errs = res.isEmpty()
@@ -286,19 +304,19 @@ public class IkanowV1SyncService_Buckets {
 											)
 									)
 								: res;
-						return updateV1SourceStatus(new Date(), id, errs, disable_on_failure, source_db);											
+						return updateV1ShareErrorStatus(new Date(), id, errs, share_db);											
 					}
 				});
 	}
 	
 	/** Want to end up with 3 lists:
-	 *  - v1 sources that don't exist in v2 (Create them)
-	 *  - v2 sources that don't exist in v1 (Delete them)
-	 *  - matching v1/v2 sources with different modified times (Update them)
+	 *  - v1 objects that don't exist in v2 (Create them)
+	 *  - v2 objects that don't exist in v1 (Delete them)
+	 *  - matching v1/v2 objects with different modified times (Update them)
 	 * @param to_compare
-	 * @returns a 3-tuple with "to create", "to delete", "to update"
+	 * @returns a 3-tuple with "to create", "to delete", "to update" - NOTE: none of the _ids here include the "v1_"
 	 */
-	protected static Tuple3<Collection<String>, Collection<String>, Collection<String>> compareSourcesToBuckets_categorize(
+	protected static Tuple3<Collection<String>, Collection<String>, Collection<String>> compareJarsToLibraryBeans_categorize(
 			final @NonNull Tuple2<Map<String, String>, Map<String, Date>> to_compare) {
 		
 		// Want to end up with 3 lists:
@@ -345,43 +363,45 @@ public class IkanowV1SyncService_Buckets {
 	// DB MANIPULATION - READ
 	
 	/** Gets a list of _id,modified from v1 and a list matching _id,modified from V2
-	 * @param bucket_mgmt
-	 * @param source_db
+	 * @param library_mgmt
+	 * @param share_db
 	 * @return tuple of id-vs-(date-or-null-if-not-approved) for v1, id-vs-date for v2
 	 */
 	protected static 
-	CompletableFuture<Tuple2<Map<String, String>, Map<String, Date>>> compareSourcesToBuckets_get(
-		final @NonNull IManagementCrudService<DataBucketBean> bucket_mgmt, 
-		final @NonNull ICrudService<JsonNode> source_db)
+	CompletableFuture<Tuple2<Map<String, String>, Map<String, Date>>> compareJarsToLibaryBeans_get(
+		final @NonNull IManagementCrudService<SharedLibraryBean> library_mgmt, 
+		final @NonNull ICrudService<JsonNode> share_db)
 	{
 		// (could make this more efficient by having a regular "did something happen" query with a slower "get everything and resync)
-		// (don't forget to add "modified" to the compund index though)
-		CompletableFuture<Cursor<JsonNode>> f_v1_sources = 
-				source_db.getObjectsBySpec(
-						CrudUtils.allOf().when("extractType", "V2DataBucket"),
-						Arrays.asList("key", "modified", "isApproved"), true);
+		// (don't forget to add "modified" to the compound index though)
+		CompletableFuture<Cursor<JsonNode>> f_v1_jars = 
+				share_db.getObjectsBySpec(
+						CrudUtils.allOf().when("type", "binary")
+							.rangeIn("title", "/app/aleph2/library/", true, "/app/aleph2/library0", true),
+							Arrays.asList("_id", "modified"), true
+						);
 		
-		return f_v1_sources
-			.<Map<String, String>>thenApply(v1_sources -> {
-				return StreamSupport.stream(v1_sources.spliterator(), false)
+		return f_v1_jars
+			.<Map<String, String>>thenApply(v1_jars -> {
+				return StreamSupport.stream(v1_jars.spliterator(), false)
 					.collect(Collectors.toMap(
-							j -> safeJsonGet("key", j).asText(),
-							j -> safeJsonGet("isApproved", j).asBoolean() ? safeJsonGet("modified", j).asText() : ""
+							j -> safeJsonGet("_id", j).asText(),
+							j -> safeJsonGet("modified", j).asText()
 							));
 			})
 			.<Tuple2<Map<String, String>, Map<String, Date>>>
 			thenCompose(v1_id_datestr_map -> {
-				final SingleQueryComponent<DataBucketBean> bucket_query = CrudUtils.allOf(DataBucketBean.class)
-						.rangeIn(DataBucketBean::_id, "aleph...bucket.", true, "aleph...bucket/", true)
+				final SingleQueryComponent<SharedLibraryBean> library_query = CrudUtils.allOf(SharedLibraryBean.class)
+						.rangeIn(SharedLibraryBean::_id, "v1_", true, "v1a", true)
 						;						
 				
-				return bucket_mgmt.getObjectsBySpec(bucket_query, Arrays.asList("_id", "modified"), true)
+				return library_mgmt.getObjectsBySpec(library_query, Arrays.asList("_id", "modified"), true)
 						.<Tuple2<Map<String, String>, Map<String, Date>>>
 						thenApply(c -> {							
 							final Map<String, Date> v2_id_date_map = 
 									StreamSupport.stream(c.spliterator(), false)
 									.collect(Collectors.toMap(
-											b -> b._id(),
+											b -> b._id().substring(3), //(ie remove the "v1_")
 											b -> b.modified()
 											));
 							
@@ -393,44 +413,67 @@ public class IkanowV1SyncService_Buckets {
 	////////////////////////////////////////////////////
 	////////////////////////////////////////////////////
 
+	// FS - WRITE
+	
+	protected static void copyFile(final @NonNull String binary_id, final @NonNull String path, 
+			final @NonNull IStorageService aleph2_fs,
+			final @NonNull GridFS share_fs
+			) throws IOException
+	{
+		try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+			final GridFSDBFile file = share_fs.find(new ObjectId(binary_id));						
+			file.writeTo(out);		
+			final FileContext fs = aleph2_fs.getUnderlyingPlatformDriver(FileContext.class, Optional.empty());
+			final Path file_path = fs.makeQualified(new Path(path));
+			try (FSDataOutputStream outer = fs.create(file_path, EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE), 
+					org.apache.hadoop.fs.Options.CreateOpts.createParent()))
+			{
+				outer.write(out.toByteArray());
+			}
+		}		
+	}
+	
+	////////////////////////////////////////////////////
+	////////////////////////////////////////////////////
+
 	// DB MANIPULATION - WRITE
 	
-	/** Create a new bucket
+	/** Create a new library bean
 	 * @param id
 	 * @param bucket_mgmt
-	 * @param bucket_status_mgmt
-	 * @param source_db
+	 * @param create_not_update - true if create, false if update
+	 * @param share_db
 	 * @return
 	 */
-	protected static ManagementFuture<Supplier<Object>> createNewBucket(final @NonNull String id,
-			final @NonNull IManagementCrudService<DataBucketBean> bucket_mgmt, 
-			final @NonNull IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
-			final @NonNull ICrudService<JsonNode> source_db			
+	protected static ManagementFuture<Supplier<Object>> createLibraryBean(final @NonNull String id,
+			final @NonNull IManagementCrudService<SharedLibraryBean> library_mgmt, 
+			final @NonNull IStorageService aleph2_fs,
+			final boolean create_not_update,
+			final @NonNull ICrudService<JsonNode> share_db,
+			final @NonNull GridFS share_fs
 			)
 	{
-		_logger.info(ErrorUtils.get("Found new source {0}, creating bucket", id));
+		if (create_not_update) {
+			_logger.info(ErrorUtils.get("Found new share {0}, creating library bean", id));
+		}
+		else {
+			_logger.info(ErrorUtils.get("Share {0} was modified, updating library bean", id));
+		}
 		
 		// Create a status bean:
 
-		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("key", id);
-		return FutureUtils.denestManagementFuture(source_db.getObjectBySpec(v1_query)
+		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("_id", new ObjectId(id));
+		return FutureUtils.denestManagementFuture(share_db.getObjectBySpec(v1_query)
 			.<ManagementFuture<Supplier<Object>>>thenApply(jsonopt -> {
 				try {
+					final SharedLibraryBean new_object = getLibraryBeanFromV1Share(jsonopt.get());
 					
-					final DataBucketBean new_object = getBucketFromV1Source(jsonopt.get());
-					final boolean is_now_suspended = safeJsonGet("searchCycle_secs", jsonopt.get()).asInt(1) < 0;
+					// Try to copy the file across before going crazy (going to leave this as single threaded for now, we'll live)
+					final String binary_id = safeJsonGet("binaryId", jsonopt.get()).asText();					
+					copyFile(binary_id, new_object.path_name(), aleph2_fs, share_fs);
 					
-					final DataBucketStatusBean status_bean = BeanTemplateUtils.build(DataBucketStatusBean.class)
-							.with(DataBucketStatusBean::_id, id)
-							.with(DataBucketStatusBean::bucket_path, new_object.full_name())
-							.with(DataBucketStatusBean::suspended, is_now_suspended) 
-							.done().get();
-
-					return FutureUtils.denestManagementFuture(underlying_bucket_status_mgmt.storeObject(status_bean, true)
-						.thenApply(__ -> {
-							final ManagementFuture<Supplier<Object>> ret = bucket_mgmt.storeObject(new_object);
-							return ret;
-						}));
+					final ManagementFuture<Supplier<Object>> ret = library_mgmt.storeObject(new_object, !create_not_update);
+					return ret;
 				}			
 				catch (Exception e) {
 					return FutureUtils.<Supplier<Object>>createManagementFuture(
@@ -438,8 +481,8 @@ public class IkanowV1SyncService_Buckets {
 							CompletableFuture.completedFuture(Arrays.asList(new BasicMessageBean(
 									new Date(),
 									false, 
-									"IkanowV1SyncService_Buckets", 
-									"createNewBucket", 
+									"IkanowV1SyncService_LibraryJars", 
+									"createLibraryBean", 
 									null, 
 									ErrorUtils.getLongForm("{0}", e), 
 									null
@@ -451,93 +494,31 @@ public class IkanowV1SyncService_Buckets {
 			;
 	}
 
-	/** Delete a bucket
+	/** Delete a library bean
 	 * @param id
-	 * @param bucket_mgmt
+	 * @param library_mgmt
 	 * @return
 	 */
-	protected static ManagementFuture<Boolean> deleteBucket(final @NonNull String id,
-			final @NonNull IManagementCrudService<DataBucketBean> bucket_mgmt)
+	protected static ManagementFuture<Boolean> deleteLibraryBean(final @NonNull String id,
+			final @NonNull IManagementCrudService<SharedLibraryBean> library_mgmt)
 	{
-		_logger.info(ErrorUtils.get("Source {0} was deleted, deleting bucket", id));
+		_logger.info(ErrorUtils.get("Share {0} was deleted, deleting libary bean", id));
+
+		//TODO: make it delete the JAR file in deleteObjectById
 		
-		return bucket_mgmt.deleteObjectById(id);
+		return library_mgmt.deleteObjectById("v1_" + id);
 	}
-	
-	/** Update a bucket based on a new V1 source
-	 * @param id
-	 * @param bucket_mgmt
-	 * @param underlying_bucket_status_mgmt
-	 * @param source_db
-	 * @return
-	 */
-	@SuppressWarnings("unchecked")
-	protected static ManagementFuture<Supplier<Object>> updateBucket(final @NonNull String id,
-			final @NonNull IManagementCrudService<DataBucketBean> bucket_mgmt, 
-			final @NonNull IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
-			final @NonNull ICrudService<JsonNode> source_db)
-	{
-		_logger.info(ErrorUtils.get("Source {0} was modified, updating bucket", id));
-		
-		// Get the full source from V1
-		// .. and from V2: the existing bucket and the existing status
-		
-		// OK first off, we're immediately going to update the bucket's modified time
-		// since otherwise if the update fails then we'll get stuck updating it every iteration...
-		// (ie this is the reason we set isApproved:false in the create case)
-		final ICrudService<DataBucketBean> underlying_bucket_db = 
-				bucket_mgmt.getUnderlyingPlatformDriver(ICrudService.class, Optional.empty());
-		
-		//(this ugliness just handles the test case already running on the underlying service)
-		(null == underlying_bucket_db ? bucket_mgmt : underlying_bucket_db)
-			.updateObjectById(id, CrudUtils.update(DataBucketBean.class).set(DataBucketBean::modified, new Date()));		
-		
-		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("key", id);
-		final CompletableFuture<Optional<JsonNode>> f_v1_source = source_db.getObjectBySpec(v1_query);		
-
-		return FutureUtils.denestManagementFuture(f_v1_source.<ManagementFuture<Supplier<Object>>>thenApply(v1_source -> {			
-			try {												
-				// Once we have all the queries back, get some more information
-				final boolean is_now_suspended = safeJsonGet("searchCycle_secs", v1_source.get()).asInt(1) < 0;
-				final DataBucketBean new_object = getBucketFromV1Source(v1_source.get());
-
-				// (Update status in underlying status store so don't trip a spurious harvest call)
-				CompletableFuture<?> update = underlying_bucket_status_mgmt.updateObjectById(id, CrudUtils.update(DataBucketStatusBean.class)
-																		.set(DataBucketStatusBean::suspended, is_now_suspended));
-
-				// Then update the management db
-				
-				return FutureUtils.denestManagementFuture(update.thenApply(__ -> bucket_mgmt.storeObject(new_object, true)));
-			}
-			catch (Exception e) {
-				return FutureUtils.<Supplier<Object>>createManagementFuture(
-						FutureUtils.returnError(e), 
-						CompletableFuture.completedFuture(Arrays.asList(new BasicMessageBean(
-								new Date(),
-								false, 
-								"IkanowV1SyncService_Buckets", 
-								"updateBucket", 
-								null, 
-								ErrorUtils.getLongForm("{0}", e), 
-								null
-								)
-								))
-						);
-			}
-		}));
-	}	
 	
 	/** Takes a collection of results from the management side-channel, and uses it to update a harvest node
 	 * @param key - source key / bucket id
 	 * @param status_messages
 	 * @param source_db
 	 */
-	protected static CompletableFuture<Boolean> updateV1SourceStatus(
+	protected static CompletableFuture<Boolean> updateV1ShareErrorStatus(
 			final @NonNull Date main_date,
-			final @NonNull String key,
+			final @NonNull String id,
 			final @NonNull Collection<BasicMessageBean> status_messages,
-			final boolean set_approved_state,
-			final @NonNull ICrudService<JsonNode> source_db
+			final @NonNull ICrudService<JsonNode> share_db
 			)
 	{
 		final String message_block = status_messages.stream()
@@ -549,21 +530,27 @@ public class IkanowV1SyncService_Buckets {
 		
 		final boolean any_errors = status_messages.stream().anyMatch(msg -> !msg.success());
 		
-		@SuppressWarnings("deprecation")
-		final CommonUpdateComponent<JsonNode> update_1 = CrudUtils.update()				
-				.set("harvest.harvest_status", (any_errors ? "error" : "success"))
-				.set("harvest.harvest_message",
-						"[" + main_date.toGMTString() + "] Bucket synchronization:\n" 
-						+ (message_block.isEmpty() ? "(no messages)" : message_block));
+		// Only going to do something if we have errors:
 		
-		final UpdateComponent<JsonNode> update = set_approved_state 
-				? update_1.set("isApproved", !any_errors)
-				: update_1;
-		
-		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("key", key);
-		final CompletableFuture<Boolean> update_res = source_db.updateObjectBySpec(v1_query, Optional.empty(), update);
-		
-		return update_res;
+		if (any_errors) {
+			return share_db.getObjectById(id, Arrays.asList("title", "description"), true).thenCompose(jsonopt -> {
+				if (jsonopt.isPresent()) { // (else share has vanished, nothing to do)
+					final CommonUpdateComponent<JsonNode> update = CrudUtils.update()
+							.set("title", "ERROR:" + safeJsonGet("title", jsonopt.get()))
+							.set("description", safeJsonGet("title", jsonopt.get()) + "\n" + message_block)
+							;
+					final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("_id", new ObjectId(id));					
+					final CompletableFuture<Boolean> update_res = share_db.updateObjectBySpec(v1_query, Optional.empty(), update);
+					return update_res;
+				}
+				else {
+					return CompletableFuture.completedFuture(false);
+				}
+			});
+		}
+		else {
+			return CompletableFuture.completedFuture(false);			
+		}
 	}
 	
 	////////////////////////////////////////////////////
@@ -571,7 +558,7 @@ public class IkanowV1SyncService_Buckets {
 
 	// LOW LEVEL UTILS
 	
-	/** Builds a V2 bucket out of a V1 source
+	/** Builds a V2 library bean out of a V1 share
 	 * @param src_json
 	 * @return
 	 * @throws JsonParseException
@@ -579,43 +566,48 @@ public class IkanowV1SyncService_Buckets {
 	 * @throws IOException
 	 * @throws ParseException
 	 */
-	protected static DataBucketBean getBucketFromV1Source(final @NonNull JsonNode src_json) throws JsonParseException, JsonMappingException, IOException, ParseException {
-		@SuppressWarnings("unused")
-		final String _id = safeJsonGet("_id", src_json).asText(); // (think we'll use key instead of _id?)
-		final String key = safeJsonGet("key", src_json).asText();
+	protected static SharedLibraryBean getLibraryBeanFromV1Share(final @NonNull JsonNode src_json) throws JsonParseException, JsonMappingException, IOException, ParseException {
+
+		final String[] description_lines = Optional.ofNullable(safeJsonGet("description", src_json).asText())
+											.orElse("unknown").split("\r\n?|\n");
+		
+		final String _id = "v1_" + safeJsonGet("_id", src_json).asText(); // (think we'll use key instead of _id?)
 		final String created = safeJsonGet("created", src_json).asText();
 		final String modified = safeJsonGet("modified", src_json).asText();
-		final String title = safeJsonGet("title", src_json).asText();
-		final String description = safeJsonGet("description", src_json).asText();
-		final String owner_id = safeJsonGet("ownerId", src_json).asText();
+		final String display_name = safeJsonGet("title", src_json).asText();
+		final String path_name = display_name;
+		final String description = Arrays.asList(description_lines).stream().skip(1).collect(Collectors.joining("\n"));
+		final LibraryType type = LibraryType.misc_archive;
+		final String owner_id = safeJsonGet("_id", safeJsonGet("owner", src_json)).asText();
+		final Set<String> tags = description_lines[description_lines.length - 1].substring(0, 5).toLowerCase().startsWith("tags:")
+								? new HashSet<String>(Arrays.asList(
+										description_lines[description_lines.length - 1]
+												.replaceFirst("(?i)tags:\\s*", "")
+												.split("\\s*,\\s*")))
+								: Collections.emptySet(); 
+		final JsonNode comm_objs = safeJsonGet("communities", src_json); // collection of { _id: $oid } types
+		final String misc_entry_point = description_lines[0];
 		
-		final JsonNode tags = safeJsonGet("tags", src_json); // collection of strings
-		final JsonNode comm_ids = safeJsonGet("communityIds", src_json); // collection of strings
-		final JsonNode px_pipeline = safeJsonGet("processingPipeline", src_json); // collection of JSON objects, first one should have data_bucket
-		final JsonNode px_pipeline_first_el = px_pipeline.get(0);
-		final JsonNode data_bucket = safeJsonGet("data_bucket", px_pipeline_first_el);
-		
-		final DataBucketBean bucket = BeanTemplateUtils.build(data_bucket, DataBucketBean.class)
-													.with(DataBucketBean::_id, key)
-													.with(DataBucketBean::created, parseJavaDate(created))
-													.with(DataBucketBean::modified, parseJavaDate(modified))
-													.with(DataBucketBean::display_name, title)
-													.with(DataBucketBean::description, description)
-													.with(DataBucketBean::owner_id, owner_id)
-													.with(DataBucketBean::access_rights,
+		final SharedLibraryBean bean = BeanTemplateUtils.build(SharedLibraryBean.class)
+													.with(SharedLibraryBean::_id, _id)
+													.with(SharedLibraryBean::created, parseJavaDate(created))
+													.with(SharedLibraryBean::modified, parseJavaDate(modified))
+													.with(SharedLibraryBean::display_name, display_name)
+													.with(SharedLibraryBean::path_name, path_name)
+													.with(SharedLibraryBean::description, description)
+													.with(SharedLibraryBean::tags, tags)
+													.with(SharedLibraryBean::type, type)
+													.with(SharedLibraryBean::misc_entry_point, misc_entry_point)
+													.with(SharedLibraryBean::owner_id, owner_id)
+													.with(SharedLibraryBean::access_rights,
 															new AuthorizationBean(
-																	StreamSupport.stream(comm_ids.spliterator(), false)
-																		.collect(Collectors.toMap(id -> id.asText(), __ -> "rw"))
+																	StreamSupport.stream(comm_objs.spliterator(), false)
+																		.collect(Collectors.toMap(obj -> safeJsonGet("_id", obj).asText(), __ -> "rw"))
 																	)
 															)
-													.with(DataBucketBean::tags, 
-															StreamSupport.stream(tags.spliterator(), false)
-																			.map(jt -> jt.asText())
-																			.collect(Collectors.toSet()))																	
 													.done().get();
 		
-		return bucket;
-		
+		return bean;		
 	}
 	
 	/** Gets a JSON field that may not be present (justs an empty JsonNode if no)

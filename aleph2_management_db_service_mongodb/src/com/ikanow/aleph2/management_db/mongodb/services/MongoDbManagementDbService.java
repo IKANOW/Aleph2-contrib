@@ -41,6 +41,7 @@ import com.ikanow.aleph2.management_db.mongodb.module.MongoDbManagementDbModule;
 import com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
+import com.mongodb.gridfs.GridFS;
 
 /** Implementation of the management DB service using MongoDB (or mock MongoDB) 
  * @author acp
@@ -66,7 +67,9 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	public MongoDbManagementDbService(
 			final IMongoDbCrudServiceFactory crud_factory, 
 			final MongoDbManagementDbConfigBean properties,
-			final IkanowV1SyncService_Buckets sync_service)
+			final IkanowV1SyncService_Buckets sync_service_buckets,
+			final IkanowV1SyncService_LibraryJars sync_service_jars
+			)
 	{
 		_crud_factory = crud_factory;
 		_auth = Optional.empty();
@@ -189,6 +192,16 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 				throw new RuntimeException("If requesting DB collection, need to specify db_name.coll_name: " + driver_options.get());
 			}
 			return (T) _crud_factory.getMongoDbCollection(db_coll[0], db_coll[1]);
+		}
+		if (GridFS.class == driver_class) {
+			if (!driver_options.isPresent()) {
+				throw new RuntimeException("If requesting GridFS, need to specify db_name.coll_name");
+			}
+			final String[] db_coll = driver_options.get().split("[.]", 2);
+			if (2 != db_coll.length) {
+				throw new RuntimeException("If requesting GridFS, need to specify db_name.coll_name: " + driver_options.get());
+			}
+			return (T) new GridFS(_crud_factory.getMongoDb(db_coll[0]), db_coll[1]);
 		}
 		else if (DB.class == driver_class) {
 			if (!driver_options.isPresent()) {
