@@ -62,11 +62,6 @@
   		<scope>test</scope>
   	</dependency>
   	<dependency>
-  		<groupId>com.google.inject</groupId>
-  		<artifactId>guice</artifactId>
-  		<version>3.0</version>
-  	</dependency>
-  	<dependency>
   		<groupId>com.ikanow.aleph2</groupId>
   		<artifactId>aleph2_data_model</artifactId>
   		<version>${aleph2.version}</version>
