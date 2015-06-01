@@ -14,11 +14,11 @@
 * limitations under the License.
 ******************************************************************************/
 package com.ikanow.aleph2.storage_service_hdfs.services;
+import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Optional;
 
-import org.apache.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import com.google.inject.Inject;
@@ -28,11 +28,12 @@ import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.FileContext;
+import org.apache.hadoop.fs.Path;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class HDFSStorageService implements IStorageService {
-
-	private static final Logger logger = Logger.getLogger(HDFSStorageService.class);
-
+	private static final Logger _logger = LogManager.getLogger();	
 	
 	final protected GlobalPropertiesBean _globals;
 	
@@ -52,28 +53,29 @@ public class HDFSStorageService implements IStorageService {
 			@NonNull Class<T> driver_class, Optional<String> driver_options) {
 		T driver = null;
 		try {
-		if(driver_class!=null){
-			Configuration configuration = getConfiguration();
-			URI uri = driver_options.isPresent() ? new URI(driver_options.get()) : getUri(configuration);
-			if (driver_class.isAssignableFrom(AbstractFileSystem.class)) {
-
-				AbstractFileSystem fs = AbstractFileSystem.createFileSystem(uri, configuration);
-				
-				return (@NonNull T) fs;
-			}			
-			else if(driver_class.isAssignableFrom(FileContext.class)){
+			if(driver_class!=null){
 				final Configuration config = getConfiguration();
-				FileContext fs = FileContext.getFileContext(AbstractFileSystem.createFileSystem(uri, config), config);
-				return (@NonNull T) fs;
-			}
-			try {
-				driver = driver_class.newInstance();
-			} catch (Exception e) {
-				logger.error("Error instamciating driver class",e);
-			}
-		} // !=null
-		} catch (Exception e) {
-			logger.error("Caught Exception:",e);
+				URI uri = driver_options.isPresent() ? new URI(driver_options.get()) : getUri(config);
+				
+				if (driver_class.isAssignableFrom(AbstractFileSystem.class)) {
+	
+					AbstractFileSystem fs = AbstractFileSystem.createFileSystem(uri, config);
+					
+					return (@NonNull T) fs;
+				}			
+				else if(driver_class.isAssignableFrom(FileContext.class)){				
+					FileContext fs = FileContext.getFileContext(AbstractFileSystem.createFileSystem(uri, config), config);
+					return (@NonNull T) fs;
+				}
+				try {
+					driver = driver_class.newInstance();
+				} catch (Exception e) {
+					_logger.error("Error instanciating driver class",e);
+				}
+			} // !=null
+		} 
+		catch (Exception e) {
+			_logger.error("Caught Exception:",e);
 		}
 		return driver;
 	}
@@ -83,33 +85,35 @@ public class HDFSStorageService implements IStorageService {
 	 * @return
 	 */
 	protected Configuration getConfiguration(){
-		Configuration config = new Configuration();
+		Configuration config = new Configuration(false);
 		
-		// TODO DEBUG Comment in for debugging environment settings
-		//Map<String, String> m = System.getenv();
-		String hadoopConfDir = System.getenv("HADOOP_CONF_DIR");
-		if(hadoopConfDir!=null){
-			
-			config.addResource(_globals +"hdfs-site.xml");
-		}else{
-			// add resource from classpath
-			config.addResource("default_fs.xml");			
+		if (new File(_globals.local_yarn_config_dir()).exists()) {
+			config.addResource(new Path(_globals.local_yarn_config_dir() +"/yarn-site.xml"));
+			config.addResource(new Path(_globals.local_yarn_config_dir() +"/core-site.xml"));
+			config.addResource(new Path(_globals.local_yarn_config_dir() +"/hdfs-site.xml"));
 		}
+		else {
+			config.addResource("default_fs.xml");						
+		}
+		// These are not added by Hortonworks, so add them manually
+		config.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");									
+		config.set("fs.AbstractFileSystem.hdfs.impl", "org.apache.hadoop.fs.Hdfs");
+		
 		return config;
 		
 	}
 
 	protected URI getUri(Configuration configuration){
 		URI uri = null;
-		try {
-			String uriStr = configuration.get("fs.default.name");
+		try {			
+			String uriStr = configuration.get("fs.default.name", configuration.get("fs.defaultFS"));
 			if(uriStr==null){
 				// default with localhost
 				uriStr = "hdfs://localhost:8020";
 			}
 			uri = new URI(uriStr);
 		} catch (URISyntaxException e) {
-			logger.error("Caught Exception:",e);
+			_logger.error("Caught Exception:",e);
 		}
 		return uri;
 	}
