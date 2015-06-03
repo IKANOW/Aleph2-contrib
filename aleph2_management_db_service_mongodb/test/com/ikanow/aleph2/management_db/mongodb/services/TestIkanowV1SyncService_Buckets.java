@@ -88,7 +88,7 @@ public class TestIkanowV1SyncService_Buckets {
 			return;
 		}
 		
-		final String temp_dir = System.getProperty("java.io.tmpdir");
+		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 		
 		// OK we're going to use guice, it was too painful doing this by hand...				
 		Config config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("test_v1_sync_service.properties")))
@@ -103,7 +103,7 @@ public class TestIkanowV1SyncService_Buckets {
 	
 	@Test
 	public void testSetup() {
-		final String temp_dir = System.getProperty("java.io.tmpdir");
+		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 		
 		assertTrue("setup completed - service context", _service_context != null);
 		assertTrue("setup completed - services", _service_context.getCoreManagementDbService() != null);
