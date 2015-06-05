@@ -81,13 +81,9 @@ public class TestIkanowV1SyncService_Buckets {
 
 	@Inject 
 	protected MongoDbManagementDbConfigBean _service_config; 
-	
+
 	@Before
 	public void setupDependencies() throws Exception {
-		if (null != _service_context) {
-			return;
-		}
-		
 		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 		
 		// OK we're going to use guice, it was too painful doing this by hand...				
@@ -98,7 +94,7 @@ public class TestIkanowV1SyncService_Buckets {
 							.withValue("globals.local_yarn_config_dir", ConfigValueFactory.fromAnyRef(temp_dir));
 		
 		Injector app_injector = ModuleUtils.createInjector(Arrays.asList(new MockMongoDbManagementDbModule()), Optional.of(config));	
-		app_injector.injectMembers(this);		
+		app_injector.injectMembers(this);
 	}
 	
 	@Test
@@ -459,7 +455,7 @@ public class TestIkanowV1SyncService_Buckets {
 		assertEquals(1L, (long)v1_source_db.countObjects().get());
 		
 		// Run the function under test
-		
+
 		// Test1 - succeeds
 		
 		final ManagementFuture<Supplier<Object>> res_1 =

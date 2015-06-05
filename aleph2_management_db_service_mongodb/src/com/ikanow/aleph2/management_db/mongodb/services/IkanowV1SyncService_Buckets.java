@@ -86,7 +86,9 @@ public class IkanowV1SyncService_Buckets {
 		_config = config;
 		_context = service_context;
 		_core_management_db = _context.getCoreManagementDbService();		
-		_underlying_management_db = _core_management_db.getUnderlyingPlatformDriver(IManagementDbService.class, Optional.empty()).get();
+		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
+		_context.getService(ICoreDistributedServices.class, Optional.empty()).get();
+		
 		_core_distributed_services = _context.getService(ICoreDistributedServices.class, Optional.empty()).get();
 		
 		if (Optional.ofNullable(_config.v1_enabled()).orElse(false)) {
@@ -484,12 +486,11 @@ public class IkanowV1SyncService_Buckets {
 		// OK first off, we're immediately going to update the bucket's modified time
 		// since otherwise if the update fails then we'll get stuck updating it every iteration...
 		// (ie this is the reason we set isApproved:false in the create case)
-		final ICrudService<DataBucketBean> underlying_bucket_db = 
-				bucket_mgmt.getUnderlyingPlatformDriver(ICrudService.class, Optional.empty()).get();
-		
 		//(this ugliness just handles the test case already running on the underlying service)
-		(null == underlying_bucket_db ? bucket_mgmt : underlying_bucket_db)
-			.updateObjectById(id, CrudUtils.update(DataBucketBean.class).set(DataBucketBean::modified, new Date()));		
+		final ICrudService<DataBucketBean> underlying_bucket_db = 
+				bucket_mgmt.getUnderlyingPlatformDriver(ICrudService.class, Optional.empty()).orElse(bucket_mgmt);
+		
+		underlying_bucket_db.updateObjectById(id, CrudUtils.update(DataBucketBean.class).set(DataBucketBean::modified, new Date()));		
 		
 		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("key", id);
 		final CompletableFuture<Optional<JsonNode>> f_v1_source = source_db.getObjectBySpec(v1_query);		

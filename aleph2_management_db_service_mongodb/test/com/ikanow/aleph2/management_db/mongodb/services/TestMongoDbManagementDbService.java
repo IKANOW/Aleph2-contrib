@@ -104,7 +104,7 @@ public class TestMongoDbManagementDbService {
 						.getFullName());
 		
 		try {
-			assertEquals(null, management_db_service.getUnderlyingPlatformDriver(String.class, Optional.empty()));
+			assertEquals(Optional.empty(), management_db_service.getUnderlyingPlatformDriver(String.class, Optional.empty()));
 		}
 		catch (Exception e) {}
 		
