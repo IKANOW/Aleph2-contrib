@@ -98,7 +98,7 @@ public class IkanowV1SyncService_LibraryJars {
 		_config = config;
 		_context = service_context;
 		_core_management_db = _context.getCoreManagementDbService();
-		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
+		_underlying_management_db = _core_management_db.getUnderlyingPlatformDriver(IManagementDbService.class, Optional.empty()).get();
 		_core_distributed_services = _context.getService(ICoreDistributedServices.class, Optional.empty()).get();
 		_storage_service = _context.getStorageService();
 		
