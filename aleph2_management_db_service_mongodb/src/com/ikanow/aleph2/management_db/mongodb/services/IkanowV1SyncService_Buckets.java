@@ -86,8 +86,8 @@ public class IkanowV1SyncService_Buckets {
 		_config = config;
 		_context = service_context;
 		_core_management_db = _context.getCoreManagementDbService();
-		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty());
-		_core_distributed_services = _context.getService(ICoreDistributedServices.class, Optional.empty());
+		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
+		_core_distributed_services = _context.getService(ICoreDistributedServices.class, Optional.empty()).get();
 		
 		if (Optional.ofNullable(_config.v1_enabled()).orElse(false)) {
 			// Launch the synchronization service
@@ -167,7 +167,7 @@ public class IkanowV1SyncService_Buckets {
 			}
 			if (!_v1_db.isSet()) {
 				@SuppressWarnings("unchecked")
-				final ICrudService<JsonNode> v1_config_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source"));				
+				final ICrudService<JsonNode> v1_config_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();				
 				_v1_db.set(v1_config_db);
 				
 				_v1_db.get().optimizeQuery(Arrays.asList("extractType"));
@@ -485,7 +485,7 @@ public class IkanowV1SyncService_Buckets {
 		// since otherwise if the update fails then we'll get stuck updating it every iteration...
 		// (ie this is the reason we set isApproved:false in the create case)
 		final ICrudService<DataBucketBean> underlying_bucket_db = 
-				bucket_mgmt.getUnderlyingPlatformDriver(ICrudService.class, Optional.empty());
+				bucket_mgmt.getUnderlyingPlatformDriver(ICrudService.class, Optional.empty()).get();
 		
 		//(this ugliness just handles the test case already running on the underlying service)
 		(null == underlying_bucket_db ? bucket_mgmt : underlying_bucket_db)

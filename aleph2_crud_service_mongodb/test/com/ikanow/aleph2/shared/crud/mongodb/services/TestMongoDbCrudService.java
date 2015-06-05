@@ -1056,19 +1056,19 @@ public class TestMongoDbCrudService {
 		
 		// Mongo DB collection
 		
-		final com.mongodb.DBCollection dbc = service.getUnderlyingPlatformDriver(com.mongodb.DBCollection.class, Optional.empty());
+		final com.mongodb.DBCollection dbc = service.getUnderlyingPlatformDriver(com.mongodb.DBCollection.class, Optional.empty()).get();
 		
 		assertEquals(2, dbc.getIndexInfo().size());
 
 		// Mongojack DB collection
 		
-		final JacksonDBCollection<?, ?> dbc2 = service.getUnderlyingPlatformDriver(JacksonDBCollection.class, Optional.empty());
+		final JacksonDBCollection<?, ?> dbc2 = service.getUnderlyingPlatformDriver(JacksonDBCollection.class, Optional.empty()).get();
 
 		assertEquals(10, dbc2.count());		
 
 		// Nothing else
 		
-		final String fail = service.getUnderlyingPlatformDriver(String.class, Optional.empty());
+		final String fail = service.getUnderlyingPlatformDriver(String.class, Optional.empty()).get();
 		
 		assertEquals(null, fail);
 		
@@ -1085,8 +1085,8 @@ public class TestMongoDbCrudService {
 		
 		replenishDocsForDeletion(service);
 			
-		final ICrudService.IMetaModel meta_model_1 = service.getUnderlyingPlatformDriver(ICrudService.IMetaModel.class, Optional.empty());	
-		final ICrudService.IMetaModel meta_model_2 = service.getUnderlyingPlatformDriver(ICrudService.IMetaModel.class, Optional.empty());
+		final ICrudService.IMetaModel meta_model_1 = service.getUnderlyingPlatformDriver(ICrudService.IMetaModel.class, Optional.empty()).get();	
+		final ICrudService.IMetaModel meta_model_2 = service.getUnderlyingPlatformDriver(ICrudService.IMetaModel.class, Optional.empty()).get();
 		
 		// Check the object is created just once
 		assertEquals(meta_model_1, meta_model_2);

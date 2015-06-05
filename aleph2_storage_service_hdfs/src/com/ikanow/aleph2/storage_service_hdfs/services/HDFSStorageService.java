@@ -48,7 +48,7 @@ public class HDFSStorageService implements IStorageService {
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T> T getUnderlyingPlatformDriver(
+	public <T> Optional<T> getUnderlyingPlatformDriver(
 			Class<T> driver_class, Optional<String> driver_options) {
 		T driver = null;
 		try {
@@ -60,11 +60,11 @@ public class HDFSStorageService implements IStorageService {
 	
 					AbstractFileSystem fs = AbstractFileSystem.createFileSystem(uri, config);
 					
-					return (T) fs;
+					return (Optional<T>) Optional.of(fs);
 				}			
 				else if(driver_class.isAssignableFrom(FileContext.class)){				
 					FileContext fs = FileContext.getFileContext(AbstractFileSystem.createFileSystem(uri, config), config);
-					return (T) fs;
+					return (Optional<T>) Optional.of(fs);
 				}
 				try {
 					driver = driver_class.newInstance();
@@ -76,7 +76,7 @@ public class HDFSStorageService implements IStorageService {
 		catch (Exception e) {
 			_logger.error("Caught Exception:",e);
 		}
-		return driver;
+		return Optional.ofNullable(driver);
 	}
 
 	/** 

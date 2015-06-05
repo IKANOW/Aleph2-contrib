@@ -142,7 +142,7 @@ public class TestIkanowV1SyncService_Buckets {
 		assertEquals(old + 1, IkanowV1SyncService_Buckets._num_leader_changes);
 		
 		@SuppressWarnings("unchecked")
-		final ICrudService<JsonNode> v1_config_db = _service_context.getCoreManagementDbService().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source"));				
+		final ICrudService<JsonNode> v1_config_db = _service_context.getCoreManagementDbService().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();				
 		
 		assertTrue("Query optimized", v1_config_db.deregisterOptimizedQuery(Arrays.asList("extractType")));
 		
@@ -253,12 +253,12 @@ public class TestIkanowV1SyncService_Buckets {
 	public void test_compareSourcesToBuckets_get() throws JsonProcessingException, IOException, ParseException, InterruptedException, ExecutionException {
 		
 		@SuppressWarnings("unchecked")
-		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty())
-										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source"));
+		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get()
+										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
 		
 		v1_source_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).getDataBucketStore();
+		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStore();
 		
 		bucket_db.deleteDatastore();
 		
@@ -319,8 +319,8 @@ public class TestIkanowV1SyncService_Buckets {
 		final Date some_date_str = IkanowV1SyncService_Buckets.parseJavaDate("21 May 2015 02:38:23 GMT");
 		
 		@SuppressWarnings("unchecked")
-		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty())
-										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source"));
+		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get()
+										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
 		
 		v1_source_db.deleteDatastore();
 		
@@ -401,15 +401,15 @@ public class TestIkanowV1SyncService_Buckets {
 	public void test_updateBucket() throws JsonProcessingException, IOException, InterruptedException, ExecutionException, ParseException {
 		
 		@SuppressWarnings("unchecked")
-		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty())
-										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source"));
+		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get()
+										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
 		
 		v1_source_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).getDataBucketStore();		
+		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStore();		
 		bucket_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).getDataBucketStatusStore();		
+		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStatusStore();		
 		bucket_status_db.deleteDatastore();
 		
 		// Create 2 V1 sources
@@ -498,15 +498,15 @@ public class TestIkanowV1SyncService_Buckets {
 	public void deleteBucket() throws JsonProcessingException, IOException, InterruptedException, ExecutionException, ParseException {
 		
 		@SuppressWarnings("unchecked")
-		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty())
-										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source"));
+		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get()
+										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
 		
 		v1_source_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).getDataBucketStore();		
+		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStore();		
 		bucket_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).getDataBucketStatusStore();		
+		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStatusStore();		
 		bucket_status_db.deleteDatastore();
 		
 		// Create 2 V1 sources
@@ -562,15 +562,15 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		
 		@SuppressWarnings("unchecked")
-		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty())
-										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source"));
+		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get()
+										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
 		
 		v1_source_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).getDataBucketStore();		
+		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStore();		
 		bucket_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).getDataBucketStatusStore();		
+		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStatusStore();		
 		bucket_status_db.deleteDatastore();
 		
 		// Create 2 V1 sources
@@ -649,15 +649,15 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		
 		@SuppressWarnings("unchecked")
-		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty())
-										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source"));
+		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get()
+										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
 		
 		v1_source_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).getDataBucketStore();		
+		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStore();		
 		bucket_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).getDataBucketStatusStore();		
+		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStatusStore();		
 		bucket_status_db.deleteDatastore();
 		
 		// Create 3 V1 sources (only going to save 1 of them)

@@ -43,14 +43,14 @@ public class MockHdfsStorageService implements IStorageService {
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T> T getUnderlyingPlatformDriver(
+	public <T> Optional<T> getUnderlyingPlatformDriver(
 			Class<T> driver_class, Optional<String> driver_options) {
 		T driver = null;
 		try {
 		if(driver_class!=null){
 			if(driver_class.isAssignableFrom(FileContext.class)){
 				FileContext fs = FileContext.getLocalFSFileContext(new Configuration());
-				return (T) fs;
+				return (Optional<T>) Optional.of(fs);
 			}
 			try {
 				driver = driver_class.newInstance();
@@ -61,7 +61,7 @@ public class MockHdfsStorageService implements IStorageService {
 		} catch (Exception e) {
 			logger.error("Caught Exception:",e);
 		}
-		return driver;
+		return Optional.ofNullable(driver);
 	}
 
 }

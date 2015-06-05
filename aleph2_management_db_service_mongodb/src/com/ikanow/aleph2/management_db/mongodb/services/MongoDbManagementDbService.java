@@ -178,7 +178,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getUnderlyingPlatformDriver(java.lang.Class, java.util.Optional)
 	 */
 	@SuppressWarnings("unchecked")
-	public <T> T getUnderlyingPlatformDriver(Class<T> driver_class,
+	public <T> Optional<T> getUnderlyingPlatformDriver(Class<T> driver_class,
 			Optional<String> driver_options) {
 		
 		if (DBCollection.class == driver_class) {
@@ -189,7 +189,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 			if (2 != db_coll.length) {
 				throw new RuntimeException("If requesting DB collection, need to specify db_name.coll_name: " + driver_options.get());
 			}
-			return (T) _crud_factory.getMongoDbCollection(db_coll[0], db_coll[1]);
+			return (Optional<T>) Optional.of(_crud_factory.getMongoDbCollection(db_coll[0], db_coll[1]));
 		}
 		if (GridFS.class == driver_class) {
 			if (!driver_options.isPresent()) {
@@ -199,13 +199,13 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 			if (2 != db_coll.length) {
 				throw new RuntimeException("If requesting GridFS, need to specify db_name.coll_name: " + driver_options.get());
 			}
-			return (T) new GridFS(_crud_factory.getMongoDb(db_coll[0]), db_coll[1]);
+			return (Optional<T>) Optional.of(new GridFS(_crud_factory.getMongoDb(db_coll[0]), db_coll[1]));
 		}
 		else if (DB.class == driver_class) {
 			if (!driver_options.isPresent()) {
 				throw new RuntimeException("If requesting DB, need to specify db_name");
 			}
-			return (T) _crud_factory.getMongoDb(driver_options.get());
+			return (Optional<T>) Optional.of( _crud_factory.getMongoDb(driver_options.get()));
 		}
 		else if (ICrudService.class == driver_class) {
 			if (!driver_options.isPresent()) {
@@ -218,21 +218,21 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 			}
 			try {
 				if (2 != dbcoll_clazz.length) { // returns the JSON version
-					return (T) _crud_factory.getMongoDbCrudService(
+					return (Optional<T>) Optional.of(_crud_factory.getMongoDbCrudService(
 							JsonNode.class, Object.class, _crud_factory.getMongoDbCollection(db_coll[0], db_coll[1]), 
-							Optional.empty(), Optional.empty(), Optional.empty());
+							Optional.empty(), Optional.empty(), Optional.empty()));
 				}
 				else {
-					return (T) _crud_factory.getMongoDbCrudService(
+					return (Optional<T>) Optional.of(_crud_factory.getMongoDbCrudService(
 							Class.forName(dbcoll_clazz[1]), Object.class, _crud_factory.getMongoDbCollection(db_coll[0], db_coll[1]), 
-							Optional.empty(), Optional.empty(), Optional.empty());
+							Optional.empty(), Optional.empty(), Optional.empty()));
 				}
 			}
 			catch (Exception e) {
 				throw new RuntimeException("Requesting CRUD service, specified invalid class name: " + driver_options.get());
 			}
 		}
-		return null;
+		return Optional.empty();
 	}
 
 	/** This service needs to load some additional classes via Guice. Here's the module that defines the bindings

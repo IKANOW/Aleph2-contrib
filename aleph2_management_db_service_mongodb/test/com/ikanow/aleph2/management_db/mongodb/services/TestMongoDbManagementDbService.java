@@ -38,32 +38,32 @@ public class TestMongoDbManagementDbService {
 		MongoDbManagementDbService management_db_service = new MongoDbManagementDbService(mock_crud_service_factory, new MongoDbManagementDbConfigBean(false), null, null);
 		
 		assertEquals(MongoDbManagementDbService.DATA_ANALYTIC_THREAD_STORE,
-				management_db_service.getAnalyticThreadStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).getFullName());
+				management_db_service.getAnalyticThreadStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
 		
 		assertEquals(MongoDbManagementDbService.DATA_BUCKET_STATUS_STORE,
-				management_db_service.getDataBucketStatusStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).getFullName());
+				management_db_service.getDataBucketStatusStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
 		
 		assertEquals(MongoDbManagementDbService.DATA_BUCKET_STORE,
-				management_db_service.getDataBucketStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).getFullName());
+				management_db_service.getDataBucketStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
 		
 		assertEquals(MongoDbManagementDbService.SHARED_LIBRARY_STORE,
-				management_db_service.getSharedLibraryStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).getFullName());
+				management_db_service.getSharedLibraryStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
 
 		// Check that the wrapped version also works
 		
 		MongoDbManagementDbService management_db_service2 = management_db_service.getFilteredDb(Optional.empty(), Optional.empty());
 		
 		assertEquals(MongoDbManagementDbService.DATA_ANALYTIC_THREAD_STORE,
-				management_db_service2.getAnalyticThreadStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).getFullName());
+				management_db_service2.getAnalyticThreadStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
 		
 		assertEquals(MongoDbManagementDbService.DATA_BUCKET_STATUS_STORE,
-				management_db_service2.getDataBucketStatusStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).getFullName());
+				management_db_service2.getDataBucketStatusStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
 		
 		assertEquals(MongoDbManagementDbService.DATA_BUCKET_STORE,
-				management_db_service2.getDataBucketStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).getFullName());
+				management_db_service2.getDataBucketStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
 		
 		assertEquals(MongoDbManagementDbService.SHARED_LIBRARY_STORE,
-				management_db_service2.getSharedLibraryStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).getFullName());
+				management_db_service2.getSharedLibraryStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
 
 		try {
 			management_db_service.getPerAnalyticThreadState(null, null, null);
@@ -91,16 +91,16 @@ public class TestMongoDbManagementDbService {
 			assertEquals(e.getMessage(), "This method is currently not supported");
 		}
 
-		assertEquals("test", management_db_service.getUnderlyingPlatformDriver(DB.class, Optional.of("test")).getName());
-		assertEquals("test1.test2", management_db_service.getUnderlyingPlatformDriver(DBCollection.class, Optional.of("test1.test2")).getFullName());
+		assertEquals("test", management_db_service.getUnderlyingPlatformDriver(DB.class, Optional.of("test")).get().getName());
+		assertEquals("test1.test2", management_db_service.getUnderlyingPlatformDriver(DBCollection.class, Optional.of("test1.test2")).get().getFullName());
 		
 		assertEquals("test3.test4", 
 				((DBCollection)management_db_service.getUnderlyingPlatformDriver(ICrudService.class, 
-						Optional.of("test3.test4")).getUnderlyingPlatformDriver(DBCollection.class, Optional.empty())).getFullName());
+						Optional.of("test3.test4")).get().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get()).getFullName());
 		
 		assertEquals("test2.test5", 
 				((DBCollection)management_db_service.getUnderlyingPlatformDriver(ICrudService.class, 
-						Optional.of("test2.test5/com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean")).getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()))
+						Optional.of("test2.test5/com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean")).get().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get())
 						.getFullName());
 		
 		try {

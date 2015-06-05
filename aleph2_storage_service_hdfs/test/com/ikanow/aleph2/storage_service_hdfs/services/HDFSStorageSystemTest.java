@@ -20,10 +20,10 @@ public class HDFSStorageSystemTest {
 		
 			HDFSStorageService storageService = new HDFSStorageService(globals);
 			
-			FileContext fs1 = storageService.getUnderlyingPlatformDriver(FileContext.class, Optional.<String>empty());
+			FileContext fs1 = storageService.getUnderlyingPlatformDriver(FileContext.class, Optional.<String>empty()).get();
 			assertNotNull(fs1);
 
-			RawLocalFileSystem fs2 = storageService.getUnderlyingPlatformDriver(org.apache.hadoop.fs.RawLocalFileSystem.class,Optional.<String>empty());
+			RawLocalFileSystem fs2 = storageService.getUnderlyingPlatformDriver(org.apache.hadoop.fs.RawLocalFileSystem.class,Optional.<String>empty()).get();
 			assertNotNull(fs2); 
 			
 	}

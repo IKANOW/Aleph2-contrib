@@ -96,7 +96,7 @@ public class TestManagementDbUtils {
 		
 		// (finally - left alone altogether)
 		
-		DBCollection dbc = wrapped_service.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty());
+		DBCollection dbc = wrapped_service.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 		
 		assertEquals(dbc.getName(), "test");
 	}

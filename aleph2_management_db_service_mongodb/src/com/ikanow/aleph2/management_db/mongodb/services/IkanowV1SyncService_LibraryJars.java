@@ -98,8 +98,8 @@ public class IkanowV1SyncService_LibraryJars {
 		_config = config;
 		_context = service_context;
 		_core_management_db = _context.getCoreManagementDbService();
-		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty());
-		_core_distributed_services = _context.getService(ICoreDistributedServices.class, Optional.empty());
+		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
+		_core_distributed_services = _context.getService(ICoreDistributedServices.class, Optional.empty()).get();
 		_storage_service = _context.getStorageService();
 		
 		if (Optional.ofNullable(_config.v1_enabled()).orElse(false)) {
@@ -180,12 +180,12 @@ public class IkanowV1SyncService_LibraryJars {
 			}
 			if (!_v1_db.isSet()) {
 				@SuppressWarnings("unchecked")
-				final ICrudService<JsonNode> v1_config_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("social.share"));				
+				final ICrudService<JsonNode> v1_config_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("social.share")).get();				
 				_v1_db.set(v1_config_db);				
 				_v1_db.get().optimizeQuery(Arrays.asList("title"));
 			}
 			if (!_mongodb_distributed_fs.isSet()) {
-				final GridFS fs = _underlying_management_db.getUnderlyingPlatformDriver(GridFS.class, Optional.of("file.binary_shares"));
+				final GridFS fs = _underlying_management_db.getUnderlyingPlatformDriver(GridFS.class, Optional.of("file.binary_shares")).get();
 				_mongodb_distributed_fs.set(fs);
 			}
 			
@@ -422,7 +422,7 @@ public class IkanowV1SyncService_LibraryJars {
 		try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 			final GridFSDBFile file = share_fs.find(new ObjectId(binary_id));						
 			file.writeTo(out);		
-			final FileContext fs = aleph2_fs.getUnderlyingPlatformDriver(FileContext.class, Optional.empty());
+			final FileContext fs = aleph2_fs.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 			final Path file_path = fs.makeQualified(new Path(path));
 			try (FSDataOutputStream outer = fs.create(file_path, EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE), 
 					org.apache.hadoop.fs.Options.CreateOpts.createParent()))

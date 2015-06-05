@@ -649,12 +649,12 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T> T getUnderlyingPlatformDriver(Class<T> driver_class, final Optional<String> driver_options) {
-		if (JacksonDBCollection.class == driver_class) return (T) _state.coll;
-		else if (DBCollection.class == driver_class) return (T) _state.orig_coll;
-		else if (IMetaModel.class == driver_class) return (T) ((null == _meta_model) 
-														? (_meta_model = new MongoDbMetaModel(_state.orig_coll)) : _meta_model);
-		else return null;
+	public <T> Optional<T> getUnderlyingPlatformDriver(Class<T> driver_class, final Optional<String> driver_options) {
+		if (JacksonDBCollection.class == driver_class) return (Optional<T>) Optional.of(_state.coll);
+		else if (DBCollection.class == driver_class) return (Optional<T>) Optional.of(_state.orig_coll);
+		else if (IMetaModel.class == driver_class) return (Optional<T>) Optional.of(((null == _meta_model) 
+														? (_meta_model = new MongoDbMetaModel(_state.orig_coll)) : _meta_model));
+		else return Optional.empty();
 	}
 
 	
