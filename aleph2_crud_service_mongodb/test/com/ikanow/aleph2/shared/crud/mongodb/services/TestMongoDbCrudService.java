@@ -1068,9 +1068,9 @@ public class TestMongoDbCrudService {
 
 		// Nothing else
 		
-		final String fail = service.getUnderlyingPlatformDriver(String.class, Optional.empty()).get();
+		final Optional<String> fail = service.getUnderlyingPlatformDriver(String.class, Optional.empty());
 		
-		assertEquals(null, fail);
+		assertEquals(Optional.empty(), fail);
 		
 		// Meta model - more complicated, tested below
 		// JSON service - more complicated, tested below...		
