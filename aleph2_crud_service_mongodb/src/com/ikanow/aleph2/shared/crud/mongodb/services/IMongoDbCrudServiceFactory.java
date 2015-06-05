@@ -17,7 +17,6 @@ package com.ikanow.aleph2.shared.crud.mongodb.services;
 
 import java.util.Optional;
 
-import org.checkerframework.checker.nullness.qual.NonNull;
 
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
@@ -33,23 +32,20 @@ public interface IMongoDbCrudServiceFactory {
 	 * @param db_name - the DB name
 	 * @return the DB driver
 	 */
-	@NonNull
-	DB getMongoDb(final @NonNull String db_name);
+	DB getMongoDb(final String db_name);
 
 	/**Get the MongoDB DB collection instance for the given names
 	 * @param db_name - the DB name
 	 * @param collection_name - the collection name
 	 * @return the DBCollection driver
 	 */
-	@NonNull
-	DBCollection getMongoDbCollection(final @NonNull String db_name, final @NonNull String collection_name);
+	DBCollection getMongoDbCollection(final String db_name, final String collection_name);
 
 	/**Get the MongoDB DB collection instance for the given names
 	 * @param db_name_and_collection - <the DB name>.<the collection name>
 	 * @return the DBCollection driver
 	 */
-	@NonNull
-	DBCollection getMongoDbCollection(final @NonNull String db_name_and_collection);
+	DBCollection getMongoDbCollection(final String db_name_and_collection);
 
 	/** A factory to obtain a CrudService
 	 * @param bean_clazz - the class to which this CRUD service is being mapped
@@ -59,8 +55,7 @@ public interface IMongoDbCrudServiceFactory {
 	 * @param auth - optionally, an authorization overlay added to each query
 	 * @param project - optionally, a project overlay added to each query
 	 */
-	@NonNull
-	<O, K> MongoDbCrudService<O, K> getMongoDbCrudService(final @NonNull Class<O> bean_clazz, final @NonNull Class<K> key_clazz, 
-						final @NonNull DBCollection coll, 
+	<O, K> MongoDbCrudService<O, K> getMongoDbCrudService(final Class<O> bean_clazz, final Class<K> key_clazz, 
+						final DBCollection coll, 
 						final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project);
 }

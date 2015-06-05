@@ -15,7 +15,6 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared.crud.mongodb.data_model;
 
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** The configuration bean for MongoDB
  * @author acp
@@ -29,13 +28,12 @@ public class MongoDbConfigurationBean {
 	/** User constructor
 	 * @param mongodb_connection he connection string that is used to initialize the MongoDB
 	 */
-	public MongoDbConfigurationBean(final @Nullable String mongodb_connection) {
+	public MongoDbConfigurationBean(final String mongodb_connection) {
 		this.mongodb_connection = mongodb_connection;
 	}
 	/** The connection string that is used to initialize the MongoDB
 	 * @return
 	 */
-	@Nullable
 	public String mongodb_connection() { return mongodb_connection; }
 	
 	private String mongodb_connection;

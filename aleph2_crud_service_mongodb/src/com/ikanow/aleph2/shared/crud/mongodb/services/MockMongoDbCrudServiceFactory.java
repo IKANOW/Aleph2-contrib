@@ -17,7 +17,6 @@ package com.ikanow.aleph2.shared.crud.mongodb.services;
 
 import java.util.Optional;
 
-import org.checkerframework.checker.nullness.qual.NonNull;
 
 import com.github.fakemongo.Fongo;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
@@ -57,7 +56,6 @@ public class MockMongoDbCrudServiceFactory implements IMongoDbCrudServiceFactory
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory#getMongoDb(java.lang.String)
 	 */
-	@NonNull
 	public
 	DB getMongoDb(String db_name) { 
 		synchronized (MockMongoDbCrudServiceFactory.class) {
@@ -68,8 +66,7 @@ public class MockMongoDbCrudServiceFactory implements IMongoDbCrudServiceFactory
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory#getMongoDbCollection(java.lang.String)
 	 */
-	@NonNull
-	public DBCollection getMongoDbCollection(final @NonNull String db_name_and_collection) {
+	public DBCollection getMongoDbCollection(final String db_name_and_collection) {
 		final String[] db_coll = db_name_and_collection.split("\\s*[.]\\s*");
 		return getMongoDbCollection(db_coll[0], db_coll[1]);
 	}
@@ -77,7 +74,6 @@ public class MockMongoDbCrudServiceFactory implements IMongoDbCrudServiceFactory
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory#getMongoDbCollection(java.lang.String, java.lang.String)
 	 */
-	@NonNull
 	public
 	DBCollection getMongoDbCollection(String db_name, String collection_name) {
 		synchronized (MockMongoDbCrudServiceFactory.class) {
@@ -88,9 +84,8 @@ public class MockMongoDbCrudServiceFactory implements IMongoDbCrudServiceFactory
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory#getMongoDbCrudService(java.lang.Class, java.lang.Class, com.mongodb.DBCollection, java.util.Optional, java.util.Optional, java.util.Optional)
 	 */
-	@NonNull
-	public <O, K> MongoDbCrudService<O, K> getMongoDbCrudService(final @NonNull Class<O> bean_clazz, final @NonNull Class<K> key_clazz, 
-			final @NonNull DBCollection coll, 
+	public <O, K> MongoDbCrudService<O, K> getMongoDbCrudService(final Class<O> bean_clazz, final Class<K> key_clazz, 
+			final DBCollection coll, 
 			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project)
 	{
 		return new MongoDbCrudService<O, K>(bean_clazz, key_clazz, coll, auth_fieldname, auth, project);

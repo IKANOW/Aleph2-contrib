@@ -17,7 +17,6 @@ package com.ikanow.aleph2.storage_service_hdfs.services;
 import java.util.Optional;
 
 import org.apache.log4j.Logger;
-import org.checkerframework.checker.nullness.qual.NonNull;
 
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
@@ -44,14 +43,14 @@ public class MockHdfsStorageService implements IStorageService {
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T> @NonNull T getUnderlyingPlatformDriver(
-			@NonNull Class<T> driver_class, Optional<String> driver_options) {
+	public <T> T getUnderlyingPlatformDriver(
+			Class<T> driver_class, Optional<String> driver_options) {
 		T driver = null;
 		try {
 		if(driver_class!=null){
 			if(driver_class.isAssignableFrom(FileContext.class)){
 				FileContext fs = FileContext.getLocalFSFileContext(new Configuration());
-				return (@NonNull T) fs;
+				return (T) fs;
 			}
 			try {
 				driver = driver_class.newInstance();

@@ -24,7 +24,6 @@ import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Collector.Characteristics;
 
-import org.checkerframework.checker.nullness.qual.NonNull;
 import org.mongojack.internal.MongoJackModule;
 import org.mongojack.internal.object.BsonObjectGenerator;
 
@@ -65,8 +64,7 @@ public class MongoDbUtils {
 	 * @return a tuple2, first element is the query, second element contains the meta ("$skip", "$limit")
 	 */
 	@SuppressWarnings("unchecked")
-	@NonNull
-	public static <T> Tuple2<DBObject,DBObject> convertToMongoQuery(final @NonNull QueryComponent<T> query_in) {
+	public static <T> Tuple2<DBObject,DBObject> convertToMongoQuery(final QueryComponent<T> query_in) {
 		
 		final String andVsOr = getOperatorName(query_in.getOp());
 		
@@ -103,8 +101,7 @@ public class MongoDbUtils {
 	 * @param operator_args - an operator enum and a pair of objects whose context depends on the operator
 	 * @return the MongoDB clause
 	 */
-	@NonNull
-	protected static BasicDBObject operatorToMongoKey(final @NonNull String field, final @NonNull Tuple2<Operator, Tuple2<Object, Object>> operator_args) {
+	protected static BasicDBObject operatorToMongoKey(final String field, final Tuple2<Operator, Tuple2<Object, Object>> operator_args) {
 		return Patterns.match(operator_args).<BasicDBObject>andReturn()
 				.when(op_args -> Operator.exists == op_args._1(), op_args -> new BasicDBObject(field, new BasicDBObject("$exists", op_args._2()._1())) )
 				
@@ -145,8 +142,7 @@ public class MongoDbUtils {
 	 * @param op_in - the operator enum
 	 * @return - the mongodb operator
 	 */
-	@NonNull
-	protected static String getOperatorName(final @NonNull Operator op_in) {		
+	protected static String getOperatorName(final Operator op_in) {		
 		return Patterns.match(op_in).<String>andReturn()
 				.when(op -> Operator.any_of == op, op -> "$or")
 				.when(op -> Operator.all_of == op, op -> "$and")
@@ -158,8 +154,7 @@ public class MongoDbUtils {
 	 * @param query_in - a multi query
 	 * @return the MongoDB query object (no meta - that is added above)
 	 */
-	@NonNull
-	protected static <T> DBObject convertToMongoQuery_multi(final @NonNull String andVsOr, final @NonNull MultiQueryComponent<T> query_in) {
+	protected static <T> DBObject convertToMongoQuery_multi(final String andVsOr, final MultiQueryComponent<T> query_in) {
 		
 		return Patterns.match(query_in.getElements())
 				.<DBObject>andReturn()
@@ -180,8 +175,7 @@ public class MongoDbUtils {
 	 * @param query_in - a single query (ie set of fields)
 	 * @return the MongoDB query object (no meta - that is added above)
 	 */
-	@NonNull
-	protected static <T> DBObject convertToMongoQuery_single(final @NonNull String andVsOr, final @NonNull SingleQueryComponent<T> query_in) {
+	protected static <T> DBObject convertToMongoQuery_single(final String andVsOr, final SingleQueryComponent<T> query_in) {
 		final LinkedHashMultimap<String, Tuple2<Operator, Tuple2<Object, Object>>> fields = query_in.getAll();
 		
 		// The actual query:
@@ -257,7 +251,7 @@ public class MongoDbUtils {
 	 * @throws JsonGenerationException 
 	 */
 	@SuppressWarnings("unchecked")
-	public static <O> DBObject createUpdateObject(final @NonNull UpdateComponent<O> update) {
+	public static <O> DBObject createUpdateObject(final UpdateComponent<O> update) {
 		final ObjectMapper object_mapper = MongoJackModule.configure(BeanTemplateUtils.configureMapper(Optional.empty()));
 		
 		return update.getAll().entries().stream()
@@ -326,7 +320,7 @@ public class MongoDbUtils {
 	 * @param nested the nested fieldname 
 	 * @param to_insert the object to insert
 	 */
-	protected static void nestedPut(final @NonNull BasicDBObject mutable, final @NonNull String parent, final @NonNull String nested, final @NonNull Object to_insert) {
+	protected static void nestedPut(final BasicDBObject mutable, final String parent, final String nested, final Object to_insert) {
 		final DBObject dbo = (DBObject) mutable.get(parent);
 		if (null != dbo) {
 			dbo.put(nested, to_insert);

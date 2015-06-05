@@ -24,7 +24,6 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.leader.LeaderLatch;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.checkerframework.checker.nullness.qual.NonNull;
 
 import scala.Tuple2;
 import scala.Tuple3;
@@ -123,7 +122,7 @@ public class IkanowV1SyncService_Buckets {
 		protected final String _path;
 		protected final SetOnce<CuratorFramework> _curator = new SetOnce<CuratorFramework>();
 		protected final SetOnce<LeaderLatch> _leader_selector = new SetOnce<LeaderLatch>();
-		public MutexMonitor(final @NonNull String path) {
+		public MutexMonitor(final String path) {
 			_path = path;
 		}
 		
@@ -199,9 +198,9 @@ public class IkanowV1SyncService_Buckets {
 	 * @param source_db
 	 */
 	protected CompletableFuture<?> synchronizeSources(
-			final @NonNull IManagementCrudService<DataBucketBean> bucket_mgmt, 
-			final @NonNull IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
-			final @NonNull ICrudService<JsonNode> source_db
+			final IManagementCrudService<DataBucketBean> bucket_mgmt, 
+			final IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
+			final ICrudService<JsonNode> source_db
 			)
 	{
 		return compareSourcesToBuckets_get(bucket_mgmt, source_db)
@@ -262,8 +261,8 @@ public class IkanowV1SyncService_Buckets {
 	 * @param source_db
 	 * @return
 	 */
-	protected CompletableFuture<Boolean> updateV1SourceStatus_top(final @NonNull String id, 
-			final @NonNull ManagementFuture<?> fres, boolean disable_on_failure,
+	protected CompletableFuture<Boolean> updateV1SourceStatus_top(final String id, 
+			final ManagementFuture<?> fres, boolean disable_on_failure,
 			ICrudService<JsonNode> source_db)
 	{		
 		return fres.getManagementResults()
@@ -299,7 +298,7 @@ public class IkanowV1SyncService_Buckets {
 	 * @returns a 3-tuple with "to create", "to delete", "to update"
 	 */
 	protected static Tuple3<Collection<String>, Collection<String>, Collection<String>> compareSourcesToBuckets_categorize(
-			final @NonNull Tuple2<Map<String, String>, Map<String, Date>> to_compare) {
+			final Tuple2<Map<String, String>, Map<String, Date>> to_compare) {
 		
 		// Want to end up with 3 lists:
 		// - v1 sources that don't exist in v2 (Create them)
@@ -351,8 +350,8 @@ public class IkanowV1SyncService_Buckets {
 	 */
 	protected static 
 	CompletableFuture<Tuple2<Map<String, String>, Map<String, Date>>> compareSourcesToBuckets_get(
-		final @NonNull IManagementCrudService<DataBucketBean> bucket_mgmt, 
-		final @NonNull ICrudService<JsonNode> source_db)
+		final IManagementCrudService<DataBucketBean> bucket_mgmt, 
+		final ICrudService<JsonNode> source_db)
 	{
 		// (could make this more efficient by having a regular "did something happen" query with a slower "get everything and resync)
 		// (don't forget to add "modified" to the compund index though)
@@ -402,10 +401,10 @@ public class IkanowV1SyncService_Buckets {
 	 * @param source_db
 	 * @return
 	 */
-	protected static ManagementFuture<Supplier<Object>> createNewBucket(final @NonNull String id,
-			final @NonNull IManagementCrudService<DataBucketBean> bucket_mgmt, 
-			final @NonNull IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
-			final @NonNull ICrudService<JsonNode> source_db			
+	protected static ManagementFuture<Supplier<Object>> createNewBucket(final String id,
+			final IManagementCrudService<DataBucketBean> bucket_mgmt, 
+			final IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
+			final ICrudService<JsonNode> source_db			
 			)
 	{
 		_logger.info(ErrorUtils.get("Found new source {0}, creating bucket", id));
@@ -456,8 +455,8 @@ public class IkanowV1SyncService_Buckets {
 	 * @param bucket_mgmt
 	 * @return
 	 */
-	protected static ManagementFuture<Boolean> deleteBucket(final @NonNull String id,
-			final @NonNull IManagementCrudService<DataBucketBean> bucket_mgmt)
+	protected static ManagementFuture<Boolean> deleteBucket(final String id,
+			final IManagementCrudService<DataBucketBean> bucket_mgmt)
 	{
 		_logger.info(ErrorUtils.get("Source {0} was deleted, deleting bucket", id));
 		
@@ -472,10 +471,10 @@ public class IkanowV1SyncService_Buckets {
 	 * @return
 	 */
 	@SuppressWarnings("unchecked")
-	protected static ManagementFuture<Supplier<Object>> updateBucket(final @NonNull String id,
-			final @NonNull IManagementCrudService<DataBucketBean> bucket_mgmt, 
-			final @NonNull IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
-			final @NonNull ICrudService<JsonNode> source_db)
+	protected static ManagementFuture<Supplier<Object>> updateBucket(final String id,
+			final IManagementCrudService<DataBucketBean> bucket_mgmt, 
+			final IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
+			final ICrudService<JsonNode> source_db)
 	{
 		_logger.info(ErrorUtils.get("Source {0} was modified, updating bucket", id));
 		
@@ -533,11 +532,11 @@ public class IkanowV1SyncService_Buckets {
 	 * @param source_db
 	 */
 	protected static CompletableFuture<Boolean> updateV1SourceStatus(
-			final @NonNull Date main_date,
-			final @NonNull String key,
-			final @NonNull Collection<BasicMessageBean> status_messages,
+			final Date main_date,
+			final String key,
+			final Collection<BasicMessageBean> status_messages,
 			final boolean set_approved_state,
-			final @NonNull ICrudService<JsonNode> source_db
+			final ICrudService<JsonNode> source_db
 			)
 	{
 		final String message_block = status_messages.stream()
@@ -579,7 +578,7 @@ public class IkanowV1SyncService_Buckets {
 	 * @throws IOException
 	 * @throws ParseException
 	 */
-	protected static DataBucketBean getBucketFromV1Source(final @NonNull JsonNode src_json) throws JsonParseException, JsonMappingException, IOException, ParseException {
+	protected static DataBucketBean getBucketFromV1Source(final JsonNode src_json) throws JsonParseException, JsonMappingException, IOException, ParseException {
 		@SuppressWarnings("unused")
 		final String _id = safeJsonGet("_id", src_json).asText(); // (think we'll use key instead of _id?)
 		final String key = safeJsonGet("key", src_json).asText();

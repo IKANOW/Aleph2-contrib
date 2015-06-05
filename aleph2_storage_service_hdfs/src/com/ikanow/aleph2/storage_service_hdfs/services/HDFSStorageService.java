@@ -19,7 +19,6 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Optional;
 
-import org.checkerframework.checker.nullness.qual.NonNull;
 
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
@@ -49,8 +48,8 @@ public class HDFSStorageService implements IStorageService {
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T> @NonNull T getUnderlyingPlatformDriver(
-			@NonNull Class<T> driver_class, Optional<String> driver_options) {
+	public <T> T getUnderlyingPlatformDriver(
+			Class<T> driver_class, Optional<String> driver_options) {
 		T driver = null;
 		try {
 			if(driver_class!=null){
@@ -61,11 +60,11 @@ public class HDFSStorageService implements IStorageService {
 	
 					AbstractFileSystem fs = AbstractFileSystem.createFileSystem(uri, config);
 					
-					return (@NonNull T) fs;
+					return (T) fs;
 				}			
 				else if(driver_class.isAssignableFrom(FileContext.class)){				
 					FileContext fs = FileContext.getFileContext(AbstractFileSystem.createFileSystem(uri, config), config);
-					return (@NonNull T) fs;
+					return (T) fs;
 				}
 				try {
 					driver = driver_class.newInstance();

@@ -17,7 +17,6 @@ package com.mongodb;
 
 import java.lang.reflect.Method;
 
-import org.checkerframework.checker.nullness.qual.NonNull;
 import org.springframework.cglib.proxy.Enhancer;
 import org.springframework.cglib.proxy.MethodInterceptor;
 import org.springframework.cglib.proxy.MethodProxy;
@@ -32,8 +31,7 @@ public class DBCollectionProxyFactory {
 	 * @param dbc - the collection to enhance
 	 * @return - the enhanced collection
 	 */
-	@NonNull 
-	public static DBCollection get(final @NonNull DBCollection dbc) {
+	public static DBCollection get(final DBCollection dbc) {
 		return get(dbc.getDB(), dbc.getName());
 	}
 	/** Get the enhanced DB collection from the provided one 
@@ -42,8 +40,7 @@ public class DBCollectionProxyFactory {
 	 * @return the enhanced collection
 	 */
 	@SuppressWarnings("deprecation")
-	@NonNull 
-	public static DBCollection get(final @NonNull DB db, final @NonNull String name) {
+	public static DBCollection get(final DB db, final String name) {
 		
 		Enhancer collectionEnhancer = new Enhancer();
 		collectionEnhancer.setSuperclass(com.mongodb.DBCollectionImpl.class);
@@ -99,7 +96,6 @@ public class DBCollectionProxyFactory {
 	
 	//DO THE SAME FOR DBCURSOR (BASICALLY ONLY CARE ABOUT next()/hasNext())
 	//(ACTUALLY DOESN'T SEEM TO BE NEEDED)
-	@NonNull 
 	protected static DBCursor getCursor(final DBCursor from) {
 		Enhancer dbcursorEnhancer = new Enhancer();
 		dbcursorEnhancer.setSuperclass(com.mongodb.DBCursor.class);

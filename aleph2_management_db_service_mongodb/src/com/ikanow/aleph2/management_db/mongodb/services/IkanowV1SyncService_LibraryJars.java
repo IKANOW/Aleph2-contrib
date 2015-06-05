@@ -31,7 +31,6 @@ import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.checkerframework.checker.nullness.qual.NonNull;
 import org.bson.types.ObjectId;
 
 import scala.Tuple2;
@@ -136,7 +135,7 @@ public class IkanowV1SyncService_LibraryJars {
 		protected final String _path;
 		protected final SetOnce<CuratorFramework> _curator = new SetOnce<CuratorFramework>();
 		protected final SetOnce<LeaderLatch> _leader_selector = new SetOnce<LeaderLatch>();
-		public MutexMonitor(final @NonNull String path) {
+		public MutexMonitor(final String path) {
 			_path = path;
 		}
 		
@@ -216,10 +215,10 @@ public class IkanowV1SyncService_LibraryJars {
 	 * @param share_db
 	 */
 	protected CompletableFuture<?> synchronizeLibraryJars(
-			final @NonNull IManagementCrudService<SharedLibraryBean> library_mgmt,
-			final @NonNull IStorageService aleph2_fs,
-			final @NonNull ICrudService<JsonNode> share_db,
-			final @NonNull GridFS share_fs
+			final IManagementCrudService<SharedLibraryBean> library_mgmt,
+			final IStorageService aleph2_fs,
+			final ICrudService<JsonNode> share_db,
+			final GridFS share_fs
 			)
 	{
 		return compareJarsToLibaryBeans_get(library_mgmt, share_db)
@@ -280,8 +279,8 @@ public class IkanowV1SyncService_LibraryJars {
 	 * @param share_db
 	 * @return
 	 */
-	protected CompletableFuture<Boolean> updateV1ShareErrorStatus_top(final @NonNull String id, 
-			final @NonNull ManagementFuture<?> fres, 
+	protected CompletableFuture<Boolean> updateV1ShareErrorStatus_top(final String id, 
+			final ManagementFuture<?> fres, 
 			ICrudService<JsonNode> share_db)
 	{		
 		return fres.getManagementResults()
@@ -317,7 +316,7 @@ public class IkanowV1SyncService_LibraryJars {
 	 * @returns a 3-tuple with "to create", "to delete", "to update" - NOTE: none of the _ids here include the "v1_"
 	 */
 	protected static Tuple3<Collection<String>, Collection<String>, Collection<String>> compareJarsToLibraryBeans_categorize(
-			final @NonNull Tuple2<Map<String, String>, Map<String, Date>> to_compare) {
+			final Tuple2<Map<String, String>, Map<String, Date>> to_compare) {
 		
 		// Want to end up with 3 lists:
 		// - v1 sources that don't exist in v2 (Create them)
@@ -369,8 +368,8 @@ public class IkanowV1SyncService_LibraryJars {
 	 */
 	protected static 
 	CompletableFuture<Tuple2<Map<String, String>, Map<String, Date>>> compareJarsToLibaryBeans_get(
-		final @NonNull IManagementCrudService<SharedLibraryBean> library_mgmt, 
-		final @NonNull ICrudService<JsonNode> share_db)
+		final IManagementCrudService<SharedLibraryBean> library_mgmt, 
+		final ICrudService<JsonNode> share_db)
 	{
 		// (could make this more efficient by having a regular "did something happen" query with a slower "get everything and resync)
 		// (don't forget to add "modified" to the compound index though)
@@ -415,9 +414,9 @@ public class IkanowV1SyncService_LibraryJars {
 
 	// FS - WRITE
 	
-	protected static void copyFile(final @NonNull String binary_id, final @NonNull String path, 
-			final @NonNull IStorageService aleph2_fs,
-			final @NonNull GridFS share_fs
+	protected static void copyFile(final String binary_id, final String path, 
+			final IStorageService aleph2_fs,
+			final GridFS share_fs
 			) throws IOException
 	{
 		try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -445,12 +444,12 @@ public class IkanowV1SyncService_LibraryJars {
 	 * @param share_db
 	 * @return
 	 */
-	protected static ManagementFuture<Supplier<Object>> createLibraryBean(final @NonNull String id,
-			final @NonNull IManagementCrudService<SharedLibraryBean> library_mgmt, 
-			final @NonNull IStorageService aleph2_fs,
+	protected static ManagementFuture<Supplier<Object>> createLibraryBean(final String id,
+			final IManagementCrudService<SharedLibraryBean> library_mgmt, 
+			final IStorageService aleph2_fs,
 			final boolean create_not_update,
-			final @NonNull ICrudService<JsonNode> share_db,
-			final @NonNull GridFS share_fs
+			final ICrudService<JsonNode> share_db,
+			final GridFS share_fs
 			)
 	{
 		if (create_not_update) {
@@ -499,8 +498,8 @@ public class IkanowV1SyncService_LibraryJars {
 	 * @param library_mgmt
 	 * @return
 	 */
-	protected static ManagementFuture<Boolean> deleteLibraryBean(final @NonNull String id,
-			final @NonNull IManagementCrudService<SharedLibraryBean> library_mgmt)
+	protected static ManagementFuture<Boolean> deleteLibraryBean(final String id,
+			final IManagementCrudService<SharedLibraryBean> library_mgmt)
 	{
 		_logger.info(ErrorUtils.get("Share {0} was deleted, deleting libary bean", id));
 
@@ -515,10 +514,10 @@ public class IkanowV1SyncService_LibraryJars {
 	 * @param source_db
 	 */
 	protected static CompletableFuture<Boolean> updateV1ShareErrorStatus(
-			final @NonNull Date main_date,
-			final @NonNull String id,
-			final @NonNull Collection<BasicMessageBean> status_messages,
-			final @NonNull ICrudService<JsonNode> share_db
+			final Date main_date,
+			final String id,
+			final Collection<BasicMessageBean> status_messages,
+			final ICrudService<JsonNode> share_db
 			)
 	{
 		final String message_block = status_messages.stream()
@@ -566,7 +565,7 @@ public class IkanowV1SyncService_LibraryJars {
 	 * @throws IOException
 	 * @throws ParseException
 	 */
-	protected static SharedLibraryBean getLibraryBeanFromV1Share(final @NonNull JsonNode src_json) throws JsonParseException, JsonMappingException, IOException, ParseException {
+	protected static SharedLibraryBean getLibraryBeanFromV1Share(final JsonNode src_json) throws JsonParseException, JsonMappingException, IOException, ParseException {
 
 		final String[] description_lines = Optional.ofNullable(safeJsonGet("description", src_json).asText())
 											.orElse("unknown").split("\r\n?|\n");

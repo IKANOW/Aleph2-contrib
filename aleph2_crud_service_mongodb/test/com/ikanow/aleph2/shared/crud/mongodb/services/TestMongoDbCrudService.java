@@ -155,7 +155,8 @@ public class TestMongoDbCrudService {
 		catch (Exception e) {
 			expected_ex = e;
 		}
-		assertThat(expected_ex.getCause(), instanceOf(MongoException.class));
+		if (null != expected_ex)
+			assertThat(expected_ex.getCause(), instanceOf(MongoException.class));
 		
 		assertEquals(1, service._state.orig_coll.count());
 		
@@ -275,7 +276,8 @@ public class TestMongoDbCrudService {
 		catch (Exception e) {
 			expected_ex = e;
 		}
-		assertThat(expected_ex.getCause(), instanceOf(MongoException.class));		
+		if (null != expected_ex)
+			assertThat(expected_ex.getCause(), instanceOf(MongoException.class));		
 		
 		// Yikes - it has inserted objects up to the error though...
 		assertEquals(100, service._state.orig_coll.count());		

@@ -15,7 +15,6 @@
  ******************************************************************************/
 package com.ikanow.aleph2.management_db.mongodb.data_model;
 
-import org.checkerframework.checker.nullness.qual.NonNull;
 
 import com.ikanow.aleph2.shared.crud.mongodb.data_model.MongoDbConfigurationBean;
 
@@ -31,7 +30,7 @@ public class MongoDbManagementDbConfigBean extends MongoDbConfigurationBean {
 	/**
 	 * @param v1_enabled
 	 */
-	public MongoDbManagementDbConfigBean(final @NonNull Boolean v1_enabled) {
+	public MongoDbManagementDbConfigBean(final Boolean v1_enabled) {
 		this.v1_enabled = v1_enabled;
 	}
 	

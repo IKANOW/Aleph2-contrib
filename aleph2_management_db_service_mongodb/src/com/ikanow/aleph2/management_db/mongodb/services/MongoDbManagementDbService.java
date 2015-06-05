@@ -19,7 +19,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import org.checkerframework.checker.nullness.qual.NonNull;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Inject;
@@ -98,7 +97,6 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getFilteredDb(java.lang.String, java.util.Optional, java.util.Optional)
 	 */
-	@NonNull 
 	public MongoDbManagementDbService getFilteredDb(final Optional<AuthorizationBean> client_auth, final Optional<ProjectBean> project_auth)
 	{
 		return new MongoDbManagementDbService(_crud_factory, client_auth, project_auth, _properties);
@@ -257,7 +255,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	 */
 	@Override
 	public <T> ICrudService<T> getRetryStore(
-			@NonNull Class<T> retry_message_clazz) {
+			Class<T> retry_message_clazz) {
 			return (ICrudService<T>) _crud_factory.getMongoDbCrudService(
 				retry_message_clazz, String.class, 
 				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.RETRY_DB, retry_message_clazz.getSimpleName()), 
