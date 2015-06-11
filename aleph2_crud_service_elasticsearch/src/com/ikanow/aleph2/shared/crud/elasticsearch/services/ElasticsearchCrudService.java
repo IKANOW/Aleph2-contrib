@@ -34,6 +34,12 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 
+//TODO ... going to need to get the mapping if any queries involve _id ranges.... and error if not 
+
+//TODO ... handle write mode with no type, ie where it's user defined, with policy for what should happen on conflicts
+
+//TODO .... more thoughts on field list buckets ... options for auto generating .number fields and .raw fields (and nested - that might live in the search index bit though?)
+
 public class ElasticsearchCrudService<O> implements ICrudService<O> {
 
 	public ElasticsearchCrudService(final Class<O> bean_clazz,  

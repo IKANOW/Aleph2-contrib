@@ -22,6 +22,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.index.query.FilterBuilder;
@@ -44,23 +45,39 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
  */
 public class ElasticsearchUtils {
 
+	//TOOD: put map comparison in here?
+	
+	//TODO: put code to check if the mapping supports _id ranges in here?
+	
+	//TODO: hmm need to pass a list of nested fields in and then do queries on those fields differently?
+	
 	////////////////////////////////////////////////////////////////////////////////////////
 	
 	// CREATE QUERY
 	
-	/** Top-level entry point to convert a generic Aleph2 CRUD component into a function MongoDB query
+	/** Top-level entry point to convert a generic Aleph2 CRUD component into an Elasticsearch filter ("complex" _id queries not supported)
 	 * @param query_in the generic query component
+	 * @param id_ranges_ok - true if the _id is indexed, enables range queries on _ids, false - if not, only all/single-term queries supported
+	 * @return a tuple2, first element is the query, second element contains the meta ("$skip", "$limit")
+	 */
+	public static <T> Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> convertToElasticsearchFilter(final QueryComponent<T> query_in) {
+		return convertToElasticsearchFilter(query_in, false);
+	}
+	
+	/** Top-level entry point to convert a generic Aleph2 CRUD component into an Elasticsearch filter
+	 * @param query_in the generic query component
+	 * @param id_ranges_ok - true if the _id is indexed, enables range queries on _ids, false - if not, only all/single-term queries supported
 	 * @return a tuple2, first element is the query, second element contains the meta ("$skip", "$limit")
 	 */
 	@SuppressWarnings("unchecked")
-	public static <T> Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> convertToElasticsearchFilter(final QueryComponent<T> query_in) {
+	public static <T> Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> convertToElasticsearchFilter(final QueryComponent<T> query_in, boolean id_ranges_ok) {
 		
 		final Function<List<FilterBuilder>, FilterBuilder> andVsOr = getMultiOperator(query_in.getOp());
 		
 		final FilterBuilder query_out = Patterns.match(query_in)
 				.<FilterBuilder>andReturn()
-					.when((Class<SingleQueryComponent<T>>)(Class<?>)SingleQueryComponent.class, q -> convertToElasticsearchFilter_single(andVsOr, q))
-					.when((Class<MultiQueryComponent<T>>)(Class<?>)MultiQueryComponent.class, q -> convertToElasticsearchFilter_multi(andVsOr, q))
+					.when((Class<SingleQueryComponent<T>>)(Class<?>)SingleQueryComponent.class, q -> convertToElasticsearchFilter_single(andVsOr, q, id_ranges_ok))
+					.when((Class<MultiQueryComponent<T>>)(Class<?>)MultiQueryComponent.class, q -> convertToElasticsearchFilter_multi(andVsOr, q, id_ranges_ok))
 					.otherwise(() -> FilterBuilders.matchAllFilter());
 		
 		// Meta commands
@@ -96,7 +113,7 @@ public class ElasticsearchUtils {
 	 * @param operator_args - an operator enum and a pair of objects whose context depends on the operator
 	 * @return the MongoDB clause
 	 */
-	protected static FilterBuilder operatorToFilter(final String field, final Tuple2<Operator, Tuple2<Object, Object>> operator_args) {
+	protected static FilterBuilder operatorToFilter(final String field, final Tuple2<Operator, Tuple2<Object, Object>> operator_args, boolean id_ranges_ok) {
 		
 		return Patterns.match(operator_args).<FilterBuilder>andReturn()
 				
@@ -104,13 +121,29 @@ public class ElasticsearchUtils {
 					final FilterBuilder exists = FilterBuilders.existsFilter(field);
 					return objToBool(op_args._2()._1()) ? exists : FilterBuilders.notFilter(exists);
 				})
+
+				//(es - handle _ids differently)
+				.when(op_args -> field.equals("_id") && (Operator.any_of == op_args._1()), op_args -> 
+					FilterBuilders.idsFilter().addIds(StreamSupport.stream(((Iterable<?>)op_args._2()._1()).spliterator(), false).map(x -> x.toString()).collect(Collectors.toList()).toArray(new String[0])))
+							
+				.when(op_args -> field.equals("_id") && (Operator.all_of == op_args._1()), __ -> { throw new RuntimeException(ErrorUtils.ALL_OF_ON_IDS); }) 				
 				
 				.when(op_args -> (Operator.any_of == op_args._1()), op_args -> FilterBuilders.termsFilter(field, (Iterable<?>)op_args._2()._1()).execution("or"))
 				.when(op_args -> (Operator.all_of == op_args._1()), op_args -> FilterBuilders.termsFilter(field, (Iterable<?>)op_args._2()._1()).execution("and")) 
 
+				//(es - handle _ids differently)
+				.when(op_args -> field.equals("_id") && (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> FilterBuilders.notFilter(FilterBuilders.idsFilter().addIds(op_args._2()._1().toString())) )
+				.when(op_args -> field.equals("_id") && (Operator.equals == op_args._1()), op_args -> FilterBuilders.idsFilter().addIds(op_args._2()._1().toString()) )				
+				
 				.when(op_args -> (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> FilterBuilders.notFilter(FilterBuilders.termFilter(field, op_args._2()._2())) )
 				.when(op_args -> (Operator.equals == op_args._1()), op_args -> FilterBuilders.termFilter(field, op_args._2()._1()) )
 										
+				// unless id_ranges_ok, exception out here:
+				.when(op_args -> field.equals("_id") && !id_ranges_ok && 
+						EnumSet.of(Operator.range_open_open, Operator.range_open_closed, Operator.range_closed_closed, Operator.range_closed_open).contains(op_args._1()), __ -> {
+					throw new RuntimeException(ErrorUtils.NO_ID_RANGES_UNLESS_IDS_INDEXED);
+				})
+				
 				.when(op_args -> EnumSet.of(Operator.range_open_open, Operator.range_open_closed, Operator.range_closed_closed, Operator.range_closed_open).contains(op_args._1()), op_args -> {					
 					return Optional.of(FilterBuilders.rangeFilter(field))
 								.map(f -> Optional.ofNullable(op_args._2()._1()).map(b -> 
@@ -124,6 +157,23 @@ public class ElasticsearchUtils {
 				.otherwise(op_args -> FilterBuilders.matchAllFilter());
 	}
 
+	/** Runs the query in isolation to check if it needs _id to be indexed in order to work
+	 * @param query_in - the query to test
+	 * @return - basically, whether to check the index/types' mapping(s) to see if an _id query is supported
+	 */
+	public static <T> boolean queryContainsIdRanges(final QueryComponent<T> query_in) {
+		try {
+			convertToElasticsearchFilter(query_in, true);
+			return true; // didn't throw so we're good
+		}
+		catch (RuntimeException re) {
+			if (re.getMessage().equals(ErrorUtils.NO_ID_RANGES_UNLESS_IDS_INDEXED)) {
+				return true;
+			}
+			throw re; // (just pass the error upwards)
+		}
+	}
+	
 	/** Handy util function
 	 * @param l
 	 * @param getter
@@ -140,7 +190,7 @@ public class ElasticsearchUtils {
 	protected static Function<List<FilterBuilder>, FilterBuilder> getMultiOperator(final Operator op_in) {		
 		return Patterns.match(op_in).<Function<List<FilterBuilder>, FilterBuilder>>andReturn()
 				.when(op -> Operator.any_of == op, __ -> l -> emptyOr(l, () -> FilterBuilders.orFilter(l.toArray(new FilterBuilder[0]))))
-				.otherwise(__ -> l -> emptyOr(l, () -> FilterBuilders.orFilter(l.toArray(new FilterBuilder[0])))); //(ie and)
+				.otherwise(__ -> l -> emptyOr(l, () -> FilterBuilders.andFilter(l.toArray(new FilterBuilder[0])))); //(ie and)
 	}
 	
 	/** Creates a big and/or list of the list of "multi query components"
@@ -148,10 +198,10 @@ public class ElasticsearchUtils {
 	 * @param query_in - a multi query
 	 * @return the Elasticsearch filter object (no meta - that is added above)
 	 */
-	protected static <T> FilterBuilder convertToElasticsearchFilter_multi(final Function<List<FilterBuilder>, FilterBuilder> andVsOr, final MultiQueryComponent<T> query_in) {
+	protected static <T> FilterBuilder convertToElasticsearchFilter_multi(final Function<List<FilterBuilder>, FilterBuilder> andVsOr, final MultiQueryComponent<T> query_in, boolean id_ranges_ok) {
 		
 		return andVsOr.apply(query_in.getElements().stream().map(entry -> 
-								convertToElasticsearchFilter_single(getMultiOperator(entry.getOp()), entry)).collect(Collectors.toList()));
+								convertToElasticsearchFilter_single(getMultiOperator(entry.getOp()), entry, id_ranges_ok)).collect(Collectors.toList()));
 	}	
 	
 	/** Creates a big $and/$or list of the list of fields in the single query component
@@ -159,7 +209,7 @@ public class ElasticsearchUtils {
 	 * @param query_in - a single query (ie set of fields)
 	 * @return the MongoDB query object (no meta - that is added above)
 	 */
-	protected static <T> FilterBuilder convertToElasticsearchFilter_single(final Function<List<FilterBuilder>, FilterBuilder> andVsOr, final SingleQueryComponent<T> query_in) {
+	protected static <T> FilterBuilder convertToElasticsearchFilter_single(final Function<List<FilterBuilder>, FilterBuilder> andVsOr, final SingleQueryComponent<T> query_in, boolean id_ranges_ok) {
 		final LinkedHashMultimap<String, Tuple2<Operator, Tuple2<Object, Object>>> fields = query_in.getAll();
 		
 		// The actual query:
@@ -170,7 +220,7 @@ public class ElasticsearchUtils {
 				fields.asMap().entrySet().stream()
 							.<Tuple2<String, Tuple2<Operator, Tuple2<Object, Object>>>>
 								flatMap(entry -> entry.getValue().stream().map( val -> Tuples._2T(entry.getKey(), val) ) )
-							.map(entry -> operatorToFilter(entry._1(), entry._2()))
+							.map(entry -> operatorToFilter(entry._1(), entry._2(), id_ranges_ok))
 							.collect(Collectors.toList())
 							);
 	}
