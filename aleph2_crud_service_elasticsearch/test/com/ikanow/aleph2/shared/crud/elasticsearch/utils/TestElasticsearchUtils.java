@@ -67,6 +67,7 @@ public class TestElasticsearchUtils {
 			private String nested_string_field;
 			private NestedNestedTestBean nested_object;
 		}		
+		public String _id() { return _id; }
 		public String string_field() { return string_field; }
 		public List<String> string_fields() { return string_fields; }
 		public Boolean bool_field() { return bool_field; }
@@ -76,6 +77,7 @@ public class TestElasticsearchUtils {
 		public NestedTestBean nested_object() { return nested_object; }
 		
 		protected TestBean() {}
+		private String _id;
 		private String string_field;
 		private List<String> string_fields;
 		private Boolean bool_field;
@@ -561,14 +563,170 @@ public class TestElasticsearchUtils {
 	}
 	
 	@Test
-	public void handleIdDifferently() {
-		//TODO: need to handle _ids differently... in code and test...		
+	public void handleIdDifferently() throws IOException {
 		
-		// Check positive and negative calls to "does it check"
+		// id - single value
+
+		{
+			BeanTemplate<TestBean> template1 = BeanTemplateUtils.build(TestBean.class).with(TestBean::_id, "id_field").done();
+			
+			final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(template1).when(TestBean::bool_field, true);
+			
+			assertTrue("No id ranges", ElasticsearchUtils.queryContainsIdRanges(query_comp_1));
+			
+			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
+			
+			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
+													.startObject("and").startArray("filters")
+														.startObject()
+															.startObject("term")
+																.field("bool_field", true)
+															.endObject()
+														.endObject()
+														.startObject()
+															.startObject("ids")
+																.array("types")
+																.array("values", "id_field")
+															.endObject()
+														.endObject()
+													.endArray().endObject()
+												.endObject();
+			
+			assertEquals(sortOutQuotesAndStuff(expected_1.string()), toXContentThenString(query_meta_1._1()));
+		}
+
+		// Error case 1: exists on "ids"
 		
-		// Check it passes the other type of error id up
+		{
+			final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(TestBean.class)
+																	.when(TestBean::bool_field, true)
+																	.withPresent(TestBean::_id);
 		
-		// Check transforms single and mutiple id queries to "idsFilter" 
+			try {
+				ElasticsearchUtils.queryContainsIdRanges(query_comp_1);
+				fail("Should have thrown exception here");
+			}
+			catch (RuntimeException e) {
+				assertEquals(ErrorUtils.EXISTS_ON_IDS, e.getMessage());
+			}			
+		}		
+		
+		// id - single value. not
+
+		{
+			final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(TestBean.class)
+					.when(TestBean::bool_field, true)
+					.whenNot(TestBean::_id, "not_id");
+			
+			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
+			
+			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
+													.startObject("and").startArray("filters")
+														.startObject()
+															.startObject("term")
+																.field("bool_field", true)
+															.endObject()
+														.endObject()
+														.startObject()
+															.startObject("not").startObject("filter")
+																.startObject("ids")
+																	.array("types")
+																	.array("values", "not_id")
+																	.endObject()
+															.endObject().endObject()
+														.endObject()
+													.endArray().endObject()
+												.endObject();
+			
+			assertEquals(sortOutQuotesAndStuff(expected_1.string()), toXContentThenString(query_meta_1._1()));
+		}
+		
+		// id - multi value
+
+		{
+			final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(TestBean.class)
+																	.when(TestBean::bool_field, true)
+																	.withAny("_id", Arrays.asList("id1", "id2", "id3"));
+			
+			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
+			
+			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
+													.startObject("and").startArray("filters")
+														.startObject()
+															.startObject("term")
+																.field("bool_field", true)
+															.endObject()
+														.endObject()
+														.startObject()
+															.startObject("ids")
+																.array("types")
+																.array("values", "id1", "id2", "id3")
+															.endObject()
+														.endObject()
+													.endArray().endObject()
+												.endObject();
+			
+			assertEquals(sortOutQuotesAndStuff(expected_1.string()), toXContentThenString(query_meta_1._1()));
+		}
+
+		// Error case 1: all of "ids"
+		
+		{
+			final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(TestBean.class)
+																	.when(TestBean::bool_field, true)
+																	.withAll("_id", Arrays.asList("id1", "id2", "id3"));
+		
+			try {
+				ElasticsearchUtils.queryContainsIdRanges(query_comp_1);
+				fail("Should have thrown exception here");
+			}
+			catch (RuntimeException e) {
+				assertEquals(ErrorUtils.ALL_OF_ON_IDS, e.getMessage());
+			}			
+		}		
+		
+		// Error case 2: id range check fails
+
+		{
+			final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(TestBean.class)
+																	.when(TestBean::bool_field, true)
+																	.rangeAbove(TestBean::_id, "lower_id", true);
+		
+			assertTrue("Range check should fail", ElasticsearchUtils.queryContainsIdRanges(query_comp_1));
+			
+			try {
+				ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1, false);
+				fail("Should have thrown exception here");
+			}
+			catch (RuntimeException e) {
+				assertEquals(ErrorUtils.NO_ID_RANGES_UNLESS_IDS_INDEXED, e.getMessage());
+			}			
+			
+			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1, true);
+			
+			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
+													.startObject("and").startArray("filters")
+														.startObject()
+															.startObject("term")
+																.field("bool_field", true)
+															.endObject()
+														.endObject()
+														.startObject()
+														.startObject("range")
+															.startObject("_id")
+																	.field("from", "lower_id")
+																	.field("to", (String) null)
+																	.field("include_lower", false)
+																	.field("include_upper", true)
+																.endObject()
+															.endObject()
+														.endObject()
+													.endArray().endObject()
+												.endObject();
+			
+			assertEquals(sortOutQuotesAndStuff(expected_1.string()), toXContentThenString(query_meta_1._1()));
+			
+		}		
 	}
 		
 	@Test

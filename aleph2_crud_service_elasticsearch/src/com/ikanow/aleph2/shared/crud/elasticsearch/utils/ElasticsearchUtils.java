@@ -116,6 +116,8 @@ public class ElasticsearchUtils {
 	protected static FilterBuilder operatorToFilter(final String field, final Tuple2<Operator, Tuple2<Object, Object>> operator_args, boolean id_ranges_ok) {
 		
 		return Patterns.match(operator_args).<FilterBuilder>andReturn()
+
+				.when(op_args -> field.equals("_id") && Operator.exists == op_args._1(), op_args -> { throw new RuntimeException(ErrorUtils.EXISTS_ON_IDS); })				
 				
 				.when(op_args -> Operator.exists == op_args._1(), op_args -> {
 					final FilterBuilder exists = FilterBuilders.existsFilter(field);
@@ -132,7 +134,7 @@ public class ElasticsearchUtils {
 				.when(op_args -> (Operator.all_of == op_args._1()), op_args -> FilterBuilders.termsFilter(field, (Iterable<?>)op_args._2()._1()).execution("and")) 
 
 				//(es - handle _ids differently)
-				.when(op_args -> field.equals("_id") && (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> FilterBuilders.notFilter(FilterBuilders.idsFilter().addIds(op_args._2()._1().toString())) )
+				.when(op_args -> field.equals("_id") && (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> FilterBuilders.notFilter(FilterBuilders.idsFilter().addIds(op_args._2()._2().toString())) )
 				.when(op_args -> field.equals("_id") && (Operator.equals == op_args._1()), op_args -> FilterBuilders.idsFilter().addIds(op_args._2()._1().toString()) )				
 				
 				.when(op_args -> (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> FilterBuilders.notFilter(FilterBuilders.termFilter(field, op_args._2()._2())) )
@@ -163,7 +165,7 @@ public class ElasticsearchUtils {
 	 */
 	public static <T> boolean queryContainsIdRanges(final QueryComponent<T> query_in) {
 		try {
-			convertToElasticsearchFilter(query_in, true);
+			convertToElasticsearchFilter(query_in, false);
 			return true; // didn't throw so we're good
 		}
 		catch (RuntimeException re) {
