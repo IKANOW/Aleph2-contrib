@@ -86,7 +86,7 @@ public class TestMongoDbCrudService {
 	//private String _real_mongodb_connection = "localhost:4017";
 	
 	@Before
-	public void setupCrudServiceFactor() throws UnknownHostException {
+	public void setupCrudServiceFactory() throws UnknownHostException {
 		if (null == _factory) {
 			if (null == _real_mongodb_connection) {
 				_factory = new MockMongoDbCrudServiceFactory();

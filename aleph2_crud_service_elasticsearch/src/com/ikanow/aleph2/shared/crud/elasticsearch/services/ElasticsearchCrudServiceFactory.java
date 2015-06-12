@@ -27,24 +27,23 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudSer
 /** A factory for returning real or "mock" Elasticsearch CRUD service
  * @author Alex
  */
-public interface IElasticsearchCrudServiceFactory {
+public class ElasticsearchCrudServiceFactory implements IElasticsearchCrudServiceFactory {
 
-	/** Returns the elasticsearch client which backs the CRUD service
-	 * @return
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory#getClient()
 	 */
-	Client getClient();
+	public Client getClient() {
+		//TODO (ALEPH-14): use the configuration bean to create a real connection
+		return null;		
+	}
 	
-	/** Returns the CRUD service
-	 * @param bean_clazz - h
-	 * @param es_context - the elasticsearch context
-	 * @param id_ranges_ok - whether the _id field is indexed for this set of indexes/types
-	 * @param auth_fieldname - optionally, the fieldname to which auth/project beans are applied
-	 * @param auth - optionally, an authorization overlay added to each query
-	 * @param project - optionally, a project overlay added to each query
-	 * @return
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory#getElasticsearchCrudService(java.lang.Class, com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext, java.util.Optional, java.util.Optional, java.util.Optional, java.util.Optional)
 	 */
-	<O> ElasticsearchCrudService<O> getElasticsearchCrudService(final Class<O> bean_clazz,  
+	public <O> ElasticsearchCrudService<O> getElasticsearchCrudService(final Class<O> bean_clazz,  
 			final ElasticsearchContext es_context, 
 			final Optional<Boolean> id_ranges_ok, final CreationPolicy creation_policy, 
-			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project);	
+			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project) {
+		return new ElasticsearchCrudService<O>(bean_clazz, es_context, id_ranges_ok, creation_policy, auth_fieldname, auth, project);
+	}
 }

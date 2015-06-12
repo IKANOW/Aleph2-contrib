@@ -15,7 +15,7 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared.crud.elasticsearch.utils;
 
-/** MongoDB CRUD service errors
+/** Elasticsearch CRUD service errors
  * @author acp
  */
 public class ErrorUtils extends com.ikanow.aleph2.data_model.utils.ErrorUtils {
@@ -23,4 +23,7 @@ public class ErrorUtils extends com.ikanow.aleph2.data_model.utils.ErrorUtils {
 	public static final String EXISTS_ON_IDS = "It is not possible to make 'exists' queries on _ids, since each data object has excactly one _id value";
 	public static final String ALL_OF_ON_IDS = "It is not possible to make 'all_of' queries on _ids, since each data object can only have one _id value";
 	public static final String NO_ID_RANGES_UNLESS_IDS_INDEXED = "In order to perform range _ids on queries, it is necessary to have indexed the _id explicitly";
+	
+	public static final String NOT_YET_IMPLEMENTED = "This feature ({0}) has not yet been implemented, but is on the roadmap";
+	public static final String TRIED_TO_WRITE_INTO_RO_SERVICE = "This CRUD service was created as read-only but the method {0} attemped to write";
 }
