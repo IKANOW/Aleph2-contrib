@@ -20,6 +20,8 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
+import org.elasticsearch.action.WriteConsistencyLevel;
+import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.client.Client;
 
 import scala.Tuple2;
@@ -33,6 +35,8 @@ import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
+import com.ikanow.aleph2.data_model.utils.FutureUtils;
+import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchFutureUtils;
 
 //TODO ... going to need to get the mapping if any queries involve _id ranges.... and error if not 
 
@@ -54,7 +58,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			this.client = client;
 			this.indexes = indexes;
 			this.types = types;
-			read_only = (1 == types.size()); // no types == _all, >1 type = read-only
+			read_only = (1 == indexes.size()) && (1 == types.size()); // no types == _all, >1 type = read-only
 		}
 		final Client client;
 		final List<String> indexes;
@@ -83,8 +87,25 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	@Override
 	public CompletableFuture<Supplier<Object>> storeObject(O new_object,
 			boolean replace_if_present) {
-		// TODO Auto-generated method stub
-		return null;
+		try {
+			//TODO: check read only
+			//TODO: handle _id
+			//TODO: handle mappings
+			//TODO: JSON case
+			IndexRequestBuilder irb = _state.client.prepareIndex(
+														_state.indexes.iterator().next(), 
+														_state.types.iterator().next())
+													.setCreate(!replace_if_present)
+													.setConsistencyLevel(WriteConsistencyLevel.ONE)
+													.setSource(BeanTemplateUtils.toJson(new_object).toString());
+
+			return ElasticsearchFutureUtils.wrap(irb.execute(), ir -> {
+				return () -> ir.getId();
+			});
+		}
+		catch (Exception e) {
+			return FutureUtils.returnError(e);
+		}
 	}
 
 	/* (non-Javadoc)
@@ -92,8 +113,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 */
 	@Override
 	public CompletableFuture<Supplier<Object>> storeObject(O new_object) {
-		// TODO Auto-generated method stub
-		return null;
+		return storeObject(new_object, false);
 	}
 
 	/* (non-Javadoc)
@@ -122,8 +142,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	@Override
 	public CompletableFuture<Boolean> optimizeQuery(
 			List<String> ordered_field_list) {
-		// TODO Auto-generated method stub
-		return null;
+		return CompletableFuture.completedFuture(true);
 	}
 
 	/* (non-Javadoc)
@@ -131,7 +150,6 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 */
 	@Override
 	public boolean deregisterOptimizedQuery(List<String> ordered_field_list) {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
