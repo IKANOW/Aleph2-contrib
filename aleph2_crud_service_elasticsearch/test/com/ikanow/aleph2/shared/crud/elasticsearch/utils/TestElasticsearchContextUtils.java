@@ -13,14 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
-package com.ikanow.aleph2.shared.crud.elasticsearch.data_model;
+package com.ikanow.aleph2.shared.crud.elasticsearch.utils;
 
 import static org.junit.Assert.*;
 
 import org.junit.Test;
 
-@SuppressWarnings("unused")
-public class TestElasticsearchContext {
+public class TestElasticsearchContextUtils {
 
-	//TODO
+	@Test
+	public void test_getNextAutoType() {
+		
+		assertEquals("test_2", ElasticsearchContextUtils.getNextAutoType("test_", "test_1"));
+	}
 }

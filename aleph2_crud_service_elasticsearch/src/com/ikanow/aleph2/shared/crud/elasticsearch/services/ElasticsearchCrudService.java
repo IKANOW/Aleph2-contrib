@@ -20,15 +20,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequestBuilder;
+import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.count.CountRequestBuilder;
 import org.elasticsearch.action.get.GetRequestBuilder;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.index.IndexRequest.OpType;
+import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.index.query.FilterBuilder;
@@ -48,8 +52,10 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
+import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext.ReadWriteContext;
+import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchFutureUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ErrorUtils;
@@ -137,11 +143,46 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 							)
 					.map(i -> object_json.has("_id") ? i.setId(object_json.get("_id").asText()) : i)
 					.get();
-											
-			//TODO: this needs to handle mapping errors, so need a more complex version of this wrapper....
-			return ElasticsearchFutureUtils.wrap(irb.execute(), ir -> {		
+
+			// Execute and handle result
+			
+			final Function<IndexResponse, Supplier<Object>> success_handler = ir -> {		
 				return () -> ir.getId();
-			});
+			};
+
+			// Recursive, so has some hoops to jump through (lambda can't access itself)
+			BiConsumer<Throwable, CompletableFuture<Supplier<Object>>> error_handler = new BiConsumer<Throwable, CompletableFuture<Supplier<Object>>>() {
+				String _type = rw_context.typeContext().getWriteType(); // (BEWARE: mutable construct, see below) 
+				
+				BiConsumer<Throwable, CompletableFuture<Supplier<Object>>> set(final String type) {
+					_type = type;
+					return this;
+				}
+				
+				@Override
+				public void accept(Throwable error, CompletableFuture<Supplier<Object>> future) {
+					Patterns.match(error).andAct()						
+					.when(org.elasticsearch.index.mapper.MapperParsingException.class, mpe -> {
+						Patterns.match(rw_context.typeContext())
+							.andAct()
+							.when(ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext.class, auto_context -> {
+								final String new_type = ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), _type);
+								irb.setType(new_type);
+								ElasticsearchFutureUtils.wrap(
+										irb.execute(),
+										future,
+										(ir, next_future) -> {
+											next_future.complete(success_handler.apply(ir));
+										},
+										this.set(new_type));
+							})
+							.otherwise(() -> future.completeExceptionally(error));														
+					})
+					.otherwise(() -> future.completeExceptionally(error));
+				}				
+			};
+			
+			return ElasticsearchFutureUtils.wrap(irb.execute(), success_handler, error_handler);
 		}
 		catch (Exception e) {
 			return FutureUtils.returnError(e);
@@ -163,7 +204,16 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final List<O> new_objects, final boolean continue_on_error) {
 		//TODO (ALEPH-14): TO BE IMPLEMENTED
 		try {
-			throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "storeObjects"));
+			
+			final BulkRequestBuilder brb = _state.client.prepareBulk();
+
+			//TODO: fill in
+
+			//TODO: this needs to handle mapping errors, so need a more complex version of this wrapper....
+			return ElasticsearchFutureUtils.wrap(brb.execute(), br -> {		
+				//br.getItems()[0].getFailure().
+				return null;
+			});
 		}
 		catch (Exception e) {
 			return FutureUtils.returnError(e);
@@ -175,13 +225,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 */
 	@Override
 	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final List<O> new_objects) {
-		//TODO (ALEPH-14): TO BE IMPLEMENTED
-		try {
-			throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "storeObjects"));
-		}
-		catch (Exception e) {
-			return FutureUtils.returnError(e);
-		}
+		return storeObjects(new_objects, false);
 	}
 
 	/* (non-Javadoc)

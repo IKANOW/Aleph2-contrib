@@ -27,6 +27,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import scala.Tuple2;
 
+//TODO: dates .. have a memoized function to work out the grouping period based on the date string
+
+//TODO: need a 1-up util for auto type
+
 /** Algebraic data type (ADT) encapsulating the state of an elasticsearch crud "service" (which could point at multiple/auto indexes and types)
  * ElasticsearchContext = ReadOnlyContext(ReadOnlyTypeContext, ReadOnlyIndexContext) 
  * 						| ReadWriteContext(ReadWriteTypeContext, ReadWriteIndexContext)
@@ -329,6 +333,9 @@ public abstract class ElasticsearchContext {
 				@Override
 				public List<String> getReadableTypeList() {
 					return Collections.unmodifiableList(_known_types);
+				}
+				public String getPrefix() {
+					return _prefix;
 				}
 				@Override
 				public String getWriteType() {

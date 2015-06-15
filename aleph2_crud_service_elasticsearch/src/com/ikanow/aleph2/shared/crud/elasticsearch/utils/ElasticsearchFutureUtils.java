@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.shared.crud.elasticsearch.utils;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 import org.elasticsearch.action.ActionListener;
@@ -51,5 +52,59 @@ public class ElasticsearchFutureUtils {
         return completableFuture;
     }
 	
+    /** Wraps an elasticsearch future into a completable one, supporting user-defined action on failure
+     * @param es_future - the ES future
+     * @param value_generator - a user provided function to generate the output of a successful future
+     * @param error_handler - a user provided function that takes the error and the returned future and can eg resubmit the attempt with different params
+     * @return - the ES future converted to a Java8 CF and "decorated" with user defined success/failure actions
+     */
+    public static <ES, T> CompletableFuture<T> wrap(final ListenableActionFuture<ES> es_future, 
+    												final Function<ES, T> value_generator,
+    												final BiConsumer<Throwable, CompletableFuture<T>> error_handler
+    												)
+    {
+        final CompletableFuture<T> completableFuture = new CompletableFuture<>();
+ 
+        es_future.addListener(new ActionListener<ES>() {
+
+			@Override
+			public void onFailure(Throwable e) {				
+				error_handler.accept(e, completableFuture);
+			}
+
+			@Override
+			public void onResponse(ES response) {
+				completableFuture.complete(value_generator.apply(response));
+			}
+			
+		});        
+        return completableFuture;
+    }
 	
+    /** Wraps an elasticsearch future into a completable one, supporting user-defined action on success and failure
+     * @param es_future - the ES future
+     * @param value_generator - a user provided function that takes the success response and the returned future and can eg resubmit the attempt with different params (eg on partial failure)
+     * @param error_handler - a user provided function that takes the error and the returned future and can eg resubmit the attempt with different params
+     * @return - the ES future converted to a Java8 CF and "decorated" with user defined success/failure actions
+     */
+    public static <ES, T> void wrap(final ListenableActionFuture<ES> es_future, 
+    												final CompletableFuture<T> original_future,
+    												final BiConsumer<ES, CompletableFuture<T>> success_handler,
+    												final BiConsumer<Throwable, CompletableFuture<T>> error_handler
+    												)
+    {
+        es_future.addListener(new ActionListener<ES>() {
+
+			@Override
+			public void onFailure(Throwable e) {				
+				error_handler.accept(e, original_future);
+			}
+
+			@Override
+			public void onResponse(ES response) {
+				success_handler.accept(response, original_future);
+			}
+			
+		});        
+    }
 }
