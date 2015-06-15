@@ -16,6 +16,9 @@
 package com.ikanow.aleph2.shared.crud.elasticsearch.services;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -24,12 +27,18 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
+import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequestBuilder;
+import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
+import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.count.CountRequestBuilder;
 import org.elasticsearch.action.get.GetRequestBuilder;
+import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.index.IndexRequest.OpType;
 import org.elasticsearch.action.index.IndexResponse;
@@ -53,12 +62,15 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
 import com.ikanow.aleph2.data_model.utils.Patterns;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext.ReadWriteContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchFutureUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ErrorUtils;
+
+import fj.data.Either;
 
 //TODO .... more thoughts on field list buckets ... options for auto generating .number fields and .raw fields (and nested - that might live in the search index bit though?)
 
@@ -96,6 +108,43 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	
 	/////////////////////////////////////////////////////
 	
+	// UTILS
+	
+	/** Utility function for adding a set of objects to a single index
+	 * @param rw_context - either the index/type context, or just (index,type) for retries 
+	 * @param new_object - either the object to insert/save, or (id, string source) (must be the object(left) if the index/type context (ie left) is used for "rw_context")
+	 * @param replace_if_present - replace the existing object (else error)
+	 * @param bulk - whether being called as part of a bulk operation
+	 * @return
+	 */
+	private IndexRequestBuilder singleObjectIndexRequest(final Either<ReadWriteContext, Tuple2<String, String>> rw_context, 
+			final Either<O, Tuple2<String, String>> new_object, final boolean replace_if_present, final boolean bulk)
+	{
+		final Either<JsonNode, Tuple2<String, String>> json_object =
+				new_object.left().map(left-> {
+					return ((JsonNode.class.isAssignableFrom(_state.clazz))
+							? (JsonNode) left
+							: BeanTemplateUtils.toJson(left));
+				});
+		
+		return Optional
+				.of(rw_context.<IndexRequestBuilder>either(
+									left -> _state.client.prepareIndex(
+										left.indexContext().getWritableIndex(Optional.of(json_object.left().value())),
+										left.typeContext().getWriteType())
+									, 
+									right ->_state.client.prepareIndex(right._1(), right._2()))
+					.setOpType(replace_if_present ? OpType.INDEX : OpType.CREATE)
+					.setConsistencyLevel(WriteConsistencyLevel.ONE)
+					.setRefresh(!bulk && CreationPolicy.OPTIMIZED != _state.creation_policy)
+					.setSource(json_object.<String>either(left -> left.toString(), right -> right._2()))
+						)
+				.map(i -> json_object.<IndexRequestBuilder>either(left -> left.has("_id") ? i.setId(left.get("_id").asText()) : i, right -> i))				
+				.get();		
+	}
+	
+	/////////////////////////////////////////////////////
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getFilteredRepo(java.lang.String, java.util.Optional, java.util.Optional)
 	 */
@@ -128,57 +177,35 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		try {
 			final ReadWriteContext rw_context = getRwContextOrThrow(_state.es_context, "storeObject");
 			
-			final JsonNode object_json = (JsonNode.class.isAssignableFrom(_state.clazz))
-											? (JsonNode) new_object
-											: BeanTemplateUtils.toJson(new_object);
-			
-			final IndexRequestBuilder irb = Optional
-					.of(_state.client.prepareIndex(
-							rw_context.indexContext().getWritableIndex(Optional.of(object_json)),
-							rw_context.typeContext().getWriteType())
-						.setOpType(replace_if_present ? OpType.INDEX : OpType.CREATE)
-						.setConsistencyLevel(WriteConsistencyLevel.ONE)
-						.setRefresh(CreationPolicy.OPTIMIZED != _state.creation_policy)
-						.setSource(object_json.toString())
-							)
-					.map(i -> object_json.has("_id") ? i.setId(object_json.get("_id").asText()) : i)
-					.get();
+			final IndexRequestBuilder irb = singleObjectIndexRequest(Either.left(rw_context), Either.left(new_object), replace_if_present, false);
 
 			// Execute and handle result
 			
-			final Function<IndexResponse, Supplier<Object>> success_handler = ir -> {		
+			final Function<IndexResponse, Supplier<Object>> success_handler = ir -> {	
 				return () -> ir.getId();
 			};
 
 			// Recursive, so has some hoops to jump through (lambda can't access itself)
-			BiConsumer<Throwable, CompletableFuture<Supplier<Object>>> error_handler = new BiConsumer<Throwable, CompletableFuture<Supplier<Object>>>() {
-				String _type = rw_context.typeContext().getWriteType(); // (BEWARE: mutable construct, see below) 
-				
-				BiConsumer<Throwable, CompletableFuture<Supplier<Object>>> set(final String type) {
-					_type = type;
-					return this;
-				}
-				
+			final BiConsumer<Throwable, CompletableFuture<Supplier<Object>>> error_handler = new BiConsumer<Throwable, CompletableFuture<Supplier<Object>>>() {
 				@Override
-				public void accept(Throwable error, CompletableFuture<Supplier<Object>> future) {
+				public void accept(final Throwable error, final CompletableFuture<Supplier<Object>> future) {
 					Patterns.match(error).andAct()						
-					.when(org.elasticsearch.index.mapper.MapperParsingException.class, mpe -> {
-						Patterns.match(rw_context.typeContext())
-							.andAct()
-							.when(ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext.class, auto_context -> {
-								final String new_type = ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), _type);
-								irb.setType(new_type);
-								ElasticsearchFutureUtils.wrap(
-										irb.execute(),
-										future,
-										(ir, next_future) -> {
-											next_future.complete(success_handler.apply(ir));
-										},
-										this.set(new_type));
-							})
-							.otherwise(() -> future.completeExceptionally(error));														
-					})
-					.otherwise(() -> future.completeExceptionally(error));
+						.when(org.elasticsearch.index.mapper.MapperParsingException.class, mpe -> {
+							Patterns.match(rw_context.typeContext())
+								.andAct()
+								.when(ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext.class, auto_context -> {
+									irb.setType(ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), irb.request().type()));
+									ElasticsearchFutureUtils.wrap(
+											irb.execute(),
+											future,
+											(ir, next_future) -> {
+												next_future.complete(success_handler.apply(ir));
+											},
+											this);
+								})
+								.otherwise(() -> future.completeExceptionally(error));														
+						})
+						.otherwise(() -> future.completeExceptionally(error));
 				}				
 			};
 			
@@ -202,18 +229,154 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 */
 	@Override
 	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final List<O> new_objects, final boolean continue_on_error) {
-		//TODO (ALEPH-14): TO BE IMPLEMENTED
+		//TODO (ALEPH-14): should consider using (or having the option to use) a BulkProcessor object here, controlled/accessed via getUnderlyingTechnology
+		// (https://www.elastic.co/guide/en/elasticsearch/client/java-api/current/bulk.html#_using_bulk_processor .. eg still support auto-type etc but don't care about responses)
+		
+		if (!continue_on_error) { // (this is an illegal arg error, so send it out of band)
+			throw new RuntimeException(ErrorUtils.STORE_OBJECTS_ALWAYS_COMPLETES);
+		}		
+		
 		try {
+			final ReadWriteContext rw_context = getRwContextOrThrow(_state.es_context, "storeObjects");
 			
-			final BulkRequestBuilder brb = _state.client.prepareBulk();
+			final BulkRequestBuilder brb = new_objects.stream()
+											.reduce(
+												_state.client.prepareBulk()
+													.setConsistencyLevel(WriteConsistencyLevel.ONE)
+													.setRefresh(CreationPolicy.AVAILABLE_IMMEDIATELY == _state.creation_policy)
+												, 
+												(acc, val) -> acc.add(singleObjectIndexRequest(Either.left(rw_context), Either.left(val), false, true)),
+												(acc1, acc2) -> { throw new RuntimeException("Internal logic error - Parallel not supported"); });
+			
+			final BiConsumer<BulkResponse, CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>>> action_handler = 
+					new BiConsumer<BulkResponse, CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>>>()
+			{
+				// WARNING: mutable/imperative code ahead...
+				long _curr_written = 0;
+				List<Object> _id_list = null;
+				HashMap<String, String> _mapping_failures = null; 
+				
+				@Override
+				public void accept(final BulkResponse result, final CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> future) {
+					
+					if (result.hasFailures() &&
+							(rw_context.typeContext() instanceof ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext)
+							)
+					{
+						final ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext auto_context = (ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext) rw_context.typeContext();
+						// Recursive builder in case I need to build a second batch of docs								
+						BulkRequestBuilder brb2 = null;
+						
+						if (null == _id_list) {
+							_id_list = new LinkedList<Object>();
+						}
+						HashMap<String, String> temp_mapping_failures = null;
+						final Iterator<BulkItemResponse> it = result.iterator();
+						while (it.hasNext()) {
+							final BulkItemResponse bir = it.next();
+							if (bir.isFailed()) {								
+								if (bir.getFailure().getMessage().startsWith("MappingParsingException")) {
+									/**/
+									System.out.println("----------- FOUND: " + bir.getFailure().getMessage());
+									
+									// OK this is the case where I might be able to apply auto types:
+									if (null == brb2) { 
+										brb2 = _state.client.prepareBulk()
+													.setConsistencyLevel(WriteConsistencyLevel.ONE)
+													.setRefresh(CreationPolicy.AVAILABLE_IMMEDIATELY == _state.creation_policy);
+									}
+									String failed_json = null;
+									if (null == _mapping_failures) { // first time through, use item id to grab the objects from the original request
+										if (null == temp_mapping_failures) {
+											temp_mapping_failures = new HashMap<String, String>();
+										}
+										final ActionRequest<?> ar = brb.request().requests().get(bir.getItemId());
+										if (ar instanceof IndexRequest) {
+											IndexRequest ir = (IndexRequest) ar;
+											failed_json = ir.source().toUtf8();
+											temp_mapping_failures.put(bir.getId(), failed_json);
+										}
+									}
+									else { // have already grabbed all the failure _ids and stuck in a map
+										failed_json = _mapping_failures.get(bir.getId());
+									}									
+									if (null != failed_json) {
+										brb2.add(singleObjectIndexRequest(
+													Either.right(Tuples._2T(bir.getIndex(), 
+															ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), bir.getType()))), 
+													Either.right(Tuples._2T(bir.getId(), failed_json)), 
+													false, true));  
+									}
+								}
+								/**/
+								else 
+									System.out.println("----------- NOT?: " + bir.getFailure().getMessage());
 
-			//TODO: fill in
+								// Ugh otherwise just silently fail I guess? 
+								//(should I also look for transient errors and resubmit them after a pause?!)
+							}
+							else { // (this item worked)
+								/**/
+								System.out.println("----------- WORKED: " + bir.getItemId());
+								
+								_id_list.add(bir.getId());
+								_curr_written++;
+							}							
+						}
+						if (null != brb2) { // found mapping errors to retry with
+							if (null == _mapping_failures) // (first level of recursion)
+								_mapping_failures = temp_mapping_failures;
+							
+							ElasticsearchFutureUtils.wrap(brb2.execute(), future, this, (error, future2) -> {
+													future2.completeExceptionally(error);
+												});
+						}
+						else { // relative success, plus we've built the list anyway
+							future.complete(Tuples._2T(() -> _id_list, () -> (Long)_curr_written));
+						}
+					}
+					else { // No errors with this iteration of the bulk request			
+/**/						
+						final Iterator<BulkItemResponse> it = result.iterator();
+						while (it.hasNext()) {
+							final BulkItemResponse bir = it.next();
+							//System.out.println(brb.request().requests().get(bir.getItemId()).);
+							final ActionRequest<?> ar = brb.request().requests().get(bir.getItemId());
+							IndexRequest ir = (IndexRequest) ar;
+							/**/
+							System.out.println("----------- WORKED2: " + bir.getItemId() + "..." + bir.getId() + "..." + ir.opType().toString() + "..." + ir.source().toUtf8() + "..." + ir.version());
+							
 
-			//TODO: this needs to handle mapping errors, so need a more complex version of this wrapper....
-			return ElasticsearchFutureUtils.wrap(brb.execute(), br -> {		
-				//br.getItems()[0].getFailure().
-				return null;
-			});
+						}						
+						
+						if (null == _id_list) { // This is the first bulk request, no recursion on failures, so can lazily create the list in case it isn't needed
+							final Supplier<List<Object>> get_objects = () -> {
+								return StreamSupport.stream(result.spliterator(), false)
+											.filter(bir -> ((IndexRequest)brb.request().requests().get(bir.getItemId())).version() > 0)
+												//(odd functionality - see duplicates as working but with -ve version field)
+											.map(bir -> bir.getId()).collect(Collectors.toList());
+							};
+							final Supplier<Long> get_count_workaround = () -> { 
+								return StreamSupport.stream(result.spliterator(), false)
+											.filter(bir -> ((IndexRequest)brb.request().requests().get(bir.getItemId())).version() > 0)
+												//(odd functionality - see duplicates as working but with -ve version field), else could just return () -> (Long)_curr_written
+												.collect(Collectors.counting());
+							};
+							future.complete(Tuples._2T(get_objects, get_count_workaround));
+						}
+						else { // have already calculated everything so just return it							
+							future.complete(Tuples._2T(() -> _id_list, () -> (Long)_curr_written));
+						}
+					}
+				}				
+			};
+			
+			return ElasticsearchFutureUtils.wrap(brb.execute(), 
+												new CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>>(),
+												action_handler,
+												(error, future) -> {
+													future.completeExceptionally(error);
+												});
 		}
 		catch (Exception e) {
 			return FutureUtils.returnError(e);
@@ -225,7 +388,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 */
 	@Override
 	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final List<O> new_objects) {
-		return storeObjects(new_objects, false);
+		return storeObjects(new_objects, true);
 	}
 
 	/* (non-Javadoc)

@@ -26,4 +26,6 @@ public class ErrorUtils extends com.ikanow.aleph2.data_model.utils.ErrorUtils {
 	
 	public static final String NOT_YET_IMPLEMENTED = "This feature ({0}) has not yet been implemented, but is on the roadmap";
 	public static final String TRIED_TO_WRITE_INTO_RO_SERVICE = "This CRUD service was created as read-only but the method {0} attemped to write";
+	
+	public static final String STORE_OBJECTS_ALWAYS_COMPLETES = "Elasticsearch does not support continue_on_error:false in storeObjects";
 }

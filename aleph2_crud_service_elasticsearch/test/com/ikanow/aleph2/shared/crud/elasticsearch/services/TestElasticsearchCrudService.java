@@ -48,6 +48,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils.BeanTemplate;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
@@ -214,89 +215,82 @@ public class TestElasticsearchCrudService {
 		}
 	}
 	
-	//TODO
-//	@Test
-//	public void testCreateMultipleObjects() throws InterruptedException, ExecutionException {
-//		
-//		final MongoDbCrudService<TestBean, String> service = getTestService("testCreateMultipleObjects", TestBean.class, String.class);
-//		
-//		// 1) Insertion without ids
-//		
-//		assertEquals(0, service._state.orig_coll.count());		
-//		
-//		final List<TestBean> l = IntStream.rangeClosed(1, 10).boxed()
-//				.map(i -> BeanTemplateUtils.build(TestBean.class).with("test_string", "test_string" + i).done().get())
-//				.collect(Collectors.toList());
-//
-//		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result = service.storeObjects(l);
-//		
-//		assertEquals(10, service._state.orig_coll.count());
-//		assertEquals((Long)(long)10, result.get()._2().get());
-//		
-//		final List<Object> ids = result.get()._1().get();
-//		IntStream.rangeClosed(1, 10).boxed().map(i -> Tuples._2T(i, ids.get(i-1)))
-//					.forEach(io -> {
-//						final DBObject val = service._state.orig_coll.findOne(io._2());
-//						assertNotEquals(null, val);
-//						assertEquals("test_string" + io._1(), val.get("test_string"));
-//					});
-//		
-//		// 2) Insertion with ids
-//		
-//		service._state.orig_coll.drop();
-//
-//		final List<TestBean> l2 = IntStream.rangeClosed(51, 100).boxed()
-//								.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done().get())
-//								.collect(Collectors.toList());
-//				
-//		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_2 = service.storeObjects(l2);
-//		
-//		assertEquals(50, service._state.orig_coll.count());
-//		assertEquals((Long)(long)50, result_2.get()._2().get());
-//		
-//		// 3) Insertion with dups - fail and stop
-//
-//		final List<TestBean> l3 = IntStream.rangeClosed(1, 200).boxed()
-//				.map(i -> BeanTemplateUtils.build(TestBean.class)
-//						.with("_id", "id" + i).
-//						with("test_string", "test_string" + i).done().get())
-//				.collect(Collectors.toList());
-//		
-//		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_3 = service.storeObjects(l3);
-//
-//		Exception expected_ex = null;
-//		try {
-//			result_3.get();
-//			fail("Should have thrown exception on duplicate insert");
-//		}
-//		catch (Exception e) {
-//			expected_ex = e;
-//		}
-//		if (null != expected_ex)
-//			assertThat(expected_ex.getCause(), instanceOf(MongoException.class));		
-//		
-//		// Yikes - it has inserted objects up to the error though...
-//		assertEquals(100, service._state.orig_coll.count());		
-//		
-//		// 4) Insertion with dups - fail and continue
-//		
-//		final List<TestBean> l4 = IntStream.rangeClosed(21, 120).boxed()
-//				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done().get())
-//				.collect(Collectors.toList());
-//		
-//		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_4 = service.storeObjects(l4, true);
-//
-//		try {
-//			assertEquals(120, service._state.orig_coll.count());
-//			assertEquals(100L, (long)result_4.get()._2().get());			
-//			
-//			// Fongo and Mongo behave differently here:
-//			if (null != this._real_mongodb_connection) {
-//				fail("Should have thrown exception on duplicate insert, even though docs have been inserted");
-//			}
-//		}
-//		catch (Exception e) {}
-//	}
+	@Test
+	public void testCreateMultipleObjects() throws InterruptedException, ExecutionException {
+		
+		final ElasticsearchCrudService<TestBean> service = getTestService("testCreateMultipleObjects", TestBean.class);
+		
+		// 1) Insertion without ids
+		
+		assertEquals(0, service.countObjects().get().intValue());		
+		
+		final List<TestBean> l = IntStream.rangeClosed(1, 10).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("test_string", "test_string" + i).done().get())
+				.collect(Collectors.toList());
+
+		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result = service.storeObjects(l);
+		result.get();
+		
+		assertEquals(10, service.countObjects().get().intValue());		
+		assertEquals((Long)(long)10, result.get()._2().get());
+		
+		final List<Object> ids = result.get()._1().get();
+		IntStream.rangeClosed(1, 10).boxed().map(i -> Tuples._2T(i, ids.get(i-1)))
+					.forEach(Lambdas.wrap_consumer_u(io -> {
+						final Optional<TestBean> tb = service.getObjectById(io._2()).get();
+						assertTrue("TestBean should be present: " + io, tb.isPresent());
+						assertEquals("test_string" + io._1(), tb.get().test_string);
+					}));
+		
+		// 2) Insertion with ids
+		
+		service.deleteDatastore().get();
+
+		final List<TestBean> l2 = IntStream.rangeClosed(51, 100).boxed()
+								.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done().get())
+								.collect(Collectors.toList());
+				
+		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_2 = service.storeObjects(l2);
+		result_2.get();
+		
+		assertEquals(50, service.countObjects().get().intValue());		
+		assertEquals(50, result_2.get()._2().get().intValue());
+		
+		//TODO: need to change this insertion with dups logic (here + in mongodb) and therefore testing
+		
+		// 3) Insertion with dups - fail and stop
+
+		// Not supported with ES
+
+		final List<TestBean> l3 = IntStream.rangeClosed(1, 200).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class)
+						.with("_id", "id" + i).
+						with("test_string", "test_string" + i).done().get())
+				.collect(Collectors.toList());
+
+		try {
+			service.storeObjects(l3, false);
+			fail("Should have thrown exception");
+		}
+		catch (Exception e) {
+			assertTrue("Threw direct runtime " + e.getMessage(), RuntimeException.class.isAssignableFrom(e.getClass()));
+		}
+
+		// 4) Insertion with dups - fail and continue
+		
+		final List<TestBean> l4 = IntStream.rangeClosed(21, 120).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string2" + i).done().get())
+				.collect(Collectors.toList());
+		
+		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_4 = service.storeObjects(l4); // (defaults to adding true)
+		result_4.get();
+
+		try {
+			assertEquals(50, result_4.get()._2().get().intValue());
+			assertEquals(100, service.countObjects().get().intValue());					
+		}
+		catch (Exception e) {}
+	}
 
 	////////////////////////////////////////////////
 	

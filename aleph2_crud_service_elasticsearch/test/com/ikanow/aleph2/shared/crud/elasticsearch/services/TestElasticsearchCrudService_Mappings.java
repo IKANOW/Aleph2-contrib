@@ -40,7 +40,6 @@ public class TestElasticsearchCrudService_Mappings {
 	// UTILS
 	
 	// Set this string to connect vs a real D
-	//TODO handle real case
 	
 	@Before
 	public void setupCrudServiceFactory() throws UnknownHostException {
@@ -102,9 +101,44 @@ public class TestElasticsearchCrudService_Mappings {
 		// Using normal type system: should fail
 		
 		{
-			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex", TestBean.class,				
+			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_1", TestBean.class,				
 					new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
-							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex".toLowerCase()),
+							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_1".toLowerCase()),
+							new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext("type1")));
+	
+			TestBean test_long = new TestBean();
+			test_long.test_string1 = "test1a.1";
+			test_long.test_map.put("test_map", 1L);
+			
+			
+			TestBean test_string = new TestBean();
+			test_string.test_string1 = "test1a.2";
+			test_string.test_map.put("test_map", "test1b");
+	
+			assertEquals(0L, service.countObjects().get().longValue());
+			
+			service.storeObject(test_long).get();
+			
+			assertEquals(1L, service.countObjects().get().longValue());
+			
+			CompletableFuture<Supplier<Object>> ret_val = service.storeObject(test_string);
+			
+			try {
+				ret_val.get();
+				fail("Should have throw mapping exception");
+			}
+			catch (Exception mpe) {
+				assertTrue("Correct type: " + mpe.getClass(), org.elasticsearch.index.mapper.MapperParsingException.class.isAssignableFrom(mpe.getCause().getClass()));
+			}
+			
+			assertEquals(1L, service.countObjects().get().longValue());
+		}		
+
+		// Using auto type: should create a second type
+		{
+			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_2", TestBean.class,				
+					new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
+							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_2".toLowerCase()),
 							new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), Optional.empty())));
 	
 			TestBean test_long = new TestBean();
@@ -125,17 +159,39 @@ public class TestElasticsearchCrudService_Mappings {
 			CompletableFuture<Supplier<Object>> ret_val = service.storeObject(test_string);
 			
 			ret_val.get();
-		}		
-		//TODO
+			
+			assertEquals(2L, service.countObjects().get().longValue());
 
-		// Using auto type: should create a second type
-		
+			// Reinsert and check it still works (includes fail-then-recurse-then-succeed test)
+			
+			service.storeObject(test_long).get();
+			
+			assertEquals(3L, service.countObjects().get().longValue());
+			
+			CompletableFuture<Supplier<Object>> ret_val_2 = service.storeObject(test_string);
+
+			ret_val_2.get();
+			
+			assertEquals(4L, service.countObjects().get().longValue());
+			
+			// And another level of recursion
+			
+			TestBean test_object = new TestBean();
+			test_object.test_string1 = "test1a.3";
+			test_object.test_map.put("test_map", test_string);
+	
+			CompletableFuture<Supplier<Object>> ret_val_3 = service.storeObject(test_object);
+
+			ret_val_3.get();
+			
+			assertEquals(5L, service.countObjects().get().longValue());
+		}
 	}
 	
 	
 	/////////////////////////////////////////////////////
 	
-	
+	//TODO when testing store objects, check the case where all the writes fail, to make sure that this still results in full success
 	
 	
 	//TODO: all sorts of things to test...

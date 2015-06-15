@@ -87,7 +87,7 @@ public class ElasticsearchFutureUtils {
      * @param error_handler - a user provided function that takes the error and the returned future and can eg resubmit the attempt with different params
      * @return - the ES future converted to a Java8 CF and "decorated" with user defined success/failure actions
      */
-    public static <ES, T> void wrap(final ListenableActionFuture<ES> es_future, 
+    public static <ES, T> CompletableFuture<T> wrap(final ListenableActionFuture<ES> es_future, 
     												final CompletableFuture<T> original_future,
     												final BiConsumer<ES, CompletableFuture<T>> success_handler,
     												final BiConsumer<Throwable, CompletableFuture<T>> error_handler
@@ -96,7 +96,7 @@ public class ElasticsearchFutureUtils {
         es_future.addListener(new ActionListener<ES>() {
 
 			@Override
-			public void onFailure(Throwable e) {				
+			public void onFailure(Throwable e) {
 				error_handler.accept(e, original_future);
 			}
 
@@ -106,5 +106,6 @@ public class ElasticsearchFutureUtils {
 			}
 			
 		});        
+		return original_future;
     }
 }
