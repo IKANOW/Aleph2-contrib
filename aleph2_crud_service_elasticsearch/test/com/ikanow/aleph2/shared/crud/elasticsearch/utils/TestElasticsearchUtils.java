@@ -563,7 +563,7 @@ public class TestElasticsearchUtils {
 	}
 	
 	@Test
-	public void handleIdDifferently() throws IOException {
+	public void handleIdAndTypeDifferently() throws IOException {
 		
 		// id - single value
 
@@ -611,6 +611,22 @@ public class TestElasticsearchUtils {
 			}			
 		}		
 		
+		// Error case 1b: exists on "_type"
+		
+		{
+			final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(TestBean.class)
+																	.when(TestBean::bool_field, true)
+																	.withPresent("_type");
+		
+			try {
+				ElasticsearchUtils.queryContainsIdRanges(query_comp_1);
+				fail("Should have thrown exception here");
+			}
+			catch (RuntimeException e) {
+				assertEquals(ErrorUtils.EXISTS_ON_TYPES, e.getMessage());
+			}			
+		}		
+		
 		// id - single value. not
 
 		{
@@ -634,6 +650,62 @@ public class TestElasticsearchUtils {
 																	.array("values", "not_id")
 																	.endObject()
 															.endObject().endObject()
+														.endObject()
+													.endArray().endObject()
+												.endObject();
+			
+			assertEquals(sortOutQuotesAndStuff(expected_1.string()), toXContentThenString(query_meta_1._1()));
+		}
+		
+		// type - single value. not
+
+		{
+			final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(TestBean.class)
+					.when(TestBean::bool_field, true)
+					.whenNot("_type", "not_id");
+			
+			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
+			
+			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
+													.startObject("and").startArray("filters")
+														.startObject()
+															.startObject("term")
+																.field("bool_field", true)
+															.endObject()
+														.endObject()
+														.startObject()
+															.startObject("not").startObject("filter")
+																.startObject("type")
+																	.field("value", "not_id")
+																	.endObject()
+															.endObject().endObject()
+														.endObject()
+													.endArray().endObject()
+												.endObject();
+			
+			assertEquals(sortOutQuotesAndStuff(expected_1.string()), toXContentThenString(query_meta_1._1()));
+		}
+
+		// type - single value. set
+
+		{
+			final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(TestBean.class)
+					.when(TestBean::bool_field, true)
+					.when("_type", "id");
+			
+			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
+			
+			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
+													.startObject("and").startArray("filters")
+														.startObject()
+															.startObject("term")
+																.field("bool_field", true)
+															.endObject()
+														.endObject()
+														.startObject()
+															.startObject("type")
+																.field("value", "id")
+																.endObject()
 														.endObject()
 													.endArray().endObject()
 												.endObject();
@@ -669,6 +741,38 @@ public class TestElasticsearchUtils {
 			assertEquals(sortOutQuotesAndStuff(expected_1.string()), toXContentThenString(query_meta_1._1()));
 		}
 
+		// type - multi value, any_of
+
+		{
+			final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(TestBean.class)
+																	.when(TestBean::bool_field, true)
+																	.withAny("_type", Arrays.asList("id1", "id2", "id3"));
+			
+			try {
+				ElasticsearchUtils.queryContainsIdRanges(query_comp_1);
+				fail("Should have thrown exception here");
+			}
+			catch (RuntimeException e) {
+				assertEquals(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "any_of/_type"), e.getMessage());
+			}			
+		}
+		
+		// type - multi value, all_of
+
+		{
+			final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.anyOf(TestBean.class)
+																	.when(TestBean::bool_field, true)
+																	.withAll("_type", Arrays.asList("id1", "id2", "id3"));
+			
+			try {
+				ElasticsearchUtils.queryContainsIdRanges(query_comp_1);
+				fail("Should have thrown exception here");
+			}
+			catch (RuntimeException e) {
+				assertEquals(ErrorUtils.ALL_OF_ON_TYPES, e.getMessage());
+			}			
+		}
+		
 		// Error case 1: all of "ids"
 		
 		{
@@ -727,6 +831,24 @@ public class TestElasticsearchUtils {
 			assertEquals(sortOutQuotesAndStuff(expected_1.string()), toXContentThenString(query_meta_1._1()));
 			
 		}		
+		
+		// Error case 2 - "_type" range fails
+		
+		{
+			final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(TestBean.class)
+					.when(TestBean::bool_field, true)
+					.rangeAbove("_type", "lower_id", true);
+		
+			try {
+				ElasticsearchUtils.queryContainsIdRanges(query_comp_1);
+				fail("Should have thrown exception here");
+			}
+			catch (RuntimeException e) {
+				assertEquals(ErrorUtils.RANGES_ON_TYPES, e.getMessage());
+			}			
+		}		
+		
+		
 	}
 		
 	@Test

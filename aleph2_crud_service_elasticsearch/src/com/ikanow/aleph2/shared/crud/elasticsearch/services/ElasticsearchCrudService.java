@@ -139,7 +139,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 					.setRefresh(!bulk && CreationPolicy.OPTIMIZED != _state.creation_policy)
 					.setSource(json_object.<String>either(left -> left.toString(), right -> right._2()))
 						)
-				.map(i -> json_object.<IndexRequestBuilder>either(left -> left.has("_id") ? i.setId(left.get("_id").asText()) : i, right -> i))				
+				.map(i -> json_object.<IndexRequestBuilder>either(left -> left.has("_id") ? i.setId(left.get("_id").asText()) : i, right -> i.setId(right._1())))				
 				.get();		
 	}
 	
@@ -271,10 +271,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 						while (it.hasNext()) {
 							final BulkItemResponse bir = it.next();
 							if (bir.isFailed()) {								
-								if (bir.getFailure().getMessage().startsWith("MappingParsingException")) {
-									/**/
-									System.out.println("----------- FOUND: " + bir.getFailure().getMessage());
-									
+								if (bir.getFailure().getMessage().startsWith("MapperParsingException")) {
 									// OK this is the case where I might be able to apply auto types:
 									if (null == brb2) { 
 										brb2 = _state.client.prepareBulk()
@@ -287,7 +284,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 											temp_mapping_failures = new HashMap<String, String>();
 										}
 										final ActionRequest<?> ar = brb.request().requests().get(bir.getItemId());
-										if (ar instanceof IndexRequest) {
+										if (ar instanceof IndexRequest) {											
 											IndexRequest ir = (IndexRequest) ar;
 											failed_json = ir.source().toUtf8();
 											temp_mapping_failures.put(bir.getId(), failed_json);
@@ -304,17 +301,10 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 													false, true));  
 									}
 								}
-								/**/
-								else 
-									System.out.println("----------- NOT?: " + bir.getFailure().getMessage());
-
 								// Ugh otherwise just silently fail I guess? 
 								//(should I also look for transient errors and resubmit them after a pause?!)
 							}
 							else { // (this item worked)
-								/**/
-								System.out.println("----------- WORKED: " + bir.getItemId());
-								
 								_id_list.add(bir.getId());
 								_curr_written++;
 							}							
@@ -323,25 +313,17 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 							if (null == _mapping_failures) // (first level of recursion)
 								_mapping_failures = temp_mapping_failures;
 							
+							// (note that if brb2.request().requests().isEmpty() this is an internal logic error, so it's OK to throw)
 							ElasticsearchFutureUtils.wrap(brb2.execute(), future, this, (error, future2) -> {
 													future2.completeExceptionally(error);
-												});
+													});
 						}
 						else { // relative success, plus we've built the list anyway
 							future.complete(Tuples._2T(() -> _id_list, () -> (Long)_curr_written));
 						}
 					}
 					else { // No errors with this iteration of the bulk request			
-						/**/						
-						final Iterator<BulkItemResponse> it = result.iterator();
-						while (it.hasNext()) {
-							final BulkItemResponse bir = it.next();
-							//System.out.println(brb.request().requests().get(bir.getItemId()).);
-							final ActionRequest<?> ar = brb.request().requests().get(bir.getItemId());
-							IndexRequest ir = (IndexRequest) ar;
-							/**/
-							System.out.println("----------- WORKED2: " + bir.getItemId() + "..." + bir.getId() + "..." + ir.opType().toString() + "..." + ir.source().toUtf8() + "..." + ir.version());
-						}						
+						_curr_written += result.getItems().length;
 						
 						if (null == _id_list) { // This is the first bulk request, no recursion on failures, so can lazily create the list in case it isn't needed
 							final Supplier<List<Object>> get_objects = () -> {
