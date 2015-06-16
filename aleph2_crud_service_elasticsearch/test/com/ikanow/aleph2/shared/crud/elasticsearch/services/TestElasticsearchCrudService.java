@@ -256,27 +256,7 @@ public class TestElasticsearchCrudService {
 		assertEquals(50, service.countObjects().get().intValue());		
 		assertEquals(50, result_2.get()._2().get().intValue());
 		
-		//TODO: need to change this insertion with dups logic (here + in mongodb) and therefore testing
-		
-		// 3) Insertion with dups - fail and stop
-
-		// Not supported with ES
-
-		final List<TestBean> l3 = IntStream.rangeClosed(1, 200).boxed()
-				.map(i -> BeanTemplateUtils.build(TestBean.class)
-						.with("_id", "id" + i).
-						with("test_string", "test_string" + i).done().get())
-				.collect(Collectors.toList());
-
-		try {
-			service.storeObjects(l3, false);
-			fail("Should have thrown exception");
-		}
-		catch (Exception e) {
-			assertTrue("Threw direct runtime " + e.getMessage(), RuntimeException.class.isAssignableFrom(e.getClass()));
-		}
-
-		// 4) Insertion with dups - fail and continue
+		// 4) Insertion with dups - fail on insert dups
 		
 		final List<TestBean> l4 = IntStream.rangeClosed(21, 120).boxed()
 				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string2" + i).done().get())
@@ -290,6 +270,24 @@ public class TestElasticsearchCrudService {
 			assertEquals(100, service.countObjects().get().intValue());					
 		}
 		catch (Exception e) {}
+		
+		// 5) Insertion with dups - overwrite 
+		
+		final List<TestBean> l5 = IntStream.rangeClosed(21, 120).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string5" + i).done().get())
+				.collect(Collectors.toList());
+		
+		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_5 = service.storeObjects(l5, true); // (defaults to adding true)
+		result_5.get();
+
+		try {
+			assertEquals(100, result_5.get()._2().get().intValue());
+			assertEquals(100, service.countObjects().get().intValue());					
+			
+			assertEquals(100, service.countObjectsBySpec(CrudUtils.allOf(TestBean.class).rangeAbove("test_string", "test_string5", true)).get().intValue());
+		}
+		catch (Exception e) {}
+		
 	}
 
 	////////////////////////////////////////////////

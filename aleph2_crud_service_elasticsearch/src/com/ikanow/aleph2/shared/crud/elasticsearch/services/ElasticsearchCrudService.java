@@ -228,13 +228,9 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#storeObjects(java.util.List, boolean)
 	 */
 	@Override
-	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final List<O> new_objects, final boolean continue_on_error) {
+	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final List<O> new_objects, final boolean replace_if_present) {
 		//TODO (ALEPH-14): should consider using (or having the option to use) a BulkProcessor object here, controlled/accessed via getUnderlyingTechnology
 		// (https://www.elastic.co/guide/en/elasticsearch/client/java-api/current/bulk.html#_using_bulk_processor .. eg still support auto-type etc but don't care about responses)
-		
-		if (!continue_on_error) { // (this is an illegal arg error, so send it out of band)
-			throw new RuntimeException(ErrorUtils.STORE_OBJECTS_ALWAYS_COMPLETES);
-		}		
 		
 		try {
 			final ReadWriteContext rw_context = getRwContextOrThrow(_state.es_context, "storeObjects");
@@ -245,7 +241,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 													.setConsistencyLevel(WriteConsistencyLevel.ONE)
 													.setRefresh(CreationPolicy.AVAILABLE_IMMEDIATELY == _state.creation_policy)
 												, 
-												(acc, val) -> acc.add(singleObjectIndexRequest(Either.left(rw_context), Either.left(val), false, true)),
+												(acc, val) -> acc.add(singleObjectIndexRequest(Either.left(rw_context), Either.left(val), replace_if_present, true)),
 												(acc1, acc2) -> { throw new RuntimeException("Internal logic error - Parallel not supported"); });
 			
 			final BiConsumer<BulkResponse, CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>>> action_handler = 
@@ -336,7 +332,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 						}
 					}
 					else { // No errors with this iteration of the bulk request			
-/**/						
+						/**/						
 						final Iterator<BulkItemResponse> it = result.iterator();
 						while (it.hasNext()) {
 							final BulkItemResponse bir = it.next();
@@ -345,8 +341,6 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 							IndexRequest ir = (IndexRequest) ar;
 							/**/
 							System.out.println("----------- WORKED2: " + bir.getItemId() + "..." + bir.getId() + "..." + ir.opType().toString() + "..." + ir.source().toUtf8() + "..." + ir.version());
-							
-
 						}						
 						
 						if (null == _id_list) { // This is the first bulk request, no recursion on failures, so can lazily create the list in case it isn't needed
@@ -388,7 +382,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 */
 	@Override
 	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final List<O> new_objects) {
-		return storeObjects(new_objects, true);
+		return storeObjects(new_objects, false);
 	}
 
 	/* (non-Javadoc)
@@ -542,7 +536,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	public CompletableFuture<Long> countObjectsBySpec(QueryComponent<O> spec) {
 		try {
 			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(spec, _state.id_ranges_ok);
-
+			
 			final CountRequestBuilder crb = _state.client.prepareCount()
 					.setIndices(_state.es_context.indexContext().getReadableIndexArray(Optional.empty()))
 					.setTypes(_state.es_context.typeContext().getReadableTypeArray())
