@@ -290,6 +290,86 @@ public class TestElasticsearchCrudService {
 		
 	}
 
+	@Test
+	public void testCreateMultipleObjects_JSON() throws InterruptedException, ExecutionException {
+		
+		final ElasticsearchCrudService<JsonNode> service = getTestService("testCreateMultipleObjects_json", TestBean.class).getRawCrudService();
+		
+		// 1) Insertion without ids
+		
+		assertEquals(0, service.countObjects().get().intValue());		
+		
+		final List<JsonNode> l = IntStream.rangeClosed(1, 10).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("test_string", "test_string" + i).done().get())
+				.map(o -> BeanTemplateUtils.toJson(o))
+				.collect(Collectors.toList());
+
+		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result = service.storeObjects(l);
+		result.get();
+		
+		assertEquals(10, service.countObjects().get().intValue());		
+		assertEquals((Long)(long)10, result.get()._2().get());
+		
+		final List<Object> ids = result.get()._1().get();
+		assertEquals(10, ids.size());
+		IntStream.rangeClosed(1, 10).boxed().map(i -> Tuples._2T(i, ids.get(i-1)))
+					.forEach(Lambdas.wrap_consumer_u(io -> {
+						final Optional<JsonNode> tb = service.getObjectById(io._2()).get();
+						assertTrue("TestBean should be present: " + io, tb.isPresent());
+						assertEquals("test_string" + io._1(), tb.get().get("test_string").asText());
+					}));
+		
+		// 2) Insertion with ids
+		
+		service.deleteDatastore().get();
+
+		final List<JsonNode> l2 = IntStream.rangeClosed(51, 100).boxed()
+								.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done().get())
+								.map(o -> BeanTemplateUtils.toJson(o))
+								.collect(Collectors.toList());
+				
+		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_2 = service.storeObjects(l2);
+		result_2.get();
+		
+		assertEquals(50, service.countObjects().get().intValue());		
+		assertEquals(50, result_2.get()._2().get().intValue());
+		
+		// 4) Insertion with dups - fail on insert dups
+		
+		final List<JsonNode> l4 = IntStream.rangeClosed(21, 120).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string2" + i).done().get())
+				.map(o -> BeanTemplateUtils.toJson(o))
+				.collect(Collectors.toList());
+		
+		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_4 = service.storeObjects(l4); // (defaults to adding true)
+		result_4.get();
+
+		try {
+			assertEquals(50, result_4.get()._2().get().intValue());
+			assertEquals(100, service.countObjects().get().intValue());					
+		}
+		catch (Exception e) {}
+		
+		// 5) Insertion with dups - overwrite 
+		
+		final List<JsonNode> l5 = IntStream.rangeClosed(21, 120).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string5" + i).done().get())
+				.map(o -> BeanTemplateUtils.toJson(o))
+				.collect(Collectors.toList());
+		
+		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_5 = service.storeObjects(l5, true); // (defaults to adding true)
+		result_5.get();
+
+		try {
+			assertEquals(100, result_5.get()._2().get().intValue());
+			assertEquals(100, service.countObjects().get().intValue());					
+			
+			assertEquals(100, service.countObjectsBySpec(CrudUtils.allOf().rangeAbove("test_string", "test_string5", true)).get().intValue());
+		}
+		catch (Exception e) {}
+		
+	}
+
 	////////////////////////////////////////////////
 	
 	// RETRIEVAL

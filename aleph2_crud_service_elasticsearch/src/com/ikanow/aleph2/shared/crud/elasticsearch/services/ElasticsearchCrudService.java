@@ -30,6 +30,9 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import org.apache.metamodel.DataContext;
+import org.apache.metamodel.elasticsearch.ElasticSearchDataContext;
+import org.apache.metamodel.schema.Table;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequestBuilder;
@@ -83,12 +86,13 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			final Optional<Boolean> id_ranges_ok, final CreationPolicy creation_policy, 
 			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project)
 	{
-		_state = new State(bean_clazz, es_context, id_ranges_ok.orElse(false), creation_policy);
+		_state = new State(bean_clazz, es_context, id_ranges_ok.orElse(false), creation_policy, auth_fieldname, auth, project);
 		_object_mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 	}
 	protected class State {
 		State(final Class<O> bean_clazz, final ElasticsearchContext es_context, 
-				final boolean id_ranges_ok, final CreationPolicy creation_policy
+				final boolean id_ranges_ok, final CreationPolicy creation_policy,
+				final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project
 				)			
 		{
 			this.es_context = es_context;
@@ -96,12 +100,20 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			clazz = bean_clazz;
 			this.id_ranges_ok = id_ranges_ok;
 			this.creation_policy = creation_policy;
+			
+			this.auth = auth;
+			this.auth_fieldname = auth_fieldname;
+			this.project = project;
 		}
 		final ElasticsearchContext es_context;
 		final Client client;
 		final Class<O> clazz;
 		final boolean id_ranges_ok;
 		final CreationPolicy creation_policy;
+		
+		final Optional<String> auth_fieldname;
+		final Optional<AuthorizationBean> auth;
+		final Optional<ProjectBean> project;		
 	}
 	protected final State _state;
 	protected final ObjectMapper _object_mapper;
@@ -653,9 +665,8 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getRawCrudService()
 	 */
 	@Override
-	public ICrudService<JsonNode> getRawCrudService() {
-		//TODO (ALEPH-14): TO BE IMPLEMENTED
-		throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "getRawCrudService"));
+	public ElasticsearchCrudService<JsonNode> getRawCrudService() {
+		return new ElasticsearchCrudService<JsonNode>(JsonNode.class, _state.es_context, Optional.of(_state.id_ranges_ok), _state.creation_policy, _state.auth_fieldname, _state.auth, _state.project); 
 	}
 
 	/* (non-Javadoc)
@@ -670,11 +681,51 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getUnderlyingPlatformDriver(java.lang.Class, java.util.Optional)
 	 */
+	@SuppressWarnings("unchecked")
 	@Override
 	public <T> Optional<T> getUnderlyingPlatformDriver(final Class<T> driver_class, final Optional<String> driver_options) {
-		//TODO (ALEPH-14): TO BE IMPLEMENTED
-		// TODO metamodel or ElasticsearchContext
-		throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "getUnderlyingPlatformDriver"));
+		if (ElasticsearchContext.class == driver_class) return (Optional<T>) Optional.of(_state.es_context);
+		else if (IMetaModel.class == driver_class) return (Optional<T>) Optional.of(((null == _meta_model) 
+														? (_meta_model = new ElasticsearchDbMetaModel(_state.es_context)) 
+														: _meta_model));
+		else return Optional.empty();
 	}
 
+	/** A table-level interface to the CRUD store using the open MetaModel library
+	 * MongoDB implementation
+	 * @author acp
+	 */
+	public static class ElasticsearchDbMetaModel implements IMetaModel {
+		protected ElasticsearchDbMetaModel(final ElasticsearchContext es_context) {
+			final Client client = es_context.client();
+			if ((es_context instanceof ReadWriteContext)
+					&& (es_context.indexContext() instanceof ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext)
+					&& (es_context.typeContext() instanceof ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext))
+			{
+				ReadWriteContext rw_context = (ReadWriteContext) es_context;				
+				_context = new ElasticSearchDataContext(client, rw_context.indexContext().getWritableIndex(Optional.empty()));
+				_table = _context.getTableByQualifiedLabel(rw_context.typeContext().getWriteType());
+			}
+			else {
+				throw new RuntimeException(ErrorUtils.METAMODEL_ELASTICSEARCH_RESTRICTIONS);
+			}
+		}
+		public final DataContext _context; 
+		public final Table _table; 
+		
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.IMetaModel#getContext()
+		 */
+		public DataContext getContext() {
+			return _context;
+		}
+		
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.IMetaModel#getTable()
+		 */
+		public Table getTable() {
+			return _table;
+		}
+	}
+	protected ElasticsearchDbMetaModel _meta_model = null;
 }

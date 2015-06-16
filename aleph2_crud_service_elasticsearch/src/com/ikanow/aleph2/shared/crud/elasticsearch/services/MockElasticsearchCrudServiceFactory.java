@@ -37,18 +37,22 @@ public class MockElasticsearchCrudServiceFactory implements IElasticsearchCrudSe
 	 * @see com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory#getClient()
 	 */
 	public Client getClient() {
+		synchronized (MockElasticsearchCrudServiceFactory.class) {
+			if (!_root_node.isSet()) {
+				final ImmutableSettings.Builder test_settings = 
+						ImmutableSettings.settingsBuilder()
+					        .put("cluster.name", "aleph2")
+					        .put("node.gateway.type", "none")
+					        .put("index.store.type", "memory")
+					        .put("index.number_of_replicas", 0)
+					        .put("index.number_of_shards", 1)
+					        .put("node.http.enabled", false);
+										
+				_root_node.set(NodeBuilder.nodeBuilder().settings(test_settings).loadConfigSettings(false).node());				
+			}
+		}
 		if (!_client.isSet()) {			
-			final ImmutableSettings.Builder test_settings = 
-				ImmutableSettings.settingsBuilder()
-			        .put("cluster.name", "aleph2")
-			        .put("node.gateway.type", "none")
-			        .put("index.store.type", "memory")
-			        .put("index.number_of_replicas", 0)
-			        .put("index.number_of_shards", 1)
-			        .put("node.http.enabled", false);
-								
-			final Node n = NodeBuilder.nodeBuilder().settings(test_settings).loadConfigSettings(false).node();
-			_client.set(n.client());
+			_client.set(_root_node.get().client());
 		}
 		return _client.get();
 	}
@@ -63,5 +67,6 @@ public class MockElasticsearchCrudServiceFactory implements IElasticsearchCrudSe
 		return new ElasticsearchCrudService<O>(bean_clazz, es_context, id_ranges_ok, creation_policy, auth_fieldname, auth, project);
 	}
 	
-	private final SetOnce<Client> _client = new SetOnce<Client>();
+	private final SetOnce<Client> _client = new SetOnce<>();
+	private static final SetOnce<Node> _root_node = new SetOnce<>();
 }
