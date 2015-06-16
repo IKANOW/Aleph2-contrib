@@ -241,16 +241,20 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#storeObjects(java.util.List, boolean)
 	 */
-	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final List<O> new_objects, final boolean continue_on_error) {
+	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final List<O> new_objects, final boolean replace_if_present) {
+		if (replace_if_present) {
+			// This is an "illegal arg exception" so throw immediately
+			throw new RuntimeException(ErrorUtils.BULK_REPLACE_DUPLICATES_NOT_SUPPORTED);
+		}
 		try {
 			final List<DBObject> l = new_objects.stream().map(o -> convertToBson(o)).collect(Collectors.toList());
 
 			final com.mongodb.WriteResult orig_result = _state.orig_coll.insert(l, 
 						Patterns.match(_state.orig_coll)
 								.<InsertOptions>andReturn()
-								.when(FongoDBCollection.class, () -> continue_on_error, 
-										() -> new InsertOptions().continueOnError(continue_on_error).writeConcern(new WriteConcern()))
-								.otherwise(() -> new InsertOptions().continueOnError(continue_on_error)));
+								.when(FongoDBCollection.class, 
+										() -> new InsertOptions().continueOnError(true).writeConcern(new WriteConcern()))
+								.otherwise(() -> new InsertOptions().continueOnError(true)));
 			
 			return CompletableFuture.completedFuture(
 					Tuples._2T(() -> l.stream().map(o -> (Object)_state.coll.convertFromDbId(o.get(_ID))).collect(Collectors.toList()),

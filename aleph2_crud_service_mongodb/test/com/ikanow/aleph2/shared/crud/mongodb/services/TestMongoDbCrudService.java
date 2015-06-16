@@ -258,29 +258,18 @@ public class TestMongoDbCrudService {
 		assertEquals(50, service._state.orig_coll.count());
 		assertEquals((Long)(long)50, result_2.get()._2().get());
 		
-		// 3) Insertion with dups - fail and stop
-
-		final List<TestBean> l3 = IntStream.rangeClosed(1, 200).boxed()
-				.map(i -> BeanTemplateUtils.build(TestBean.class)
-						.with("_id", "id" + i).
-						with("test_string", "test_string" + i).done().get())
-				.collect(Collectors.toList());
+		// 3) Check storeObjects(..., true) fails
 		
-		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_3 = service.storeObjects(l3);
+		final List<TestBean> l3 = IntStream.rangeClosed(151, 200).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done().get())
+				.collect(Collectors.toList());
 
-		Exception expected_ex = null;
 		try {
-			result_3.get();
-			fail("Should have thrown exception on duplicate insert");
+			service.storeObjects(l3, true);
 		}
 		catch (Exception e) {
-			expected_ex = e;
+			assertTrue("Should throw runtime exception: " + e.getMessage(), e instanceof RuntimeException);
 		}
-		if (null != expected_ex)
-			assertThat(expected_ex.getCause(), instanceOf(MongoException.class));		
-		
-		// Yikes - it has inserted objects up to the error though...
-		assertEquals(100, service._state.orig_coll.count());		
 		
 		// 4) Insertion with dups - fail and continue
 		
@@ -288,10 +277,10 @@ public class TestMongoDbCrudService {
 				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done().get())
 				.collect(Collectors.toList());
 		
-		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_4 = service.storeObjects(l4, true);
+		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_4 = service.storeObjects(l4);
 
 		try {
-			assertEquals(120, service._state.orig_coll.count());
+			assertEquals(100, service._state.orig_coll.count());
 			assertEquals(100L, (long)result_4.get()._2().get());			
 			
 			// Fongo and Mongo behave differently here:
@@ -299,7 +288,7 @@ public class TestMongoDbCrudService {
 				fail("Should have thrown exception on duplicate insert, even though docs have been inserted");
 			}
 		}
-		catch (Exception e) {}
+		catch (Exception e) {}		
 	}
 
 	////////////////////////////////////////////////
@@ -818,7 +807,7 @@ public class TestMongoDbCrudService {
 								.done().get())
 				.collect(Collectors.toList());
 
-		service.storeObjects(l, true);
+		service.storeObjects(l, false);
 		
 		assertEquals(10, service._state.orig_coll.count());
 	}
@@ -834,7 +823,7 @@ public class TestMongoDbCrudService {
 				.map(b -> BeanTemplateUtils.toJson(b))
 				.collect(Collectors.toList());
 
-		service.storeObjects(l, true);
+		service.storeObjects(l, false);
 		
 		assertEquals(10, service._state.orig_coll.count());
 	}

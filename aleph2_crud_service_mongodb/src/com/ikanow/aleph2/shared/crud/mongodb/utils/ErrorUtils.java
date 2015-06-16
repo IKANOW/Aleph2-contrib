@@ -22,4 +22,5 @@ public class ErrorUtils extends com.ikanow.aleph2.data_model.utils.ErrorUtils {
 
 	public static final String INTERNAL_LOGIC_ERROR_NO_ID_FIELD = "Internal logic error: get String _id field for {0}";
 	public static final String MISSING_MONGODB_INDEX_KEY = "Index key {0} didn't exist";
+	public static final String BULK_REPLACE_DUPLICATES_NOT_SUPPORTED = "Bulk storeObjects with update not yet supported";
 }
