@@ -16,27 +16,28 @@
 package com.ikanow.aleph2.shared.crud.elasticsearch.utils;
 
 import java.text.SimpleDateFormat;
+import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.Optional;
 import java.util.function.Function;
 
 import com.ikanow.aleph2.data_model.utils.Functions;
+import com.ikanow.aleph2.data_model.utils.Patterns;
 
 /** Utilities around the ElasticsearchContext ADTs
  * @author Alex
  */
 public class ElasticsearchContextUtils {
 
-	public enum DateGroupingTypes { HOURLY, DAILY, WEEKLY, MONTHLY, YEARLY, NONE };
-	
 	/** Utility function to figure out the grouping period based on the index name
 	 * @param date_format
 	 * @return the date grouping type
 	 */
-	private static DateGroupingTypes getIndexGroupingPeriod_slow(String date_format) {
+	private static ChronoUnit getIndexGroupingPeriod_slow(String date_format) {
+		
 		final SimpleDateFormat d = new SimpleDateFormat(date_format);
 		final long try_date_boxes[] = { 3601L, 21L*3600L, 8L*24L*3600L, 32L*24L*3600L, 367L*34L*3600L };
-		final DateGroupingTypes ret_date_boxes[] = { DateGroupingTypes.HOURLY, DateGroupingTypes.DAILY, DateGroupingTypes.WEEKLY, DateGroupingTypes.MONTHLY, DateGroupingTypes.YEARLY };
+		final ChronoUnit ret_date_boxes[] = { ChronoUnit.HOURS, ChronoUnit.DAYS, ChronoUnit.WEEKS, ChronoUnit.MONTHS, ChronoUnit.YEARS };
 		final Date now = new Date();
 		final String now_string = d.format(now);
 		for (int i = 0; i < try_date_boxes.length; ++i) {
@@ -45,11 +46,11 @@ public class ElasticsearchContextUtils {
 				return ret_date_boxes[i];
 			}
 		}
-		return DateGroupingTypes.NONE;
+		return ChronoUnit.FOREVER;
 	}	
 	/** Memoized version of getIndexGroupingPeriod_slow
 	 */
-	final public Function<String, DateGroupingTypes> getIndexGroupingPeriod = Functions.memoize(ElasticsearchContextUtils::getIndexGroupingPeriod_slow);
+	final public Function<String, ChronoUnit> getIndexGroupingPeriod = Functions.memoize(ElasticsearchContextUtils::getIndexGroupingPeriod_slow);
 	
 	/** 1-ups an auto type
 	 * @param prefix
@@ -64,4 +65,19 @@ public class ElasticsearchContextUtils {
 				.get();
 	}
 	
+	/** Returns the suffix of a time-based index given the grouping period
+	 * @param grouping_period - the grouping period
+	 * @return the index suffix, ie added to the base index
+	 */
+	public static String getIndexSuffix(final ChronoUnit grouping_period) {
+		return Patterns.match(grouping_period).<String>andReturn()
+				.when(p -> ChronoUnit.SECONDS == p, __ -> "_{YYYY-MM-dd-hh}") // (too granular, just use hours)
+				.when(p -> ChronoUnit.MINUTES == p, __ -> "_{YYYY-MM-dd-hh}") // (too granular, just use hours)
+				.when(p -> ChronoUnit.HOURS == p, __ -> "_{YYYY-MM-dd-hh}")
+				.when(p -> ChronoUnit.DAYS == p, __ -> "_{YYYY-MM-dd}")
+				.when(p -> ChronoUnit.WEEKS == p, __ -> "_{YYYY.ww}")
+				.when(p -> ChronoUnit.MONTHS == p, __ -> "_{YYYY-MM}")
+				.when(p -> ChronoUnit.YEARS == p, __ -> "_{YYYY-MM}")
+				.otherwise(__ -> "");
+	}
 }

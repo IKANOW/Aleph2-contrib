@@ -15,6 +15,8 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared.crud.elasticsearch.services;
 
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -37,6 +39,8 @@ import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequestBuilder;
 import org.elasticsearch.action.bulk.BulkItemResponse;
+import org.elasticsearch.action.bulk.BulkProcessor;
+import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.count.CountRequestBuilder;
@@ -47,6 +51,9 @@ import org.elasticsearch.action.index.IndexRequest.OpType;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.common.unit.ByteSizeUnit;
+import org.elasticsearch.common.unit.ByteSizeValue;
+import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.FilterBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
@@ -688,9 +695,110 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		else if (IMetaModel.class == driver_class) return (Optional<T>) Optional.of(((null == _meta_model) 
 														? (_meta_model = new ElasticsearchDbMetaModel(_state.es_context)) 
 														: _meta_model));
+		else if ((ElasticsearchBatchSubsystem.class == driver_class) && (_state.es_context instanceof ReadWriteContext)) {
+			if (null == _batch_processor) _batch_processor = new ElasticsearchBatchSubsystem();
+			return (Optional<T>) Optional.of(_batch_processor);
+		}
 		else return Optional.empty();
 	}
 
+	/** A subsystem providing a simple interface to dump JSON objects in batch into the CRUD service, at the expense of less visibility
+	 * @author Alex
+	 *
+	 * @param <O> - the object type
+	 */
+	public class ElasticsearchBatchSubsystem implements IBatchSubservice<O> {
+
+		@Override
+		public void setBatchProperties(final Optional<Integer> max_objects, final Optional<Long> size_kb, final Optional<Duration> flush_interval)
+		{
+			BulkProcessor old = null;
+			synchronized (this) {
+				old = _current;
+				_current = buildBulkProcessor(max_objects, size_kb, flush_interval);
+			}
+			old.close();
+		}
+
+		@Override
+		public synchronized void storeObjects(final List<O> new_objects, final boolean replace_if_present) {
+			if (null == _current) {
+				_current = buildBulkProcessor(Optional.empty(), Optional.empty(), Optional.empty());
+			}
+			new_objects.stream().forEach(new_object -> 			
+				_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
+					Either.left(new_object), replace_if_present, true).request()));
+		}
+
+		@Override
+		public synchronized void storeObject(final O new_object, final boolean replace_if_present) {
+			if (null == _current) {
+				_current = buildBulkProcessor(Optional.empty(), Optional.empty(), Optional.empty());
+			}			
+			_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
+							Either.left(new_object), replace_if_present, true).request());
+		}
+		
+		//TODO: need to test this in normal mode and with mapping errors occurring
+		
+		protected BulkProcessor buildBulkProcessor(final Optional<Integer> max_objects, final Optional<Long> size_kb, final Optional<Duration> flush_interval) {
+			return BulkProcessor.builder(_state.client, 
+						new BulkProcessor.Listener() {							
+							@Override
+							public void beforeBulk(long exec_id, BulkRequest in) {
+								return; // (nothing to do)
+							}
+							
+							@Override
+							public void afterBulk(long arg0, BulkRequest in, Throwable error) {
+								return; // (nothing to exec_id but weep)
+							}
+							
+							@Override
+							public void afterBulk(long exec_id, BulkRequest in, BulkResponse out) {
+								if (out.hasFailures() &&
+										(_state.es_context.typeContext() instanceof ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext)
+										)
+								{
+									final ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext auto_context = (ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext) _state.es_context.typeContext();
+									final Iterator<BulkItemResponse> it = out.iterator();
+									synchronized (this) {
+										while (it.hasNext()) {										
+											final BulkItemResponse bir = it.next();
+											if (bir.isFailed()) {								
+												if (bir.getFailure().getMessage().startsWith("MapperParsingException")) {
+													String failed_json = null;
+													final ActionRequest<?> ar = in.requests().get(bir.getItemId());
+													if (ar instanceof IndexRequest) {											
+														IndexRequest ir = (IndexRequest) ar;
+														failed_json = ir.source().toUtf8();
+													}
+													if (null != failed_json) {
+														_current.add(singleObjectIndexRequest(
+																	Either.right(Tuples._2T(bir.getIndex(), 
+																			ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), bir.getType()))), 
+																	Either.right(Tuples._2T(bir.getId(), failed_json)), 
+																	false, true).request());
+													}//(End got the source, so re-insert this into the stream)
+												}//(was a mapping error)
+											}//(item failed)
+										}//(loop over iterms)
+									}//(synchronized)
+								}//(has failures AND is an auto type)
+							}//(end afterBulk)
+						}//(end new Listener)
+					)
+					.setBulkActions(max_objects.orElse(1000))
+					.setBulkSize(new ByteSizeValue(size_kb.orElse(10240L), ByteSizeUnit.KB))
+					.setFlushInterval(TimeValue.timeValueSeconds(flush_interval.orElse(Duration.of(3, ChronoUnit.SECONDS)).get(ChronoUnit.SECONDS)))
+					.setConcurrentRequests(1)
+					.build();
+		}
+		
+		protected BulkProcessor _current; // (note: mutable)
+	}
+	protected ElasticsearchBatchSubsystem _batch_processor = null;
+	
 	/** A table-level interface to the CRUD store using the open MetaModel library
 	 * MongoDB implementation
 	 * @author acp

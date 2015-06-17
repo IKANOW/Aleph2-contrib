@@ -15,7 +15,11 @@
  ******************************************************************************/
 package com.ikanow.aleph2.search_service.elasticsearch.utils;
 
-import org.elasticsearch.common.xcontent.XContent;
+import java.io.IOException;
+import java.util.Optional;
+
+import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentFactory;
 
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 
@@ -37,7 +41,7 @@ public class ElasticsearchIndexUtils {
 	 * @param index_name - the elasticsearch index name
 	 * @return
 	 */
-	public static String  getBucketIdFromIndexName(String index_name) {
+	public static String getBucketIdFromIndexName(String index_name) {
 		return index_name.replaceFirst("([a-z0-9]+_[a-z0-9]+_[a-z0-9]+_[a-z0-9]+_[a-z0-9]+).*", "$1").replace("_", "-");
 	}
 	
@@ -45,20 +49,43 @@ public class ElasticsearchIndexUtils {
 	 * @param bucket
 	 * @return
 	 */
-	public XContent getTemplateMapping(final DataBucketBean bucket) {
+	public XContentBuilder getTemplateMapping(final DataBucketBean bucket) {
 		//TODO just call getMapping and register with the bucket's base index name
 		return null;
 	}
 	
-	/** Creates a mapping for the bucekt
+	/** Creates a mapping for the bucket
 	 * @param bucket
 	 * @return
+	 * @throws IOException 
 	 */
-	public XContent getMapping(final DataBucketBean bucket) {
-		//TODO search schema
-		//TODO temporal schema
-		//TODO columnar schema
-		return null;
+	public XContentBuilder getMapping(final DataBucketBean bucket, Optional<XContentBuilder> to_embed) {
+		try {
+			final XContentBuilder start = to_embed.orElse(XContentFactory.jsonBuilder().startObject());
+			if (null == bucket.data_schema()) return start;
+			if ((null != bucket.data_schema().search_index_schema()) && 
+					Optional.ofNullable(bucket.data_schema().search_index_schema().enabled()).orElse(true))
+			{
+				//TODO search schema
+				
+			}
+			if ((null != bucket.data_schema().temporal_schema()) && 
+					Optional.ofNullable(bucket.data_schema().temporal_schema().enabled()).orElse(true))
+			{
+				//TODO temporal schema
+				
+			}
+			if ((null != bucket.data_schema().columnar_schema()) && 
+					Optional.ofNullable(bucket.data_schema().columnar_schema().enabled()).orElse(true))
+			{
+				//TODO columnar_schema schema				
+			}
+			return start;//TODO
+		}
+		catch (IOException e) {
+			//Handle fake "IOException"
+			return null;
+		}
 	}
 	
 	
