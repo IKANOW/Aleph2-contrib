@@ -15,6 +15,27 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared.crud.elasticsearch.data_model;
 
+/** Configuration for the Elasticsearch CRUD service
+ * @author Alex
+ */
 public class ElasticsearchConfigurationBean {
 
+	final public static String PROPERTIES_ROOT = "ElasticsearchCrudService";
+	
+	protected ElasticsearchConfigurationBean() {}
+	
+	public ElasticsearchConfigurationBean(final String elasticsearch_connection) {
+		this.elasticsearch_connection = elasticsearch_connection;
+	}
+	/** The connection string that is used to initialize the Elasticsearch client
+	 * @return
+	 */
+	public String elasticsearch_connection() { return elasticsearch_connection; }
+	/** The Elasticsearch cluster name to which to connect
+	 * @return
+	 */
+	public String cluster_name() { return cluster_name; }
+	
+	private String elasticsearch_connection;
+	private String cluster_name;
 }

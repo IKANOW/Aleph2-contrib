@@ -248,9 +248,6 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 */
 	@Override
 	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final List<O> new_objects, final boolean replace_if_present) {
-		//TODO (ALEPH-14): should consider using (or having the option to use) a BulkProcessor object here, controlled/accessed via getUnderlyingTechnology
-		// (https://www.elastic.co/guide/en/elasticsearch/client/java-api/current/bulk.html#_using_bulk_processor .. eg still support auto-type etc but don't care about responses)
-		
 		try {
 			final ReadWriteContext rw_context = getRwContextOrThrow(_state.es_context, "storeObjects");
 			
@@ -343,7 +340,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 					}
 					else { // No errors with this iteration of the bulk request			
 						_curr_written += result.getItems().length;
-						
+
 						if (null == _id_list) { // This is the first bulk request, no recursion on failures, so can lazily create the list in case it isn't needed
 							final Supplier<List<Object>> get_objects = () -> {
 								return StreamSupport.stream(result.spliterator(), false)

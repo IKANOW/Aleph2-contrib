@@ -22,6 +22,8 @@ import java.util.Optional;
 
 import org.elasticsearch.client.Client;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.Inject;
 import com.google.inject.Module;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService;
@@ -29,8 +31,14 @@ import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService
 import com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.module.ElasticsearchIndexServiceModule;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory;
+
+//TODO: all the data services should have a validate(DataSchemaBean xxx) which returns a list of errors so the bucket dev can find out
+//in advance of trying to use them...
 
 /** Elasticsearch implementation of the SearchIndexService/TemporalService/ColumnarService
  * @author Alex
@@ -38,14 +46,21 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudSe
  */
 public class ElasticsearchIndexService implements ISearchIndexService, ITemporalService, IColumnarService {
 
-	final IElasticsearchCrudServiceFactory _crud_factory;
+	protected final IElasticsearchCrudServiceFactory _crud_factory;
+	protected final ElasticsearchIndexServiceConfigBean _config;
+	
+	protected final static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 	
 	/** Guice generated constructor
 	 * @param crud_factory
 	 */
 	@Inject
-	public ElasticsearchIndexService(final IElasticsearchCrudServiceFactory crud_factory) {
+	public ElasticsearchIndexService(
+			final IElasticsearchCrudServiceFactory crud_factory,
+			final ElasticsearchIndexServiceConfigBean configuration)
+	{
 		_crud_factory = crud_factory;
+		_config = configuration;
 	}
 	
 	/* (non-Javadoc)
@@ -80,6 +95,23 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		
 		// TODO Auto-generated method stub
 		return null;
+	}
+	
+	//TODO make this static
+	@SuppressWarnings("unused")
+	private void createIndexMapping(final DataBucketBean bucket) {
+		
+		final JsonNode default_mapping = Optional.ofNullable(bucket.data_schema())
+												.map(DataSchemaBean::search_index_schema)
+												.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+												.map(DataSchemaBean.SearchIndexSchemaBean::technology_override_schema)
+												.map(t -> _mapper.convertValue(t, JsonNode.class))
+											.orElse(BeanTemplateUtils.toJson(_config.search_technology_override()));
+		
+		// Also get JsonNodes for the default field bit
+		
+		// Get a list of field overrides Either<String,Tuple2<String,String>> for dynamic/real fields
+		
 	}
 
 	/* (non-Javadoc)

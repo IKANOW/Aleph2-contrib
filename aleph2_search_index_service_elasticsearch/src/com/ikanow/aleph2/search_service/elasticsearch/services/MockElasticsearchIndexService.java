@@ -20,6 +20,7 @@ import java.util.List;
 
 import com.google.inject.Inject;
 import com.google.inject.Module;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.module.MockElasticsearchIndexServiceModule;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory;
 
@@ -33,8 +34,11 @@ public class MockElasticsearchIndexService extends ElasticsearchIndexService {
 	 * @param crud_factory
 	 */
 	@Inject
-	public MockElasticsearchIndexService(final IElasticsearchCrudServiceFactory crud_factory) {
-		super(crud_factory);
+	public MockElasticsearchIndexService(
+			final IElasticsearchCrudServiceFactory crud_factory,
+			final ElasticsearchIndexServiceConfigBean configuration)
+	{
+		super(crud_factory, configuration);
 	}
 	
 	/** This service needs to load some additional classes via Guice. Here's the module that defines the bindings
