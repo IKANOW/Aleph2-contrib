@@ -17,11 +17,14 @@ package com.ikanow.aleph2.storage_service_hdfs.services;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
-
 
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean;
+import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 
 import org.apache.hadoop.conf.Configuration;
@@ -115,6 +118,14 @@ public class HDFSStorageService implements IStorageService {
 			_logger.error("Caught Exception:",e);
 		}
 		return uri;
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean)
+	 */
+	@Override
+	public List<BasicMessageBean> validateSchema(StorageSchemaBean schema) {
+		return Collections.emptyList();
 	}
 
 }

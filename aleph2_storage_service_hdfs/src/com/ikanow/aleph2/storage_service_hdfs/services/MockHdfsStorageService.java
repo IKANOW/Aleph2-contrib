@@ -14,6 +14,8 @@
 * limitations under the License.
 ******************************************************************************/
 package com.ikanow.aleph2.storage_service_hdfs.services;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import org.apache.logging.log4j.LogManager;
@@ -21,6 +23,8 @@ import org.apache.logging.log4j.Logger;
 
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean;
+import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 
 import org.apache.hadoop.fs.FileContext;
@@ -63,6 +67,14 @@ public class MockHdfsStorageService implements IStorageService {
 			logger.error("Caught Exception:",e);
 		}
 		return Optional.ofNullable(driver);
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean)
+	 */
+	@Override
+	public List<BasicMessageBean> validateSchema(StorageSchemaBean schema) {
+		return Collections.emptyList();
 	}
 
 }
