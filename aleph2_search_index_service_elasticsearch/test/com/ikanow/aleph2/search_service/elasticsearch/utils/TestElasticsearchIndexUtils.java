@@ -100,6 +100,16 @@ public class TestElasticsearchIndexUtils {
 					Tuples._2T("STAR", "number")
 				), 
 				templates_test2.keySet().stream().map(e -> e.right().value()).collect(Collectors.toList()));
+		
+		// Putting it all together...
+		
+		//TODO
+		
+		// A couple of error checks:
+		// - Missing mapping
+		// - Mapping not an object
+		
+		
 	}
 	
 }
