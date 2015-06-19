@@ -74,7 +74,8 @@ public class TestElasticsearchIndexConfigUtils {
 			
 			// Derived fields (search)
 			assertEquals(ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy.error, config_bean.search_technology_override().collide_policy());
-			assertEquals(null, config_bean.search_technology_override().settings());
+			assertTrue("Search Settings", null != config_bean.search_technology_override().settings());
+			assertTrue("Search Settings", config_bean.search_technology_override().settings().size() > 0);
 			
 			// Derived fields (columnar)
 			assertTrue("Default field settings", null != config_bean.columnar_technology_override().default_field_data_analyzed());
@@ -105,7 +106,9 @@ public class TestElasticsearchIndexConfigUtils {
 			assertTrue("Search Settings", config_bean.search_technology_override().settings().size() > 0);
 			
 			// Derived fields (columnar)
-			assertTrue("Default field settings", null == config_bean.columnar_technology_override().default_field_data_analyzed());
+			assertTrue("Default field settings", null != config_bean.columnar_technology_override().default_field_data_analyzed());
+			assertTrue("Default field settings for analyzed fields", null != config_bean.columnar_technology_override().default_field_data_analyzed().get("_default"));
+			assertTrue("Default field settings for non-analyzied fields", null != config_bean.columnar_technology_override().default_field_data_notanalyzed().get("_default"));			
 		}
 		
 		// Check defaults aren't applied if they are specified (both)
@@ -128,10 +131,13 @@ public class TestElasticsearchIndexConfigUtils {
 			
 			// Derived fields (search)
 			assertEquals(ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy.error, config_bean.search_technology_override().collide_policy());
-			assertEquals(null, config_bean.search_technology_override().settings());
+			assertTrue("Search Settings", null != config_bean.search_technology_override().settings());
+			assertTrue("Search Settings", config_bean.search_technology_override().settings().size() > 0);
 			
 			// Derived fields (columnar)
-			assertTrue("Default field settings", null == config_bean.columnar_technology_override().default_field_data_analyzed());
+			assertTrue("Default field settings", null != config_bean.columnar_technology_override().default_field_data_analyzed());
+			assertTrue("Default field settings for analyzed fields", null != config_bean.columnar_technology_override().default_field_data_analyzed().get("_default"));
+			assertTrue("Default field settings for non-analyzied fields", null != config_bean.columnar_technology_override().default_field_data_notanalyzed().get("_default"));			
 		}
 	}
 }

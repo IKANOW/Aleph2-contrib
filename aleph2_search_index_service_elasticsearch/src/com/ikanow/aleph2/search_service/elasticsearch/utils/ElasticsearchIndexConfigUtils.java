@@ -17,7 +17,6 @@ package com.ikanow.aleph2.search_service.elasticsearch.utils;
 
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
-import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.typesafe.config.Config;
@@ -35,35 +34,23 @@ public class ElasticsearchIndexConfigUtils {
 	public static ElasticsearchIndexServiceConfigBean buildConfigBean(final Config global_config) {
 		
 		try {
-			final ElasticsearchIndexServiceConfigBean bean = Lambdas.wrap_u(__ -> {  
-				return BeanTemplateUtils.from(PropertiesUtils.getSubConfig(global_config, ElasticsearchIndexServiceConfigBean.PROPERTIES_ROOT).orElse(null), 
-										ElasticsearchIndexServiceConfigBean.class);
-			})
-			.andThen(Lambdas.wrap_u(b -> {
-				if (null == b.search_technology_override()) {
-					final ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean search_override = BeanTemplateUtils.from( 
-							ConfigFactory.parseResources(Thread.currentThread().getContextClassLoader(), 
-									"com/ikanow/aleph2/search_service/elasticsearch/data_model/default_search_index_override.conf"), 
-							ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.class);
-					
-					return BeanTemplateUtils.clone(b).with(ElasticsearchIndexServiceConfigBean::search_technology_override, search_override).done();
-				}
-				else return b;
-			}))
-			.andThen(Lambdas.wrap_u(b -> {
-				if (null == b.columnar_technology_override()) {
-					final ElasticsearchIndexServiceConfigBean.ColumnarSchemaDefaultBean columnar_override = BeanTemplateUtils.from( 
-							ConfigFactory.parseResources(Thread.currentThread().getContextClassLoader(), 
-									"com/ikanow/aleph2/search_service/elasticsearch/data_model/default_columnar_override.conf"), 
-							ElasticsearchIndexServiceConfigBean.ColumnarSchemaDefaultBean.class);
-					
-					return BeanTemplateUtils.clone(b).with(ElasticsearchIndexServiceConfigBean::columnar_technology_override, columnar_override).done();
-				}
-				else return b;
-			}))
-			.apply(null); // (Supplier doens't support composition for some reason)
 			
-			return bean;
+			final Config default_search = ConfigFactory.parseResources(Thread.currentThread().getContextClassLoader(), 
+					"com/ikanow/aleph2/search_service/elasticsearch/data_model/default_search_index_override.conf").atPath("search_technology_override");
+			
+			final Config default_templates = ConfigFactory.parseResources(Thread.currentThread().getContextClassLoader(), 
+					"com/ikanow/aleph2/search_service/elasticsearch/data_model/default_columnar_override.conf").atPath("columnar_technology_override");
+			
+			final Config user_overrides = PropertiesUtils.getSubConfig(global_config, ElasticsearchIndexServiceConfigBean.PROPERTIES_ROOT).orElse(ConfigFactory.empty());
+			
+			return BeanTemplateUtils.from(
+					default_templates.withFallback(default_search).entrySet().stream()
+								.reduce(
+										user_overrides, 
+										(acc, kv) -> (acc.hasPath(kv.getKey())) ? acc : acc.withValue(kv.getKey(), kv.getValue()), 
+										(acc1, acc2) -> acc1.withFallback(acc2) 
+										),
+								ElasticsearchIndexServiceConfigBean.class);
 		}
 		catch (Exception e) {
 			throw new RuntimeException(ErrorUtils.get(ErrorUtils.INVALID_CONFIG_ERROR,

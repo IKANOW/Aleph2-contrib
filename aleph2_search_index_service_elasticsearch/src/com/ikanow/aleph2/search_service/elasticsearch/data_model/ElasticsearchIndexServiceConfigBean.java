@@ -40,11 +40,13 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 	public static class SearchIndexSchemaDefaultBean {
 		public CollidePolicy collide_policy() { return collide_policy; }
 		public String type_name_or_prefix() { return type_name_or_prefix; }
+		public Boolean verbose() { return verbose; };
 		public Map<String, Object> settings() { return settings; }
 		public Map<String, Object> mappings() { return mappings; }
 		
 		public enum CollidePolicy { error, new_type };
 		private CollidePolicy collide_policy;
+		private Boolean verbose;
 		private String type_name_or_prefix;
 		private Map<String, Object> settings;
 		private Map<String, Object> mappings;
