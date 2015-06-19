@@ -18,14 +18,24 @@ package com.ikanow.aleph2.search_service.elasticsearch.utils;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
 
 import org.junit.Test;
 
+import scala.Tuple2;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Charsets;
+import com.google.common.io.Resources;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+
+import fj.data.Either;
 
 public class TestElasticsearchIndexUtils {
 
@@ -46,6 +56,10 @@ public class TestElasticsearchIndexUtils {
 
 	@Test
 	public void test_parseDefaultMapping() throws JsonProcessingException, IOException {
+
+		// Check the different components
+		
+		// Build match pair
 		
 		assertEquals(Tuples._2T("STAR", "STAR"), ElasticsearchIndexUtils.buildMatchPair(_mapper.readTree("{}")));
 		
@@ -53,22 +67,39 @@ public class TestElasticsearchIndexUtils {
 		
 		assertEquals(Tuples._2T("fieldSTARfield", "type*"), ElasticsearchIndexUtils.buildMatchPair(_mapper.readTree("{\"match\":\"field*field\", \"match_mapping_type\": \"type*\"}")));
 		
-		//TODO now test some of the logic
+		// More complex objects
 		
-//	      "properties" : {
-//	         "@version": { "type": "string", "index": "not_analyzed" },
-//	         "@timestamp": { "type": "date" },
-//	         "sourceKey": { "type": "string", "index": "not_analyzed" },
-//	         "geoip"  : {
-//	           "type" : "object",
-//	             "dynamic": true,
-//	             "path": "full",
-//	             "properties" : {
-//	               "location" : { "type" : "geo_point" }
-//	             }
-//	         }
-//	       }
+		final String properties = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/properties_test.json"), Charsets.UTF_8);
+		final String templates = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/templates_test.json"), Charsets.UTF_8);
 		
+		final JsonNode properties_json = _mapper.readTree(properties);
+		final JsonNode templates_json = _mapper.readTree(templates);
+		
+		// Properties, empty + non-empty
+		
+		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> props_test1 = ElasticsearchIndexUtils.getProperties(templates_json);
+		assertTrue("Empty map if not present", props_test1.isEmpty());
+
+		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> props_test2 = ElasticsearchIndexUtils.getProperties(properties_json);
+		assertEquals(4, props_test2.size());
+		assertEquals(Arrays.asList("@version", "@timestamp", "sourceKey", "geoip"), 
+				props_test2.keySet().stream().map(e -> e.left().value()).collect(Collectors.toList()));
+		
+		assertEquals("{\"type\":\"string\",\"index\":\"not_analyzed\"}", 
+						props_test2.get(Either.left("sourceKey")).toString());
+		
+		// Templates, empty + non-empty
+
+		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> templates_test1 = ElasticsearchIndexUtils.getTemplates(properties_json);
+		assertTrue("Empty map if not present", templates_test1.isEmpty());
+		
+		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> templates_test2 = ElasticsearchIndexUtils.getTemplates(templates_json);
+		assertEquals(2, templates_test2.size());
+		assertEquals(Arrays.asList(
+					Tuples._2T("STAR", "string"),
+					Tuples._2T("STAR", "number")
+				), 
+				templates_test2.keySet().stream().map(e -> e.right().value()).collect(Collectors.toList()));
 	}
 	
 }

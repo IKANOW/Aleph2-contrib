@@ -74,8 +74,16 @@ public class ElasticsearchIndexUtils {
 	public static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> parseDefaultMapping(final JsonNode mapping, Optional<String> type) {
 		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> ret = 
 				Optional.ofNullable(mapping.get("mappings"))
+					.map(m -> {
+						if (!m.isObject()) throw new RuntimeException("mappings must be object");
+						return m;
+					})
 					.map(m -> m.get(type.orElse("_default_")))
 					.filter(i -> !i.isNull())
+					.map(i -> {
+						if (!i.isObject()) throw new RuntimeException(type + " must be object");
+						return i;
+					})
 					.map(i -> {
 						final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> props = getProperties(i);						
 						props.putAll(getTemplates(i));
@@ -92,6 +100,10 @@ public class ElasticsearchIndexUtils {
 	protected static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> getProperties(JsonNode index) {
 		return Optional.ofNullable(index.get("properties"))
 					.filter(p -> !p.isNull())
+					.map(p -> {
+						if (!p.isObject()) throw new RuntimeException("properties must be object");
+						return p;
+					})
 					.map(p -> {
 						return StreamSupport.stream(Spliterators.spliteratorUnknownSize(p.fields(), Spliterator.ORDERED), false)
 							.collect(Collectors.
@@ -110,15 +122,24 @@ public class ElasticsearchIndexUtils {
 		return Optional.ofNullable(index.get("dynamic_templates"))
 					.filter(p -> !p.isNull())					
 					.map(p -> {
-						return StreamSupport.stream(Spliterators.spliteratorUnknownSize(p.fields(), Spliterator.ORDERED), false)
+						if (!p.isArray()) throw new RuntimeException("dynamic_templates must be object");
+						return p;
+					})
+					.map(p -> {
+						return StreamSupport.stream(Spliterators.spliteratorUnknownSize(p.elements(), Spliterator.ORDERED), false)
+							.map(pf -> {
+								if (!pf.isObject()) throw new RuntimeException("dynamic_templates[*] must be object");
+								return pf;
+							})
+							.flatMap(pp -> StreamSupport.stream(Spliterators.spliteratorUnknownSize(pp.fields(), Spliterator.ORDERED), false))
 							.collect(Collectors.
-									<Map.Entry<String, JsonNode>, Either<String, Tuple2<String, String>>, JsonNode, LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>>
-									toMap(
-										kv -> Either.right(buildMatchPair(kv.getValue())),
-										kv -> kv.getValue().get("mapping"),
-										(v1, v2) -> v1, // (should never happen)
-										() -> new LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>()
-									));
+								<Map.Entry<String, JsonNode>, Either<String, Tuple2<String, String>>, JsonNode, LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>>
+								toMap(
+									kv -> Either.right(buildMatchPair(kv.getValue())),
+									kv -> kv.getValue().get("mapping"),
+									(v1, v2) -> v1, // (should never happen)
+									() -> new LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>()
+								));
 					})
 					.orElse(new LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>());
 	}
