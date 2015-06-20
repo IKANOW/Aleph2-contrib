@@ -96,12 +96,13 @@ public class ElasticsearchIndexUtils {
 					})
 					.orElse(new LinkedHashMap<>());
 		
-		if (type.isPresent()) { // If this was on behalf of a specific type then also roll up the defaults
-			ret.putAll(parseDefaultMapping(mapping, Optional.empty()));
-		}		
 		return ret;
 	}
 	
+	/** Get a set of field mappings from the "properties" section of a mapping
+	 * @param index
+	 * @return
+	 */
 	protected static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> getProperties(JsonNode index) {
 		return Optional.ofNullable(index.get("properties"))
 					.filter(p -> !p.isNull())
@@ -123,6 +124,10 @@ public class ElasticsearchIndexUtils {
 					.orElse(new LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>());
 	}
 	
+	/** Get a set of field mappings from the "dynamic_templates" section of a mapping
+	 * @param index
+	 * @return
+	 */
 	protected static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> getTemplates(JsonNode index) {
 		return Optional.ofNullable(index.get("dynamic_templates"))
 					.filter(p -> !p.isNull())					
@@ -149,6 +154,10 @@ public class ElasticsearchIndexUtils {
 					.orElse(new LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>());
 	}
 	
+	/** Builds a match pair from a field mapping
+	 * @param template
+	 * @return
+	 */
 	protected static Tuple2<String, String> buildMatchPair(final JsonNode template) {
 		return Tuples._2T(
 				Optional.ofNullable(template.get("match")).map(j -> j.asText().replace("*", "STAR")).orElse("STAR")
@@ -156,6 +165,16 @@ public class ElasticsearchIndexUtils {
 				Optional.ofNullable(template.get("match_mapping_type")).map(j -> j.asText()).orElse("STAR")
 				);
 	}
+	
+	/** Creates a single string from a match/match_mapping_type pair
+	 * @param field_info
+	 * @return
+	 */
+	protected static String getFieldNameFromMatchPair(final Tuple2<String, String> field_info) {
+		return field_info._1().replace("*", "STAR").replace("_", "BAR") + "_" + field_info._2();
+	};
+	
+	
 	
 	/////////////////////////////////////////////////////////////////////
 	
@@ -216,6 +235,12 @@ public class ElasticsearchIndexUtils {
 	
 	//TODO: either wants to go under type or _default_, depending on whether a single type is defined?
 	
+	// (Few constants to tidy stuff up)
+	protected final static String BACKUP_FIELD_MAPPING = "{\"type\":\"string\",\"analyzed\":\"no\"}";
+	protected final static String DEFAULT_FIELDDATA_NAME = "_default";
+	protected final static String DISABLED_FIELDDATA = "{\"format\":\"disabled\"}";
+	
+	
 	/** Creates a mapping for the bucket - columnar elements
 	 * @param bucket
 	 * @return
@@ -230,7 +255,6 @@ public class ElasticsearchIndexUtils {
 			final XContentBuilder start = to_embed.orElse(XContentFactory.jsonBuilder().startObject());
 			if (!Optional.ofNullable(bucket.data_schema()).map(DataSchemaBean::columnar_schema).isPresent()) return start;
 
-			//Stream<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>> under_properties = 
 			final XContentBuilder properties = Stream.of(
 			
 				addIncludes(bucket.data_schema().columnar_schema().field_include_list().stream(),
@@ -276,7 +300,7 @@ public class ElasticsearchIndexUtils {
 			.reduce(
 					properties.startObject("dynamic_templates").startArray(),
 					Lambdas.wrap_u((acc, t2) -> acc.startObject()
-													.rawField(getFieldName(t2._1().right().value()), t2._2().toString().getBytes()) // (right by construction)
+													.rawField(getFieldNameFromMatchPair(t2._1().right().value()), t2._2().toString().getBytes()) // (right by construction)
 												.endObject()),  						
 					(acc1, acc2) -> acc1) // (not actually possible)
 			.endArray().endObject()
@@ -285,23 +309,10 @@ public class ElasticsearchIndexUtils {
 			return templates;
 		}
 		catch (IOException e) {
-			//Handle fake "IOException"
+			//Handle in-practice-impossible "IOException"
 			return null;
 		}
 	}
-	
-	/** Creates a single string from a match/match_mapping_type pair
-	 * @param field_info
-	 * @return
-	 */
-	protected static String getFieldName(final Tuple2<String, String> field_info) {
-		return field_info._1().replace("*", "STAR").replace("_", "BAR") + "_" + field_info._2();
-	};
-	
-	// (Few constants to tidy stuff up)
-	protected final static String BACKUP_FIELD_MAPPING = "{\"type\":\"string\",\"analyzed\":\"no\"}";
-	protected final static String DEFAULT_FIELDDATA_NAME = "_default";
-	protected final static String DISABLED_FIELDDATA = "{\"format\":\"disabled\"}";
 	
 	/** Creates a list of JsonNodes containing the mapping for fields that will enable field data
 	 * @param instream
@@ -325,6 +336,11 @@ public class ElasticsearchIndexUtils {
 														.map(j -> j.deepCopy())
 														.orElse(mapper.readTree(BACKUP_FIELD_MAPPING));
 	
+				if (either.isRight()) {
+					mutable_field_mapping.put("match", either.right().value()._1());
+					mutable_field_mapping.put("match_mapping_type", either.right().value()._2());
+				}
+				
 				final boolean is_analyzed = Optional.ofNullable(mutable_field_mapping.get("index")).filter(j -> !j.isNull() && j.isTextual())
 												.map(jt -> jt.asText().equalsIgnoreCase("analyzed") || jt.asText().equalsIgnoreCase("yes"))
 												.orElse(false); 
@@ -365,6 +381,11 @@ public class ElasticsearchIndexUtils {
 				final ObjectNode mutable_field_mapping = (ObjectNode) Optional.ofNullable(field_lookups.get(either))
 														.map(j -> j.deepCopy())
 														.orElse(mapper.readTree(BACKUP_FIELD_MAPPING));
+				
+				if (either.isRight()) {
+					mutable_field_mapping.put("match", either.right().value()._1());
+					mutable_field_mapping.put("match_mapping_type", either.right().value()._2());
+				}
 				
 				mutable_field_mapping.set("fielddata", mapper.readTree(DISABLED_FIELDDATA));
 				

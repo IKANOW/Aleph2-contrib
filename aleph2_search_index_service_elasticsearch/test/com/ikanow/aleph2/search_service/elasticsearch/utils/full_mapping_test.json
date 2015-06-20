@@ -31,7 +31,32 @@
              }
          }
        }
+    },
+    "type_test" : {
+       "_all" : {"enabled" : true},
+       "dynamic_templates" : [ {
+         "number_fields" : {
+           "match" : "test*",
+           "match_mapping_type" : "number",
+           "mapping" : {
+             "type" : "number", "index" : "analyzed"
+           }
+         }
+       } ],
+       "properties" : {
+         "@version1": { "type": "string", "index": "not_analyzed" },
+         "@timestamp1": { "type": "date" },
+         "geoip1"  : {
+           "type" : "object",
+             "dynamic": true,
+             "path": "full",
+             "properties" : {
+               "location" : { "type" : "geo_point" }
+             }
+           }  
+         }
+       }
     }
-  }
+  }  
 }
 

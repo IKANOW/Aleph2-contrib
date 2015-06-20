@@ -20,7 +20,10 @@ import static org.junit.Assert.*;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.junit.Test;
 
@@ -59,7 +62,7 @@ public class TestElasticsearchIndexUtils {
 
 		// Check the different components
 		
-		// Build match pair
+		// Build/"unbuild" match pair
 		
 		assertEquals(Tuples._2T("STAR", "STAR"), ElasticsearchIndexUtils.buildMatchPair(_mapper.readTree("{}")));
 		
@@ -67,13 +70,17 @@ public class TestElasticsearchIndexUtils {
 		
 		assertEquals(Tuples._2T("fieldSTARfield", "type*"), ElasticsearchIndexUtils.buildMatchPair(_mapper.readTree("{\"match\":\"field*field\", \"match_mapping_type\": \"type*\"}")));
 		
+		assertEquals("testBARSTAR_string", ElasticsearchIndexUtils.getFieldNameFromMatchPair(Tuples._2T("test_*", "string")));
+		
 		// More complex objects
 		
 		final String properties = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/properties_test.json"), Charsets.UTF_8);
 		final String templates = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/templates_test.json"), Charsets.UTF_8);
+		final String both = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/full_mapping_test.json"), Charsets.UTF_8);
 		
 		final JsonNode properties_json = _mapper.readTree(properties);
 		final JsonNode templates_json = _mapper.readTree(templates);
+		final JsonNode both_json = _mapper.readTree(both);
 		
 		// Properties, empty + non-empty
 		
@@ -103,12 +110,39 @@ public class TestElasticsearchIndexUtils {
 		
 		// Putting it all together...
 		
-		//TODO
+		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> 
+			total_result1 = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.of("type_test"));
+		
+		assertEquals(4, total_result1.size());
+		assertEquals("{\"type\":\"number\",\"index\":\"analyzed\"}", total_result1.get(Either.right(Tuples._2T("testSTAR", "number"))).toString());
+		assertEquals("{\"type\":\"date\"}", total_result1.get(Either.left("@timestamp1")).toString());
+		
+		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> 
+		total_result2 = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty());
+	
+		assertEquals(5, total_result2.size());
+		assertEquals(true, total_result2.get(Either.right(Tuples._2T("STAR", "string"))).get("omit_norms").asBoolean());
+		assertEquals("{\"type\":\"date\"}", total_result2.get(Either.left("@timestamp")).toString());	
 		
 		// A couple of error checks:
 		// - Missing mapping
 		// - Mapping not an object
+	}
+
+	@Test
+	public void test_columnarMapping() throws JsonProcessingException, IOException {
+		ObjectMapper mapper = BeanTemplateUtils.configureMapper(Optional.empty());
+
+		final String both = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/full_mapping_test.json"), Charsets.UTF_8);
+		final JsonNode both_json = _mapper.readTree(both);		
 		
+//		protected static Stream<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>> addIncludes(final Stream<String> instream,
+//				final Function<String, Either<String, Tuple2<String, String>>> f,
+//				final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups,
+//				final JsonNode default_not_analyzed, final JsonNode default_analyzed,
+//				final ObjectMapper mapper)
+
+		final Stream<String> test_stream = Stream.of("", "");
 		
 	}
 	
