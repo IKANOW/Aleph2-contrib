@@ -1,0 +1,79 @@
+{
+  "template" : "recs_*",
+  "settings" : {
+    "index.refresh_interval" : "5s"
+  },
+  "mappings" : {
+    "_default_" : {
+       "properties" : {
+       	 "column_only_disabled": { "index": "not_analyzed", "fielddata": { "format": "disabled" } },
+         "@timestamp": { "type": "date", "fielddata": { } },
+       	 "column_only_enabled": { "index": "not_analyzed", "fielddata": { "format": "doc_values" } },
+         "@version": { "type": "string", "index": "analyzed", "fielddata": {"format":"fst"} },
+         "sourceKey": { "type": "string", "index": "not_analyzed"},
+         "geoip"  : {
+           "type" : "object",
+             "dynamic": true,
+             "path": "full",
+             "properties" : {
+               "location" : { "type" : "geo_point" }
+             }
+         }
+       },
+       "dynamic_templates" : [
+       {
+         "STAR_string" : {
+           "mapping" : {
+             "type" : "string", "index" : "analyzed", "omit_norms" : true, "fielddata": {"format":"fst"},
+               "fields" : {
+                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256}
+               }
+           },
+           "match" : "*",
+           "match_mapping_type" : "string"
+         }
+       }, 
+       {
+         "testSTAR_STAR" : {
+           "mapping" : {
+             "type" : "string", "index" : "analyzed", "omit_norms" : true, "fielddata": {"format":"fst"},
+               "fields" : {
+                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256}
+               }
+           },
+           "match" : "test*",
+           "match_mapping_type" : "*"
+         }
+       },
+       {
+         "STARnoindex_STAR" : {
+           "mapping" : {
+             "type" : "string", "index" : "not_analyzed", "fielddata": {"format":"disabled"}
+           },
+           "match" : "*noindex",
+           "match_mapping_type" : "*"
+         }
+       },
+       {
+         "column_only_enabledSTAR_STAR" : {
+           "mapping" : {
+             "index" : "not_analyzed", "fielddata": {"format":"doc_values"}
+           },
+           "match" : "column_only_enabled*",
+           "match_mapping_type" : "*"
+         }
+       },
+       {
+         "column_only_disabledSTAR_STAR" : {
+           "mapping" : {
+             "index" : "not_analyzed", "fielddata": {"format":"disabled"}
+           },
+           "match" : "column_only_disabled*",
+           "match_mapping_type" : "*"
+         }
+       }
+       ]
+    }
+  }
+}
+
