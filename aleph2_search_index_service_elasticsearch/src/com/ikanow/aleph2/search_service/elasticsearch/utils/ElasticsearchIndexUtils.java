@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.search_service.elasticsearch.utils;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -76,8 +77,9 @@ public class ElasticsearchIndexUtils {
 					.map(t -> BeanTemplateUtils.from(mapper.convertValue(t, JsonNode.class), SearchIndexSchemaDefaultBean.class).get())
 					.<String>map(cfg -> {
 						return Patterns.match(cfg.collide_policy()).<String>andReturn()
-								.when(cp -> SearchIndexSchemaDefaultBean.CollidePolicy.new_type == cp, __ -> null) // (ie falls through to default below)
-								.otherwise(__ -> Optional.ofNullable(cfg.type_name_or_prefix()).orElse("data_object"));
+								.when(cp -> SearchIndexSchemaDefaultBean.CollidePolicy.error == cp, 
+										__ -> Optional.ofNullable(cfg.type_name_or_prefix()).orElse("data_object")) // (ie falls through to default below)
+								.otherwise(__ -> null);
 					})
 				.orElse("_default_"); // (the default - "auto type")
 	}
@@ -295,7 +297,7 @@ public class ElasticsearchIndexUtils {
 						,
 				createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_exclude_list()).stream(),
 						fn -> Either.left(fn), 
-						field_lookups, default_not_analyzed, default_analyzed, mapper
+						field_lookups, mapper
 						)
 						,
 				createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_include_pattern_list()).stream(),
@@ -310,12 +312,12 @@ public class ElasticsearchIndexUtils {
 						,			
 				createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_exclude_pattern_list()).stream(),
 						fn -> Either.right(Tuples._2T(fn, "*")), 
-						field_lookups, default_not_analyzed, default_analyzed, mapper
+						field_lookups, mapper
 						)
 						,
 				createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_type_exclude_list()).stream(),
 						fn -> Either.right(Tuples._2T("*", fn)), 
-						field_lookups, default_not_analyzed, default_analyzed, mapper
+						field_lookups, mapper
 					)
 			)
 			.flatMap(x -> x)
@@ -432,7 +434,6 @@ public class ElasticsearchIndexUtils {
 	protected static Stream<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>> createFieldExcludeLookups(final Stream<String> instream,
 			final Function<String, Either<String, Tuple2<String, String>>> f,
 			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups,
-			final JsonNode default_not_analyzed, final JsonNode default_analyzed,
 			final ObjectMapper mapper)
 	{
 		return instream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>
@@ -466,7 +467,8 @@ public class ElasticsearchIndexUtils {
 	
 	// SEARCH PROCESSING
 		
-	/** Creates a mapping for the bucket - search service elements
+	/** Creates a mapping for the bucket - search service elements .. up to but not including the mapping + type
+	 *  NOTE: creates an embedded object that is {{, ie must be closed twice subsequently in order to be a well formed JSON object
 	 * @param bucket
 	 * @return
 	 * @throws IOException 
@@ -479,21 +481,53 @@ public class ElasticsearchIndexUtils {
 		try {
 			final XContentBuilder start = to_embed.orElse(XContentFactory.jsonBuilder().startObject());
 
+			// (Nullable)
+			final ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean search_schema =
+					Optional.ofNullable(bucket.data_schema())
+						.map(DataSchemaBean::search_index_schema)				
+						.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+						.map(DataSchemaBean.SearchIndexSchemaBean::technology_override_schema)
+						.map(m -> BeanTemplateUtils.from(mapper.convertValue(m, JsonNode.class), 
+								ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.class).get())
+					.orElse(config.search_technology_override());
+			
 			//(very briefly Nullable)
-			final JsonNode settings = Optional.ofNullable(bucket.data_schema())
-					.map(DataSchemaBean::search_index_schema)				
-					.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
-					.map(DataSchemaBean.SearchIndexSchemaBean::technology_override_schema)
-					.map(s -> s.get("settings"))
-					.map(o -> mapper.convertValue(o, JsonNode.class))
-				.orElse(Optional.ofNullable(config.search_technology_override()).map(cfg -> cfg.settings())
-						.map(o -> mapper.convertValue(o, JsonNode.class)).orElse(null));
+			final JsonNode settings = Optional.ofNullable(search_schema)
+											.map(s -> s.settings())
+											.map(o -> mapper.convertValue(o, JsonNode.class))
+										.orElse(Optional.ofNullable(config.search_technology_override()).map(cfg -> cfg.settings())
+												.map(o -> mapper.convertValue(o, JsonNode.class)).orElse(null));
 			
-			if (null == settings) { // nothing to do
-				return start;
-			}
+			// Settings
 			
-			return start.rawField("settings", settings.toString().getBytes());
+			final String type_key = getTypeKey(bucket, mapper);
+			
+			return Lambdas.wrap_u(__ -> {
+				if (null == settings) { // nothing to do
+					return start;
+				}
+				else {
+					return start.rawField("settings", settings.toString().getBytes());
+				}
+			})
+			// Mappings and overrides
+			.andThen(Lambdas.wrap_u(json -> json.startObject("mappings").startObject(type_key)))
+			// More mapping overrides
+			.andThen(Lambdas.wrap_u(json -> {
+				
+				return Optional.ofNullable(search_schema)
+								.map(ss -> ss.mapping_overrides())
+								.map(m -> m.get(type_key))
+							.orElse(Collections.emptyMap())
+							.entrySet().stream()
+							.reduce(json, 
+									Lambdas.wrap_u(
+											(acc, kv) -> acc.rawField(kv.getKey(), mapper.convertValue(kv.getValue(), JsonNode.class).toString().getBytes())), 
+									(acc1, acc2) -> acc1 // (can't actually ever happen)
+									)
+							;
+			}))
+			.apply(null);
 		}
 		catch (IOException e) {
 			//Handle fake "IOException"
@@ -512,7 +546,7 @@ public class ElasticsearchIndexUtils {
 	public static XContentBuilder getTemplateMapping(final DataBucketBean bucket) {
 		try {		
 			final XContentBuilder start = XContentFactory.jsonBuilder().startObject()
-											.field("templates", 
+											.field("template", 
 													getBaseIndexName(bucket) + "*"
 													);
 			
@@ -522,6 +556,27 @@ public class ElasticsearchIndexUtils {
 			//Handle fake "IOException"
 			return null;
 		}
+	}
+	
+	/** The control method to build up the mapping from the constituent parts
+	 * @param bucket
+	 * @param field_lookups
+	 * @param default_not_analyzed
+	 * @param default_analyzed
+	 * @param mapper
+	 * @return
+	 */
+	public static XContentBuilder getFullMapping(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean config,
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups,
+			final JsonNode default_not_analyzed, final JsonNode default_analyzed,
+			final ObjectMapper mapper)
+	{
+		return Lambdas.wrap_u(__ -> getTemplateMapping(bucket))
+				.andThen(json -> getSearchServiceMapping(bucket, config, Optional.of(json), mapper))
+				.andThen(json -> getColumnarMapping(bucket, Optional.of(json), field_lookups, default_not_analyzed, default_analyzed, mapper))
+				.andThen(Lambdas.wrap_u(json -> json.endObject().endObject())) // (close the objects from the search service mapping)
+				.andThen(json -> getTemporalMapping(bucket, Optional.of(json)))
+			.apply(null);
 	}
 	
 }

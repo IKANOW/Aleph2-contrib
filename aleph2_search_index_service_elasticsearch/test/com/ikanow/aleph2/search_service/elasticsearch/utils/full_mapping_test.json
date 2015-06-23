@@ -1,5 +1,4 @@
 {
-  "template" : "recs_*",
   "settings" : {
     "index.refresh_interval" : "5s"
   },
