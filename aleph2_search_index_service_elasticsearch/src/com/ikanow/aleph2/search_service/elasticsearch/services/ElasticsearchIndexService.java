@@ -150,7 +150,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 							: Optional.ofNullable(settings.type_name_or_prefix())
 						);
 		
-		
+		//TODO: finish this
 	}
 
 	/* (non-Javadoc)

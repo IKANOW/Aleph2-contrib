@@ -25,7 +25,9 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.elasticsearch.common.collect.ImmutableMap;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentFactory;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -59,14 +61,125 @@ public class TestElasticsearchIndexUtils {
 	@Test
 	public void test_baseNames() {
 		
-		final String uuid = "de305d54-75b4-431b-adb2-eb6b9e546014";
+		// Index stuff
+		{
+			final String uuid = "de305d54-75b4-431b-adb2-eb6b9e546014";
+			
+			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::_id, uuid).done().get());
+			
+			assertEquals("de305d54_75b4_431b_adb2_eb6b9e546014", base_index);
+			
+			assertEquals(uuid, ElasticsearchIndexUtils.getBucketIdFromIndexName("de305d54_75b4_431b_adb2_eb6b9e546014_2015"));
+		}
 		
-		final String base_index = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::_id, uuid).done().get());
-		
-		assertEquals("de305d54_75b4_431b_adb2_eb6b9e546014", base_index);
-		
-		assertEquals(uuid, ElasticsearchIndexUtils.getBucketIdFromIndexName("de305d54_75b4_431b_adb2_eb6b9e546014_2015"));
-		
+		// Type stuff
+		{
+			// Tests:
+			// 0a) no data schema 0b) no search index schema, 0c) no settings, 0d) disabled search index schema
+			// 1a) collide_policy==error, type_name_or_prefix not set
+			// 1b) collide_policy==error, type_name_or_prefix set
+			// 2a) collide_policy==new_type, type_name_or_prefix not set
+			// 2b) collide_policy==new_type, type_name_or_prefix set
+
+			final DataBucketBean test_bucket_0a = BeanTemplateUtils.build(DataBucketBean.class).done().get();
+			final DataBucketBean test_bucket_0b = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, BeanTemplateUtils.build(DataSchemaBean.class).done().get()).done().get();
+			final DataBucketBean test_bucket_0c = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::search_index_schema,
+										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+								.done().get())
+							.done().get())
+					.done().get();
+			final DataBucketBean test_bucket_0d = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::search_index_schema,
+										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+											.with("enabled", false)
+											.with("technology_override_schema",
+													ImmutableMap.builder().put("collide_policy", "error").build()
+													)
+								.done().get())
+							.done().get())
+					.done().get();
+
+			final DataBucketBean test_bucket_1a = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::search_index_schema,
+										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+											.with("technology_override_schema",
+													ImmutableMap.builder()
+														.put("collide_policy", "error")
+													.build()
+													)
+										.done().get()
+								)
+							.done().get()
+							)
+					.done().get();						
+			final DataBucketBean test_bucket_1b = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::search_index_schema,
+										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+											.with("enabled", true)
+											.with("technology_override_schema",
+													ImmutableMap.builder()
+														.put("collide_policy", "error")
+														.put("type_name_or_prefix", "test1")
+													.build()
+													)
+										.done().get()
+								)
+							.done().get()
+							)
+					.done().get();			
+
+			final DataBucketBean test_bucket_2a = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::search_index_schema,
+										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+											.with("technology_override_schema",
+													ImmutableMap.builder()
+														.put("collide_policy", "new_type")
+													.build()
+													)
+										.done().get()
+								)
+							.done().get()
+							)
+					.done().get();						
+			final DataBucketBean test_bucket_2b = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::search_index_schema,
+										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+											.with("enabled", true)
+											.with("technology_override_schema",
+													ImmutableMap.builder()
+														.put("collide_policy", "new_type")
+														.put("type_name_or_prefix", "test2")
+													.build()
+													)
+										.done().get()
+								)
+							.done().get()
+							)
+					.done().get();			
+			
+			assertEquals("_default_", ElasticsearchIndexUtils.getTypeKey(test_bucket_0a, _mapper));
+			assertEquals("_default_", ElasticsearchIndexUtils.getTypeKey(test_bucket_0b, _mapper));
+			assertEquals("_default_", ElasticsearchIndexUtils.getTypeKey(test_bucket_0c, _mapper));
+			assertEquals("_default_", ElasticsearchIndexUtils.getTypeKey(test_bucket_0d, _mapper));
+			assertEquals("data_object", ElasticsearchIndexUtils.getTypeKey(test_bucket_1a, _mapper));
+			assertEquals("test1", ElasticsearchIndexUtils.getTypeKey(test_bucket_1b, _mapper));
+			assertEquals("_default_", ElasticsearchIndexUtils.getTypeKey(test_bucket_2a, _mapper));
+			assertEquals("_default_", ElasticsearchIndexUtils.getTypeKey(test_bucket_2b, _mapper));
+		}
 	}
 
 	@Test
@@ -259,12 +372,6 @@ public class TestElasticsearchIndexUtils {
 		final String both = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/full_mapping_test.json"), Charsets.UTF_8);
 		final JsonNode both_json = _mapper.readTree(both);		
 		
-		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty());
-		
-		System.out.println("(Field lookups = " + field_lookups + ")");
-		System.out.println("(Analyzed default = " + _config.columnar_technology_override().default_field_data_analyzed() + ")");
-		System.out.println("(NotAnalyzed default = " + _config.columnar_technology_override().default_field_data_notanalyzed() + ")");
-		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
 				.with(DataBucketBean::data_schema, 
 						BeanTemplateUtils.build(DataSchemaBean.class)
@@ -282,26 +389,202 @@ public class TestElasticsearchIndexUtils {
 						)
 				.done().get();
 
-		final XContentBuilder test_result = ElasticsearchIndexUtils.getColumnarMapping(
-				test_bucket, Optional.empty(), field_lookups, 
-				_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
-				_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
-			_mapper);
-
 		final String expected = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/mapping_test_results.json"), Charsets.UTF_8);
 		final JsonNode expected_json = _mapper.readTree(expected);		
-
-
-		assertEquals(expected_json.get("mappings").get("_default_").toString(), test_result.bytes().toUtf8());
 		
-		//DEBUG
-		//System.out.println("XContent = " + test_result.bytes().toUtf8());
 		
-		//TODO: some things to try:
-		// 1) null values
-		// 2) duplicate keys (should exception)
-		// 3) like the above but with a specific type
+		// 1) Default
+		{
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty());
+			
+			//DEBUG
+//			System.out.println("(Field lookups = " + field_lookups + ")");
+//			System.out.println("(Analyzed default = " + _config.columnar_technology_override().default_field_data_analyzed() + ")");
+//			System.out.println("(NotAnalyzed default = " + _config.columnar_technology_override().default_field_data_notanalyzed() + ")");
+		
+			final XContentBuilder test_result = ElasticsearchIndexUtils.getColumnarMapping(
+					test_bucket, Optional.empty(), field_lookups, 
+					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
+					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
+				_mapper);
+	
+			assertEquals(expected_json.get("mappings").get("_default_").toString(), test_result.bytes().toUtf8());
+			
+			// 1b) While we're here, just test that the temporal service doesn't change the XContent
+			
+			final XContentBuilder test_result_1b_1 = ElasticsearchIndexUtils.getTemporalMapping(test_bucket, Optional.of(test_result));
+			
+			assertEquals(test_result_1b_1.bytes().toUtf8(), test_result.bytes().toUtf8());
+			
+			// Slightly more complex, add non null temporal mapping (which is just ignored for mappings purpose, it's used elsewhere)
+			
+			final DataBucketBean test_bucket_temporal = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::temporal_schema,
+										BeanTemplateUtils.build(DataSchemaBean.TemporalSchemaBean.class)
+											.with("grouping_time_period", "1w")
+										.done().get()
+								)
+							.done().get()
+							)
+					.done().get();			
+			
+			final XContentBuilder test_result_1b_2 = ElasticsearchIndexUtils.getTemporalMapping(test_bucket_temporal, Optional.of(test_result));
+			
+			assertEquals(test_result_1b_2.bytes().toUtf8(), test_result.bytes().toUtf8());
+						
+			// 1c) Check it exceptions out if there's a duplicate key
+			
+			final DataBucketBean test_bucket_error = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::columnar_schema,
+										BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class)
+											.with("field_include_list", Arrays.asList("column_only_enabled", "@timestamp", "@version"))
+											.with("field_exclude_list", Arrays.asList("column_only_enabled"))
+											.with("field_type_include_list", Arrays.asList("string"))
+											.with("field_type_exclude_list", Arrays.asList("number"))
+											.with("field_include_pattern_list", Arrays.asList("test*", "column_only_enabled*"))
+											.with("field_exclude_pattern_list", Arrays.asList("*noindex", "column_only_disabled*"))
+										.done().get()
+								)
+							.done().get()
+							)
+					.done().get();
+	
+
+			try {
+				ElasticsearchIndexUtils.getColumnarMapping(
+						test_bucket_error, Optional.empty(), field_lookups, 
+						_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
+						_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
+					_mapper);
+				
+				fail("Should have thrown exception");
+			}
+			catch (Exception e) {} // expected, carry on
+			
+		}
+		
+		// 2) Types instead of "_defaults_"
+		
+		// 2a) type exists
+		
+		{
+			final String test_type = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/full_mapping_test_type.json"), Charsets.UTF_8);
+			final JsonNode test_type_json = _mapper.readTree(test_type);		
+			
+			
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(test_type_json, Optional.of("type_test"));			
+			
+			final XContentBuilder test_result = ElasticsearchIndexUtils.getColumnarMapping(
+					test_bucket, Optional.of(XContentFactory.jsonBuilder().startObject()), field_lookups, 
+					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
+					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
+				_mapper);
+	
+			assertEquals(expected_json.get("mappings").get("_default_").toString(), test_result.bytes().toUtf8());
+		}
+		
+		// 2b) type doesn't exist, should fall back to _default_
+
+		{
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.of("no_such_type"));			
+			
+			final XContentBuilder test_result = ElasticsearchIndexUtils.getColumnarMapping(
+					test_bucket, Optional.of(XContentFactory.jsonBuilder().startObject()), field_lookups, 
+					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
+					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
+				_mapper);
+	
+			assertEquals(expected_json.get("mappings").get("_default_").toString(), test_result.bytes().toUtf8());
+		}
 	}
+	
+	//TODO include in all??
 
+	@Test
+	public void test_searchMapping_integrated() throws JsonProcessingException, IOException {
+		
+		final ElasticsearchIndexServiceConfigBean config_bean = ElasticsearchIndexConfigUtils.buildConfigBean(ConfigFactory.empty());	
+		
+		// TEST with default config, no settings specified in mapping
+		{		
+			final String default_settings = "{\"settings\":{\"index.refresh_interval\":\"5s\",\"indices.fielddata.cache.size\":\"10%\"}}";
+			
+			final DataBucketBean test_bucket_0a = BeanTemplateUtils.build(DataBucketBean.class).done().get();
+			final DataBucketBean test_bucket_0b = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, BeanTemplateUtils.build(DataSchemaBean.class).done().get()).done().get();
+			final DataBucketBean test_bucket_0c = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::search_index_schema,
+										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+								.done().get())
+							.done().get())
+					.done().get();
+			final DataBucketBean test_bucket_0d = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::search_index_schema,
+										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+											.with("enabled", false)
+											.with("technology_override_schema",
+													ImmutableMap.builder().build()
+													)
+								.done().get())
+							.done().get())
+					.done().get();
+			final DataBucketBean test_bucket_0e = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::search_index_schema,
+										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+											.with("enabled", false)
+											.with("technology_override_schema",
+													ImmutableMap.builder().put("settings", ImmutableMap.builder().build()).build()
+													)
+								.done().get())
+							.done().get())
+					.done().get();
+			
+			// Nothing at all:
+			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0a, config_bean, Optional.of(XContentFactory.jsonBuilder().startObject()), _mapper).bytes().toUtf8());
+			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0b, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
+			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0c, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
+			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0d, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
+			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0e, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
+			
+			// Not even config
+			final ElasticsearchIndexServiceConfigBean config_bean2 = BeanTemplateUtils.build(ElasticsearchIndexServiceConfigBean.class).done().get();
+			assertEquals("{}", ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0a, config_bean2, Optional.of(XContentFactory.jsonBuilder().startObject()), _mapper).bytes().toUtf8());
+		}		
+		
+		// TEST with settings specified in mapping
+		{
+			final String user_settings = "{\"settings\":{\"indices.fielddata.cache.size\":\"25%\"}}";
+			
+			final DataBucketBean test_bucket_1 = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::search_index_schema,
+										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+											.with("enabled", true)
+											.with("technology_override_schema",
+													ImmutableMap.builder().put("settings", 
+															ImmutableMap.builder()
+																.put("indices.fielddata.cache.size", "25%")
+															.build())
+													.build()
+													)
+								.done().get())
+							.done().get())
+					.done().get();
+
+			assertEquals(user_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_1, config_bean, Optional.empty(), _mapper).bytes().toUtf8());			
+		}
+		
+	}
 	
 }

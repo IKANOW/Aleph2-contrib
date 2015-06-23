@@ -36,9 +36,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
 
 import fj.data.Either;
 
@@ -58,6 +62,24 @@ public class ElasticsearchIndexUtils {
 	 */
 	public static String getBaseIndexName(final DataBucketBean bucket) {
 		return bucket._id().toLowerCase().replace("-", "_");
+	}
+	
+	/** Returns either a specifc type name, or "_default_" if auto types are used
+	 * @param bucket
+	 * @return
+	 */
+	public static String getTypeKey(final DataBucketBean bucket, final ObjectMapper mapper) {
+		return Optional.ofNullable(bucket.data_schema())
+					.map(DataSchemaBean::search_index_schema)				
+					.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+					.map(DataSchemaBean.SearchIndexSchemaBean::technology_override_schema)
+					.map(t -> BeanTemplateUtils.from(mapper.convertValue(t, JsonNode.class), SearchIndexSchemaDefaultBean.class).get())
+					.<String>map(cfg -> {
+						return Patterns.match(cfg.collide_policy()).<String>andReturn()
+								.when(cp -> SearchIndexSchemaDefaultBean.CollidePolicy.new_type == cp, __ -> null) // (ie falls through to default below)
+								.otherwise(__ -> Optional.ofNullable(cfg.type_name_or_prefix()).orElse("data_object"));
+					})
+				.orElse("_default_"); // (the default - "auto type")
 	}
 	
 	/** Converts any index back to its spawning bucket
@@ -84,8 +106,10 @@ public class ElasticsearchIndexUtils {
 						if (!m.isObject()) throw new RuntimeException("mappings must be object");
 						return m;
 					})
-					.map(m -> m.get(type.orElse("_default_")))
-					.filter(i -> !i.isNull())
+					.map(m -> Optional.ofNullable(m.get(type.orElse("_default_")))
+												.map(mm -> !mm.isNull() ? mm : m.get("_default_"))
+											.orElse(m.get("_default_")))
+					.filter(m -> !m.isNull())
 					.map(i -> {
 						if (!i.isObject()) throw new RuntimeException(type + " must be object");
 						return i;
@@ -215,10 +239,14 @@ public class ElasticsearchIndexUtils {
 	 * @return
 	 * @throws IOException 
 	 */
-	public static XContentBuilder getTemporalMapping(final DataBucketBean bucket, Optional<XContentBuilder> to_embed) {
+	public static XContentBuilder getTemporalMapping(final DataBucketBean bucket, final Optional<XContentBuilder> to_embed) {
 		try {
 			final XContentBuilder start = to_embed.orElse(XContentFactory.jsonBuilder().startObject());
-			if (!Optional.ofNullable(bucket.data_schema()).map(DataSchemaBean::temporal_schema).isPresent()) return start;
+			if (!Optional.ofNullable(bucket.data_schema())
+					.map(DataSchemaBean::temporal_schema)
+					.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+					.isPresent()) 
+						return start;			
 			
 			// Nothing to be done here
 			
@@ -253,7 +281,11 @@ public class ElasticsearchIndexUtils {
 	{
 		try {
 			final XContentBuilder start = to_embed.orElse(XContentFactory.jsonBuilder().startObject());
-			if (!Optional.ofNullable(bucket.data_schema()).map(DataSchemaBean::columnar_schema).isPresent()) return start;			
+			if (!Optional.ofNullable(bucket.data_schema())
+					.map(DataSchemaBean::columnar_schema)
+					.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+					.isPresent()) 
+						return start;			
 			
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> column_lookups = Stream.of(			
 				createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_include_list()).stream(),
@@ -421,8 +453,7 @@ public class ElasticsearchIndexUtils {
 					mutable_field_metadata
 						.put("match", either.right().value()._1())
 						.put("match_mapping_type", either.right().value()._2());
-				}
-				
+				}				
 																
 				if (!mutable_field_mapping.has("fielddata"))  // (ie if user specifies fielddata in the search index schema then respect that)
 					mutable_field_mapping.set("fielddata", mapper.readTree(DISABLED_FIELDDATA));
@@ -440,18 +471,29 @@ public class ElasticsearchIndexUtils {
 	 * @return
 	 * @throws IOException 
 	 */
-	public static XContentBuilder getSearchServiceMapping(final DataBucketBean bucket, Optional<XContentBuilder> to_embed) {
+	public static XContentBuilder getSearchServiceMapping(final DataBucketBean bucket,
+															final ElasticsearchIndexServiceConfigBean config,
+															final Optional<XContentBuilder> to_embed,
+															final ObjectMapper mapper)
+	{
 		try {
 			final XContentBuilder start = to_embed.orElse(XContentFactory.jsonBuilder().startObject());
-			if (null == bucket.data_schema()) return start;
 
-			// TODO: copy settings across from either the bucket or the default options
-
-			//TODO: need an option for _all that is "lifted" out of "mappings":"type/_default_", to make it easier to set it 
+			//(very briefly Nullable)
+			final JsonNode settings = Optional.ofNullable(bucket.data_schema())
+					.map(DataSchemaBean::search_index_schema)				
+					.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+					.map(DataSchemaBean.SearchIndexSchemaBean::technology_override_schema)
+					.map(s -> s.get("settings"))
+					.map(o -> mapper.convertValue(o, JsonNode.class))
+				.orElse(Optional.ofNullable(config.search_technology_override()).map(cfg -> cfg.settings())
+						.map(o -> mapper.convertValue(o, JsonNode.class)).orElse(null));
 			
-			//TODO: anything else?
+			if (null == settings) { // nothing to do
+				return start;
+			}
 			
-			return start;
+			return start.rawField("settings", settings.toString().getBytes());
 		}
 		catch (IOException e) {
 			//Handle fake "IOException"
@@ -467,40 +509,19 @@ public class ElasticsearchIndexUtils {
 	 * @param bucket
 	 * @return
 	 */
-	public XContentBuilder getTemplateMapping(final DataBucketBean bucket) {
-		//TODO just call getMapping and register with the bucket's base index name
-		return null;
+	public static XContentBuilder getTemplateMapping(final DataBucketBean bucket) {
+		try {		
+			final XContentBuilder start = XContentFactory.jsonBuilder().startObject()
+											.field("templates", 
+													getBaseIndexName(bucket) + "*"
+													);
+			
+			return start;
+		}
+		catch (IOException e) {
+			//Handle fake "IOException"
+			return null;
+		}
 	}
-	
-	//TODO: need the schema checks here
-//	public XContentBuilder getMapping(final DataBucketBean bucket, Optional<XContentBuilder> to_embed) {
-//		try {
-//			final XContentBuilder start = to_embed.orElse(XContentFactory.jsonBuilder().startObject());
-//			if (null == bucket.data_schema()) return start;
-//			if ((null != bucket.data_schema().search_index_schema()) && 
-//					Optional.ofNullable(bucket.data_schema().search_index_schema().enabled()).orElse(true))
-//			{
-//				//TODO search schema
-//				
-//			}
-//			if ((null != bucket.data_schema().temporal_schema()) && 
-//					Optional.ofNullable(bucket.data_schema().temporal_schema().enabled()).orElse(true))
-//			{
-//				//TODO temporal schema
-//				
-//			}
-//			if ((null != bucket.data_schema().columnar_schema()) && 
-//					Optional.ofNullable(bucket.data_schema().columnar_schema().enabled()).orElse(true))
-//			{
-//				//TODO columnar_schema schema				
-//			}
-//			return start;//TODO
-//		}
-//		catch (IOException e) {
-//			//Handle fake "IOException"
-//			return null;
-//		}
-//	}
-	
 	
 }

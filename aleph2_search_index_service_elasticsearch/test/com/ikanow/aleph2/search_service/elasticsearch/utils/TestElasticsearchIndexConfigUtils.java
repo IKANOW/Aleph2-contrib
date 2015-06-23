@@ -28,6 +28,8 @@ import com.typesafe.config.ConfigFactory;
 
 public class TestElasticsearchIndexConfigUtils {
 
+	//TODO: test mapping overrides
+	
 	@Test 
 	public void test_configUtils() {
 		

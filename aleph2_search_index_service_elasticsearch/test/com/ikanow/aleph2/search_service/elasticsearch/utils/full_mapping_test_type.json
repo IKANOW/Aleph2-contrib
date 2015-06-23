@@ -1,0 +1,84 @@
+{
+  "template" : "recs_*",
+  "settings" : {
+    "index.refresh_interval" : "5s"
+  },
+  "mappings" : {
+    "type_test" : {
+       "_all" : {"enabled" : true},
+       "dynamic_templates" : [ {
+         "string_fields" : {
+           "match" : "*",
+           "match_mapping_type" : "string",
+           "mapping" : {
+             "type" : "string", "index" : "analyzed", "omit_norms" : true,
+               "fields" : {
+                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256}
+               }
+           }
+         }
+       }, 
+       {
+         "named_fields1" : {
+           "match" : "test*",
+           "match_mapping_type" : "*",
+           "mapping" : {
+             "type" : "string", "index" : "analyzed", "omit_norms" : true,
+               "fields" : {
+                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256}
+               }
+           }
+         }
+       },
+       {
+         "named_fields2" : {
+           "match" : "*noindex",
+           "match_mapping_type" : "*",
+           "mapping" : {
+             "type" : "string", "index" : "not_analyzed"
+           }
+         }
+       }
+       ],
+       "properties" : {
+         "@version": { "type": "string", "index": "analyzed" },
+         "@timestamp": { "type": "date", "fielddata": { } },
+         "sourceKey": { "type": "string", "index": "not_analyzed" },
+         "geoip"  : {
+           "type" : "object",
+             "dynamic": true,
+             "path": "full",
+             "properties" : {
+               "location" : { "type" : "geo_point" }
+             }
+         }
+       }
+    },
+    "_default_" : {
+       "_all" : {"enabled" : true},
+       "dynamic_templates" : [ {
+         "number_fields" : {
+           "match" : "test*",
+           "match_mapping_type" : "number",
+           "mapping" : {
+             "type" : "number", "index" : "analyzed"
+           }
+         }
+       } ],
+       "properties" : {
+         "@version1": { "type": "string", "index": "not_analyzed" },
+         "@timestamp1": { "type": "date" },
+         "geoip1"  : {
+           "type" : "object",
+             "dynamic": true,
+             "path": "full",
+             "properties" : {
+               "location" : { "type" : "geo_point" }
+             }
+           }  
+         }
+       }
+    }
+  }  
+}
+

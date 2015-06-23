@@ -43,6 +43,7 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		public Boolean verbose() { return verbose; };
 		public Map<String, Object> settings() { return settings; }
 		public Map<String, Object> mappings() { return mappings; }
+		public Map<String, Map<String, Object>> mapping_overrides() { return mapping_overrides; }
 		
 		public enum CollidePolicy { error, new_type };
 		private CollidePolicy collide_policy;
@@ -50,6 +51,7 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		private String type_name_or_prefix;
 		private Map<String, Object> settings;
 		private Map<String, Object> mappings;
+		private Map<String, Map<String, Object>> mapping_overrides;
 	}
 	public static class ColumnarSchemaDefaultBean {
 		// the contents of the "fielddata" sub-object of a property, takes from "_default", or field_type if the field_type can be inferred
