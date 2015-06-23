@@ -147,7 +147,7 @@ public class ElasticsearchIndexUtils {
 								<Map.Entry<String, JsonNode>, Either<String, Tuple2<String, String>>, JsonNode, LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>>
 								toMap(
 									kv -> Either.right(buildMatchPair(kv.getValue())),
-									kv -> kv.getValue().get("mapping"),
+									kv -> kv.getValue(),
 									(v1, v2) -> v1, // (should never happen)
 									() -> new LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>()
 								));
@@ -235,7 +235,8 @@ public class ElasticsearchIndexUtils {
 	// COLUMNAR PROCESSING
 	
 	// (Few constants to tidy stuff up)
-	protected final static String BACKUP_FIELD_MAPPING = "{\"index\":\"not_analyzed\"}";
+	protected final static String BACKUP_FIELD_MAPPING_PROPERTIES = "{\"index\":\"not_analyzed\"}";
+	protected final static String BACKUP_FIELD_MAPPING_TEMPLATES = "{\"mapping\":" + BACKUP_FIELD_MAPPING_PROPERTIES + "}";
 	protected final static String DEFAULT_FIELDDATA_NAME = "_default";
 	protected final static String DISABLED_FIELDDATA = "{\"format\":\"disabled\"}";
 	
@@ -309,13 +310,12 @@ public class ElasticsearchIndexUtils {
 								(acc1, acc2) -> acc1) // (not actually possible)
 							.endObject();
 
-			final XContentBuilder templates = field_lookups.entrySet().stream()
+			final XContentBuilder templates = combined_lookups.entrySet().stream()
 					// properties not dynamic_templates
 					.filter(kv -> kv.getKey().isRight())
 					// overwrite with version built using columns if it exists
 					.map(kv -> Tuples._2T(kv.getKey(), column_lookups.getOrDefault(kv.getKey(), kv.getValue())))
 					.reduce(
-							//TODO: there's a missing mapping in here...
 							properties.startArray("dynamic_templates"),
 							Lambdas.wrap_u((acc, t2) -> acc.startObject()
 															.rawField(getFieldNameFromMatchPair(t2._1().right().value()), t2._2().toString().getBytes()) // (right by construction)
@@ -349,13 +349,22 @@ public class ElasticsearchIndexUtils {
 		return instream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>
 			map(Lambdas.wrap_u(fn -> {
 				final Either<String, Tuple2<String, String>> either = f.apply(fn);
-				final ObjectNode mutable_field_mapping = (ObjectNode) Optional.ofNullable(field_lookups.get(either))
+				
+				final ObjectNode mutable_field_metadata = (ObjectNode) Optional.ofNullable(field_lookups.get(either))
 														.map(j -> j.deepCopy())
-														.orElse(mapper.readTree(BACKUP_FIELD_MAPPING));
+														.orElse(either.either(
+																Lambdas.wrap_fj_u(__ -> mapper.readTree(BACKUP_FIELD_MAPPING_PROPERTIES)),
+																Lambdas.wrap_fj_u(__ -> mapper.readTree(BACKUP_FIELD_MAPPING_TEMPLATES))
+																));
 
+				final ObjectNode mutable_field_mapping = either.isLeft()
+									? mutable_field_metadata
+									: (ObjectNode) mutable_field_metadata.get("mapping");
+				
 				if (either.isRight()) {
-					mutable_field_mapping.put("match", either.right().value()._1());
-					mutable_field_mapping.put("match_mapping_type", either.right().value()._2());
+					mutable_field_metadata
+						.put("match", either.right().value()._1())
+						.put("match_mapping_type", either.right().value()._2());
 				}
 				
 				final boolean is_analyzed = Optional.ofNullable(mutable_field_mapping.get("index"))
@@ -374,7 +383,7 @@ public class ElasticsearchIndexUtils {
 					.ifPresent(j -> { if (!mutable_field_mapping.has("fielddata")) // (ie if user specifies fielddata in the search index schema then respect that)
 											mutable_field_mapping.set("fielddata", j); });
 				
-				return Tuples._2T(either, mutable_field_mapping); 
+				return Tuples._2T(either, mutable_field_metadata); 
 			}));
 
 	}
@@ -397,19 +406,28 @@ public class ElasticsearchIndexUtils {
 		return instream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>
 			map(Lambdas.wrap_u(fn -> {
 				final Either<String, Tuple2<String, String>> either = f.apply(fn);
-				final ObjectNode mutable_field_mapping = (ObjectNode) Optional.ofNullable(field_lookups.get(either))
+				final ObjectNode mutable_field_metadata = (ObjectNode) Optional.ofNullable(field_lookups.get(either))
 														.map(j -> j.deepCopy())
-														.orElse(mapper.readTree(BACKUP_FIELD_MAPPING));
+														.orElse(either.either(
+																Lambdas.wrap_fj_u(__ -> mapper.readTree(BACKUP_FIELD_MAPPING_PROPERTIES)),
+																Lambdas.wrap_fj_u(__ -> mapper.readTree(BACKUP_FIELD_MAPPING_TEMPLATES))
+																));
+
+				final ObjectNode mutable_field_mapping = either.isLeft()
+									? mutable_field_metadata
+									: (ObjectNode) mutable_field_metadata.get("mapping");
 				
 				if (either.isRight()) {
-					mutable_field_mapping.put("match", either.right().value()._1());
-					mutable_field_mapping.put("match_mapping_type", either.right().value()._2());
+					mutable_field_metadata
+						.put("match", either.right().value()._1())
+						.put("match_mapping_type", either.right().value()._2());
 				}
 				
+																
 				if (!mutable_field_mapping.has("fielddata"))  // (ie if user specifies fielddata in the search index schema then respect that)
 					mutable_field_mapping.set("fielddata", mapper.readTree(DISABLED_FIELDDATA));
 				
-				return Tuples._2T(either, mutable_field_mapping); 
+				return Tuples._2T(either, mutable_field_metadata); 
 			}));
 	}
 

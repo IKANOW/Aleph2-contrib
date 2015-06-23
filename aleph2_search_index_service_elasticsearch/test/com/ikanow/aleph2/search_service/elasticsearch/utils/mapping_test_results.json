@@ -22,56 +22,65 @@
        },
        "dynamic_templates" : [
        {
-         "STAR_string" : {
+         "columnBARonlyBARenabledSTAR_STAR" : {
            "mapping" : {
-             "type" : "string", "index" : "analyzed", "omit_norms" : true, "fielddata": {"format":"fst"},
-               "fields" : {
-                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256}
-               }
-           },
-           "match" : "*",
-           "match_mapping_type" : "string"
-         }
-       }, 
-       {
-         "testSTAR_STAR" : {
-           "mapping" : {
-             "type" : "string", "index" : "analyzed", "omit_norms" : true, "fielddata": {"format":"fst"},
-               "fields" : {
-                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256}
-               }
-           },
-           "match" : "test*",
-           "match_mapping_type" : "*"
-         }
-       },
-       {
-         "STARnoindex_STAR" : {
-           "mapping" : {
-             "type" : "string", "index" : "not_analyzed", "fielddata": {"format":"disabled"}
-           },
-           "match" : "*noindex",
-           "match_mapping_type" : "*"
-         }
-       },
-       {
-         "column_only_enabledSTAR_STAR" : {
-           "mapping" : {
-             "index" : "not_analyzed", "fielddata": {"format":"doc_values"}
+           	"index":"not_analyzed","fielddata":{"format":"doc_values"}
            },
            "match" : "column_only_enabled*",
            "match_mapping_type" : "*"
          }
+       }, 
+       {
+         "STAR_number" : {
+           "mapping" : {
+           	"index":"not_analyzed","fielddata":{"format":"disabled"}
+           },
+           "match" : "*",
+           "match_mapping_type" : "number"
+         }
+       }, 
+       {
+         "STARnoindex_STAR" : {
+           "match" : "*noindex",
+           "match_mapping_type" : "*",
+           "mapping" : {
+             "type" : "string", "index" : "not_analyzed", "fielddata": {"format":"disabled"}
+           }
+         }
        },
        {
-         "column_only_disabledSTAR_STAR" : {
+         "STAR_string" : {
+           "match" : "*",
+           "match_mapping_type" : "string",
            "mapping" : {
-             "index" : "not_analyzed", "fielddata": {"format":"disabled"}
+             "type" : "string", "index" : "analyzed", "omit_norms" : true,
+               "fields" : {
+                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256}
+               }, "fielddata": {"format":"fst"}
+           }
+         }
+       }, 
+       {
+         "testSTAR_STAR" : {
+           "match" : "test*",
+           "match_mapping_type" : "*",
+           "mapping" : {
+             "type" : "string", "index" : "analyzed", "omit_norms" : true, 
+               "fields" : {
+                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256}
+               }, "fielddata": {"format":"fst"}
+           }
+         }
+       },
+       {
+         "columnBARonlyBARdisabledSTAR_STAR" : {
+           "mapping" : {
+           	"index":"not_analyzed","fielddata":{"format":"disabled"}
            },
            "match" : "column_only_disabled*",
            "match_mapping_type" : "*"
          }
-       }
+       } 
        ]
     }
   }

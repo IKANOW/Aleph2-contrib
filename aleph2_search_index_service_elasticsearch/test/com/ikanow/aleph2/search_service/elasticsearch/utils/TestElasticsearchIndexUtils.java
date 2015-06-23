@@ -27,7 +27,6 @@ import java.util.stream.Stream;
 
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import scala.Tuple2;
@@ -127,14 +126,14 @@ public class TestElasticsearchIndexUtils {
 			total_result1 = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.of("type_test"));
 		
 		assertEquals(4, total_result1.size());
-		assertEquals("{\"type\":\"number\",\"index\":\"analyzed\"}", total_result1.get(Either.right(Tuples._2T("test*", "number"))).toString());
+		assertEquals("{\"match\":\"test*\",\"match_mapping_type\":\"number\",\"mapping\":{\"type\":\"number\",\"index\":\"analyzed\"}}", total_result1.get(Either.right(Tuples._2T("test*", "number"))).toString());
 		assertEquals("{\"type\":\"date\"}", total_result1.get(Either.left("@timestamp1")).toString());
 		
 		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> 
 		total_result2 = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty());
 	
 		assertEquals(7, total_result2.size());
-		assertEquals(true, total_result2.get(Either.right(Tuples._2T("*", "string"))).get("omit_norms").asBoolean());
+		assertEquals(true, total_result2.get(Either.right(Tuples._2T("*", "string"))).get("mapping").get("omit_norms").asBoolean());
 		assertEquals("{\"type\":\"date\",\"fielddata\":{}}", total_result2.get(Either.left("@timestamp")).toString());	
 		
 		// A couple of error checks:
@@ -196,7 +195,7 @@ public class TestElasticsearchIndexUtils {
 												t2 -> t2._2()
 												));
 			
-			final String test_map_expected_1 = "{Right((test*,*))={'type':'string','index':'analyzed','omit_norms':true,'fields':{'raw':{'type':'string','index':'not_analyzed','ignore_above':256}},'match':'test*','match_mapping_type':'*','fielddata':{'format':'fst'}}, Right((*,*))={'index':'not_analyzed','match':'*','match_mapping_type':'*','fielddata':{'format':'doc_values'}}}";
+			final String test_map_expected_1 = "{Right((test*,*))={'match':'test*','match_mapping_type':'*','mapping':{'type':'string','index':'analyzed','omit_norms':true,'fields':{'raw':{'type':'string','index':'not_analyzed','ignore_above':256}},'fielddata':{'format':'fst'}}}, Right((*,*))={'mapping':{'index':'not_analyzed','fielddata':{'format':'doc_values'}},'match':'*','match_mapping_type':'*'}}";
 			assertEquals(test_map_expected_1, strip(test_map_result_1.toString()));
 			
 			//DEBUG
@@ -244,7 +243,7 @@ public class TestElasticsearchIndexUtils {
 												t2 -> t2._2()
 												));
 			
-			final String test_map_expected_1 = "{Right((test*,*))={'type':'string','index':'analyzed','omit_norms':true,'fields':{'raw':{'type':'string','index':'not_analyzed','ignore_above':256}},'match':'test*','match_mapping_type':'*','fielddata':{'format':'disabled'}}, Right((*,*))={'index':'not_analyzed','match':'*','match_mapping_type':'*','fielddata':{'format':'disabled'}}}";
+			final String test_map_expected_1 = "{Right((test*,*))={'match':'test*','match_mapping_type':'*','mapping':{'type':'string','index':'analyzed','omit_norms':true,'fields':{'raw':{'type':'string','index':'not_analyzed','ignore_above':256}},'fielddata':{'format':'disabled'}}}, Right((*,*))={'mapping':{'index':'not_analyzed','fielddata':{'format':'disabled'}},'match':'*','match_mapping_type':'*'}}";
 			assertEquals(test_map_expected_1, strip(test_map_result_1.toString()));
 
 			//DEBUG
@@ -255,8 +254,6 @@ public class TestElasticsearchIndexUtils {
 		//TODO: non-default fielddata formats
 	}
 
-	//TODO not currently working the format is wrong
-	@Ignore
 	@Test
 	public void test_columnarMapping_integrated() throws JsonProcessingException, IOException {
 		final String both = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/full_mapping_test.json"), Charsets.UTF_8);
@@ -277,7 +274,7 @@ public class TestElasticsearchIndexUtils {
 										.with("field_exclude_list", Arrays.asList("column_only_disabled"))
 										.with("field_type_include_list", Arrays.asList("string"))
 										.with("field_type_exclude_list", Arrays.asList("number"))
-										.with("field_include_pattern_list", Arrays.asList("test_*", "column_only_enabled*"))
+										.with("field_include_pattern_list", Arrays.asList("test*", "column_only_enabled*"))
 										.with("field_exclude_pattern_list", Arrays.asList("*noindex", "column_only_disabled*"))
 									.done().get()
 							)
@@ -285,7 +282,7 @@ public class TestElasticsearchIndexUtils {
 						)
 				.done().get();
 
-		XContentBuilder test_result = ElasticsearchIndexUtils.getColumnarMapping(
+		final XContentBuilder test_result = ElasticsearchIndexUtils.getColumnarMapping(
 				test_bucket, Optional.empty(), field_lookups, 
 				_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
 				_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
@@ -297,17 +294,8 @@ public class TestElasticsearchIndexUtils {
 
 		assertEquals(expected_json.get("mappings").get("_default_").toString(), test_result.bytes().toUtf8());
 		
-		/**/
 		//DEBUG
-		System.out.println("XContent = " + test_result.bytes().toUtf8());
-		
-		//TODO convert to JsonNode, grab some fields and check them
-		
-//		public static XContentBuilder getColumnarMapping(final DataBucketBean bucket, Optional<XContentBuilder> to_embed,
-//				final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups,
-//				final JsonNode default_not_analyzed, final JsonNode default_analyzed,
-//				final ObjectMapper mapper)
-		
+		//System.out.println("XContent = " + test_result.bytes().toUtf8());
 		
 		//TODO: some things to try:
 		// 1) null values
