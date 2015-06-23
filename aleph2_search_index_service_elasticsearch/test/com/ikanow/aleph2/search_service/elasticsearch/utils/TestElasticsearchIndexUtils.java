@@ -669,10 +669,12 @@ public class TestElasticsearchIndexUtils {
 									BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
 										.with("enabled", true)
 										.with("technology_override_schema",
-												ImmutableMap.builder().put("settings", 
+												ImmutableMap.builder()
+													.put("settings", 
 														ImmutableMap.builder()
 															.put("index.refresh_interval","10s")
 														.build())
+													.put("mappings", both_json.get("mappings"))	
 													.build()
 												)
 									.done().get()
@@ -694,7 +696,7 @@ public class TestElasticsearchIndexUtils {
 		final String expected = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/mapping_test_results.json"), Charsets.UTF_8);
 		final JsonNode expected_json = _mapper.readTree(expected);				
 		
-		// 1) Default
+		// 1) Sub method
 		{
 			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty());
 			
@@ -704,6 +706,12 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 				_mapper);
 			
+			assertEquals(expected_json.toString(), test_result.bytes().toUtf8());
+		}
+		
+		// Final method
+		{ 
+			final XContentBuilder test_result = ElasticsearchIndexUtils.createIndexMapping(test_bucket, _config, _mapper);			
 			assertEquals(expected_json.toString(), test_result.bytes().toUtf8());
 		}
 	}

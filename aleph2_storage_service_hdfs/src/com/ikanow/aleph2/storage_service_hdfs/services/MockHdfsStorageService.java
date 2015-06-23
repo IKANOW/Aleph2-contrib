@@ -23,6 +23,7 @@ import org.apache.logging.log4j.Logger;
 
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
@@ -73,7 +74,7 @@ public class MockHdfsStorageService implements IStorageService {
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean)
 	 */
 	@Override
-	public List<BasicMessageBean> validateSchema(StorageSchemaBean schema) {
+	public List<BasicMessageBean> validateSchema(StorageSchemaBean schema, final DataBucketBean bucket) {
 		return Collections.emptyList();
 	}
 

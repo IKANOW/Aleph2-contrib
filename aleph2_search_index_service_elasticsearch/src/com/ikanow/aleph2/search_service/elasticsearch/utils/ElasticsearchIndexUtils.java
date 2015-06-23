@@ -44,6 +44,7 @@ import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
 
 import fj.data.Either;
 
@@ -566,7 +567,7 @@ public class ElasticsearchIndexUtils {
 	 * @param mapper
 	 * @return
 	 */
-	public static XContentBuilder getFullMapping(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean config,
+	protected static XContentBuilder getFullMapping(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean config,
 			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups,
 			final JsonNode default_not_analyzed, final JsonNode default_analyzed,
 			final ObjectMapper mapper)
@@ -579,4 +580,55 @@ public class ElasticsearchIndexUtils {
 			.apply(null);
 	}
 	
+	/** Utility function to create a mapping out of all the different system components (see also ElasticsearchUtils)
+	 * @param bucket
+	 * @param config
+	 * @return
+	 */
+	public static XContentBuilder createIndexMapping(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean config, final ObjectMapper mapper) {
+		
+		final JsonNode default_mapping = Optional.ofNullable(bucket.data_schema())
+												.map(DataSchemaBean::search_index_schema)
+												.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+												.map(DataSchemaBean.SearchIndexSchemaBean::technology_override_schema)
+												.map(t -> mapper.convertValue(t, JsonNode.class))
+											.orElse(BeanTemplateUtils.toJson(config.search_technology_override()));
+		
+		// Also get JsonNodes for the default field config bit
+
+		final Optional<JsonNode> columnar_defaults =  Optional.ofNullable(bucket.data_schema())
+															.map(DataSchemaBean::columnar_schema)
+															.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+															.map(DataSchemaBean.ColumnarSchemaBean::technology_override_schema)
+															.map(t -> mapper.convertValue(t, JsonNode.class));
+		
+		final JsonNode default_analyzed_field = columnar_defaults
+												.map(j -> j.get("default_field_data_analyzed")) 
+												.filter(j -> !j.isNull())
+											.orElse(BeanTemplateUtils.toJson(config.columnar_technology_override().default_field_data_analyzed())); // (can't be null by construction)
+
+		final JsonNode default_not_analyzed_field = columnar_defaults
+												.map(j -> j.get("default_field_data_notanalyzed")) 
+												.filter(j -> !j.isNull())
+											.orElse(BeanTemplateUtils.toJson(config.columnar_technology_override().default_field_data_notanalyzed())); // (can't be null by construction)		
+		
+		// Get a list of field overrides Either<String,Tuple2<String,String>> for dynamic/real fields
+		
+		final ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean settings = BeanTemplateUtils.from(default_mapping, 
+														ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.class).get();
+		
+		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> 
+			field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(default_mapping, 
+					(CollidePolicy.new_type == Optional.ofNullable(settings.collide_policy()).orElse(CollidePolicy.new_type))
+							? Optional.empty()
+							: Optional.ofNullable(settings.type_name_or_prefix())
+						);
+		
+		final XContentBuilder test_result = getFullMapping(
+				bucket, config, field_lookups, 
+				default_analyzed_field,  default_not_analyzed_field,
+				mapper);		
+
+		return test_result;
+	}
 }

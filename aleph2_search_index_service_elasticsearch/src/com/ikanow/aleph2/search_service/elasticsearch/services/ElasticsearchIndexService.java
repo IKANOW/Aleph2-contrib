@@ -18,15 +18,12 @@ package com.ikanow.aleph2.search_service.elasticsearch.services;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.LinkedHashMap;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
 import org.elasticsearch.client.Client;
 
-import scala.Tuple2;
-
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.Inject;
 import com.google.inject.Module;
@@ -35,22 +32,16 @@ import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService
 import com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
-import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchIndexSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
-import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
 import com.ikanow.aleph2.search_service.elasticsearch.module.ElasticsearchIndexServiceModule;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory;
-
-import fj.data.Either;
-
-//TODO: all the data services should have a validate(DataSchemaBean xxx) which returns a list of errors so the bucket dev can find out
-//in advance of trying to use them...
 
 /** Elasticsearch implementation of the SearchIndexService/TemporalService/ColumnarService
  * @author Alex
@@ -109,50 +100,10 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		return null;
 	}
 	
-	//TODO make this static, or at least all its components
-	@SuppressWarnings("unused")
-	private void createIndexMapping(final DataBucketBean bucket) {
-		
-		final JsonNode default_mapping = Optional.ofNullable(bucket.data_schema())
-												.map(DataSchemaBean::search_index_schema)
-												.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
-												.map(DataSchemaBean.SearchIndexSchemaBean::technology_override_schema)
-												.map(t -> _mapper.convertValue(t, JsonNode.class))
-											.orElse(BeanTemplateUtils.toJson(_config.search_technology_override()));
-		
-		// Also get JsonNodes for the default field config bit
+	////////////////////////////////////////////////////////////////////////////////
 
-		final Optional<JsonNode> columnar_defaults =  Optional.ofNullable(bucket.data_schema())
-															.map(DataSchemaBean::columnar_schema)
-															.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
-															.map(DataSchemaBean.ColumnarSchemaBean::technology_override_schema)
-															.map(t -> _mapper.convertValue(t, JsonNode.class));
-		
-		final JsonNode default_analyzed_field = columnar_defaults
-												.map(j -> j.get("default_field_data_analyzed")) 
-												.filter(j -> !j.isNull())
-											.orElse(BeanTemplateUtils.toJson(_config.columnar_technology_override().default_field_data_analyzed())); // (can't be null by construction)
-
-		final JsonNode default_not_analyzed_field = columnar_defaults
-												.map(j -> j.get("default_field_data_notanalyzed")) 
-												.filter(j -> !j.isNull())
-											.orElse(BeanTemplateUtils.toJson(_config.columnar_technology_override().default_field_data_notanalyzed())); // (can't be null by construction)		
-		
-		// Get a list of field overrides Either<String,Tuple2<String,String>> for dynamic/real fields
-		
-		final ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean settings = BeanTemplateUtils.from(default_mapping, 
-														ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.class).get();
-		
-		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> 
-			field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(default_mapping, 
-					(CollidePolicy.new_type == Optional.ofNullable(settings.collide_policy()).orElse(CollidePolicy.new_type))
-							? Optional.empty()
-							: Optional.ofNullable(settings.type_name_or_prefix())
-						);
-		
-		//TODO: finish this
-	}
-
+	// ES CLIENT ACCESS	
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService#getUnderlyingPlatformDriver(java.lang.Class, java.util.Optional)
 	 */
@@ -165,6 +116,51 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		return Optional.empty();
 	}
 
+	////////////////////////////////////////////////////////////////////////////////
+
+	// VALIDATION	
+	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean)
+	 */
+	@Override
+	public List<BasicMessageBean> validateSchema(final ColumnarSchemaBean schema, final DataBucketBean bucket) {
+		// (Performed under search index schema)
+		return Collections.emptyList();
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean)
+	 */
+	@Override
+	public List<BasicMessageBean> validateSchema(final TemporalSchemaBean schema, final DataBucketBean bucket) {
+		// (time buckets aka default schema options are already validated, nothing else to do)
+		return Collections.emptyList();
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchIndexSchemaBean)
+	 */
+	@Override
+	public List<BasicMessageBean> validateSchema(final SearchIndexSchemaBean schema, final DataBucketBean bucket) {
+		try {
+			ElasticsearchIndexUtils.createIndexMapping(bucket, _config, _mapper);
+			
+			//TODO (ALEPH-14): if in debug mode then return the mapping 
+			
+			return Collections.emptyList();
+		}
+		catch (Throwable e) {
+			final BasicMessageBean err = new BasicMessageBean(
+					new Date(), false, bucket.full_name(), "validateSchema", null, 
+					ErrorUtils.getLongForm("{0}", e), null);
+					
+			return Arrays.asList(err);
+		}
+	}
+	
+	////////////////////////////////////////////////////////////////////////////////
+	
 	/** This service needs to load some additional classes via Guice. Here's the module that defines the bindings
 	 * @return
 	 */
@@ -176,30 +172,4 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		//(done!)
 	}
 
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean)
-	 */
-	@Override
-	public List<BasicMessageBean> validateSchema(final ColumnarSchemaBean schema) {
-		//TODO
-		return Collections.emptyList();
-	}
-
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean)
-	 */
-	@Override
-	public List<BasicMessageBean> validateSchema(final TemporalSchemaBean schema) {
-		//TODO
-		return Collections.emptyList();
-	}
-
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchIndexSchemaBean)
-	 */
-	@Override
-	public List<BasicMessageBean> validateSchema(final SearchIndexSchemaBean schema) {
-		//TODO
-		return Collections.emptyList();
-	}
 }
