@@ -16,9 +16,9 @@
 package com.ikanow.aleph2.management_db.mongodb.services;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Inject;
@@ -260,5 +260,13 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 				retry_message_clazz, String.class, 
 				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.RETRY_DB, retry_message_clazz.getSimpleName()), 
 				Optional.empty(), Optional.empty(), Optional.empty());
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getUnderlyingArtefacts()
+	 */
+	@Override
+	public Collection<Object> getUnderlyingArtefacts() {
+		return Arrays.asList(_crud_factory);
 	}
 }
