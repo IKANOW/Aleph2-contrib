@@ -14,6 +14,8 @@
 * limitations under the License.
 ******************************************************************************/
 package com.ikanow.aleph2.storage_service_hdfs.services;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -76,6 +78,11 @@ public class MockHdfsStorageService implements IStorageService {
 	@Override
 	public List<BasicMessageBean> validateSchema(StorageSchemaBean schema, final DataBucketBean bucket) {
 		return Collections.emptyList();
+	}
+
+	@Override
+	public Collection<Object> getUnderlyingArtefacts() {
+		return Arrays.asList(this);
 	}
 
 }

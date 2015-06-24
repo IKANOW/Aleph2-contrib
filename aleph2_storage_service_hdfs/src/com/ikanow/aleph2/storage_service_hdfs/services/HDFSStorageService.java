@@ -17,6 +17,8 @@ package com.ikanow.aleph2.storage_service_hdfs.services;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -127,6 +129,11 @@ public class HDFSStorageService implements IStorageService {
 	@Override
 	public List<BasicMessageBean> validateSchema(final StorageSchemaBean schema, final DataBucketBean bucket) {
 		return Collections.emptyList();
+	}
+
+	@Override
+	public Collection<Object> getUnderlyingArtefacts() {
+		return Arrays.asList(this);
 	}
 
 }

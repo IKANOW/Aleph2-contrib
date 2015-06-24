@@ -21,8 +21,13 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
+import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.common.xcontent.XContentBuilder;
+
+import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.Inject;
@@ -54,6 +59,8 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	
 	protected final static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 	
+	protected final ConcurrentHashMap<String, Tuple2<Date, String>> _bucket_index_cache = new ConcurrentHashMap<>();
+	
 	/** Guice generated constructor
 	 * @param crud_factory
 	 */
@@ -81,6 +88,12 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		}
 		
 		// OK so it's a legit single bucket ... first question ... does this already exist?
+		
+		//TODO: will get an error if index has been deleted and recreated?
+		final Tuple2<Date,String> current_index = _bucket_index_cache.get(bucket._id());
+		
+		final String[] index_pattern = { ElasticsearchIndexUtils.getBaseIndexName(bucket) + "*" };
+		_crud_factory.getClient().admin().indices().exists(new IndicesExistsRequest().indices(index_pattern));
 		
 		// If it does, do we need to check and potentially update its mapping? 
 		
@@ -144,11 +157,18 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	@Override
 	public List<BasicMessageBean> validateSchema(final SearchIndexSchemaBean schema, final DataBucketBean bucket) {
 		try {
-			ElasticsearchIndexUtils.createIndexMapping(bucket, _config, _mapper);
-			
-			//TODO (ALEPH-14): if in debug mode then return the mapping 
-			
-			return Collections.emptyList();
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, _config, _mapper);
+			if (is_verbose(schema)) {
+				final BasicMessageBean success = new BasicMessageBean(
+						new Date(), true, bucket.full_name(), "validateSchema", null, 
+						mapping.bytes().toUtf8(), null);
+						
+				return Arrays.asList(success);
+				
+			}
+			else {
+				return Collections.emptyList();
+			}
 		}
 		catch (Throwable e) {
 			final BasicMessageBean err = new BasicMessageBean(
@@ -157,6 +177,14 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					
 			return Arrays.asList(err);
 		}
+	}
+	private static boolean is_verbose(final SearchIndexSchemaBean schema) {
+		return Optional.ofNullable(schema)
+					.map(SearchIndexSchemaBean::technology_override_schema)
+					.map(m -> m.get("verbose"))
+					.filter(b -> b.toString().equalsIgnoreCase("true") || b.toString().equals("1"))
+					.map(b -> true) // (if we're here then must be true/1)
+				.orElse(false);
 	}
 	
 	////////////////////////////////////////////////////////////////////////////////
@@ -170,6 +198,11 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	
 	public void youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules() {
 		//(done!)
+	}
+
+	@Override
+	public Collection<Object> getUnderlyingArtefacts() {
+		return Arrays.asList(this, _crud_factory);
 	}
 
 }
