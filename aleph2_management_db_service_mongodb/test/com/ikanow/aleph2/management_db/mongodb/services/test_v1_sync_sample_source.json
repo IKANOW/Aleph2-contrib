@@ -15,7 +15,7 @@
         "data_bucket": {
             "aliases": [],
             "batch_enrichment_configs": [{
-                "config": {"key1": "value1"},
+                "config": {"key1": 1, "key2":"value2"},
                 "dependencies": [],
                 "enabled": false,
                 "library_ids_or_names": [],
@@ -55,7 +55,7 @@
             },
             "full_name": "/bucket/path/here",
             "harvest_configs": [{
-                "config": {"key1": "value1_harvest"},
+                "config": {"key1": "value1_harvest", "key2": 1},
                 "enabled": true,
                 "library_ids_or_names": [],
                 "name": "harvester_1"

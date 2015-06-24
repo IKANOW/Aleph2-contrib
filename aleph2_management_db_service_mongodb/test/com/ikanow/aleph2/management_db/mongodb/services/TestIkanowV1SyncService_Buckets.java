@@ -163,7 +163,8 @@ public class TestIkanowV1SyncService_Buckets {
 		assertEquals(Collections.unmodifiableSet(new HashSet<String>()), bucket.aliases());
 		assertEquals(1, bucket.batch_enrichment_configs().size());
 		assertEquals(false, bucket.batch_enrichment_configs().get(0).enabled());
-		assertEquals("value1", bucket.batch_enrichment_configs().get(0).config().get("key1"));
+		assertEquals(1, bucket.batch_enrichment_configs().get(0).config().get("key1"));
+		assertEquals("value2", bucket.batch_enrichment_configs().get(0).config().get("key2"));
 		assertEquals(null, bucket.batch_enrichment_topology());
 		assertEquals("21 May 2015 02:37:23 GMT", bucket.created().toGMTString());
 		assertEquals(null, bucket.data_locations());
