@@ -267,6 +267,6 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	 */
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
-		return Arrays.asList(_crud_factory);
+		return Arrays.asList(this, _crud_factory);
 	}
 }
