@@ -21,6 +21,8 @@ import org.junit.Test;
 
 public class TestElasticsearchContextUtils {
 
+	//TODO: lots to test
+	
 	@Test
 	public void test_getNextAutoType() {
 		

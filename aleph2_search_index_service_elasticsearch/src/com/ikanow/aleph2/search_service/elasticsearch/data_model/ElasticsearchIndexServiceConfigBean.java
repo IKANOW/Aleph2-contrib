@@ -17,6 +17,7 @@ package com.ikanow.aleph2.search_service.elasticsearch.data_model;
 
 import java.util.Map;
 
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConfigurationBean;
 
 /** The configuration bean for the Elasticsearch Index Service
@@ -31,9 +32,11 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 	
 	public SearchIndexSchemaDefaultBean search_technology_override() { return search_technology_override; }
 	public ColumnarSchemaDefaultBean columnar_technology_override() { return columnar_technology_override; }
+	public DataSchemaBean.TemporalSchemaBean temporal_technology_override() { return temporal_technology_override; }
 
 	private SearchIndexSchemaDefaultBean search_technology_override;
 	private ColumnarSchemaDefaultBean columnar_technology_override;
+	private DataSchemaBean.TemporalSchemaBean temporal_technology_override;
 	
 	// Can only construct this from a config element
 	

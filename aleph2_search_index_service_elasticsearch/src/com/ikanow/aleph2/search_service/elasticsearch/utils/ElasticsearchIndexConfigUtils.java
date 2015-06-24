@@ -15,6 +15,11 @@
  ******************************************************************************/
 package com.ikanow.aleph2.search_service.elasticsearch.utils;
 
+import java.util.Optional;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
@@ -41,10 +46,14 @@ public class ElasticsearchIndexConfigUtils {
 			final Config default_templates = ConfigFactory.parseResources(Thread.currentThread().getContextClassLoader(), 
 					"com/ikanow/aleph2/search_service/elasticsearch/data_model/default_columnar_override.conf").atPath("columnar_technology_override");
 			
+			final Config default_temporal = ConfigFactory.parseResources(Thread.currentThread().getContextClassLoader(), 
+					"com/ikanow/aleph2/search_service/elasticsearch/data_model/default_temporal_override.conf").atPath("temporal_technology_override");
+			
+			
 			final Config user_overrides = PropertiesUtils.getSubConfig(global_config, ElasticsearchIndexServiceConfigBean.PROPERTIES_ROOT).orElse(ConfigFactory.empty());
 			
 			return BeanTemplateUtils.from(
-					default_templates.withFallback(default_search).entrySet().stream()
+					default_templates.withFallback(default_search).withFallback(default_temporal).entrySet().stream()
 								.reduce(
 										user_overrides, 
 										(acc, kv) -> (acc.hasPath(kv.getKey())) ? acc : acc.withValue(kv.getKey(), kv.getValue()), 
@@ -59,4 +68,36 @@ public class ElasticsearchIndexConfigUtils {
 					), e);				
 		}
 	}
+	
+	/** Converts the bucket schema into the config bean
+	 * @param bucket
+	 * @param backup - provides defaults from the global configuration
+	 * @return
+	 */
+	public static ElasticsearchIndexServiceConfigBean buildConfigBeanFromSchema(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean backup, final ObjectMapper mapper) {
+		final ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean search_index_bits =
+				Optional.ofNullable(bucket.data_schema()).map(DataSchemaBean::search_index_schema)
+							.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+							.map(s -> s.technology_override_schema())
+							.map(map -> mapper.convertValue(map, ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.class))
+						.orElse(backup.search_technology_override());
+		
+		final ElasticsearchIndexServiceConfigBean.ColumnarSchemaDefaultBean columnar_bits =
+				Optional.ofNullable(bucket.data_schema()).map(DataSchemaBean::columnar_schema)
+							.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+							.map(s -> s.technology_override_schema())
+							.map(map -> mapper.convertValue(map, ElasticsearchIndexServiceConfigBean.ColumnarSchemaDefaultBean.class))
+						.orElse(backup.columnar_technology_override());
+		
+		final DataSchemaBean.TemporalSchemaBean temporal_bits = Optional.ofNullable(bucket.data_schema()).map(DataSchemaBean::temporal_schema)
+																	.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))				
+																	.orElse(backup.temporal_technology_override());
+		
+		return BeanTemplateUtils.build(ElasticsearchIndexServiceConfigBean.class)
+				.with(ElasticsearchIndexServiceConfigBean::search_technology_override, search_index_bits)
+				.with(ElasticsearchIndexServiceConfigBean::columnar_technology_override, columnar_bits)
+				.with(ElasticsearchIndexServiceConfigBean::temporal_technology_override, temporal_bits)
+				.done().get();
+	}
+	
 }

@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.ikanow.aleph2.search_service.elasticsearch.services;
 
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -23,7 +24,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 
@@ -43,10 +43,17 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalS
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
 import com.ikanow.aleph2.search_service.elasticsearch.module.ElasticsearchIndexServiceModule;
+import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexUtils;
+import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
+import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.CreationPolicy;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory;
+
+import fj.data.Validation;
 
 /** Elasticsearch implementation of the SearchIndexService/TemporalService/ColumnarService
  * @author Alex
@@ -89,28 +96,74 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		
 		// OK so it's a legit single bucket ... first question ... does this already exist?
 		
-		//TODO: will get an error if index has been deleted and recreated?
-		final Tuple2<Date,String> current_index = _bucket_index_cache.get(bucket._id());
+		final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);
 		
-		final String[] index_pattern = { ElasticsearchIndexUtils.getBaseIndexName(bucket) + "*" };
-		_crud_factory.getClient().admin().indices().exists(new IndicesExistsRequest().indices(index_pattern));
+		this.handlePotentiallyNewIndex(bucket);
 		
-		// If it does, do we need to check and potentially update its mapping? 
+		// Need to decide a) if it's a time based index b) an auto type index
+		// And then build the context from there
 		
-		// TODO Auto-generated method stub
-		return null;
+		final Validation<String, ChronoUnit> time_period = TimeUtils.getTimePeriod(Optional.ofNullable(schema_config.temporal_technology_override())
+																.map(t -> t.grouping_time_period()).orElse(""));
+
+		// Index
+		final String index_base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+		final ElasticsearchContext.IndexContext.ReadWriteIndexContext index_context = time_period.validation(
+				fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name)
+				, 
+				success -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext(index_base_name, 
+									Optional.ofNullable(schema_config.temporal_technology_override().time_field()))
+				);
+		
+		// Type
+		final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
+		final ElasticsearchContext.TypeContext.ReadWriteTypeContext type_context =
+				CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+						.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
+					? new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), type)
+					: new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext(type.orElse("data_object"));
+		
+		//if (schema_config.temporal_technology_override().enabled())
+		
+		return _crud_factory.getElasticsearchCrudService(clazz,
+				new ElasticsearchContext.ReadWriteContext(_crud_factory.getClient(), index_context, type_context),
+				Optional.empty(), 
+				CreationPolicy.OPTIMIZED, 
+				Optional.empty(), Optional.empty(), Optional.empty());
 	}
 
+	/** Checks if an index/set-of-indexes spawned from a bucket
+	 * @param bucket
+	 */
+	protected void handlePotentiallyNewIndex(final DataBucketBean bucket) {
+		//TODO: will get an error if index has been deleted and recreated?
+		final Tuple2<Date,String> current_index = _bucket_index_cache.get(bucket._id());
+		if ((null == current_index) || current_index._1().before(Optional.ofNullable(bucket.modified()).orElse(new Date()))) {
+			//TODO
+			// Get index
+			//final String[] index_pattern = { ElasticsearchIndexUtils.getBaseIndexName(bucket) + "*" };
+			//final IndicesExistsResponse ier = _crud_factory.getClient().admin().indices().exists(new IndicesExistsRequest().indices(index_pattern)).actionGet();
+			
+			// If it doesn't, create index and mapping
+			
+			// If it does, do we need to check and potentially try to update its mapping? 
+			
+		}
+	}
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService#getCrudService(java.lang.Class, java.util.Collection)
 	 */
 	@Override
 	public <O> ICrudService<O> getCrudService(final Class<O> clazz, final Collection<String> buckets) {
 		
-		// Grab all the buckets 
+		//TODO (ALEPH-14): expand aliases
 		
-		// TODO Auto-generated method stub
-		return null;
+		// Grab all the _existing_ buckets 
+		
+		//TODO (ALEPH-14): Handle the read only case
+		
+		throw new RuntimeException("Not yet implemented");
 	}
 	
 	////////////////////////////////////////////////////////////////////////////////

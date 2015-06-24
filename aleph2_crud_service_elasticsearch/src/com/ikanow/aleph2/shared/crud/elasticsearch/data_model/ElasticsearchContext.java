@@ -15,8 +15,10 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared.crud.elasticsearch.data_model;
 
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -24,12 +26,11 @@ import java.util.stream.Collectors;
 import org.elasticsearch.client.Client;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUtils;
 
 import scala.Tuple2;
 
-//TODO: dates .. have a memoized function to work out the grouping period based on the date string
-
-//TODO: need a 1-up util for auto type
+//TODO: lots to test
 
 /** Algebraic data type (ADT) encapsulating the state of an elasticsearch crud "service" (which could point at multiple/auto indexes and types)
  * ElasticsearchContext = ReadOnlyContext(ReadOnlyTypeContext, ReadOnlyIndexContext) 
@@ -139,7 +140,7 @@ public abstract class ElasticsearchContext {
 				final private List<String> _indexes;
 				
 				@Override
-				public List<String> getReadableIndexList(Optional<Tuple2<Long, Long>> date_range) {
+				public List<String> getReadableIndexList(final Optional<Tuple2<Long, Long>> date_range) {
 					return Collections.unmodifiableList(_indexes);
 				} 
 			}
@@ -153,13 +154,14 @@ public abstract class ElasticsearchContext {
 				final private List<String> _indexes;
 				
 				@Override
-				public List<String> getReadableIndexList(Optional<Tuple2<Long, Long>> date_range) {
+				public List<String> getReadableIndexList(final Optional<Tuple2<Long, Long>> date_range) {
 					if (!date_range.isPresent()) { // Convert to wildcards
 						return _indexes.stream().map(i -> i.replaceFirst("_[^_]+*$", "_*")).collect(Collectors.toList());
 					}
 					else {
-						//TODO it gets a bit more complicated here...
-						return null;
+						return _indexes.stream()
+									.flatMap(i -> ElasticsearchContextUtils.getIndexesFromDateRange(i, date_range.get()))
+									.collect(Collectors.toList());
 					}
 				} 
 			}
@@ -216,19 +218,28 @@ public abstract class ElasticsearchContext {
 				}
 				
 				@Override
-				public List<String> getReadableIndexList(Optional<Tuple2<Long, Long>> date_range) {
+				public List<String> getReadableIndexList(final Optional<Tuple2<Long, Long>> date_range) {
 					if (!date_range.isPresent()) { // Convert to wildcards
 						return Arrays.asList(_index.replaceFirst("_[^_]+*$", "_*"));
 					}
 					else {
-						//TODO it gets a bit more complicated here...
-						return null;
+						return ElasticsearchContextUtils.getIndexesFromDateRange(_index, date_range.get()).collect(Collectors.toList());
 					}
 				}
 				@Override
-				public String getWritableIndex(Optional<JsonNode> writable_object) {
-					// TODO need some date utilities
-					return null;
+				public String getWritableIndex(final Optional<JsonNode> writable_object) {
+					final Date d = _time_field
+										.filter(__ -> writable_object.isPresent())
+										.map(t -> writable_object.get().get(t))
+										.filter(j -> j.isLong())
+										.map(j -> new Date(j.asLong()))
+									.orElseGet(() -> new Date()); // (else just use "now")
+							
+					final Tuple2<String, String> index_split = ElasticsearchContextUtils.splitTimeBasedIndex(_index);
+					final SimpleDateFormat formatter = new SimpleDateFormat(index_split._2());
+					final String formatted_date = formatter.format(d);
+
+					return ElasticsearchContextUtils.reconstructTimedBasedSplitIndex(index_split._1(), formatted_date);
 				}
 			}
 		}
@@ -301,7 +312,7 @@ public abstract class ElasticsearchContext {
 			 * @author Alex
 			 */
 			public static class FixedRwTypeContext extends ReadWriteTypeContext {
-				public FixedRwTypeContext(String type) {
+				public FixedRwTypeContext(final String type) {
 					_type = type; 
 				}
 				private String _type;
@@ -324,7 +335,7 @@ public abstract class ElasticsearchContext {
 				/** Construct an auto read-write type context
 				 * @param known_types - to restrict the set of indexes passed to a query it is necessary to get the current set of types (via the mapping), otherwise leave blank and don't apply to the query
 				 */
-				public AutoRwTypeContext(final Optional<List<String>> known_types, Optional<String> prefix) {
+				public AutoRwTypeContext(final Optional<List<String>> known_types, final Optional<String> prefix) {
 					_known_types = known_types.orElse(Collections.emptyList()); 
 					_prefix = prefix.orElse(DEFAULT_PREFIX);
 				}

@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.ikanow.aleph2.search_service.elasticsearch.services;
 
-public class TestElasticsearchIndex {
+public class TestElasticsearchIndexService {
 
+	//TODO
 }

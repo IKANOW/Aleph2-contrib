@@ -518,7 +518,7 @@ public class ElasticsearchIndexUtils {
 				
 				return Optional.ofNullable(search_schema)
 								.map(ss -> ss.mapping_overrides())
-								.map(m -> m.get(type_key))
+								.map(m -> m.getOrDefault(type_key, m.get("*")))
 							.orElse(Collections.emptyMap())
 							.entrySet().stream()
 							.reduce(json, 

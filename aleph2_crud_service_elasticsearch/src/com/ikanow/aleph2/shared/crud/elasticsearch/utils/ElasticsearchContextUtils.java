@@ -20,15 +20,65 @@ import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
+import scala.Tuple2;
+
+import com.codepoetics.protonpack.StreamUtils;
 import com.ikanow.aleph2.data_model.utils.Functions;
 import com.ikanow.aleph2.data_model.utils.Patterns;
+import com.ikanow.aleph2.data_model.utils.Tuples;
+
 
 /** Utilities around the ElasticsearchContext ADTs
  * @author Alex
  */
 public class ElasticsearchContextUtils {
 
+	//TODO: test code for this...
+	
+	/** Creates a list of time-based indexes from a time range
+	 * @param index_template
+	 * @param date_range
+	 * @return
+	 */
+	public static Stream<String> getIndexesFromDateRange(final String index_template, final Tuple2<Long, Long> date_range) {
+		try {
+			// Get lower-end of date range
+			final Date lower_end = new Date(date_range._1());
+			final Date upper_end = new Date(date_range._2());
+			final Tuple2<String, String> index_split = splitTimeBasedIndex(index_template);
+			final SimpleDateFormat formatter = new SimpleDateFormat(index_split._2());
+			final ChronoUnit time_period = getIndexGroupingPeriod.apply(index_split._2());
+	
+			return StreamUtils.takeWhile(Stream.iterate(lower_end, d -> Date.from(time_period.addTo(d.toInstant(), 1))), d -> d.before(upper_end))
+						.map(d -> formatter.format(d))
+						.map(s -> reconstructTimedBasedSplitIndex(index_split._1(), s));
+		}
+		catch (Exception e) { // This particular index was probably not time-based..
+			return Stream.of(index_template);
+		}
+	}
+	
+	/** Split a time-based index into its base and the bit that gets formatted
+	 * @param index_template
+	 * @return
+	 */
+	public static Tuple2<String, String> splitTimeBasedIndex(final String index_template) {
+		final String base_index = index_template.substring(0, index_template.lastIndexOf("_"));
+		final String date_string = index_template.substring(2 + index_template.lastIndexOf("_")).replace("}", ""); //+2 for _{
+		return Tuples._2T(base_index, date_string);		
+	}
+	
+	/** Reconstruct a split generated from splitTimeBasedIndex
+	 * @param base_index
+	 * @param formatted_date
+	 * @return
+	 */
+	public static String reconstructTimedBasedSplitIndex(final String base_index, final String formatted_date) {
+		return base_index + "_" + formatted_date;
+	}
+	
 	/** Utility function to figure out the grouping period based on the index name
 	 * @param date_format
 	 * @return the date grouping type
@@ -50,7 +100,7 @@ public class ElasticsearchContextUtils {
 	}	
 	/** Memoized version of getIndexGroupingPeriod_slow
 	 */
-	final public Function<String, ChronoUnit> getIndexGroupingPeriod = Functions.memoize(ElasticsearchContextUtils::getIndexGroupingPeriod_slow);
+	final public static Function<String, ChronoUnit> getIndexGroupingPeriod = Functions.memoize(ElasticsearchContextUtils::getIndexGroupingPeriod_slow);
 	
 	/** 1-ups an auto type
 	 * @param prefix
