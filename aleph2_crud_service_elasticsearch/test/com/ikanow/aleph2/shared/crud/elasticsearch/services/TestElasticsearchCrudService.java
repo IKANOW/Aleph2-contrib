@@ -16,6 +16,8 @@
 package com.ikanow.aleph2.shared.crud.elasticsearch.services;
 
 import java.net.UnknownHostException;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -64,6 +66,7 @@ import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.CreationPolicy;
+import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.ElasticsearchBatchSubsystem;
 
 import static org.junit.Assert.*;
 
@@ -385,6 +388,141 @@ public class TestElasticsearchCrudService {
 		
 	}
 
+	
+	@Test
+	public void testCreateMultipleObjects_JSON_batch() throws InterruptedException, ExecutionException {
+		
+		final ElasticsearchCrudService<JsonNode> service = getTestService("testCreateMultipleObjects_json_batch", TestBean.class).getRawCrudService();
+		
+		@SuppressWarnings("unchecked")
+		final ElasticsearchCrudService<JsonNode>.ElasticsearchBatchSubsystem batch_service = service.getUnderlyingPlatformDriver(ElasticsearchBatchSubsystem.class, Optional.empty()).get();
+		
+		batch_service.setBatchProperties(Optional.empty(), Optional.empty(), Optional.of(Duration.of(2, ChronoUnit.SECONDS)));
+		
+		// 1) Insertion without ids
+		
+		assertEquals(0, service.countObjects().get().intValue());		
+		
+		final List<JsonNode> l = IntStream.rangeClosed(1, 10).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("test_string", "test_string" + i).done().get())
+				.map(o -> BeanTemplateUtils.toJson(o))
+				.collect(Collectors.toList());
+
+		batch_service.storeObjects(l, false);
+
+		//Sleep for 5s to let it flush
+		try { Thread.sleep(5000L); } catch (Exception e) {}
+		
+		assertEquals(10, service.countObjects().get().intValue());		
+		
+		// Check all the expected objects exist:
+		
+		IntStream.rangeClosed(1, 10).boxed().map(i -> "test_string" + i)
+			.forEach(Lambdas.wrap_consumer_u(field -> {
+				Optional<JsonNode> obj = service.getObjectBySpec(CrudUtils.allOf().when("test_string", field)).get();
+				assertTrue("NEeds to find: " + field, obj.isPresent());
+			}));
+		
+		// 2) Insertion with ids
+			
+		service.deleteDatastore().get();
+
+		batch_service.setBatchProperties(Optional.of(30), Optional.empty(), Optional.empty());		
+		
+		final List<JsonNode> l2 = IntStream.rangeClosed(51, 100).boxed()
+								.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done().get())
+								.map(o -> BeanTemplateUtils.toJson(o))
+								.collect(Collectors.toList());
+				
+		batch_service.storeObjects(l2, false);
+
+		try { Thread.sleep(1500L); } catch (Exception e) {}		
+		
+		assertEquals(30, service.countObjects().get().intValue());		
+		
+		//Sleep for total 5s to let it flush
+		try { Thread.sleep(3500L); } catch (Exception e) {}
+
+		assertEquals(50, service.countObjects().get().intValue());		
+		
+		IntStream.rangeClosed(51, 100).boxed().map(i -> "test_string" + i)
+		.forEach(Lambdas.wrap_consumer_u(field -> {
+			Optional<JsonNode> obj = service.getObjectBySpec(CrudUtils.allOf().when("test_string", field)).get();
+			assertTrue("NEeds to find: " + field, obj.isPresent());
+		}));
+		
+		// 4) Insertion with dups - fail on insert dups
+		
+		batch_service.setBatchProperties(Optional.empty(), Optional.of(10000L), Optional.empty());				
+		
+		final List<JsonNode> l4 = IntStream.rangeClosed(21, 120).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string2" + i).done().get())
+				.map(o -> BeanTemplateUtils.toJson(o))
+				.collect(Collectors.toList());
+		
+		batch_service.storeObjects(l4, false);
+		
+		//Sleep for total 5s to let it flush
+		try { Thread.sleep(5000L); } catch (Exception e) {}
+
+		assertEquals(100, service.countObjects().get().intValue());					
+				
+		// 5) Insertion with dups - overwrite 
+
+		batch_service.setBatchProperties(Optional.of(20), Optional.empty(), Optional.of(Duration.of(4, ChronoUnit.SECONDS)));						
+		try { Thread.sleep(100L); } catch (Exception e) {}
+		
+		final List<JsonNode> l5_1 = IntStream.rangeClosed(21, 59).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string5" + i).done().get())
+				.map(o -> BeanTemplateUtils.toJson(o))
+				.collect(Collectors.toList());
+
+		final List<JsonNode> l5_2 = IntStream.rangeClosed(60, 120).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string5" + i).done().get())
+				.map(o -> BeanTemplateUtils.toJson(o))
+				.collect(Collectors.toList());
+		
+		batch_service.storeObjects(l5_1, true);
+
+		// (wait for it to refresh)
+		try { Thread.sleep(1100L); } catch (Exception e) {}
+
+		assertEquals(100, service.countObjects().get().intValue());	// first batch						
+				
+		// Check only some objects are overwritten
+		IntStream.rangeClosed(21, 40).boxed().map(i -> "test_string5" + i)
+		.forEach(Lambdas.wrap_consumer_u(field -> {
+			Optional<JsonNode> obj = service.getObjectBySpec(CrudUtils.allOf().when("test_string", field)).get();
+			assertTrue("NEeds to find: " + field, obj.isPresent());
+		}));
+		IntStream.rangeClosed(41, 50).boxed().map(i -> "test_string2" + i)
+		.forEach(Lambdas.wrap_consumer_u(field -> {
+			Optional<JsonNode> obj = service.getObjectBySpec(CrudUtils.allOf().when("test_string", field)).get();
+			assertTrue("NEeds to find: " + field, obj.isPresent());
+		}));
+		IntStream.rangeClosed(51, 100).boxed().map(i -> "test_string" + i)
+		.forEach(Lambdas.wrap_consumer_u(field -> {
+			Optional<JsonNode> obj = service.getObjectBySpec(CrudUtils.allOf().when("test_string", field)).get();
+			assertTrue("NEeds to find: " + field, obj.isPresent());
+		}));
+
+		batch_service.storeObjects(l5_2, true);		
+		
+		//Sleep for total 1s to let it flush
+		try { Thread.sleep(5000L); } catch (Exception e) {}
+
+		assertEquals(100, service.countObjects().get().intValue());
+		
+		// Check all objects are overwritten
+		
+		IntStream.rangeClosed(21, 120).boxed().map(i -> "test_string5" + i)
+		.forEach(Lambdas.wrap_consumer_u(field -> {
+			Optional<JsonNode> obj = service.getObjectBySpec(CrudUtils.allOf().when("test_string", field)).get();
+			assertTrue("NEeds to find: " + field, obj.isPresent());
+		}));
+		
+	}
+	
 	////////////////////////////////////////////////
 	
 	// RETRIEVAL
@@ -478,6 +616,11 @@ public class TestElasticsearchCrudService {
 		final Future<Optional<TestBean>> obj1 = service.getObjectById("id1");
 		
 		assertTrue("Call succeeded but no object", !obj1.get().isPresent());
+		
+		// Count
+		
+		assertEquals(0L, service.countObjects().get().longValue());
+		assertEquals(0L, service.countObjectsBySpec(CrudUtils.allOf(TestBean.class).when("test", "test")).get().longValue());
 		
 		// Multiple Objects
 		

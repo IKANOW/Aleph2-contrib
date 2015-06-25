@@ -18,6 +18,8 @@ package com.ikanow.aleph2.shared.crud.elasticsearch.services;
 import static org.junit.Assert.*;
 
 import java.net.UnknownHostException;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -39,6 +41,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils.BeanTemplate;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.CreationPolicy;
+import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.ElasticsearchBatchSubsystem;
 
 public class TestElasticsearchCrudService_Mappings {
 
@@ -319,12 +322,139 @@ public class TestElasticsearchCrudService_Mappings {
 	}
 	
 	/////////////////////////////////////////////////////
+
+	@Test
+	public void testMultipleMappingsPerIndex_multiStore_batch() throws InterruptedException, ExecutionException {
+		
+		// 1) Check fails with mixed mapping
+		
+		{
+			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_multi1", TestBean.class,				
+					new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
+							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi1".toLowerCase()),
+							new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext("type1")));
 	
-	//TODO when testing store objects, check the case where all the writes fail, to make sure that this still results in full success
-	//TODO: also mixed
-	//TODO: also check fixed type case
+			@SuppressWarnings("unchecked")
+			final ElasticsearchCrudService<TestBean>.ElasticsearchBatchSubsystem batch_service = service.getUnderlyingPlatformDriver(ElasticsearchBatchSubsystem.class, Optional.empty()).get();
+
+			batch_service.setBatchProperties(Optional.empty(), Optional.empty(), Optional.of(Duration.of(1, ChronoUnit.SECONDS)));			
+			
+			// Set up the mapping
+			
+			final TestBean test_long1 = new TestBean();
+			test_long1.test_string1 = "test1a.1";
+			test_long1.test_map.put("test_map", 1L);
+			
+			final TestBean test_long2 = new TestBean();
+			test_long2.test_string1 = "test1a.2";
+			test_long2.test_map.put("test_map", 2L);
+
+			batch_service.storeObjects(Arrays.asList(test_long1, test_long2), true);
+			try { Thread.sleep(2200L); } catch (Exception e) {}
+			
+			assertEquals(2L, service.countObjects().get().longValue());
+			
+			// Submit 2 docs, one that will work with "type1", one that won't work
+			
+			final TestBean test_long3 = new TestBean();
+			test_long3.test_string1 = "test1a.3";
+			test_long3.test_map.put("test_map", 1L);
+			
+			
+			final TestBean test_string1 = new TestBean();
+			test_string1.test_string1 = "test1a.4";
+			test_string1.test_map.put("test_map", "test1b");
+
+			batch_service.storeObjects(Arrays.asList(test_long3, test_string1), false);			
+			try { Thread.sleep(3250L); } catch (Exception e) {}			
+			
+			assertEquals(3L, service.countObjects().get().longValue());
+
+			final BeanTemplate<TestBean> for_queries = BeanTemplateUtils.build(TestBean.class).with("test_map", null).done();
+			assertEquals(3L, service.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type1")).get().intValue());
+			assertEquals(0L, service.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type2")).get().intValue());
+			
+		}
+		
+		// 2) Check works with mixed mapping when using auto type
+		
+		ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_multi2", TestBean.class,				
+				new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
+						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi2".toLowerCase()),
+						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.of(Arrays.asList("type_1", "type_2", "type_3")), Optional.of("type_"))));
+		
+		@SuppressWarnings("unchecked")
+		final ElasticsearchCrudService<TestBean>.ElasticsearchBatchSubsystem batch_service = service.getUnderlyingPlatformDriver(ElasticsearchBatchSubsystem.class, Optional.empty()).get();
+
+		batch_service.setBatchProperties(Optional.empty(), Optional.empty(), Optional.of(Duration.of(1, ChronoUnit.SECONDS)));			
+		
+		{
+
+			// Set up the mapping
+			
+			final TestBean test_long1 = new TestBean();
+			test_long1.test_string1 = "test1a.1";
+			test_long1.test_map.put("test_map", 1L);
+			
+			final TestBean test_long2 = new TestBean();
+			test_long2.test_string1 = "test1a.2";
+			test_long2.test_map.put("test_map", 2L);
+
+			batch_service.storeObjects(Arrays.asList(test_long1, test_long2), true);			
+			try { Thread.sleep(4250L); } catch (Exception e) {}
+			
+			assertEquals(2L, service.countObjects().get().longValue());
+			
+			// Submit 2 docs, one that will work with "type1", one that won't work
+			
+			final TestBean test_long3 = new TestBean();
+			test_long3.test_string1 = "test1a.3";
+			test_long3.test_map.put("test_map", 1L);
+			
+			
+			final TestBean test_string1 = new TestBean();
+			test_string1.test_string1 = "test1a.4";
+			test_string1.test_map.put("test_map", "test1b");
+
+			batch_service.storeObjects(Arrays.asList(test_long3, test_string1), false);			
+			try { Thread.sleep(4250L); } catch (Exception e) {}			
+			
+			assertEquals(4L, service.countObjects().get().longValue());
+
+			final BeanTemplate<TestBean> for_queries = BeanTemplateUtils.build(TestBean.class).with("test_map", null).done();
+			assertEquals(3L, service.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type_1")).get().intValue());
+			assertEquals(1L, service.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type_2")).get().intValue());
+			
+		}	
+		
+		// 3) 3rd level of recursion and list in which all messages initially fail
+		
+		{
+			final TestBean test_string1 = new TestBean();
+			test_string1.test_string1 = "test1a.4";
+			test_string1.test_map.put("test_map", "test1b");
+
+			TestBean test_object1 = new TestBean();
+			test_object1.test_string1 = "test1a.5";
+			test_object1.test_map.put("test_map", test_string1);
+
+			TestBean test_object2 = new TestBean();
+			test_object2.test_string1 = "test1a.6";
+			test_object2.test_map.put("test_map", test_string1);
+			
+
+			batch_service.storeObjects(Arrays.asList(test_string1, test_object1, test_object2), false);			
+			try { Thread.sleep(5250L); } catch (Exception e) {}			
+						
+			assertEquals(7L, service.countObjects().get().longValue());
+
+			final BeanTemplate<TestBean> for_queries = BeanTemplateUtils.build(TestBean.class).with("test_map", null).done();
+			assertEquals(3L, service.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type_1")).get().intValue());
+			assertEquals(2L, service.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type_2")).get().intValue());
+			assertEquals(2L, service.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type_3")).get().intValue());
+		}
+	}
 	
-	//TODO: all sorts of things to test...
+	/////////////////////////////////////////////////////
 	
-	//TODO: test id ranges with mapping
 }

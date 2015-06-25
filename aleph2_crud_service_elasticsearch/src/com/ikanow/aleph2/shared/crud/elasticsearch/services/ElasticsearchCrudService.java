@@ -83,7 +83,7 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ErrorUtils;
 
 import fj.data.Either;
 
-//TODO .... more thoughts on field list buckets ... options for auto generating .number fields and .raw fields (and nested - that might live in the search index bit though?)
+//TODO (ALEPH-14) .... more thoughts on field list buckets ... options for auto generating .number fields and .raw fields (and nested - that might live in the search index bit though?)
 
 public class ElasticsearchCrudService<O> implements ICrudService<O> {
 
@@ -558,7 +558,16 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			
 			return ElasticsearchFutureUtils.wrap(crb.execute(), cr -> {
 				return cr.getCount();
-			});			
+			},
+			(err, future) -> {
+				if (err instanceof IndexMissingException) {
+					future.complete(0L);
+				}
+				else {
+					future.completeExceptionally(err);
+				}
+			}
+			);			
 		}
 		catch (Exception e) {
 			return FutureUtils.returnError(e);
@@ -578,7 +587,16 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			
 			return ElasticsearchFutureUtils.wrap(crb.execute(), cr -> {				
 				return cr.getCount();
-			});			
+			},
+			(err, future) -> {
+				if (err instanceof IndexMissingException) {
+					future.complete(0L);
+				}
+				else {
+					future.completeExceptionally(err);
+				}
+			}
+			);			
 		}
 		catch (Exception e) {
 			return FutureUtils.returnError(e);
@@ -729,7 +747,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				old = _current;
 				_current = buildBulkProcessor(max_objects, size_kb, flush_interval);
 			}
-			old.close();
+			if (null != old) old.close();
 		}
 
 		@Override
