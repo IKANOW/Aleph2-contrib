@@ -16,10 +16,14 @@
 package com.ikanow.aleph2.shared.crud.elasticsearch.utils;
 
 import java.text.SimpleDateFormat;
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.Date;
 import java.util.Optional;
 import java.util.function.Function;
@@ -45,15 +49,17 @@ public class ElasticsearchContextUtils {
 	public static Stream<String> getIndexesFromDateRange(final String index_template, final Tuple2<Long, Long> date_range) {
 		try {
 			// Get lower-end of date range
-			final Date lower_end = new Date(date_range._1());
-			final Date upper_end = new Date(date_range._2());
 			final Tuple2<String, String> index_split = splitTimeBasedIndex(index_template);
-			final SimpleDateFormat formatter = new SimpleDateFormat(index_split._2());
+			final DateTimeFormatter formatter = DateTimeFormatter.ofPattern(index_split._2());
 			final ChronoUnit time_period = getIndexGroupingPeriod.apply(index_split._2());
-	
+
+			final LocalDateTime lower_end = LocalDateTime.ofInstant(Instant.ofEpochMilli(date_range._1()), ZoneId.systemDefault());
+			final LocalDateTime upper_end = LocalDateTime.ofInstant(Instant.ofEpochMilli(date_range._2()), ZoneId.systemDefault());
 			
+			final Tuple2<LocalDateTime, LocalDateTime> temporal_range = 
+					Tuples._2T(truncate(lower_end, time_period), truncate(upper_end.plus(1, time_period), time_period));
 			
-			return StreamUtils.takeWhile(Stream.iterate(lower_end, d -> local2LegacyDt(legacy2LocalDt(d).plus(1, time_period))), d -> d.before(upper_end))
+			return StreamUtils.takeWhile(Stream.iterate(temporal_range._1(), d -> d.plus(1, time_period)), d -> d.isBefore(temporal_range._2()))
 						.map(d -> formatter.format(d))
 						.map(s -> reconstructTimedBasedSplitIndex(index_split._1(), s));
 		}
@@ -62,14 +68,21 @@ public class ElasticsearchContextUtils {
 		}
 	}
 	
-	private static LocalDateTime legacy2LocalDt(final Date date) {
-		Instant instant = Instant.ofEpochMilli(date.getTime());
-	    return LocalDateTime.ofInstant(instant, ZoneOffset.UTC);		
+	/** Simple utility to truncate a date time to the start of the corresponding time period 
+	 * @param start = the date time
+	 * @param period - the time period
+	 * @return
+	 */
+	private static LocalDateTime truncate(final LocalDateTime start, final ChronoUnit period) {
+		return Patterns.match(period).<LocalDateTime>andReturn()
+			.when(p -> ChronoUnit.DAYS == p, __ -> LocalDate.of(start.getYear(), start.getMonth(), start.getDayOfMonth()).atStartOfDay())
+			.when(p -> ChronoUnit.WEEKS == p, __ -> // (the only really complicated one) 
+				LocalDate.of(start.getYear(), start.getMonth(), start.getDayOfMonth()).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY)).atStartOfDay())
+			.when(p -> ChronoUnit.MONTHS == p, __ -> LocalDate.of(start.getYear(), start.getMonth(), 1).atStartOfDay())
+			.when(p -> ChronoUnit.YEARS == p, __ -> LocalDate.of(start.getYear(), 1, 1).atStartOfDay())
+			.otherwise(__ -> start.truncatedTo(period));
 	}
-
-	private static Date local2LegacyDt(final LocalDateTime date) {
-		return Date.from(date.toInstant(ZoneOffset.UTC));
-	}
+	
 	
 	/** Split a time-based index into its base and the bit that gets formatted
 	 * @param index_template
@@ -136,13 +149,13 @@ public class ElasticsearchContextUtils {
 	 */
 	public static String getIndexSuffix(final ChronoUnit grouping_period) {
 		return Patterns.match(grouping_period).<String>andReturn()
-				.when(p -> ChronoUnit.SECONDS == p, __ -> "_{YYYY-MM-dd-hh}") // (too granular, just use hours)
-				.when(p -> ChronoUnit.MINUTES == p, __ -> "_{YYYY-MM-dd-hh}") // (too granular, just use hours)
-				.when(p -> ChronoUnit.HOURS == p, __ -> "_{YYYY-MM-dd-hh}")
-				.when(p -> ChronoUnit.DAYS == p, __ -> "_{YYYY-MM-dd}")
-				.when(p -> ChronoUnit.WEEKS == p, __ -> "_{YYYY.ww}")
-				.when(p -> ChronoUnit.MONTHS == p, __ -> "_{YYYY-MM}")
-				.when(p -> ChronoUnit.YEARS == p, __ -> "_{YYYY}")
+				.when(p -> ChronoUnit.SECONDS == p, __ -> "_{yyyy-MM-dd-HH}") // (too granular, just use hours)
+				.when(p -> ChronoUnit.MINUTES == p, __ -> "_{yyyy-MM-dd-HH}") // (too granular, just use hours)
+				.when(p -> ChronoUnit.HOURS == p, __ -> "_{yyyy-MM-dd-HH}")
+				.when(p -> ChronoUnit.DAYS == p, __ -> "_{yyyy-MM-dd}")
+				.when(p -> ChronoUnit.WEEKS == p, __ -> "_{YYYY.ww}") // (deliberately 'Y' (week-year) not 'y' since 'w' is week-of-year 
+				.when(p -> ChronoUnit.MONTHS == p, __ -> "_{yyyy-MM}")
+				.when(p -> ChronoUnit.YEARS == p, __ -> "_{yyyy}")
 				.otherwise(__ -> "");
 	}
 }

@@ -56,6 +56,7 @@ import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.FilterBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.indices.IndexMissingException;
 import org.elasticsearch.search.SearchHit;
 
 import scala.Tuple2;
@@ -464,39 +465,53 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 */
 	@Override
 	public CompletableFuture<Optional<O>> getObjectById(final Object id, final List<String> field_list, final boolean include) {
-		final List<String> indexes = _state.es_context.indexContext().getReadableIndexList(Optional.empty());
-		final List<String> types = _state.es_context.typeContext().getReadableTypeList();
-		if ((indexes.size() != 1) || (indexes.size() > 1)) {
-			// Multi index request, so use a query (which may not always return the most recent value, depending on index refresh settings/timings)
-			return getObjectBySpec(CrudUtils.anyOf(_state.clazz).when("_id", id.toString()), field_list, include);			
+		try {
+			final List<String> indexes = _state.es_context.indexContext().getReadableIndexList(Optional.empty());
+			final List<String> types = _state.es_context.typeContext().getReadableTypeList();
+			if ((indexes.size() != 1) || (indexes.size() > 1)) {
+				// Multi index request, so use a query (which may not always return the most recent value, depending on index refresh settings/timings)
+				return getObjectBySpec(CrudUtils.anyOf(_state.clazz).when("_id", id.toString()), field_list, include);			
+			}
+			else {
+				
+				final GetRequestBuilder srb = Optional
+						.of(
+							_state.client.prepareGet()
+								.setIndex(indexes.get(0))
+								.setId(id.toString())
+							)
+						.map(s -> (1 == types.size()) ? s.setType(types.get(0)) : s)
+						.map(s -> field_list.isEmpty() 
+								? s 
+								: include
+									? s.setFetchSource(field_list.toArray(new String[0]), new String[0])
+									: s.setFetchSource(new String[0], field_list.toArray(new String[0]))
+							)
+						.get();
+				
+				return ElasticsearchFutureUtils.wrap(srb.execute(), sr -> {
+					if (sr.isExists()) {
+						final Map<String, Object> src_fields = sr.getSource();					
+						return Optional.ofNullable(_object_mapper.convertValue(src_fields, _state.clazz));
+					}
+					else {
+						return Optional.empty();
+					}
+				},
+				(err, future) -> {
+					if (err instanceof IndexMissingException) { // just treat this like an "object not found"
+						future.complete(Optional.empty());
+					}
+					else {
+						future.completeExceptionally(err);
+					}
+				}
+				);			
+			}
 		}
-		else {
-			
-			final GetRequestBuilder srb = Optional
-					.of(
-						_state.client.prepareGet()
-							.setIndex(indexes.get(0))
-							.setId(id.toString())
-						)
-					.map(s -> (1 == types.size()) ? s.setType(types.get(0)) : s)
-					.map(s -> field_list.isEmpty() 
-							? s 
-							: include
-								? s.setFetchSource(field_list.toArray(new String[0]), new String[0])
-								: s.setFetchSource(new String[0], field_list.toArray(new String[0]))
-						)
-					.get();
-			
-			return ElasticsearchFutureUtils.wrap(srb.execute(), sr -> {
-				if (sr.isExists()) {
-					final Map<String, Object> src_fields = sr.getSource();					
-					return Optional.ofNullable(_object_mapper.convertValue(src_fields, _state.clazz));
-				}
-				else {
-					return Optional.empty();
-				}
-			});			
-		}		
+		catch (Exception e) {
+			return FutureUtils.returnError(e);
+		}
 	}
 
 	/* (non-Javadoc)

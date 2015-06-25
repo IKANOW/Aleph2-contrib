@@ -136,6 +136,8 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	 * @param bucket
 	 */
 	protected void handlePotentiallyNewIndex(final DataBucketBean bucket) {
+		//TODO: check if mapping exists and needs to be updated?
+		
 		//TODO: will get an error if index has been deleted and recreated?
 		final Tuple2<Date,String> current_index = _bucket_index_cache.get(bucket._id());
 		if ((null == current_index) || current_index._1().before(Optional.ofNullable(bucket.modified()).orElse(new Date()))) {

@@ -30,8 +30,6 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUti
 
 import scala.Tuple2;
 
-//TODO: lots to test
-
 /** Algebraic data type (ADT) encapsulating the state of an elasticsearch crud "service" (which could point at multiple/auto indexes and types)
  * ElasticsearchContext = ReadOnlyContext(ReadOnlyTypeContext, ReadOnlyIndexContext) 
  * 						| ReadWriteContext(ReadWriteTypeContext, ReadWriteIndexContext)
@@ -156,11 +154,12 @@ public abstract class ElasticsearchContext {
 				@Override
 				public List<String> getReadableIndexList(final Optional<Tuple2<Long, Long>> date_range) {
 					if (!date_range.isPresent()) { // Convert to wildcards
-						return _indexes.stream().map(i -> i.replaceFirst("_[^_]+*$", "_*")).collect(Collectors.toList());
+						return _indexes.stream().map(i -> i.replaceFirst("_[^_]+$", "_*")).collect(Collectors.toList());
 					}
 					else {
 						return _indexes.stream()
 									.flatMap(i -> ElasticsearchContextUtils.getIndexesFromDateRange(i, date_range.get()))
+									.map(s -> s + '*')
 									.collect(Collectors.toList());
 					}
 				} 
@@ -223,23 +222,28 @@ public abstract class ElasticsearchContext {
 						return Arrays.asList(_index.replaceFirst("_[^_]+*$", "_*"));
 					}
 					else {
-						return ElasticsearchContextUtils.getIndexesFromDateRange(_index, date_range.get()).collect(Collectors.toList());
+						return ElasticsearchContextUtils.getIndexesFromDateRange(_index, date_range.get()).map(s -> s + '*').collect(Collectors.toList());
 					}
 				}
 				@Override
 				public String getWritableIndex(final Optional<JsonNode> writable_object) {
-					final Date d = _time_field
-										.filter(__ -> writable_object.isPresent())
-										.map(t -> writable_object.get().get(t))
-										.filter(j -> j.isLong())
-										.map(j -> new Date(j.asLong()))
-									.orElseGet(() -> new Date()); // (else just use "now")
-							
-					final Tuple2<String, String> index_split = ElasticsearchContextUtils.splitTimeBasedIndex(_index);
-					final SimpleDateFormat formatter = new SimpleDateFormat(index_split._2());
-					final String formatted_date = formatter.format(d);
-
-					return ElasticsearchContextUtils.reconstructTimedBasedSplitIndex(index_split._1(), formatted_date);
+					try {
+						final Date d = _time_field
+											.filter(__ -> writable_object.isPresent())
+											.map(t -> writable_object.get().get(t))
+											.filter(j -> j.isLong())
+											.map(j -> new Date(j.asLong()))
+										.orElseGet(() -> new Date()); // (else just use "now")
+								
+						final Tuple2<String, String> index_split = ElasticsearchContextUtils.splitTimeBasedIndex(_index);
+						final SimpleDateFormat formatter = new SimpleDateFormat(index_split._2());
+						final String formatted_date = formatter.format(d);
+	
+						return ElasticsearchContextUtils.reconstructTimedBasedSplitIndex(index_split._1(), formatted_date);
+					}
+					catch (Exception e) { // just treat like a non-time-based index
+						return _index;
+					}
 				}
 			}
 		}

@@ -104,6 +104,9 @@ public class TestElasticsearchCrudService {
 	protected IElasticsearchCrudServiceFactory _factory = null; 
 	
 	public <O> ElasticsearchCrudService<O> getTestService(String test_name_case, Class<O> bean_clazz) throws InterruptedException, ExecutionException {
+		return getTestService(test_name_case, bean_clazz, true);
+	}
+	public <O> ElasticsearchCrudService<O> getTestService(String test_name_case, Class<O> bean_clazz, boolean create_index) throws InterruptedException, ExecutionException {
 		
 		final String test_name = test_name_case.toLowerCase();
 		
@@ -122,11 +125,12 @@ public class TestElasticsearchCrudService {
 		}
 		
 		// Create an empty index
-		final CreateIndexRequest cir = new CreateIndexRequest(test_name);
-		_factory.getClient().admin().indices().create(cir).actionGet();		
-		//(Wait for above operation to be completed)
-		_factory.getClient().admin().cluster().health(new ClusterHealthRequest(test_name).waitForYellowStatus()).actionGet();
-		
+		if (create_index) {
+			final CreateIndexRequest cir = new CreateIndexRequest(test_name);
+			_factory.getClient().admin().indices().create(cir).actionGet();		
+			//(Wait for above operation to be completed)
+			_factory.getClient().admin().cluster().health(new ClusterHealthRequest(test_name).waitForYellowStatus()).actionGet();
+		}		
 		return service;
 	}
 	
@@ -464,6 +468,23 @@ public class TestElasticsearchCrudService {
 	protected void sysOut(String s) {
 		System.out.println(copyableOutput(s));
 	}
+
+	@Test
+	public void objectRetrieve_missingIndex() throws InterruptedException, ExecutionException {
+		final ElasticsearchCrudService<TestBean> service = getTestService("objectRetrieve_missingIndex", TestBean.class, false); //(didn't create index)
+		
+		// Single Object
+		
+		final Future<Optional<TestBean>> obj1 = service.getObjectById("id1");
+		
+		assertTrue("Call succeeded but no object", !obj1.get().isPresent());
+		
+		// Multiple Objects
+		
+		//TODO (ALEPH-14): TO BE IMPLEMENTED
+	}
+		
+
 	
 	@Test
 	public void singleObjectRetrieve() throws InterruptedException, ExecutionException {
