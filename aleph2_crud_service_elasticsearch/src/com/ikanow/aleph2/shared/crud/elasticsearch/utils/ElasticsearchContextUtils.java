@@ -16,6 +16,9 @@
 package com.ikanow.aleph2.shared.crud.elasticsearch.utils;
 
 import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.Optional;
@@ -29,14 +32,11 @@ import com.ikanow.aleph2.data_model.utils.Functions;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 
-
 /** Utilities around the ElasticsearchContext ADTs
  * @author Alex
  */
 public class ElasticsearchContextUtils {
 
-	//TODO: test code for this...
-	
 	/** Creates a list of time-based indexes from a time range
 	 * @param index_template
 	 * @param date_range
@@ -51,13 +51,24 @@ public class ElasticsearchContextUtils {
 			final SimpleDateFormat formatter = new SimpleDateFormat(index_split._2());
 			final ChronoUnit time_period = getIndexGroupingPeriod.apply(index_split._2());
 	
-			return StreamUtils.takeWhile(Stream.iterate(lower_end, d -> Date.from(time_period.addTo(d.toInstant(), 1))), d -> d.before(upper_end))
+			
+			
+			return StreamUtils.takeWhile(Stream.iterate(lower_end, d -> local2LegacyDt(legacy2LocalDt(d).plus(1, time_period))), d -> d.before(upper_end))
 						.map(d -> formatter.format(d))
 						.map(s -> reconstructTimedBasedSplitIndex(index_split._1(), s));
 		}
 		catch (Exception e) { // This particular index was probably not time-based..
 			return Stream.of(index_template);
 		}
+	}
+	
+	private static LocalDateTime legacy2LocalDt(final Date date) {
+		Instant instant = Instant.ofEpochMilli(date.getTime());
+	    return LocalDateTime.ofInstant(instant, ZoneOffset.UTC);		
+	}
+
+	private static Date local2LegacyDt(final LocalDateTime date) {
+		return Date.from(date.toInstant(ZoneOffset.UTC));
 	}
 	
 	/** Split a time-based index into its base and the bit that gets formatted
@@ -93,7 +104,11 @@ public class ElasticsearchContextUtils {
 		for (int i = 0; i < try_date_boxes.length; ++i) {
 			final String test_str = d.format(new Date(now.getTime() + 1000L*try_date_boxes[i]));
 			if (!now_string.equals(test_str)) {
-				return ret_date_boxes[i];
+				final String test_str_2 = d.format(new Date(now.getTime() + 2000L*try_date_boxes[i]));
+				if (!test_str.equals(test_str_2)) {
+					// Need 2 consecutive indexes to be different, handles eg weeks at month boundaries
+					return ret_date_boxes[i];
+				}
 			}
 		}
 		return ChronoUnit.FOREVER;
@@ -127,7 +142,7 @@ public class ElasticsearchContextUtils {
 				.when(p -> ChronoUnit.DAYS == p, __ -> "_{YYYY-MM-dd}")
 				.when(p -> ChronoUnit.WEEKS == p, __ -> "_{YYYY.ww}")
 				.when(p -> ChronoUnit.MONTHS == p, __ -> "_{YYYY-MM}")
-				.when(p -> ChronoUnit.YEARS == p, __ -> "_{YYYY-MM}")
+				.when(p -> ChronoUnit.YEARS == p, __ -> "_{YYYY}")
 				.otherwise(__ -> "");
 	}
 }

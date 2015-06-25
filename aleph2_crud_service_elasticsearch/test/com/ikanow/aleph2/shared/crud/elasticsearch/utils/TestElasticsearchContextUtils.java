@@ -17,15 +17,88 @@ package com.ikanow.aleph2.shared.crud.elasticsearch.utils;
 
 import static org.junit.Assert.*;
 
+import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.GregorianCalendar;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 import org.junit.Test;
+
+import com.ikanow.aleph2.data_model.utils.Tuples;
 
 public class TestElasticsearchContextUtils {
 
 	//TODO: lots to test
 	
 	@Test
+	public void test_timeSplit() {
+		assertEquals("test1_test2", ElasticsearchContextUtils.reconstructTimedBasedSplitIndex("test1", "test2"));
+		
+		assertEquals(Tuples._2T("test1_1", "date-bit-here"),
+				ElasticsearchContextUtils.splitTimeBasedIndex("test1_1_{date-bit-here}"));
+	}
+	
+	@Test
 	public void test_getNextAutoType() {
 		
 		assertEquals("test_2", ElasticsearchContextUtils.getNextAutoType("test_", "test_1"));
 	}
+	
+	@Test
+	public void test_timePeriods() {
+		String s1, s2, s3, s4, s5, s6, s7;
+		
+		assertEquals("_{YYYY-MM-dd-hh}", s1 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.SECONDS));
+		assertEquals("_{YYYY-MM-dd-hh}", s2 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.MINUTES));
+		assertEquals("_{YYYY-MM-dd-hh}", s3 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.HOURS));
+		assertEquals("_{YYYY-MM-dd}", s4 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.DAYS));
+		assertEquals("_{YYYY.ww}", s5 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.WEEKS));
+		assertEquals("_{YYYY-MM}", s6 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.MONTHS));
+		assertEquals("_{YYYY}", s7 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.YEARS));
+		assertEquals("", ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.CENTURIES));
+		
+		assertEquals(ChronoUnit.HOURS, 
+				ElasticsearchContextUtils.getIndexGroupingPeriod.apply(s1.substring(2).replace("}", "")));
+		assertEquals(ChronoUnit.HOURS, 
+				ElasticsearchContextUtils.getIndexGroupingPeriod.apply(s2.substring(2).replace("}", "")));
+		assertEquals(ChronoUnit.HOURS, 
+				ElasticsearchContextUtils.getIndexGroupingPeriod.apply(s3.substring(2).replace("}", "")));
+		assertEquals(ChronoUnit.DAYS, 
+				ElasticsearchContextUtils.getIndexGroupingPeriod.apply(s4.substring(2).replace("}", "")));
+		assertEquals(ChronoUnit.WEEKS, 
+				ElasticsearchContextUtils.getIndexGroupingPeriod.apply(s5.substring(2).replace("}", "")));
+		assertEquals(ChronoUnit.MONTHS, 
+				ElasticsearchContextUtils.getIndexGroupingPeriod.apply(s6.substring(2).replace("}", "")));
+		assertEquals(ChronoUnit.YEARS, 
+				ElasticsearchContextUtils.getIndexGroupingPeriod.apply(s7.substring(2).replace("}", "")));
+		
+	}
+	
+	@Test
+	public void test_IndexesFromDateRange() {
+		
+		Calendar c1 = GregorianCalendar.getInstance();
+		Calendar c2 = GregorianCalendar.getInstance();
+		
+		c1.set(2000, 5, 1); c2.set(2005,  5, 1);
+		final Stream<String> res1 = ElasticsearchContextUtils.getIndexesFromDateRange("test_{YYYY}", 
+				Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()));
+		
+		assertEquals(Arrays.asList("test_2000","test_2001","test_2002","test_2003","test_2004","test_2005"), 
+				res1.collect(Collectors.toList()));		
+		
+		assertEquals(Arrays.asList("test"), ElasticsearchContextUtils.getIndexesFromDateRange("test", 
+				Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime())).collect(Collectors.toList()));
+		
+		c1.set(2015, 5, 1); c2.set(2015, 5, 3);
+		final Stream<String> res2 = ElasticsearchContextUtils.getIndexesFromDateRange("test_{YYYY-MM-dd}", 
+				Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()));
+		
+		assertEquals(Arrays.asList("test_2015-06-01","test_2015-06-02","test_2015-06-03"), 
+				res2.collect(Collectors.toList()));		
+		
+	}
+	
 }
