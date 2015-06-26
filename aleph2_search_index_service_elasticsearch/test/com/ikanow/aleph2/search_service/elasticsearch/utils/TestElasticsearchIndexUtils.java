@@ -281,14 +281,14 @@ public class TestElasticsearchIndexUtils {
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class),
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class),
 								false,
-							_mapper);
+							_mapper, "_default_");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
 					test_stream_result_1.collect(Collectors.toMap(
 												t2 -> t2._1(),
 												t2 -> t2._2()
 												));
-			final String test_map_expected_1 = "{Left(@timestamp)={'type':'date','fielddata':{}}, Right((field_not_present,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'doc_values'}},'match':'field_not_present','match_mapping_type':'*'}, Left(@version)={'type':'string','index':'analyzed','fielddata':{'format':'fst'}}}";
+			final String test_map_expected_1 = "{Left(@timestamp)={'type':'date','fielddata':{}}, Right((field_not_present,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'doc_values'}},'path_match':'field_not_present','match_mapping_type':'*'}, Left(@version)={'type':'string','index':'analyzed','fielddata':{'format':'fst'}}}";
 			assertEquals(test_map_expected_1, strip(test_map_result_1.toString()));
 			
 			//DEBUG
@@ -306,7 +306,7 @@ public class TestElasticsearchIndexUtils {
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class),
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 								true,
-							_mapper);
+							_mapper, "_default_");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
 					test_stream_result_1.collect(Collectors.toMap(
@@ -314,7 +314,7 @@ public class TestElasticsearchIndexUtils {
 												t2 -> t2._2()
 												));
 			
-			final String test_map_expected_1 = "{Right((test*,*))={'match':'test*','match_mapping_type':'*','mapping':{'type':'string','index':'analyzed','omit_norms':true,'fields':{'raw':{'type':'string','index':'not_analyzed','ignore_above':256}},'fielddata':{'format':'fst'}}}, Right((*,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'doc_values'}},'match':'*','match_mapping_type':'*'}}";
+			final String test_map_expected_1 = "{Right((test*,*))={'match':'test*','match_mapping_type':'*','mapping':{'type':'string','index':'analyzed','omit_norms':true,'fields':{'raw':{'type':'string','index':'not_analyzed','ignore_above':256,'fielddata':{'format':'doc_values'}}},'fielddata':{'format':'fst'}}}, Right((*,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'doc_values'}},'path_match':'*','match_mapping_type':'*'}}";
 			assertEquals(test_map_expected_1, strip(test_map_result_1.toString()));
 			
 			//DEBUG
@@ -327,14 +327,14 @@ public class TestElasticsearchIndexUtils {
 			
 			final Stream<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>> test_stream_result_1 =
 					ElasticsearchIndexUtils.createFieldExcludeLookups(test_stream1, fn -> Either.left(fn), field_lookups, 
-							_mapper);
+							_mapper, "_default_");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
 					test_stream_result_1.collect(Collectors.toMap(
 												t2 -> t2._1(),
 												t2 -> t2._2()
 												));
-			final String test_map_expected_1 = "{Left(@timestamp)={'type':'date','fielddata':{'format':'disabled'}}, Right((field_not_present,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'disabled'}},'match':'field_not_present','match_mapping_type':'*'}, Left(@version)={'type':'string','index':'analyzed','fielddata':{'format':'disabled'}}}";
+			final String test_map_expected_1 = "{Left(@timestamp)={'type':'date','fielddata':{'format':'disabled'}}, Right((field_not_present,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'disabled'}},'path_match':'field_not_present','match_mapping_type':'*'}, Left(@version)={'type':'string','index':'analyzed','fielddata':{'format':'disabled'}}}";
 			assertEquals(test_map_expected_1, strip(test_map_result_1.toString()));
 			
 			//DEBUG
@@ -350,7 +350,7 @@ public class TestElasticsearchIndexUtils {
 					ElasticsearchIndexUtils.createFieldExcludeLookups(test_stream1, 
 							fn -> Either.right(Tuples._2T(fn, "*")), 
 							field_lookups, 
-							_mapper);
+							_mapper, "_default_");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
 					test_stream_result_1.collect(Collectors.toMap(
@@ -358,7 +358,7 @@ public class TestElasticsearchIndexUtils {
 												t2 -> t2._2()
 												));
 			
-			final String test_map_expected_1 = "{Right((test*,*))={'match':'test*','match_mapping_type':'*','mapping':{'type':'string','index':'analyzed','omit_norms':true,'fields':{'raw':{'type':'string','index':'not_analyzed','ignore_above':256}},'fielddata':{'format':'disabled'}}}, Right((*,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'disabled'}},'match':'*','match_mapping_type':'*'}}";
+			final String test_map_expected_1 = "{Right((test*,*))={'match':'test*','match_mapping_type':'*','mapping':{'type':'string','index':'analyzed','omit_norms':true,'fields':{'raw':{'type':'string','index':'not_analyzed','ignore_above':256,'fielddata':{'format':'disabled'}}},'fielddata':{'format':'disabled'}}}, Right((*,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'disabled'}},'path_match':'*','match_mapping_type':'*'}}";
 			assertEquals(test_map_expected_1, strip(test_map_result_1.toString()));
 
 			//DEBUG
@@ -382,7 +382,7 @@ public class TestElasticsearchIndexUtils {
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class),
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 								false,
-							_mapper);
+							_mapper, "test_type_123");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
 					test_stream_result_1.collect(Collectors.toMap(
@@ -390,7 +390,7 @@ public class TestElasticsearchIndexUtils {
 												t2 -> t2._2()
 												));
 			
-			final String test_map_expected_1 = "{Right((test_type_123,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'test2'}},'match':'test_type_123','match_mapping_type':'*'}}";
+			final String test_map_expected_1 = "{Right((test_type_123,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'test2'}},'path_match':'test_type_123','match_mapping_type':'*'}}";
 			assertEquals(test_map_expected_1, strip(test_map_result_1.toString()));
 			
 		}		
@@ -437,7 +437,7 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
-				_mapper);
+				_mapper, "_default_");
 	
 			assertEquals(expected_json.get("mappings").get("_default_").toString(), test_result.bytes().toUtf8());
 			
@@ -519,7 +519,7 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
-				_mapper);
+				_mapper, "_default_");
 	
 			assertEquals(expected_json.get("mappings").get("_default_").toString(), test_result.bytes().toUtf8());
 		}
@@ -535,7 +535,7 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
-				_mapper);
+				_mapper, "_default_");
 	
 			assertEquals(expected_json.get("mappings").get("_default_").toString(), test_result.bytes().toUtf8());
 		}
@@ -719,14 +719,14 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
-				_mapper);
+				_mapper, "misc_test");
 			
 			assertEquals(expected_json.toString(), test_result.bytes().toUtf8());
 		}
 		
 		// Final method
 		{ 
-			final XContentBuilder test_result = ElasticsearchIndexUtils.createIndexMapping(test_bucket, _config, _mapper);			
+			final XContentBuilder test_result = ElasticsearchIndexUtils.createIndexMapping(test_bucket, _config, _mapper, "_default_");			
 			assertEquals(expected_json.toString(), test_result.bytes().toUtf8());
 		}
 	}

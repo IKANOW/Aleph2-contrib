@@ -101,7 +101,13 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		
 		final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);
 		
-		this.handlePotentiallyNewIndex(bucket);
+		final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
+		final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+									.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
+										? "_default_"
+										: type.orElse("data_object");
+		
+		this.handlePotentiallyNewIndex(bucket, index_type);
 		
 		// Need to decide a) if it's a time based index b) an auto type index
 		// And then build the context from there
@@ -119,7 +125,6 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 				);
 		
 		// Type
-		final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
 		final ElasticsearchContext.TypeContext.ReadWriteTypeContext type_context =
 				CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
 						.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
@@ -136,12 +141,12 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	/** Checks if an index/set-of-indexes spawned from a bucket
 	 * @param bucket
 	 */
-	protected void handlePotentiallyNewIndex(final DataBucketBean bucket) {
+	protected void handlePotentiallyNewIndex(final DataBucketBean bucket, final String index_type) {
 		final Date current_template_time = _bucket_template_cache.get(bucket._id());
 		if ((null == current_template_time) || current_template_time.before(Optional.ofNullable(bucket.modified()).orElse(new Date()))) {
 			
 			try {
-				final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, _config, _mapper);
+				final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, _config, _mapper, index_type);
 				
 				final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(bucket._id());
 				final GetIndexTemplatesResponse gtr = _crud_factory.getClient().admin().indices().getTemplates(gt).actionGet();
@@ -221,7 +226,15 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	@Override
 	public List<BasicMessageBean> validateSchema(final SearchIndexSchemaBean schema, final DataBucketBean bucket) {
 		try {
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, _config, _mapper);
+			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);
+			
+			final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
+			final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+										.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
+											? "_default_"
+											: type.orElse("data_object");
+			
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, _config, _mapper, index_type);
 			if (is_verbose(schema)) {
 				final BasicMessageBean success = new BasicMessageBean(
 						new Date(), true, bucket.full_name(), "validateSchema", null, 

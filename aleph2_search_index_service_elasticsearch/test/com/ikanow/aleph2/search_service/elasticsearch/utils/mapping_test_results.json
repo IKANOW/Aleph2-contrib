@@ -25,7 +25,7 @@
            "mapping" : {
            	"index":"not_analyzed","type":"{dynamic_type}","fielddata":{"format":"disabled"}
            },
-           "match" : "column_only_disabled2*",
+           "path_match" : "column_only_disabled2*",
            "match_mapping_type" : "*"
          }
        }, 
@@ -34,7 +34,7 @@
            "mapping" : {
            	"index":"not_analyzed","type":"number","fielddata":{"format":"disabled"}
            },
-           "match" : "*",
+           "path_match" : "*",
            "match_mapping_type" : "number"
          }
        }, 
@@ -54,7 +54,7 @@
            "mapping" : {
              "type" : "string", "index" : "analyzed", "omit_norms" : true,
                "fields" : {
-                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256}
+                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256, "fielddata":{"format":"doc_values"}}
                }, "fielddata": {"format":"fst"}
            }
          }
@@ -64,7 +64,7 @@
            "mapping" : {
            	"index":"not_analyzed","type":"{dynamic_type}","fielddata":{"format":"doc_values"}
            },
-           "match" : "column_only_enabled2*",
+           "path_match" : "column_only_enabled2*",
            "match_mapping_type" : "*"
          }
        }, 
@@ -75,7 +75,7 @@
            "mapping" : {
              "type" : "string", "index" : "analyzed", "omit_norms" : true, 
                "fields" : {
-                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256}
+                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256,"fielddata":{"format":"doc_values"}}
                }, "fielddata": {"format":"fst"}
            }
          }
@@ -85,7 +85,7 @@
            "mapping" : {
            	"index":"not_analyzed","type":"{dynamic_type}","fielddata":{"format":"disabled"}
            },
-           "match" : "column_only_disabled",
+           "path_match" : "column_only_disabled",
            "match_mapping_type" : "*"
          }
        }, 
@@ -94,7 +94,7 @@
            "mapping" : {
            	"index":"not_analyzed","type":"{dynamic_type}","fielddata":{"format":"doc_values"}
            },
-           "match" : "column_only_enabled",
+           "path_match" : "column_only_enabled",
            "match_mapping_type" : "*"
          }
        }        
