@@ -24,10 +24,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesRequest;
+import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-
-import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.Inject;
@@ -60,13 +62,14 @@ import fj.data.Validation;
  *
  */
 public class ElasticsearchIndexService implements ISearchIndexService, ITemporalService, IColumnarService {
+	final static protected Logger _logger = LogManager.getLogger();
 
 	protected final IElasticsearchCrudServiceFactory _crud_factory;
 	protected final ElasticsearchIndexServiceConfigBean _config;
 	
 	protected final static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 	
-	protected final ConcurrentHashMap<String, Tuple2<Date, String>> _bucket_index_cache = new ConcurrentHashMap<>();
+	protected final ConcurrentHashMap<String, Date> _bucket_template_cache = new ConcurrentHashMap<>();
 	
 	/** Guice generated constructor
 	 * @param crud_factory
@@ -123,8 +126,6 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					? new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), type)
 					: new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext(type.orElse("data_object"));
 		
-		//if (schema_config.temporal_technology_override().enabled())
-		
 		return _crud_factory.getElasticsearchCrudService(clazz,
 				new ElasticsearchContext.ReadWriteContext(_crud_factory.getClient(), index_context, type_context),
 				Optional.empty(), 
@@ -136,20 +137,27 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	 * @param bucket
 	 */
 	protected void handlePotentiallyNewIndex(final DataBucketBean bucket) {
-		//TODO: check if mapping exists and needs to be updated?
-		
-		//TODO: will get an error if index has been deleted and recreated?
-		final Tuple2<Date,String> current_index = _bucket_index_cache.get(bucket._id());
-		if ((null == current_index) || current_index._1().before(Optional.ofNullable(bucket.modified()).orElse(new Date()))) {
-			//TODO
-			// Get index
-			//final String[] index_pattern = { ElasticsearchIndexUtils.getBaseIndexName(bucket) + "*" };
-			//final IndicesExistsResponse ier = _crud_factory.getClient().admin().indices().exists(new IndicesExistsRequest().indices(index_pattern)).actionGet();
+		final Date current_template_time = _bucket_template_cache.get(bucket._id());
+		if ((null == current_template_time) || current_template_time.before(Optional.ofNullable(bucket.modified()).orElse(new Date()))) {
 			
-			// If it doesn't, create index and mapping
-			
-			// If it does, do we need to check and potentially try to update its mapping? 
-			
+			try {
+				final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, _config, _mapper);
+				
+				final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(bucket._id());
+				final GetIndexTemplatesResponse gtr = _crud_factory.getClient().admin().indices().getTemplates(gt).actionGet();
+				
+				if (gtr.getIndexTemplates().isEmpty() || 
+					!gtr.getIndexTemplates().get(0).mappings().get(bucket._id()).string().equals(mapping.bytes().toUtf8()))
+				{
+					// If no template, or it's changed, then update
+					_crud_factory.getClient().admin().indices().preparePutTemplate(bucket._id()).setSource(mapping);						
+				}				
+				_logger.info(ErrorUtils.get("Updated mapping for bucket={0}, base_index={1}", bucket._id()));
+			}
+			catch (Exception e) {
+				_logger.error(ErrorUtils.getLongForm("Error updating mapper bucket={1} err={0}", e, bucket._id()));
+			}
+			_bucket_template_cache.put(bucket._id(), bucket.modified());			
 		}
 	}
 	
@@ -165,7 +173,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		
 		//TODO (ALEPH-14): Handle the read only case
 		
-		throw new RuntimeException("Not yet implemented");
+		throw new RuntimeException("Read-only interface: Not yet implemented");
 	}
 	
 	////////////////////////////////////////////////////////////////////////////////
@@ -203,6 +211,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	@Override
 	public List<BasicMessageBean> validateSchema(final TemporalSchemaBean schema, final DataBucketBean bucket) {
 		// (time buckets aka default schema options are already validated, nothing else to do)
+		
 		return Collections.emptyList();
 	}
 

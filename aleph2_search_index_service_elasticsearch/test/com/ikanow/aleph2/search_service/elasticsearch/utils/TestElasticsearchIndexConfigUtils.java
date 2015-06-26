@@ -54,9 +54,9 @@ public class TestElasticsearchIndexConfigUtils {
 			final ElasticsearchIndexServiceConfigBean config_bean = ElasticsearchIndexConfigUtils.buildConfigBean(config);
 			
 			// Derived fields
-			assertTrue("Default field settings", null != config_bean.columnar_technology_override().default_field_data_analyzed());
-			assertTrue("Default field settings for analyzed fields", null != config_bean.columnar_technology_override().default_field_data_analyzed().get("_default"));
-			assertTrue("Default field settings for non-analyzied fields", null != config_bean.columnar_technology_override().default_field_data_notanalyzed().get("_default"));
+			assertTrue("Default field settings", null != config_bean.columnar_technology_override().enabled_field_data_analyzed());
+			assertTrue("Default field settings for analyzed fields", null != config_bean.columnar_technology_override().enabled_field_data_analyzed().get("_default"));
+			assertTrue("Default field settings for non-analyzied fields", null != config_bean.columnar_technology_override().enabled_field_data_notanalyzed().get("_default"));
 			assertEquals(ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy.new_type, config_bean.search_technology_override().collide_policy());
 			assertTrue("Search Settings", null != config_bean.search_technology_override().settings());
 			assertTrue("Search Settings", config_bean.search_technology_override().settings().size() > 0);
@@ -92,9 +92,9 @@ public class TestElasticsearchIndexConfigUtils {
 			assertTrue("Search Settings", config_bean.search_technology_override().settings().size() > 0);
 			
 			// Derived fields (columnar)
-			assertTrue("Default field settings", null != config_bean.columnar_technology_override().default_field_data_analyzed());
-			assertTrue("Default field settings for analyzed fields", null != config_bean.columnar_technology_override().default_field_data_analyzed().get("_default"));
-			assertTrue("Default field settings for non-analyzied fields", null != config_bean.columnar_technology_override().default_field_data_notanalyzed().get("_default"));
+			assertTrue("Default field settings", null != config_bean.columnar_technology_override().enabled_field_data_analyzed());
+			assertTrue("Default field settings for analyzed fields", null != config_bean.columnar_technology_override().enabled_field_data_analyzed().get("_default"));
+			assertTrue("Default field settings for non-analyzied fields", null != config_bean.columnar_technology_override().enabled_field_data_notanalyzed().get("_default"));
 			
 			// Derived fields (temporal)
 			assertTrue("Overriden temporal field", !config_bean.temporal_technology_override().enabled());			
@@ -123,9 +123,9 @@ public class TestElasticsearchIndexConfigUtils {
 			assertTrue("Search Settings", config_bean.search_technology_override().settings().size() > 0);
 			
 			// Derived fields (columnar)
-			assertTrue("Default field settings", null != config_bean.columnar_technology_override().default_field_data_analyzed());
-			assertTrue("Default field settings for analyzed fields", null != config_bean.columnar_technology_override().default_field_data_analyzed().get("_default"));
-			assertTrue("Default field settings for non-analyzied fields", null != config_bean.columnar_technology_override().default_field_data_notanalyzed().get("_default"));
+			assertTrue("Default field settings", null != config_bean.columnar_technology_override().enabled_field_data_analyzed());
+			assertTrue("Default field settings for analyzed fields", null != config_bean.columnar_technology_override().enabled_field_data_analyzed().get("_default"));
+			assertTrue("Default field settings for non-analyzied fields", null != config_bean.columnar_technology_override().enabled_field_data_notanalyzed().get("_default"));
 			
 			// Derived fields (temporal)
 			assertTrue("Overriden temporal field", !config_bean.temporal_technology_override().enabled());
@@ -156,9 +156,9 @@ public class TestElasticsearchIndexConfigUtils {
 			assertTrue("Search Settings", config_bean.search_technology_override().settings().size() > 0);
 			
 			// Derived fields (columnar)
-			assertTrue("Default field settings", null != config_bean.columnar_technology_override().default_field_data_analyzed());
-			assertTrue("Default field settings for analyzed fields", null != config_bean.columnar_technology_override().default_field_data_analyzed().get("_default"));
-			assertTrue("Default field settings for non-analyzied fields", null != config_bean.columnar_technology_override().default_field_data_notanalyzed().get("_default"));
+			assertTrue("Default field settings", null != config_bean.columnar_technology_override().enabled_field_data_analyzed());
+			assertTrue("Default field settings for analyzed fields", null != config_bean.columnar_technology_override().enabled_field_data_analyzed().get("_default"));
+			assertTrue("Default field settings for non-analyzied fields", null != config_bean.columnar_technology_override().enabled_field_data_notanalyzed().get("_default"));
 			
 			// Derived fields (temporal)
 			assertTrue("Overriden temporal field", config_bean.temporal_technology_override().enabled());
@@ -179,7 +179,7 @@ public class TestElasticsearchIndexConfigUtils {
 			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);
 		
 			assertEquals(CollidePolicy.error, schema_config.search_technology_override().collide_policy());
-			assertTrue("Overrode columnar tech", schema_config.columnar_technology_override().default_field_data_analyzed().containsKey("xxx"));
+			assertTrue("Overrode columnar tech", schema_config.columnar_technology_override().enabled_field_data_analyzed().containsKey("xxx"));
 			assertEquals("month", schema_config.temporal_technology_override().exist_age_max());
 		}
 		
@@ -193,8 +193,8 @@ public class TestElasticsearchIndexConfigUtils {
 			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);
 		
 			assertEquals(CollidePolicy.new_type, schema_config.search_technology_override().collide_policy());
-			assertTrue("Overrode columnar tech", !schema_config.columnar_technology_override().default_field_data_analyzed().containsKey("xxx"));
-			assertTrue("Overrode columnar tech", schema_config.columnar_technology_override().default_field_data_analyzed().containsKey("_default"));
+			assertTrue("Overrode columnar tech", !schema_config.columnar_technology_override().enabled_field_data_analyzed().containsKey("xxx"));
+			assertTrue("Overrode columnar tech", schema_config.columnar_technology_override().enabled_field_data_analyzed().containsKey("_default"));
 			assertEquals(false, schema_config.temporal_technology_override().enabled());
 			
 		}

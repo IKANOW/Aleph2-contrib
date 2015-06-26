@@ -64,7 +64,7 @@ public class ElasticsearchIndexConfigUtils {
 		catch (Exception e) {
 			throw new RuntimeException(ErrorUtils.get(ErrorUtils.INVALID_CONFIG_ERROR,
 					ElasticsearchIndexServiceConfigBean.class.toString(),
-					global_config.getConfig(ElasticsearchIndexServiceConfigBean.PROPERTIES_ROOT)
+					PropertiesUtils.getSubConfig(global_config, ElasticsearchIndexServiceConfigBean.PROPERTIES_ROOT).orElse(ConfigFactory.empty())
 					), e);				
 		}
 	}

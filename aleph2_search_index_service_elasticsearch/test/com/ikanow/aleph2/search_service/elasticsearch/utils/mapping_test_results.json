@@ -6,34 +6,33 @@
   "mappings" : {
     "_default_" : {
        "properties" : {
-       	 "column_only_disabled": { "index": "not_analyzed", "fielddata": { "format": "disabled" } },
-         "@timestamp": { "type": "date", "fielddata": { } },
-       	 "column_only_enabled": { "index": "not_analyzed", "fielddata": { "format": "doc_values" } },
-         "@version": { "type": "string", "index": "analyzed", "fielddata": {"format":"fst"} },
-         "sourceKey": { "type": "string", "index": "not_analyzed"},
+         "sourceKey": { "type": "string", "index": "not_analyzed", "fielddata": { "format": "disabled" } },
          "geoip"  : {
            "type" : "object",
              "dynamic": true,
              "path": "full",
              "properties" : {
                "location" : { "type" : "geo_point" }
-             }
-         }
+             },
+             "fielddata": { "format": "disabled" }
+         },
+         "@timestamp": { "type": "date", "fielddata": { "format": "fst" } },
+         "@version": { "type": "string", "index": "analyzed", "fielddata": {"format":"fst"} }
        },
        "dynamic_templates" : [
        {
-         "columnBARonlyBARenabledSTAR_STAR" : {
+         "columnBARonlyBARdisabled2STAR_STAR" : {
            "mapping" : {
-           	"index":"not_analyzed","fielddata":{"format":"doc_values"}
+           	"index":"not_analyzed","type":"{dynamic_type}","fielddata":{"format":"disabled"}
            },
-           "match" : "column_only_enabled*",
+           "match" : "column_only_disabled2*",
            "match_mapping_type" : "*"
          }
        }, 
        {
          "STAR_number" : {
            "mapping" : {
-           	"index":"not_analyzed","fielddata":{"format":"disabled"}
+           	"index":"not_analyzed","type":"number","fielddata":{"format":"disabled"}
            },
            "match" : "*",
            "match_mapping_type" : "number"
@@ -61,6 +60,15 @@
          }
        }, 
        {
+         "columnBARonlyBARenabled2STAR_STAR" : {
+           "mapping" : {
+           	"index":"not_analyzed","type":"{dynamic_type}","fielddata":{"format":"doc_values"}
+           },
+           "match" : "column_only_enabled2*",
+           "match_mapping_type" : "*"
+         }
+       }, 
+       {
          "testSTAR_STAR" : {
            "match" : "test*",
            "match_mapping_type" : "*",
@@ -73,14 +81,23 @@
          }
        },
        {
-         "columnBARonlyBARdisabledSTAR_STAR" : {
+         "columnBARonlyBARdisabled_STAR" : {
            "mapping" : {
-           	"index":"not_analyzed","fielddata":{"format":"disabled"}
+           	"index":"not_analyzed","type":"{dynamic_type}","fielddata":{"format":"disabled"}
            },
-           "match" : "column_only_disabled*",
+           "match" : "column_only_disabled",
            "match_mapping_type" : "*"
          }
-       } 
+       }, 
+       {
+         "columnBARonlyBARenabled_STAR" : {
+           "mapping" : {
+           	"index":"not_analyzed","type":"{dynamic_type}","fielddata":{"format":"doc_values"}
+           },
+           "match" : "column_only_enabled",
+           "match_mapping_type" : "*"
+         }
+       }        
        ]
     }
   }

@@ -57,12 +57,18 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		private Map<String, Map<String, Object>> mapping_overrides;
 	}
 	public static class ColumnarSchemaDefaultBean {
-		// the contents of the "fielddata" sub-object of a property, takes from "_default", or field_type if the field_type can be inferred
+		// the contents of the "fielddata" sub-object of a property for which an include has been specifed, takes from "_default", or field_type if the field_type can be inferred
+		public Map<String, Map<String, Object>> enabled_field_data_analyzed() { return enabled_field_data_analyzed; }		
+		public Map<String, Map<String, Object>> enabled_field_data_notanalyzed() { return enabled_field_data_notanalyzed; }		
+		private Map<String, Map<String, Object>> enabled_field_data_analyzed;
+		private Map<String, Map<String, Object>> enabled_field_data_notanalyzed;
+
+		// the contents of the "fielddata" sub-object of a property for which no include/exclude has been specifed, takes from "_default", or field_type if the field_type can be inferred
 		public Map<String, Map<String, Object>> default_field_data_analyzed() { return default_field_data_analyzed; }		
 		public Map<String, Map<String, Object>> default_field_data_notanalyzed() { return default_field_data_notanalyzed; }		
 		private Map<String, Map<String, Object>> default_field_data_analyzed;
 		private Map<String, Map<String, Object>> default_field_data_notanalyzed;
-		
+				
 		@SuppressWarnings("unused")
 		private String test; // (just used for testing)
 	}

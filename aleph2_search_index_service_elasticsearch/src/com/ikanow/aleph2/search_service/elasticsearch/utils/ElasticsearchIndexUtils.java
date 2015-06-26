@@ -140,6 +140,10 @@ public class ElasticsearchIndexUtils {
 					})
 					.map(p -> {
 						return StreamSupport.stream(Spliterators.spliteratorUnknownSize(p.fields(), Spliterator.ORDERED), false)
+							.map(kv -> {
+								if (!kv.getValue().has("type")) throw new RuntimeException("type must have a field");
+								return kv;
+							})
 							.collect(Collectors.
 									<Map.Entry<String, JsonNode>, Either<String, Tuple2<String, String>>, JsonNode, LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>>
 									toMap(
@@ -279,6 +283,7 @@ public class ElasticsearchIndexUtils {
 	 */
 	public static XContentBuilder getColumnarMapping(final DataBucketBean bucket, Optional<XContentBuilder> to_embed,
 														final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups,
+														final JsonNode enabled_not_analyzed, final JsonNode enabled_analyzed,
 														final JsonNode default_not_analyzed, final JsonNode default_analyzed,
 														final ObjectMapper mapper)
 	{
@@ -293,7 +298,7 @@ public class ElasticsearchIndexUtils {
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> column_lookups = Stream.of(			
 				createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_include_list()).stream(),
 						fn -> Either.left(fn), 
-						field_lookups, default_not_analyzed, default_analyzed, mapper
+						field_lookups, enabled_not_analyzed, enabled_analyzed, true, mapper
 						)
 						,
 				createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_exclude_list()).stream(),
@@ -303,12 +308,12 @@ public class ElasticsearchIndexUtils {
 						,
 				createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_include_pattern_list()).stream(),
 						fn -> Either.right(Tuples._2T(fn, "*")), 
-						field_lookups, default_not_analyzed, default_analyzed, mapper
+						field_lookups, enabled_not_analyzed, enabled_analyzed, true, mapper
 						)
 						,	
 				createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_type_include_list()).stream(),
 						fn -> Either.right(Tuples._2T("*", fn)), 
-						field_lookups, default_not_analyzed, default_analyzed, mapper
+						field_lookups, enabled_not_analyzed, enabled_analyzed, true, mapper
 						)
 						,			
 				createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_exclude_pattern_list()).stream(),
@@ -319,22 +324,30 @@ public class ElasticsearchIndexUtils {
 				createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_type_exclude_list()).stream(),
 						fn -> Either.right(Tuples._2T("*", fn)), 
 						field_lookups, mapper
-					)
+					),
+					
+				// Finally add the default columnar lookups to the unmentioned strings
+					
+				field_lookups.entrySet().stream()
+					.flatMap(kv -> createFieldIncludeLookups(Stream.of(kv.getKey().toString()), __ -> kv.getKey(),
+							field_lookups, default_not_analyzed, default_analyzed, false, mapper
+							))
 			)
 			.flatMap(x -> x)
 			.collect(Collectors.toMap(
 					t2 -> t2._1(),
-					t2 -> t2._2()
+					t2 -> t2._2(),
+					(v1, v2) -> v1 // (ie ignore duplicates)
 					));
 			;			
 			
-			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> combined_lookups = new LinkedHashMap<>();
-			combined_lookups.putAll(column_lookups);
-			combined_lookups.putAll(field_lookups); // (should overwrite them, ie field lookups get prio)
+//			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> combined_lookups = new LinkedHashMap<>();
+//			combined_lookups.putAll(column_lookups);
+//			combined_lookups.putAll(field_lookups); // (should overwrite them, ie field lookups get prio)
 			
 			// Build the mapping in 2 stages - left (properties) then right (dynamic_templates)
 			
-			final XContentBuilder properties = combined_lookups.entrySet().stream()
+			final XContentBuilder properties = column_lookups.entrySet().stream()
 							// properties not dynamic_templates
 							.filter(kv -> kv.getKey().isLeft())
 							// overwrite with version built using columns if it exists
@@ -345,7 +358,7 @@ public class ElasticsearchIndexUtils {
 								(acc1, acc2) -> acc1) // (not actually possible)
 							.endObject();
 
-			final XContentBuilder templates = combined_lookups.entrySet().stream()
+			final XContentBuilder templates = column_lookups.entrySet().stream()
 					// properties not dynamic_templates
 					.filter(kv -> kv.getKey().isRight())
 					// overwrite with version built using columns if it exists
@@ -370,15 +383,16 @@ public class ElasticsearchIndexUtils {
 	 * @param instream
 	 * @param f
 	 * @param field_lookups
-	 * @param default_not_analyzed
-	 * @param default_analyzed
+	 * @param fielddata_not_analyzed
+	 * @param fielddata_analyzed
 	 * @param mapper
 	 * @return
 	 */
 	protected static Stream<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>> createFieldIncludeLookups(final Stream<String> instream,
 								final Function<String, Either<String, Tuple2<String, String>>> f,
 								final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups,
-								final JsonNode default_not_analyzed, final JsonNode default_analyzed,
+								final JsonNode fielddata_not_analyzed, final JsonNode fielddata_analyzed,
+								final boolean override_existing,
 								final ObjectMapper mapper)
 	{
 		return instream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>
@@ -392,33 +406,60 @@ public class ElasticsearchIndexUtils {
 																Lambdas.wrap_fj_u(__ -> mapper.readTree(BACKUP_FIELD_MAPPING_TEMPLATES))
 																));
 
-				final ObjectNode mutable_field_mapping = either.isLeft()
+				final ObjectNode mutable_field_mapping_tmp = either.isLeft()
 									? mutable_field_metadata
 									: (ObjectNode) mutable_field_metadata.get("mapping");
+									
+				final boolean has_type = mutable_field_mapping_tmp.has("type");
 				
-				if (either.isRight()) {
-					mutable_field_metadata
-						.put("match", either.right().value()._1())
-						.put("match_mapping_type", either.right().value()._2());
+				final Tuple2<ObjectNode, Either<String, Tuple2<String, String>>> toplevel_eithermod = Lambdas.get(() -> {
+					if (either.isLeft() && !has_type) {
+						final ObjectNode top_level = (ObjectNode) mapper.createObjectNode().set("mapping", mutable_field_metadata);
+						return Tuples._2T(top_level, Either.<String, Tuple2<String, String>>right(Tuples._2T(fn, "*")));
+					}
+					else {
+						return Tuples._2T(mutable_field_metadata, either);
+					}
+				});
+				
+				final ObjectNode mutable_field_mapping = toplevel_eithermod._2().isLeft()
+									? toplevel_eithermod._1()
+									: (ObjectNode) toplevel_eithermod._1().get("mapping");				
+				
+						
+				if (toplevel_eithermod._2().isRight()) {
+					toplevel_eithermod._1()
+						.put("match", toplevel_eithermod._2().right().value()._1())
+						.put("match_mapping_type", toplevel_eithermod._2().right().value()._2());
+					
+					if (!has_type) {
+						if (toplevel_eithermod._2().right().value()._2().equals("*")) { // type is mandatory
+							mutable_field_mapping.put("type", "{dynamic_type}");
+						}
+						else {
+							mutable_field_mapping.put("type", toplevel_eithermod._2().right().value()._2());
+						}
+					}
 				}
+				
+				//TODO: handle subtypes
 				
 				final boolean is_analyzed = Optional.ofNullable(mutable_field_mapping.get("index"))
 												.filter(j -> !j.isNull() && j.isTextual())
 												.map(jt -> jt.asText().equalsIgnoreCase("analyzed") || jt.asText().equalsIgnoreCase("yes"))
-												.orElse(false); 
+												.orElse(true); 
 				
-				final JsonNode fielddata_settings = is_analyzed ? default_analyzed : default_not_analyzed;
+				final JsonNode fielddata_settings = is_analyzed ? fielddata_analyzed : fielddata_not_analyzed;
 				
 				Optional.ofNullable(						
-					Optional.ofNullable(fielddata_settings.get(either.<String>either
-																(left->left, right->getFieldNameFromMatchPair(right))))
+					Optional.ofNullable(fielddata_settings.get(toplevel_eithermod._2().<String>either
+																(left->left, right->right._1())))
 							.filter(j -> !j.isNull())
 							.orElse(fielddata_settings.get(DEFAULT_FIELDDATA_NAME))
 					)
-					.ifPresent(j -> { if (!mutable_field_mapping.has("fielddata")) // (ie if user specifies fielddata in the search index schema then respect that)
-											mutable_field_mapping.set("fielddata", j); });
+					.ifPresent(j -> { if (override_existing || !mutable_field_mapping.has("fielddata")) mutable_field_mapping.set("fielddata", j); } );
 				
-				return Tuples._2T(either, mutable_field_metadata); 
+				return Tuples._2T(toplevel_eithermod._2(), toplevel_eithermod._1()); 
 			}));
 
 	}
@@ -446,21 +487,44 @@ public class ElasticsearchIndexUtils {
 																Lambdas.wrap_fj_u(__ -> mapper.readTree(BACKUP_FIELD_MAPPING_PROPERTIES)),
 																Lambdas.wrap_fj_u(__ -> mapper.readTree(BACKUP_FIELD_MAPPING_TEMPLATES))
 																));
-
-				final ObjectNode mutable_field_mapping = either.isLeft()
+				final ObjectNode mutable_field_mapping_tmp = either.isLeft()
 									? mutable_field_metadata
 									: (ObjectNode) mutable_field_metadata.get("mapping");
+									
+				final boolean has_type = mutable_field_mapping_tmp.has("type");
 				
-				if (either.isRight()) {
-					mutable_field_metadata
-						.put("match", either.right().value()._1())
-						.put("match_mapping_type", either.right().value()._2());
-				}				
-																
-				if (!mutable_field_mapping.has("fielddata"))  // (ie if user specifies fielddata in the search index schema then respect that)
-					mutable_field_mapping.set("fielddata", mapper.readTree(DISABLED_FIELDDATA));
+				final Tuple2<ObjectNode, Either<String, Tuple2<String, String>>> toplevel_eithermod = Lambdas.get(() -> {
+					if (either.isLeft() && !has_type) {
+						final ObjectNode top_level = (ObjectNode) mapper.createObjectNode().set("mapping", mutable_field_metadata);
+						return Tuples._2T(top_level, Either.<String, Tuple2<String, String>>right(Tuples._2T(fn, "*")));
+					}
+					else {
+						return Tuples._2T(mutable_field_metadata, either);
+					}
+				});
 				
-				return Tuples._2T(either, mutable_field_metadata); 
+				final ObjectNode mutable_field_mapping = toplevel_eithermod._2().isLeft()
+									? toplevel_eithermod._1()
+									: (ObjectNode) toplevel_eithermod._1().get("mapping");				
+				
+						
+				if (toplevel_eithermod._2().isRight()) {
+					toplevel_eithermod._1()
+						.put("match", toplevel_eithermod._2().right().value()._1())
+						.put("match_mapping_type", toplevel_eithermod._2().right().value()._2());
+					
+					if (!has_type) {
+						if (toplevel_eithermod._2().right().value()._2().equals("*")) { // type is mandatory
+							mutable_field_mapping.put("type", "{dynamic_type}");
+						}
+						else {
+							mutable_field_mapping.put("type", toplevel_eithermod._2().right().value()._2());
+						}
+					}
+				}
+				mutable_field_mapping.set("fielddata", mapper.readTree(DISABLED_FIELDDATA));
+				
+				return Tuples._2T(toplevel_eithermod._2(), toplevel_eithermod._1()); 
 			}));
 	}
 
@@ -562,19 +626,20 @@ public class ElasticsearchIndexUtils {
 	/** The control method to build up the mapping from the constituent parts
 	 * @param bucket
 	 * @param field_lookups
-	 * @param default_not_analyzed
-	 * @param default_analyzed
+	 * @param enabled_not_analyzed
+	 * @param enabled_analyzed
 	 * @param mapper
 	 * @return
 	 */
 	protected static XContentBuilder getFullMapping(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean config,
 			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups,
+			final JsonNode enabled_not_analyzed, final JsonNode enabled_analyzed,
 			final JsonNode default_not_analyzed, final JsonNode default_analyzed,
 			final ObjectMapper mapper)
 	{
 		return Lambdas.wrap_u(__ -> getTemplateMapping(bucket))
 				.andThen(json -> getSearchServiceMapping(bucket, config, Optional.of(json), mapper))
-				.andThen(json -> getColumnarMapping(bucket, Optional.of(json), field_lookups, default_not_analyzed, default_analyzed, mapper))
+				.andThen(json -> getColumnarMapping(bucket, Optional.of(json), field_lookups, enabled_not_analyzed, enabled_analyzed, default_not_analyzed, default_analyzed, mapper))
 				.andThen(Lambdas.wrap_u(json -> json.endObject().endObject())) // (close the objects from the search service mapping)
 				.andThen(json -> getTemporalMapping(bucket, Optional.of(json)))
 			.apply(null);
@@ -602,6 +667,16 @@ public class ElasticsearchIndexUtils {
 															.map(DataSchemaBean.ColumnarSchemaBean::technology_override_schema)
 															.map(t -> mapper.convertValue(t, JsonNode.class));
 		
+		final JsonNode enabled_analyzed_field = columnar_defaults
+												.map(j -> j.get("enabled_field_data_analyzed")) 
+												.filter(j -> !j.isNull())
+											.orElse(BeanTemplateUtils.toJson(config.columnar_technology_override().enabled_field_data_analyzed())); // (can't be null by construction)
+
+		final JsonNode enabled_not_analyzed_field = columnar_defaults
+												.map(j -> j.get("enabled_field_data_notanalyzed")) 
+												.filter(j -> !j.isNull())
+											.orElse(BeanTemplateUtils.toJson(config.columnar_technology_override().enabled_field_data_notanalyzed())); // (can't be null by construction)		
+
 		final JsonNode default_analyzed_field = columnar_defaults
 												.map(j -> j.get("default_field_data_analyzed")) 
 												.filter(j -> !j.isNull())
@@ -626,7 +701,8 @@ public class ElasticsearchIndexUtils {
 		
 		final XContentBuilder test_result = getFullMapping(
 				bucket, config, field_lookups, 
-				default_analyzed_field,  default_not_analyzed_field,
+				enabled_not_analyzed_field, enabled_analyzed_field, 
+				default_not_analyzed_field, default_analyzed_field,  
 				mapper);		
 
 		return test_result;
