@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.ikanow.aleph2.search_service.elasticsearch.services;
 
+import java.io.IOException;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collection;
@@ -23,15 +24,22 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.StreamSupport;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesRequest;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesResponse;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.cluster.metadata.IndexTemplateMetaData;
+import org.elasticsearch.common.collect.ImmutableOpenMap;
+import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.inject.Inject;
 import com.google.inject.Module;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService;
@@ -45,6 +53,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalS
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
@@ -54,6 +63,7 @@ import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexUt
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.CreationPolicy;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory;
+import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUtils;
 
 import fj.data.Validation;
 
@@ -105,9 +115,9 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
 									.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
 										? "_default_"
-										: type.orElse("data_object");
+										: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 		
-		this.handlePotentiallyNewIndex(bucket, index_type);
+		this.handlePotentiallyNewIndex(bucket, schema_config, index_type);
 		
 		// Need to decide a) if it's a time based index b) an auto type index
 		// And then build the context from there
@@ -120,7 +130,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		final ElasticsearchContext.IndexContext.ReadWriteIndexContext index_context = time_period.validation(
 				fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name)
 				, 
-				success -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext(index_base_name, 
+				success -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext(index_base_name + ElasticsearchContextUtils.getIndexSuffix(success), 
 									Optional.ofNullable(schema_config.temporal_technology_override().time_field()))
 				);
 		
@@ -129,7 +139,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 				CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
 						.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
 					? new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), type)
-					: new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext(type.orElse("data_object"));
+					: new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext(type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME));
 		
 		return _crud_factory.getElasticsearchCrudService(clazz,
 				new ElasticsearchContext.ReadWriteContext(_crud_factory.getClient(), index_context, type_context),
@@ -138,32 +148,83 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 				Optional.empty(), Optional.empty(), Optional.empty());
 	}
 
+	//TODO (ALEPH-14): Handle bucket deletion (eg remove template)
+	
 	/** Checks if an index/set-of-indexes spawned from a bucket
 	 * @param bucket
 	 */
-	protected void handlePotentiallyNewIndex(final DataBucketBean bucket, final String index_type) {
+	protected void handlePotentiallyNewIndex(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean schema_config, final String index_type) {
 		final Date current_template_time = _bucket_template_cache.get(bucket._id());
 		if ((null == current_template_time) || current_template_time.before(Optional.ofNullable(bucket.modified()).orElse(new Date()))) {
 			
 			try {
-				final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, _config, _mapper, index_type);
+				final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, schema_config, _mapper, index_type);
 				
 				final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(bucket._id());
 				final GetIndexTemplatesResponse gtr = _crud_factory.getClient().admin().indices().getTemplates(gt).actionGet();
 				
-				if (gtr.getIndexTemplates().isEmpty() || 
-					!gtr.getIndexTemplates().get(0).mappings().get(bucket._id()).string().equals(mapping.bytes().toUtf8()))
+				if (gtr.getIndexTemplates().isEmpty() 
+						|| 
+					!mappingsAreEquivalent(gtr.getIndexTemplates().get(0), _mapper.readTree(mapping.bytes().toUtf8()), _mapper))
 				{
 					// If no template, or it's changed, then update
-					_crud_factory.getClient().admin().indices().preparePutTemplate(bucket._id()).setSource(mapping);						
+					_crud_factory.getClient().admin().indices().preparePutTemplate(bucket._id()).setSource(mapping).execute().actionGet();
+					
+					_logger.info(ErrorUtils.get("Updated mapping for bucket={0}, base_index={1}", bucket._id()));
 				}				
-				_logger.info(ErrorUtils.get("Updated mapping for bucket={0}, base_index={1}", bucket._id()));
 			}
 			catch (Exception e) {
 				_logger.error(ErrorUtils.getLongForm("Error updating mapper bucket={1} err={0}", e, bucket._id()));
 			}
 			_bucket_template_cache.put(bucket._id(), bucket.modified());			
 		}
+	}
+	
+	/** Check if a new mapping based on a schema is equivalent to a mapping previously stored (from a schema) 
+	 * @param stored_mapping
+	 * @param new_mapping
+	 * @param mapper
+	 * @return
+	 * @throws JsonProcessingException
+	 * @throws IOException
+	 */
+	protected static boolean mappingsAreEquivalent(final IndexTemplateMetaData stored_mapping, final JsonNode new_mapping, final ObjectMapper mapper) throws JsonProcessingException, IOException {		
+		
+		final ObjectNode stored_json_mappings = StreamSupport.stream(stored_mapping.mappings().spliterator(), false)
+													.reduce(mapper.createObjectNode(), 
+															Lambdas.wrap_u((acc, kv) -> (ObjectNode) acc.setAll((ObjectNode) mapper.readTree(kv.value.string()))), 
+															(acc1, acc2) -> acc1); // (can't occur)
+		
+		final JsonNode new_json_mappings = Optional.ofNullable(new_mapping.get("mappings")).orElse(mapper.createObjectNode());
+		
+		final JsonNode stored_json_settings = mapper.convertValue(
+												Optional.ofNullable(stored_mapping.settings()).orElse(ImmutableSettings.settingsBuilder().build())
+													.getAsMap(), JsonNode.class);
+
+		final JsonNode new_json_settings = Optional.ofNullable(new_mapping.get("settings")).orElse(mapper.createObjectNode());
+				
+		final ObjectNode stored_json_aliases = StreamSupport.stream(Optional.ofNullable(stored_mapping.aliases()).orElse(ImmutableOpenMap.of()).spliterator(), false)
+				.reduce(mapper.createObjectNode(), 
+						Lambdas.wrap_u((acc, kv) -> (ObjectNode) acc.set(kv.key, kv.value.filteringRequired()
+								? mapper.createObjectNode().set("filter", mapper.readTree(kv.value.filter().string()))
+								: mapper.createObjectNode()
+								)),
+						(acc1, acc2) -> acc1); // (can't occur)
+		
+		final JsonNode new_json_aliases = Optional.ofNullable(new_mapping.get("aliases")).orElse(mapper.createObjectNode());
+		
+		//DEBUG
+//		System.out.println("1a: " + stored_json_mappings);
+//		System.out.println("1b: " + new_json_mappings);
+//		System.out.println(" 1: " + stored_json_mappings.equals(new_json_mappings));
+//		System.out.println("2a: " + stored_json_settings);
+//		System.out.println("2b: " + new_json_settings);
+//		System.out.println(" 2: " + stored_json_settings.equals(new_json_settings));
+//		System.out.println("3a: " + stored_json_aliases);
+//		System.out.println("3b: " + new_json_aliases);
+//		System.out.println(" 3: " + stored_json_aliases.equals(new_json_aliases));
+		
+		return stored_json_mappings.equals(new_json_mappings) && stored_json_settings.equals(new_json_settings) && stored_json_aliases.equals(new_json_aliases);		
 	}
 	
 	/* (non-Javadoc)
@@ -232,9 +293,9 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
 										.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
 											? "_default_"
-											: type.orElse("data_object");
+											: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, _config, _mapper, index_type);
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, schema_config, _mapper, index_type);
 			if (is_verbose(schema)) {
 				final BasicMessageBean success = new BasicMessageBean(
 						new Date(), true, bucket.full_name(), "validateSchema", null, 
@@ -255,7 +316,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			return Arrays.asList(err);
 		}
 	}
-	private static boolean is_verbose(final SearchIndexSchemaBean schema) {
+	protected static boolean is_verbose(final SearchIndexSchemaBean schema) {
 		return Optional.ofNullable(schema)
 					.map(SearchIndexSchemaBean::technology_override_schema)
 					.map(m -> m.get("verbose"))

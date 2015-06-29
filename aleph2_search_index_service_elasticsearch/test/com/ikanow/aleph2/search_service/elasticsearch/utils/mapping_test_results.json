@@ -5,6 +5,8 @@
   },
   "mappings" : {
     "_default_" : {
+	   "_all":{"enabled":false},
+	   "_source":{"enabled":true},
        "properties" : {
          "sourceKey": { "type": "string", "index": "not_analyzed", "fielddata": { "format": "disabled" } },
          "geoip"  : {

@@ -81,7 +81,7 @@ public class ElasticsearchIndexUtils {
 					.<String>map(cfg -> {
 						return Patterns.match(cfg.collide_policy()).<String>andReturn()
 								.when(cp -> SearchIndexSchemaDefaultBean.CollidePolicy.error == cp, 
-										__ -> Optional.ofNullable(cfg.type_name_or_prefix()).orElse("data_object")) // (ie falls through to default below)
+										__ -> Optional.ofNullable(cfg.type_name_or_prefix()).orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME)) // (ie falls through to default below)
 								.otherwise(__ -> null);
 					})
 				.orElse("_default_"); // (the default - "auto type")
@@ -104,7 +104,7 @@ public class ElasticsearchIndexUtils {
 	 * @param type - if the index has a specific type, lookup that and _default_ ; otherwise just _default
 	 * @return
 	 */
-	public static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> parseDefaultMapping(final JsonNode mapping, Optional<String> type) {
+	public static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> parseDefaultMapping(final JsonNode mapping, final Optional<String> type) {
 		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> ret = 
 				Optional.ofNullable(mapping.get("mappings"))
 					.map(m -> {
@@ -133,7 +133,7 @@ public class ElasticsearchIndexUtils {
 	 * @param index
 	 * @return
 	 */
-	protected static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> getProperties(JsonNode index) {
+	protected static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> getProperties(final JsonNode index) {
 		return Optional.ofNullable(index.get("properties"))
 					.filter(p -> !p.isNull())
 					.map(p -> {
@@ -162,7 +162,7 @@ public class ElasticsearchIndexUtils {
 	 * @param index
 	 * @return
 	 */
-	protected static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> getTemplates(JsonNode index) {
+	protected static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> getTemplates(final JsonNode index) {
 		return Optional.ofNullable(index.get("dynamic_templates"))
 					.filter(p -> !p.isNull())					
 					.map(p -> {
@@ -553,7 +553,7 @@ public class ElasticsearchIndexUtils {
 	 * @throws IOException 
 	 */
 	public static XContentBuilder getSearchServiceMapping(final DataBucketBean bucket,
-															final ElasticsearchIndexServiceConfigBean config,
+															final ElasticsearchIndexServiceConfigBean schema_config,
 															final Optional<XContentBuilder> to_embed,
 															final ObjectMapper mapper)
 	{
@@ -561,21 +561,19 @@ public class ElasticsearchIndexUtils {
 			final XContentBuilder start = to_embed.orElse(XContentFactory.jsonBuilder().startObject());
 
 			// (Nullable)
-			final ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean search_schema =
-					Optional.ofNullable(bucket.data_schema())
-						.map(DataSchemaBean::search_index_schema)				
-						.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
-						.map(DataSchemaBean.SearchIndexSchemaBean::technology_override_schema)
-						.map(m -> BeanTemplateUtils.from(mapper.convertValue(m, JsonNode.class), 
-								ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.class).get())
-					.orElse(config.search_technology_override());
+			final ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean search_schema = schema_config.search_technology_override();
 			
 			//(very briefly Nullable)
 			final JsonNode settings = Optional.ofNullable(search_schema)
 											.map(s -> s.settings())
 											.map(o -> mapper.convertValue(o, JsonNode.class))
-										.orElse(Optional.ofNullable(config.search_technology_override()).map(cfg -> cfg.settings())
-												.map(o -> mapper.convertValue(o, JsonNode.class)).orElse(null));
+											.orElse(null);
+			
+			//(very briefly Nullable)
+			final JsonNode aliases = Optional.ofNullable(search_schema)
+											.map(s -> s.aliases())
+											.map(o -> mapper.convertValue(o, JsonNode.class))
+											.orElse(null);
 			
 			// Settings
 			
@@ -589,6 +587,15 @@ public class ElasticsearchIndexUtils {
 					return start.rawField("settings", settings.toString().getBytes());
 				}
 			})
+			// Aliases
+			.andThen(Lambdas.wrap_u(json -> {
+				if (null == aliases) { // nothing to do
+					return json;
+				}
+				else {
+					return start.rawField("aliases", aliases.toString().getBytes());
+				}
+			}))
 			// Mappings and overrides
 			.andThen(Lambdas.wrap_u(json -> json.startObject("mappings").startObject(type_key)))
 			// More mapping overrides
@@ -645,14 +652,14 @@ public class ElasticsearchIndexUtils {
 	 * @param mapper
 	 * @return
 	 */
-	protected static XContentBuilder getFullMapping(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean config,
+	protected static XContentBuilder getFullMapping(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean schema_config,
 			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups,
 			final JsonNode enabled_not_analyzed, final JsonNode enabled_analyzed,
 			final JsonNode default_not_analyzed, final JsonNode default_analyzed,
 			final ObjectMapper mapper, final String index_type)
 	{
 		return Lambdas.wrap_u(__ -> getTemplateMapping(bucket))
-				.andThen(json -> getSearchServiceMapping(bucket, config, Optional.of(json), mapper))
+				.andThen(json -> getSearchServiceMapping(bucket, schema_config, Optional.of(json), mapper))
 				.andThen(json -> getColumnarMapping(bucket, Optional.of(json), field_lookups, enabled_not_analyzed, enabled_analyzed, default_not_analyzed, default_analyzed, mapper, index_type))
 				.andThen(Lambdas.wrap_u(json -> json.endObject().endObject())) // (close the objects from the search service mapping)
 				.andThen(json -> getTemporalMapping(bucket, Optional.of(json)))
@@ -664,57 +671,29 @@ public class ElasticsearchIndexUtils {
 	 * @param config
 	 * @return
 	 */
-	public static XContentBuilder createIndexMapping(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean config, final ObjectMapper mapper, final String index_type) {
+	public static XContentBuilder createIndexMapping(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean schema_config, final ObjectMapper mapper, final String index_type) {
 		
-		final JsonNode default_mapping = Optional.ofNullable(bucket.data_schema())
-												.map(DataSchemaBean::search_index_schema)
-												.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
-												.map(DataSchemaBean.SearchIndexSchemaBean::technology_override_schema)
-												.map(t -> mapper.convertValue(t, JsonNode.class))
-											.orElse(BeanTemplateUtils.toJson(config.search_technology_override()));
+		final JsonNode default_mapping = mapper.convertValue(schema_config.search_technology_override(), JsonNode.class);
 		
 		// Also get JsonNodes for the default field config bit
-
-		final Optional<JsonNode> columnar_defaults =  Optional.ofNullable(bucket.data_schema())
-															.map(DataSchemaBean::columnar_schema)
-															.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
-															.map(DataSchemaBean.ColumnarSchemaBean::technology_override_schema)
-															.map(t -> mapper.convertValue(t, JsonNode.class));
 		
-		final JsonNode enabled_analyzed_field = columnar_defaults
-												.map(j -> j.get("enabled_field_data_analyzed")) 
-												.filter(j -> !j.isNull())
-											.orElse(BeanTemplateUtils.toJson(config.columnar_technology_override().enabled_field_data_analyzed())); // (can't be null by construction)
-
-		final JsonNode enabled_not_analyzed_field = columnar_defaults
-												.map(j -> j.get("enabled_field_data_notanalyzed")) 
-												.filter(j -> !j.isNull())
-											.orElse(BeanTemplateUtils.toJson(config.columnar_technology_override().enabled_field_data_notanalyzed())); // (can't be null by construction)		
-
-		final JsonNode default_analyzed_field = columnar_defaults
-												.map(j -> j.get("default_field_data_analyzed")) 
-												.filter(j -> !j.isNull())
-											.orElse(BeanTemplateUtils.toJson(config.columnar_technology_override().default_field_data_analyzed())); // (can't be null by construction)
-
-		final JsonNode default_not_analyzed_field = columnar_defaults
-												.map(j -> j.get("default_field_data_notanalyzed")) 
-												.filter(j -> !j.isNull())
-											.orElse(BeanTemplateUtils.toJson(config.columnar_technology_override().default_field_data_notanalyzed())); // (can't be null by construction)		
+		// (these can't be null by construction)
+		final JsonNode enabled_analyzed_field = mapper.convertValue(schema_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class);
+		final JsonNode enabled_not_analyzed_field = mapper.convertValue(schema_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class);
+		final JsonNode default_analyzed_field = mapper.convertValue(schema_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class);
+		final JsonNode default_not_analyzed_field = mapper.convertValue(schema_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class);
 		
 		// Get a list of field overrides Either<String,Tuple2<String,String>> for dynamic/real fields
 		
-		final ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean settings = BeanTemplateUtils.from(default_mapping, 
-														ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.class).get();
-		
 		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> 
 			field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(default_mapping, 
-					(CollidePolicy.new_type == Optional.ofNullable(settings.collide_policy()).orElse(CollidePolicy.new_type))
+					(CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override().collide_policy()).orElse(CollidePolicy.new_type))
 							? Optional.empty()
-							: Optional.ofNullable(settings.type_name_or_prefix())
+							: Optional.ofNullable(schema_config.search_technology_override().type_name_or_prefix())
 						);
 		
 		final XContentBuilder test_result = getFullMapping(
-				bucket, config, field_lookups, 
+				bucket, schema_config, field_lookups, 
 				enabled_not_analyzed_field, enabled_analyzed_field, 
 				default_not_analyzed_field, default_analyzed_field,  
 				mapper, index_type);		

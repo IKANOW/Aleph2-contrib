@@ -25,6 +25,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -159,7 +162,9 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 					.setRefresh(!bulk && CreationPolicy.OPTIMIZED != _state.creation_policy)
 					.setSource(json_object.<String>either(left -> left.toString(), right -> right._2()))
 						)
-				.map(i -> json_object.<IndexRequestBuilder>either(left -> left.has("_id") ? i.setId(left.get("_id").asText()) : i, right -> i.setId(right._1())))				
+				.map(i -> json_object.<IndexRequestBuilder>either(left -> left.has("_id") ? i.setId(left.get("_id").asText()) : i, right -> i.setId(right._1())))
+				//DEBUG
+				//.map(irb -> { System.out.println("REQUEST INDICES = " + Arrays.toString(irb.request().indices())); return irb; })
 				.get();		
 	}
 	
@@ -725,7 +730,8 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		else if (IMetaModel.class == driver_class) return (Optional<T>) Optional.of(((null == _meta_model) 
 														? (_meta_model = new ElasticsearchDbMetaModel(_state.es_context)) 
 														: _meta_model));
-		else if ((ElasticsearchBatchSubsystem.class == driver_class) && (_state.es_context instanceof ReadWriteContext)) {
+		else if (((ElasticsearchBatchSubsystem.class == driver_class) || (ICrudService.IBatchSubservice.class == driver_class)) 
+					&& (_state.es_context instanceof ReadWriteContext)) {
 			if (null == _batch_processor) _batch_processor = new ElasticsearchBatchSubsystem();
 			return (Optional<T>) Optional.of(_batch_processor);
 		}
@@ -739,6 +745,22 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 */
 	public class ElasticsearchBatchSubsystem implements IBatchSubservice<O> {
 
+		protected ElasticsearchBatchSubsystem() {
+			// Kick off thread that handles higher speed flushing
+			final ExecutorService executor = Executors.newSingleThreadExecutor();
+			executor.submit(() -> {
+				for (;;) {
+					if (_flush_now) {
+						synchronized (this) {
+							_current.flush();
+							_flush_now = false;
+						}
+					}
+					TimeUnit.MILLISECONDS.sleep(50);
+				}
+			});
+		}
+		
 		@Override
 		public void setBatchProperties(final Optional<Integer> max_objects, final Optional<Long> size_kb, final Optional<Duration> flush_interval)
 		{
@@ -769,7 +791,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 							Either.left(new_object), replace_if_present, true).request());
 		}
 		
-		//TODO: need to test this in normal mode and with mapping errors occurring
+		private boolean _flush_now = false; // (_very_ simple inter-thread comms via this mutable var, NOTE: don't let it get more complex than this without refactoring)
 		
 		protected BulkProcessor buildBulkProcessor(final Optional<Integer> max_objects, final Optional<Long> size_kb, final Optional<Duration> flush_interval) {
 			return BulkProcessor.builder(_state.client, 
@@ -804,6 +826,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 														failed_json = ir.source().toUtf8();
 													}
 													if (null != failed_json) {
+														_flush_now = true;
 														_current.add(singleObjectIndexRequest(
 																	Either.right(Tuples._2T(bir.getIndex(), 
 																			ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), bir.getType()))), 
@@ -813,8 +836,10 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 												}//(was a mapping error)
 											}//(item failed)
 										}//(loop over iterms)
-									}//(synchronized)
+										
+									}//(synchronized)									
 								}//(has failures AND is an auto type)
+								
 							}//(end afterBulk)
 						}//(end new Listener)
 					)

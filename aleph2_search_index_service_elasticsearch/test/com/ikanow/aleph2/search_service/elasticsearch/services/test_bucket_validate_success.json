@@ -1,0 +1,34 @@
+{
+	"_id": "test_validate_success",
+	"full_name": "/test/validate/success",
+	"data_schema": {
+	    "search_index_schema": {
+	        "enabled": true,
+	        "technology_override_schema": {
+	        	"aliases": {
+	        		"test1": {},
+	        		"test2": {
+	        			"filter": { "term": {"test2a": "test2b"}}
+	        		}
+	        	}
+	        }
+	    },
+	    "columnar_schema": {
+	        "enabled": true,
+	        "field_exclude_pattern_list": [],
+	        "field_exclude_pattern_list": [],
+	        "field_include_list": [],
+	        "field_include_pattern_list": [],
+	        "field_type_exclude_list": [],
+	        "field_type_include_list": [],
+	        "technology_override_schema": {}
+	    },
+	    "temporal_schema": {
+	        "enabled": true,
+	        "exist_age_max": "month",
+	        "time_field": "@timestamp",
+	        "grouping_time_period": "day",
+	        "technology_override_schema": {}
+	    }
+	}
+}

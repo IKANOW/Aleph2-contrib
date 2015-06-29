@@ -64,12 +64,14 @@ public class TestElasticsearchContext {
 		final ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext index_context_3 = 
 				new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test_2_{yyyy.MM}", Optional.empty());
 
-		final ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext index_context_4 = 
-				new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test3", Optional.of("@timestamp"));
+		// This isn't supported any more, valid strings only
+//		final ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext index_context_4 = 
+//				new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test3", Optional.of("@timestamp"));
 		
 		assertEquals(Arrays.asList("test1_2004*", "test1_2005*"), index_context_2.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
 		assertEquals(Arrays.asList("test_2_2004.12*", "test_2_2005.01*"), index_context_3.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
-		assertEquals(Arrays.asList("test3*"), index_context_4.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
+		// (see index_context_4 declaration, above)
+//		assertEquals(Arrays.asList("test3*"), index_context_4.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
 
 		// Check gets the right timestamp when writing objects into an index
 		
@@ -82,6 +84,7 @@ public class TestElasticsearchContext {
 		
 		assertEquals("test1_2004", index_context_2.getWritableIndex(Optional.of(obj)));
 		assertEquals("test_2_" + expected3, index_context_3.getWritableIndex(Optional.of(obj)));
-		assertEquals("test3", index_context_4.getWritableIndex(Optional.of(obj)));
+		// (see index_context_4 declaration, above)
+//		assertEquals("test3", index_context_4.getWritableIndex(Optional.of(obj)));
 	}
 }

@@ -36,6 +36,7 @@ import scala.Tuple2;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
@@ -439,7 +440,8 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
 				_mapper, "_default_");
 	
-			assertEquals(expected_json.get("mappings").get("_default_").toString(), test_result.bytes().toUtf8());
+			final ObjectNode expected_remove_search_settings = ((ObjectNode) expected_json.get("mappings").get("_default_")).remove(Arrays.asList("_all", "_source"));
+			assertEquals(expected_remove_search_settings.toString(), test_result.bytes().toUtf8());
 			
 			// 1b) While we're here, just test that the temporal service doesn't change the XContent
 			
@@ -548,7 +550,7 @@ public class TestElasticsearchIndexUtils {
 		
 		// TEST with default config, no settings specified in mapping
 		{		
-			final String default_settings = "{\"settings\":{\"index.refresh_interval\":\"5s\",\"indices.fielddata.cache.size\":\"10%\"},\"mappings\":{\"_default_\":{\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true}}}}";
+			final String default_settings = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true}}}}";
 			
 			final DataBucketBean test_bucket_0a = BeanTemplateUtils.build(DataBucketBean.class).done().get();
 			final DataBucketBean test_bucket_0b = BeanTemplateUtils.build(DataBucketBean.class)
@@ -600,7 +602,7 @@ public class TestElasticsearchIndexUtils {
 		
 		// TEST with settings specified in mapping
 		{
-			final String user_settings = "{\"settings\":{\"indices.fielddata.cache.size\":\"25%\"},\"mappings\":{\"data_object\":{}}}";
+			final String user_settings = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"25%\"},\"mappings\":{\"data_object\":{\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true}}}}";
 			
 			final DataBucketBean test_bucket_1 = BeanTemplateUtils.build(DataBucketBean.class)
 					.with(DataBucketBean::data_schema, 
@@ -611,7 +613,7 @@ public class TestElasticsearchIndexUtils {
 											.with("technology_override_schema",
 													ImmutableMap.builder().put("settings", 
 															ImmutableMap.builder()
-																.put("indices.fielddata.cache.size", "25%")
+																.put("index.indices.fielddata.cache.size", "25%")
 															.build())
 															.put("collide_policy", "error")
 													.build()
@@ -620,12 +622,14 @@ public class TestElasticsearchIndexUtils {
 							.done().get())
 					.done().get();
 
-			assertEquals(user_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_1, config_bean, Optional.empty(), _mapper).bytes().toUtf8());			
+			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(test_bucket_1, config_bean, _mapper);
+			
+			assertEquals(user_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_1, schema_config, Optional.empty(), _mapper).bytes().toUtf8());			
 		}
 		
 		// TEST with mapping overrides
 		{
-			final String user_settings = "{\"settings\":{\"indices.fielddata.cache.size\":\"25%\"},\"mappings\":{\"test_type\":{\"_all\":{\"enabled\":false}}}}";
+			final String user_settings = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"25%\"},\"mappings\":{\"test_type\":{\"_all\":{\"enabled\":false}}}}";
 			
 			final DataBucketBean test_bucket_1 = BeanTemplateUtils.build(DataBucketBean.class)
 					.with(DataBucketBean::data_schema, 
@@ -636,7 +640,7 @@ public class TestElasticsearchIndexUtils {
 											.with("technology_override_schema",
 													ImmutableMap.builder().put("settings", 
 															ImmutableMap.builder()
-																.put("indices.fielddata.cache.size", "25%")
+																.put("index.indices.fielddata.cache.size", "25%")
 															.build())
 															.put("collide_policy", "error")
 															.put("type_name_or_prefix", "test_type")
@@ -650,8 +654,10 @@ public class TestElasticsearchIndexUtils {
 								.done().get())
 							.done().get())
 					.done().get();
-
-			assertEquals(user_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_1, config_bean, Optional.empty(), _mapper).bytes().toUtf8());						
+			
+			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(test_bucket_1, config_bean, _mapper);
+			
+			assertEquals(user_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_1, schema_config, Optional.empty(), _mapper).bytes().toUtf8());						
 		}
 	}
 
@@ -709,12 +715,14 @@ public class TestElasticsearchIndexUtils {
 		final String expected = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/mapping_test_results.json"), Charsets.UTF_8);
 		final JsonNode expected_json = _mapper.readTree(expected);				
 		
+		final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(test_bucket, _config, _mapper);			
+		
 		// 1) Sub method
 		{
 			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty());
 			
 			final XContentBuilder test_result = ElasticsearchIndexUtils.getFullMapping(
-					test_bucket, _config, field_lookups, 
+					test_bucket, schema_config, field_lookups, 
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
@@ -726,7 +734,7 @@ public class TestElasticsearchIndexUtils {
 		
 		// Final method
 		{ 
-			final XContentBuilder test_result = ElasticsearchIndexUtils.createIndexMapping(test_bucket, _config, _mapper, "_default_");			
+			final XContentBuilder test_result = ElasticsearchIndexUtils.createIndexMapping(test_bucket, schema_config, _mapper, "_default_");			
 			assertEquals(expected_json.toString(), test_result.bytes().toUtf8());
 		}
 	}

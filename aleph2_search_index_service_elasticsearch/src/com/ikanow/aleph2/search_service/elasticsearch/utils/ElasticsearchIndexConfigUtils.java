@@ -24,6 +24,8 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.ColumnarSchemaDefaultBean;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
@@ -75,20 +77,42 @@ public class ElasticsearchIndexConfigUtils {
 	 * @return
 	 */
 	public static ElasticsearchIndexServiceConfigBean buildConfigBeanFromSchema(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean backup, final ObjectMapper mapper) {
-		final ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean search_index_bits =
+		
+		final SearchIndexSchemaDefaultBean search_index_bits_tmp =
 				Optional.ofNullable(bucket.data_schema()).map(DataSchemaBean::search_index_schema)
 							.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
 							.map(s -> s.technology_override_schema())
-							.map(map -> mapper.convertValue(map, ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.class))
+							.map(map -> mapper.convertValue(map, SearchIndexSchemaDefaultBean.class))
 						.orElse(backup.search_technology_override());
 		
-		final ElasticsearchIndexServiceConfigBean.ColumnarSchemaDefaultBean columnar_bits =
+		// The _actual_ settings technology override object is taken from either the bucket or the backup on a top-level-field by top-leve-field basis
+		final SearchIndexSchemaDefaultBean search_index_bits =
+				BeanTemplateUtils.clone(search_index_bits_tmp)
+					.with(SearchIndexSchemaDefaultBean::collide_policy, Optional.ofNullable(search_index_bits_tmp.collide_policy()).orElse(backup.search_technology_override().collide_policy()))
+					.with(SearchIndexSchemaDefaultBean::type_name_or_prefix, Optional.ofNullable(search_index_bits_tmp.type_name_or_prefix()).orElse(backup.search_technology_override().type_name_or_prefix()))
+					.with(SearchIndexSchemaDefaultBean::verbose, Optional.ofNullable(search_index_bits_tmp.verbose()).orElse(backup.search_technology_override().verbose()))
+					.with(SearchIndexSchemaDefaultBean::settings, Optional.ofNullable(search_index_bits_tmp.settings()).orElse(backup.search_technology_override().settings()))
+					.with(SearchIndexSchemaDefaultBean::aliases, Optional.ofNullable(search_index_bits_tmp.aliases()).orElse(backup.search_technology_override().aliases()))
+					.with(SearchIndexSchemaDefaultBean::mappings, Optional.ofNullable(search_index_bits_tmp.mappings()).orElse(backup.search_technology_override().mappings()))
+					.with(SearchIndexSchemaDefaultBean::mapping_overrides, Optional.ofNullable(search_index_bits_tmp.mapping_overrides()).orElse(backup.search_technology_override().mapping_overrides()))
+				.done();
+		
+		final ColumnarSchemaDefaultBean columnar_bits_tmp =
 				Optional.ofNullable(bucket.data_schema()).map(DataSchemaBean::columnar_schema)
 							.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
 							.map(s -> s.technology_override_schema())
-							.map(map -> mapper.convertValue(map, ElasticsearchIndexServiceConfigBean.ColumnarSchemaDefaultBean.class))
+							.map(map -> mapper.convertValue(map, ColumnarSchemaDefaultBean.class))
 						.orElse(backup.columnar_technology_override());
+
+		final ColumnarSchemaDefaultBean columnar_bits =
+				BeanTemplateUtils.clone(columnar_bits_tmp)
+					.with(ColumnarSchemaDefaultBean::default_field_data_analyzed, Optional.ofNullable(columnar_bits_tmp.default_field_data_analyzed()).orElse(backup.columnar_technology_override().default_field_data_analyzed()))
+					.with(ColumnarSchemaDefaultBean::default_field_data_notanalyzed, Optional.ofNullable(columnar_bits_tmp.default_field_data_notanalyzed()).orElse(backup.columnar_technology_override().default_field_data_notanalyzed()))
+					.with(ColumnarSchemaDefaultBean::enabled_field_data_analyzed, Optional.ofNullable(columnar_bits_tmp.enabled_field_data_analyzed()).orElse(backup.columnar_technology_override().enabled_field_data_analyzed()))
+					.with(ColumnarSchemaDefaultBean::enabled_field_data_notanalyzed, Optional.ofNullable(columnar_bits_tmp.enabled_field_data_notanalyzed()).orElse(backup.columnar_technology_override().enabled_field_data_notanalyzed()))
+				.done();		
 		
+		// (no _tmp here because there are currently no technology overrides for temporal code)
 		final DataSchemaBean.TemporalSchemaBean temporal_bits = Optional.ofNullable(bucket.data_schema()).map(DataSchemaBean::temporal_schema)
 																	.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))				
 																	.orElse(backup.temporal_technology_override());

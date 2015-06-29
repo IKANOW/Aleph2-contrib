@@ -1,0 +1,25 @@
+{
+	"_id": "test_end_2_end_2",
+	"full_name": "/test/end/2/end/2",
+	"data_schema": {
+	    "search_index_schema": {
+	        "enabled": true,
+	        "technology_override_schema": {
+	        	"collide_policy": "error"
+	        }
+	    },
+	    "columnar_schema": {
+	        "enabled": true,
+	        "field_exclude_pattern_list": [],
+	        "field_exclude_pattern_list": [],
+	        "field_include_list": [],
+	        "field_include_pattern_list": [],
+	        "field_type_exclude_list": [],
+	        "field_type_include_list": [],
+	        "technology_override_schema": {}
+	    },
+	    "temporal_schema": {
+	        "enabled": false
+	    }
+	}
+}

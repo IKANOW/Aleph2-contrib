@@ -208,9 +208,14 @@ public abstract class ElasticsearchContext {
 				public TimedRwIndexContext(final String index, final Optional<String> time_field) {
 					_index = index;
 					_time_field = time_field;
+					_index_split = ElasticsearchContextUtils.splitTimeBasedIndex(_index);
+					_formatter = ThreadLocal.withInitial(() -> new SimpleDateFormat(_index_split._2()));
+					
 				}
 				final String _index;
 				final Optional<String> _time_field;
+				final Tuple2<String, String> _index_split;
+				final ThreadLocal<SimpleDateFormat> _formatter;
 				
 				public Optional<String> timeField() {
 					return _time_field;
@@ -235,13 +240,14 @@ public abstract class ElasticsearchContext {
 											.map(j -> new Date(j.asLong()))
 										.orElseGet(() -> new Date()); // (else just use "now")
 								
-						final Tuple2<String, String> index_split = ElasticsearchContextUtils.splitTimeBasedIndex(_index);
-						final SimpleDateFormat formatter = new SimpleDateFormat(index_split._2());
-						final String formatted_date = formatter.format(d);
+						final String formatted_date = _formatter.get().format(d);
 	
-						return ElasticsearchContextUtils.reconstructTimedBasedSplitIndex(index_split._1(), formatted_date);
+						return ElasticsearchContextUtils.reconstructTimedBasedSplitIndex(_index_split._1(), formatted_date);
 					}
 					catch (Exception e) { // just treat like a non-time-based index
+						/**/
+						e.printStackTrace();
+						
 						return _index;
 					}
 				}

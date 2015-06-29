@@ -28,6 +28,8 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 
 	final public static String PROPERTIES_ROOT = "ElasticsearchIndexService";
 	
+	final public static String DEFAULT_FIXED_TYPE_NAME = "data_object";
+	
 	protected ElasticsearchIndexServiceConfigBean() {}
 	
 	public SearchIndexSchemaDefaultBean search_technology_override() { return search_technology_override; }
@@ -44,6 +46,7 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		public CollidePolicy collide_policy() { return collide_policy; }
 		public String type_name_or_prefix() { return type_name_or_prefix; }
 		public Boolean verbose() { return verbose; };
+		public Map<String, Object> aliases() { return aliases; }
 		public Map<String, Object> settings() { return settings; }
 		public Map<String, Object> mappings() { return mappings; }
 		public Map<String, Map<String, Object>> mapping_overrides() { return mapping_overrides; }
@@ -54,6 +57,7 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		private String type_name_or_prefix;
 		private Map<String, Object> settings;
 		private Map<String, Object> mappings;
+		private Map<String, Object> aliases;
 		private Map<String, Map<String, Object>> mapping_overrides;
 	}
 	public static class ColumnarSchemaDefaultBean {
