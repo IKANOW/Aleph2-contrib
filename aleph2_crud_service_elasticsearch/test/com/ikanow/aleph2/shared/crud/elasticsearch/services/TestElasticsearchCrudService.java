@@ -64,6 +64,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConfigurationBean;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.CreationPolicy;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.ElasticsearchBatchSubsystem;
@@ -93,14 +94,25 @@ public class TestElasticsearchCrudService {
 	////////////////////////////////////////////////
 
 	// UTILS
+
+	//TODO test real case	
 	
 	// Set this string to connect vs a real D
-	//TODO handle real case
+	private final String _connection_string = null;
+	private final String _cluster_name = null;
+	//private final String _connection_string = "localhost:9300";
+	//private final String _cluster_name = "infinite-dev";
 	
 	@Before
 	public void setupCrudServiceFactory() throws UnknownHostException {
 		if (null == _factory) {
-			_factory = new MockElasticsearchCrudServiceFactory();
+			if (null == _connection_string) {
+				_factory = new MockElasticsearchCrudServiceFactory();
+			}
+			else {
+				final ElasticsearchConfigurationBean config_bean = new ElasticsearchConfigurationBean(_connection_string, _cluster_name);
+				_factory = new ElasticsearchCrudServiceFactory(config_bean);
+			}
 		}
 	}
 	

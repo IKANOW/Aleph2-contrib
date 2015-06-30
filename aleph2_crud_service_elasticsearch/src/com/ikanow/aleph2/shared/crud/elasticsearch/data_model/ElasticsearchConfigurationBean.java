@@ -24,8 +24,9 @@ public class ElasticsearchConfigurationBean {
 	
 	protected ElasticsearchConfigurationBean() {}
 	
-	public ElasticsearchConfigurationBean(final String elasticsearch_connection) {
+	public ElasticsearchConfigurationBean(final String elasticsearch_connection, final String cluster_name) {
 		this.elasticsearch_connection = elasticsearch_connection;
+		this.cluster_name = cluster_name;
 	}
 	/** The connection string that is used to initialize the Elasticsearch client
 	 * @return

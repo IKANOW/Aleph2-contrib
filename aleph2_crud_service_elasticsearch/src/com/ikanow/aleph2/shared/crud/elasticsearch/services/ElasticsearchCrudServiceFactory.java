@@ -18,9 +18,18 @@ package com.ikanow.aleph2.shared.crud.elasticsearch.services;
 import java.util.Optional;
 
 import org.elasticsearch.client.Client;
+import org.elasticsearch.client.transport.TransportClient;
+import org.elasticsearch.common.settings.ImmutableSettings;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.settings.ImmutableSettings.Builder;
+import org.elasticsearch.common.transport.InetSocketTransportAddress;
 
+import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
+import com.ikanow.aleph2.data_model.utils.SetOnce;
+import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConfigurationBean;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.CreationPolicy;
 
@@ -29,12 +38,36 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudSer
  */
 public class ElasticsearchCrudServiceFactory implements IElasticsearchCrudServiceFactory {
 
+	protected final ElasticsearchConfigurationBean _config_bean;
+	
+	/** Guice constructor
+	 */
+	@Inject
+	public ElasticsearchCrudServiceFactory(final ElasticsearchConfigurationBean config_bean) {
+		_config_bean = config_bean;
+	}
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory#getClient()
 	 */
-	public Client getClient() {
-		//TODO (ALEPH-14): use the configuration bean to create a real connection
-		return null;		
+	public synchronized Client getClient() {
+		if (!_client.isSet()) {
+			final Builder settings_builder = ImmutableSettings.settingsBuilder();
+			final Settings settings = null != _config_bean.cluster_name()
+					? settings_builder.put("cluster.name", _config_bean.cluster_name()).build()
+					: settings_builder.put("client.transport.ignore_cluster_name", true).build();
+			
+			_client.set(java.util.stream.Stream.of(_config_bean.elasticsearch_connection().split("\\s*,\\s*"))
+									.map(hostport -> {
+										final String[] host_port = hostport.split("\\s*:\\s*");
+										return Tuples._2T(host_port[0], host_port.length > 1 ? host_port[1] : "9300");
+									})
+									.reduce(new TransportClient(settings),
+											(acc, host_port) -> acc.addTransportAddress(new InetSocketTransportAddress(host_port._1(), Integer.parseInt(host_port._2()))),
+											(acc1, acc2) -> acc1) // (not possible)
+			);
+		}		
+		return _client.get();		
 	}
 	
 	/* (non-Javadoc)
@@ -46,4 +79,6 @@ public class ElasticsearchCrudServiceFactory implements IElasticsearchCrudServic
 			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project) {
 		return new ElasticsearchCrudService<O>(bean_clazz, es_context, id_ranges_ok, creation_policy, auth_fieldname, auth, project);
 	}
+	private static final SetOnce<Client> _client = new SetOnce<>();
+	
 }
