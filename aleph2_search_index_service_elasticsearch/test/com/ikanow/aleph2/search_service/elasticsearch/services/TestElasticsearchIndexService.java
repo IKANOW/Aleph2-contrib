@@ -414,11 +414,13 @@ public class TestElasticsearchIndexService {
 		StreamSupport.stream(gmr.getMappings().spliterator(), false)
 			.forEach(x -> {
 				assertTrue("Is one of the expected keys: " + x.key + " vs  " + expected_keys.stream().collect(Collectors.joining(":")), expected_keys.contains(x.key));
+				/**/
 				//DEBUG
-				//System.out.println(" ? " + x.key);
+				System.out.println(" ? " + x.key);
 				StreamSupport.stream(x.value.spliterator(), false).forEach(Lambdas.wrap_consumer_u(y -> {
+					/**/
 					//DEBUG
-					//System.out.println("?? " + y.key + " --- " + y.value.sourceAsMap().toString());
+					System.out.println("?? " + y.key + " --- " + y.value.sourceAsMap().toString());
 					// Size 3: _default_, type1 and type2
 					/**/
 					//TODO: bug here, seems to be 4, with extra "data_object"
@@ -512,23 +514,21 @@ public class TestElasticsearchIndexService {
 		
 		assertEquals(1, gmr.getMappings().keys().size());
 		final Set<String> expected_keys =  Arrays.asList("2b_test_end_2_end").stream().collect(Collectors.toSet());
-		final Set<String> expected_types =  Arrays.asList("_default_", "data_object").stream().collect(Collectors.toSet());
+		final Set<String> expected_types =  Arrays.asList("data_object").stream().collect(Collectors.toSet());
 		
 		StreamSupport.stream(gmr.getMappings().spliterator(), false)
 			.forEach(x -> {
 				assertTrue("Is one of the expected keys: " + x.key + " vs  " + expected_keys.stream().collect(Collectors.joining(":")), expected_keys.contains(x.key));
-				// Size 2: _default_, data_object 
-				assertEquals(2, x.value.size());
+				// Size 1: data_object 
+				assertEquals(1, x.value.size());
 				//DEBUG
 				//System.out.println(" ? " + x.key);
 				StreamSupport.stream(x.value.spliterator(), false).forEach(Lambdas.wrap_consumer_u(y -> {
+					/**/
 					//DEBUG
-					//System.out.println("?? " + y.value.sourceAsMap().toString());
-					//TODO: check _default and data_object
-					//assertTrue("Is expected type: " + y.key, expected_types.contains(y.key));
+					//System.out.println("?? " + y.key + " --- " + y.value.sourceAsMap().toString());
+					assertTrue("Is expected type: " + y.key, expected_types.contains(y.key));
 				}));
 			});
-	}
-	
-	//TODO issues: 1) seeing "type_" as fixed prefix, not "data_object" 2) seems difficult to guarantee that V1 _ids can't be substrings of each other, but use "*" everywhere....
+	}	
 }

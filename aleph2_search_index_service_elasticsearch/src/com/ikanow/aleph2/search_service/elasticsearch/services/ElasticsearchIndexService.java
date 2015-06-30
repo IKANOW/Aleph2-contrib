@@ -154,9 +154,8 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	 * @param bucket
 	 */
 	protected void handlePotentiallyNewIndex(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean schema_config, final String index_type) {
-		final Date current_template_time = _bucket_template_cache.get(bucket._id());
-		if ((null == current_template_time) || current_template_time.before(Optional.ofNullable(bucket.modified()).orElse(new Date()))) {
-			
+		final Date current_template_time = _bucket_template_cache.get(bucket._id());		
+		if ((null == current_template_time) || current_template_time.before(Optional.ofNullable(bucket.modified()).orElse(new Date()))) {			
 			try {
 				final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, schema_config, _mapper, index_type);
 				

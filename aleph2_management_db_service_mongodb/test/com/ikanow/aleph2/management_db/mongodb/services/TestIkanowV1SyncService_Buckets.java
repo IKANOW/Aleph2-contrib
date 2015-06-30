@@ -57,6 +57,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
@@ -84,17 +85,23 @@ public class TestIkanowV1SyncService_Buckets {
 
 	@Before
 	public void setupDependencies() throws Exception {
-		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
-		
-		// OK we're going to use guice, it was too painful doing this by hand...				
-		Config config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("test_v1_sync_service.properties")))
-							.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
-							.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
-							.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
-							.withValue("globals.local_yarn_config_dir", ConfigValueFactory.fromAnyRef(temp_dir));
-		
-		Injector app_injector = ModuleUtils.createInjector(Arrays.asList(new MockMongoDbManagementDbModule()), Optional.of(config));	
-		app_injector.injectMembers(this);
+		try {
+			final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
+			
+			// OK we're going to use guice, it was too painful doing this by hand...				
+			Config config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("test_v1_sync_service.properties")))
+								.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
+								.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
+								.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
+								.withValue("globals.local_yarn_config_dir", ConfigValueFactory.fromAnyRef(temp_dir));
+			
+			Injector app_injector = ModuleUtils.createInjector(Arrays.asList(new MockMongoDbManagementDbModule()), Optional.of(config));	
+			app_injector.injectMembers(this);
+		}
+		catch (Throwable t) {
+			System.out.println(ErrorUtils.getLongForm("{0}", t));
+			throw t;
+		}
 	}
 	
 	@Test
@@ -158,7 +165,7 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		final DataBucketBean bucket = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source);
 		
-		assertEquals("aleph...bucket.Template_V2_data_bucket.", bucket._id());
+		assertEquals("aleph...bucket.Template_V2_data_bucket.;", bucket._id());
 		assertEquals(ImmutableMap.<String, String>builder().put("50bcd6fffbf0fd0b27875a7c", "rw").build(), bucket.access_rights().auth_token());
 		assertEquals(Collections.unmodifiableSet(new HashSet<String>()), bucket.aliases());
 		assertEquals(1, bucket.batch_enrichment_configs().size());
@@ -550,7 +557,7 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		// Check if got deleted....
 		
-		assertEquals(false, bucket_db.getObjectById("aleph...bucket.Template_V2_data_bucket.").get().isPresent());
+		assertEquals(false, bucket_db.getObjectById(IkanowV1SyncService_Buckets.getBucketIdFromV1SourceKey("aleph...bucket.Template_V2_data_bucket.")).get().isPresent());
 		// (would normally test bucket status here - but it won't be changed because test uses underlying_mgmt_db as core_mgmt_db for circular dep issues in maven)
 	}	
 	
@@ -599,16 +606,16 @@ public class TestIkanowV1SyncService_Buckets {
 																			v1_source_db
 				);
 
-		assertEquals("aleph...bucket.Template_V2_data_bucket.", f_res.get().get());
+		assertEquals(IkanowV1SyncService_Buckets.getBucketIdFromV1SourceKey("aleph...bucket.Template_V2_data_bucket."), f_res.get().get());
 		assertEquals(0, f_res.getManagementResults().get().size());
 		
 		assertEquals(1L, (long)bucket_db.countObjects().get());
 		assertEquals(1L, (long)bucket_status_db.countObjects().get());
 		
-		final Optional<DataBucketStatusBean> status = bucket_status_db.getObjectById("aleph...bucket.Template_V2_data_bucket.").get();
+		final Optional<DataBucketStatusBean> status = bucket_status_db.getObjectById(IkanowV1SyncService_Buckets.getBucketIdFromV1SourceKey("aleph...bucket.Template_V2_data_bucket.")).get();
 		assertEquals(true, status.get().suspended());
 
-		final Optional<DataBucketBean> bucket = bucket_db.getObjectById("aleph...bucket.Template_V2_data_bucket.").get();
+		final Optional<DataBucketBean> bucket = bucket_db.getObjectById(IkanowV1SyncService_Buckets.getBucketIdFromV1SourceKey("aleph...bucket.Template_V2_data_bucket.")).get();
 
 		final DataBucketBean exp_bucket = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source_1);
 		//(check a couple of fields)
@@ -749,11 +756,11 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		// 1) bucket3 has been deleted
 		
-		assertEquals(false, bucket_db.getObjectById("aleph...bucket.Template_V2_data_bucket.3").get().isPresent());
+		assertEquals(false, bucket_db.getObjectById(IkanowV1SyncService_Buckets.getBucketIdFromV1SourceKey("aleph...bucket.Template_V2_data_bucket.3")).get().isPresent());
 		
 		// 2) bucket2 has been created
 		
-		assertEquals(true, bucket_db.getObjectById("aleph...bucket.Template_V2_data_bucket.2").get().isPresent());
+		assertEquals(true, bucket_db.getObjectById(IkanowV1SyncService_Buckets.getBucketIdFromV1SourceKey("aleph...bucket.Template_V2_data_bucket.2")).get().isPresent());
 		
 		// 3) bucket1 has been updated
 		

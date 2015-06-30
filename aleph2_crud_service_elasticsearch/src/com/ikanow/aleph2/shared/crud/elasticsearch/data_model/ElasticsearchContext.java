@@ -245,9 +245,6 @@ public abstract class ElasticsearchContext {
 						return ElasticsearchContextUtils.reconstructTimedBasedSplitIndex(_index_split._1(), formatted_date);
 					}
 					catch (Exception e) { // just treat like a non-time-based index
-						/**/
-						e.printStackTrace();
-						
 						return _index;
 					}
 				}

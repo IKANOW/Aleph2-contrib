@@ -222,28 +222,28 @@ public class IkanowV1SyncService_Buckets {
 				
 				final List<CompletableFuture<Boolean>> l1 = 
 					create_update_delete._1().stream().parallel()
-						.<Tuple2<String, ManagementFuture<?>>>map(id -> 
-							Tuples._2T(id, createNewBucket(id, bucket_mgmt, underlying_bucket_status_mgmt, source_db)))
-						.<CompletableFuture<Boolean>>map(id_fres -> 
-							updateV1SourceStatus_top(id_fres._1(), id_fres._2(), true, source_db))
+						.<Tuple2<String, ManagementFuture<?>>>map(key -> 
+							Tuples._2T(key, createNewBucket(key, bucket_mgmt, underlying_bucket_status_mgmt, source_db)))
+						.<CompletableFuture<Boolean>>map(key_fres -> 
+							updateV1SourceStatus_top(key_fres._1(), key_fres._2(), true, source_db))
 						.collect(Collectors.toList());
 					;
 					
 				final List<CompletableFuture<Boolean>> l2 = 
 						create_update_delete._2().stream().parallel()
-							.<Tuple2<String, ManagementFuture<?>>>map(id -> 
-								Tuples._2T(id, deleteBucket(id, bucket_mgmt)))
-						.<CompletableFuture<Boolean>>map(id_fres -> 
+							.<Tuple2<String, ManagementFuture<?>>>map(key -> 
+								Tuples._2T(key, deleteBucket(key, bucket_mgmt)))
+						.<CompletableFuture<Boolean>>map(key_fres -> 
 							CompletableFuture.completedFuture(true)) // (don't update source in delete case obviously)
 							.collect(Collectors.toList());
 						;
 					
 				final List<CompletableFuture<Boolean>> l3 = 
 						create_update_delete._3().stream().parallel()
-							.<Tuple2<String, ManagementFuture<?>>>map(id -> 
-								Tuples._2T(id, updateBucket(id, bucket_mgmt, underlying_bucket_status_mgmt, source_db)))
-							.<CompletableFuture<Boolean>>map(id_fres -> 
-								updateV1SourceStatus_top(id_fres._1(), id_fres._2(), false, source_db))
+							.<Tuple2<String, ManagementFuture<?>>>map(key -> 
+								Tuples._2T(key, updateBucket(key, bucket_mgmt, underlying_bucket_status_mgmt, source_db)))
+							.<CompletableFuture<Boolean>>map(key_fres -> 
+								updateV1SourceStatus_top(key_fres._1(), key_fres._2(), false, source_db))
 							.collect(Collectors.toList());
 						;
 						
@@ -257,13 +257,13 @@ public class IkanowV1SyncService_Buckets {
 	}
 	
 	/** Top level handler for update status based on the result
-	 * @param id
+	 * @param key
 	 * @param fres
 	 * @param disable_on_failure
 	 * @param source_db
 	 * @return
 	 */
-	protected CompletableFuture<Boolean> updateV1SourceStatus_top(final String id, 
+	protected CompletableFuture<Boolean> updateV1SourceStatus_top(final String key, 
 			final ManagementFuture<?> fres, boolean disable_on_failure,
 			ICrudService<JsonNode> source_db)
 	{		
@@ -271,7 +271,7 @@ public class IkanowV1SyncService_Buckets {
 				.<Boolean>thenCompose(res ->  {
 					try {
 						fres.get(); // (check if the DB side call has failed)
-						return updateV1SourceStatus(new Date(), id, res, disable_on_failure, source_db);	
+						return updateV1SourceStatus(new Date(), key, res, disable_on_failure, source_db);	
 					}
 					catch (Exception e) { // DB-side call has failed, create ad hoc error
 						final Collection<BasicMessageBean> errs = res.isEmpty()
@@ -287,7 +287,7 @@ public class IkanowV1SyncService_Buckets {
 											)
 									)
 								: res;
-						return updateV1SourceStatus(new Date(), id, errs, disable_on_failure, source_db);											
+						return updateV1SourceStatus(new Date(), key, errs, disable_on_failure, source_db);											
 					}
 				});
 	}
@@ -345,7 +345,7 @@ public class IkanowV1SyncService_Buckets {
 
 	// DB MANIPULATION - READ
 	
-	/** Gets a list of _id,modified from v1 and a list matching _id,modified from V2
+	/** Gets a list of keys,modified from v1 and a list matching keys,modified from V2 (ie _id minus ';')
 	 * @param bucket_mgmt
 	 * @param source_db
 	 * @return tuple of id-vs-(date-or-null-if-not-approved) for v1, id-vs-date for v2
@@ -371,7 +371,7 @@ public class IkanowV1SyncService_Buckets {
 							));
 			})
 			.<Tuple2<Map<String, String>, Map<String, Date>>>
-			thenCompose(v1_id_datestr_map -> {
+			thenCompose(v1_key_datestr_map -> {
 				final SingleQueryComponent<DataBucketBean> bucket_query = CrudUtils.allOf(DataBucketBean.class)
 						.rangeIn(DataBucketBean::_id, "aleph...bucket.", true, "aleph...bucket/", true)
 						;						
@@ -379,14 +379,14 @@ public class IkanowV1SyncService_Buckets {
 				return bucket_mgmt.getObjectsBySpec(bucket_query, Arrays.asList("_id", "modified"), true)
 						.<Tuple2<Map<String, String>, Map<String, Date>>>
 						thenApply(c -> {							
-							final Map<String, Date> v2_id_date_map = 
+							final Map<String, Date> v2_key_date_map = 
 									StreamSupport.stream(c.spliterator(), false)
 									.collect(Collectors.toMap(
-											b -> b._id(),
+											b -> getV1SourceKeyFromBucketId(b._id()), // (convert to v1 source key format)
 											b -> b.modified()
 											));
 							
-							return Tuples._2T(v1_id_datestr_map, v2_id_date_map);
+							return Tuples._2T(v1_key_datestr_map, v2_key_date_map);
 						});
 			});
 	}
@@ -397,23 +397,23 @@ public class IkanowV1SyncService_Buckets {
 	// DB MANIPULATION - WRITE
 	
 	/** Create a new bucket
-	 * @param id
+	 * @param key
 	 * @param bucket_mgmt
 	 * @param bucket_status_mgmt
 	 * @param source_db
 	 * @return
 	 */
-	protected static ManagementFuture<Supplier<Object>> createNewBucket(final String id,
+	protected static ManagementFuture<Supplier<Object>> createNewBucket(final String key,
 			final IManagementCrudService<DataBucketBean> bucket_mgmt, 
 			final IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
 			final ICrudService<JsonNode> source_db			
 			)
 	{
-		_logger.info(ErrorUtils.get("Found new source {0}, creating bucket", id));
+		_logger.info(ErrorUtils.get("Found new source {0}, creating bucket", key));
 		
 		// Create a status bean:
 
-		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("key", id);
+		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("key", key);
 		return FutureUtils.denestManagementFuture(source_db.getObjectBySpec(v1_query)
 			.<ManagementFuture<Supplier<Object>>>thenApply(jsonopt -> {
 				try {
@@ -422,7 +422,7 @@ public class IkanowV1SyncService_Buckets {
 					final boolean is_now_suspended = safeJsonGet("searchCycle_secs", jsonopt.get()).asInt(1) < 0;
 					
 					final DataBucketStatusBean status_bean = BeanTemplateUtils.build(DataBucketStatusBean.class)
-							.with(DataBucketStatusBean::_id, id)
+							.with(DataBucketStatusBean::_id, new_object._id())
 							.with(DataBucketStatusBean::bucket_path, new_object.full_name())
 							.with(DataBucketStatusBean::suspended, is_now_suspended) 
 							.done().get();
@@ -453,32 +453,32 @@ public class IkanowV1SyncService_Buckets {
 	}
 
 	/** Delete a bucket
-	 * @param id
+	 * @param key
 	 * @param bucket_mgmt
 	 * @return
 	 */
-	protected static ManagementFuture<Boolean> deleteBucket(final String id,
+	protected static ManagementFuture<Boolean> deleteBucket(final String key,
 			final IManagementCrudService<DataBucketBean> bucket_mgmt)
 	{
-		_logger.info(ErrorUtils.get("Source {0} was deleted, deleting bucket", id));
+		_logger.info(ErrorUtils.get("Source {0} was deleted, deleting bucket", key));
 		
-		return bucket_mgmt.deleteObjectById(id);
+		return bucket_mgmt.deleteObjectById(getBucketIdFromV1SourceKey(key));
 	}
 	
 	/** Update a bucket based on a new V1 source
-	 * @param id
+	 * @param key
 	 * @param bucket_mgmt
 	 * @param underlying_bucket_status_mgmt
 	 * @param source_db
 	 * @return
 	 */
 	@SuppressWarnings("unchecked")
-	protected static ManagementFuture<Supplier<Object>> updateBucket(final String id,
+	protected static ManagementFuture<Supplier<Object>> updateBucket(final String key,
 			final IManagementCrudService<DataBucketBean> bucket_mgmt, 
 			final IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
 			final ICrudService<JsonNode> source_db)
 	{
-		_logger.info(ErrorUtils.get("Source {0} was modified, updating bucket", id));
+		_logger.info(ErrorUtils.get("Source {0} was modified, updating bucket", key));
 		
 		// Get the full source from V1
 		// .. and from V2: the existing bucket and the existing status
@@ -490,9 +490,9 @@ public class IkanowV1SyncService_Buckets {
 		final ICrudService<DataBucketBean> underlying_bucket_db = 
 				bucket_mgmt.getUnderlyingPlatformDriver(ICrudService.class, Optional.empty()).orElse(bucket_mgmt);
 		
-		underlying_bucket_db.updateObjectById(id, CrudUtils.update(DataBucketBean.class).set(DataBucketBean::modified, new Date()));		
+		underlying_bucket_db.updateObjectById(getBucketIdFromV1SourceKey(key), CrudUtils.update(DataBucketBean.class).set(DataBucketBean::modified, new Date()));		
 		
-		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("key", id);
+		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("key", key);
 		final CompletableFuture<Optional<JsonNode>> f_v1_source = source_db.getObjectBySpec(v1_query);		
 
 		return FutureUtils.denestManagementFuture(f_v1_source.<ManagementFuture<Supplier<Object>>>thenApply(v1_source -> {			
@@ -502,7 +502,7 @@ public class IkanowV1SyncService_Buckets {
 				final DataBucketBean new_object = getBucketFromV1Source(v1_source.get());
 
 				// (Update status in underlying status store so don't trip a spurious harvest call)
-				CompletableFuture<?> update = underlying_bucket_status_mgmt.updateObjectById(id, CrudUtils.update(DataBucketStatusBean.class)
+				CompletableFuture<?> update = underlying_bucket_status_mgmt.updateObjectById(getBucketIdFromV1SourceKey(key), CrudUtils.update(DataBucketStatusBean.class)
 																		.set(DataBucketStatusBean::suspended, is_now_suspended));
 
 				// Then update the management db
@@ -569,6 +569,13 @@ public class IkanowV1SyncService_Buckets {
 	////////////////////////////////////////////////////
 	////////////////////////////////////////////////////
 
+	protected static String getBucketIdFromV1SourceKey(final String key) {
+		return key + ';';
+	}
+	protected static String getV1SourceKeyFromBucketId(final String _id) {
+		return _id.endsWith(";") ? _id.substring(0, _id.length()-1) : _id;
+	}
+	
 	// LOW LEVEL UTILS
 	
 	/** Builds a V2 bucket out of a V1 source
@@ -580,8 +587,8 @@ public class IkanowV1SyncService_Buckets {
 	 * @throws ParseException
 	 */
 	protected static DataBucketBean getBucketFromV1Source(final JsonNode src_json) throws JsonParseException, JsonMappingException, IOException, ParseException {
-		@SuppressWarnings("unused")
-		final String _id = safeJsonGet("_id", src_json).asText(); // (think we'll use key instead of _id?)
+		// (think we'll use key instead of _id):
+		//final String _id = safeJsonGet("_id", src_json).asText(); 
 		final String key = safeJsonGet("key", src_json).asText();
 		final String created = safeJsonGet("created", src_json).asText();
 		final String modified = safeJsonGet("modified", src_json).asText();
@@ -596,7 +603,7 @@ public class IkanowV1SyncService_Buckets {
 		final JsonNode data_bucket = safeJsonGet("data_bucket", px_pipeline_first_el);
 		
 		final DataBucketBean bucket = BeanTemplateUtils.build(data_bucket, DataBucketBean.class)
-													.with(DataBucketBean::_id, key)
+													.with(DataBucketBean::_id, getBucketIdFromV1SourceKey(key))
 													.with(DataBucketBean::created, parseJavaDate(created))
 													.with(DataBucketBean::modified, parseJavaDate(modified))
 													.with(DataBucketBean::display_name, title)
