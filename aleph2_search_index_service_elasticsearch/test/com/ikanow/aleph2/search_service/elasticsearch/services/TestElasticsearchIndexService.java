@@ -51,7 +51,10 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
+import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConfigurationBean;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
+import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudServiceFactory;
+import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.MockElasticsearchCrudServiceFactory;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
@@ -61,13 +64,25 @@ public class TestElasticsearchIndexService {
 	public static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());	
 	
 	protected MockElasticsearchIndexService _index_service;
-	protected MockElasticsearchCrudServiceFactory _crud_factory;
+	protected IElasticsearchCrudServiceFactory _crud_factory;
 	protected ElasticsearchIndexServiceConfigBean _config_bean;
+	
+	// Set this string to connect vs a real DB
+	private final String _connection_string = null;
+	private final String _cluster_name = null;
+//	private final String _connection_string = "localhost:4093";
+//	private final String _cluster_name = "infinite-dev";
 	
 	@Before
 	public void setupServices() {
 		final Config full_config = ConfigFactory.empty();		
-		_crud_factory = new MockElasticsearchCrudServiceFactory();
+		if (null == _connection_string) {
+			_crud_factory = new MockElasticsearchCrudServiceFactory();
+		}
+		else {
+			final ElasticsearchConfigurationBean config_bean = new ElasticsearchConfigurationBean(_connection_string, _cluster_name);
+			_crud_factory = new ElasticsearchCrudServiceFactory(config_bean);
+		}
 		_config_bean = ElasticsearchIndexConfigUtils.buildConfigBean(full_config);
 		
 		_index_service = new MockElasticsearchIndexService(_crud_factory, _config_bean);
@@ -393,7 +408,7 @@ public class TestElasticsearchIndexService {
 						.map(d -> (ObjectNode) _mapper.createObjectNode().put("@timestamp", d.getTime()))
 						.forEach(o -> {
 							ObjectNode o1 = o.deepCopy();
-							o1.put("val1", 10);
+							o1.set("val1", _mapper.createObjectNode().put("val2", "test"));
 							ObjectNode o2 = o.deepCopy();
 							o2.put("val1", "test");
 							batch_service.get().storeObject(o1, false);

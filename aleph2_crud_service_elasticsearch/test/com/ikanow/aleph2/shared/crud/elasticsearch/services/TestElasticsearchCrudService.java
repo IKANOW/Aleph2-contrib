@@ -95,13 +95,11 @@ public class TestElasticsearchCrudService {
 
 	// UTILS
 
-	//TODO test real case	
-	
-	// Set this string to connect vs a real D
+	// Set this string to connect vs a real DB
 	private final String _connection_string = null;
 	private final String _cluster_name = null;
-	//private final String _connection_string = "localhost:9300";
-	//private final String _cluster_name = "infinite-dev";
+//	private final String _connection_string = "localhost:4093";
+//	private final String _cluster_name = "infinite-dev";
 	
 	@Before
 	public void setupCrudServiceFactory() throws UnknownHostException {

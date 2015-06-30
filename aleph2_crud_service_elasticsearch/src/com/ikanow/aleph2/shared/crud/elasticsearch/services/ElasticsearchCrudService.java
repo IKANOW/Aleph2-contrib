@@ -350,16 +350,15 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 						if (null == _id_list) { // This is the first bulk request, no recursion on failures, so can lazily create the list in case it isn't needed
 							final Supplier<List<Object>> get_objects = () -> {
 								return StreamSupport.stream(result.spliterator(), false)
-											.filter(bir -> ((IndexRequest)brb.request().requests().get(bir.getItemId())).version() > 0)
-												//(odd functionality - see duplicates as working but with -ve version field)
+											.filter(bir -> !bir.isFailed())
 											.map(bir -> bir.getId()).collect(Collectors.toList());
 							};
-							final Supplier<Long> get_count_workaround = () -> { 
+							final Supplier<Long> get_count_workaround = () -> {
 								return StreamSupport.stream(result.spliterator(), false)
-											.filter(bir -> ((IndexRequest)brb.request().requests().get(bir.getItemId())).version() > 0)
-												//(odd functionality - see duplicates as working but with -ve version field), else could just return () -> (Long)_curr_written
+												.filter(bir -> !bir.isFailed())
 												.collect(Collectors.counting());
 							};
+							get_count_workaround.get();
 							future.complete(Tuples._2T(get_objects, get_count_workaround));
 						}
 						else { // have already calculated everything so just return it							
