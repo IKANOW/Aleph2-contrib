@@ -414,22 +414,16 @@ public class TestElasticsearchIndexService {
 		StreamSupport.stream(gmr.getMappings().spliterator(), false)
 			.forEach(x -> {
 				assertTrue("Is one of the expected keys: " + x.key + " vs  " + expected_keys.stream().collect(Collectors.joining(":")), expected_keys.contains(x.key));
-				/**/
 				//DEBUG
-				System.out.println(" ? " + x.key);
+				//System.out.println(" ? " + x.key);
 				StreamSupport.stream(x.value.spliterator(), false).forEach(Lambdas.wrap_consumer_u(y -> {
-					/**/
 					//DEBUG
-					System.out.println("?? " + y.key + " --- " + y.value.sourceAsMap().toString());
+					//System.out.println("?? " + y.key + " --- " + y.value.sourceAsMap().toString());
 					// Size 3: _default_, type1 and type2
-					/**/
-					//TODO: bug here, seems to be 4, with extra "data_object"
-					//assertTrue("Is expected type: " + y.key, expected_types.contains(y.key));
+					assertTrue("Is expected type: " + y.key, expected_types.contains(y.key));
 				}));
 				// Size 3: _default_, type_1, type_2 
-				/**/
-				//TODO: bug here, seems to be 4, with extra "data_object"
-				//assertEquals(3, x.value.size());
+				assertEquals(3, x.value.size());
 			});
 	}
 	
