@@ -46,6 +46,7 @@ import com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchIndexSchemaBean;
@@ -71,7 +72,7 @@ import fj.data.Validation;
  * @author Alex
  *
  */
-public class ElasticsearchIndexService implements ISearchIndexService, ITemporalService, IColumnarService {
+public class ElasticsearchIndexService implements ISearchIndexService, ITemporalService, IColumnarService, IExtraDependencyLoader {
 	final static protected Logger _logger = LogManager.getLogger();
 
 	protected final IElasticsearchCrudServiceFactory _crud_factory;
