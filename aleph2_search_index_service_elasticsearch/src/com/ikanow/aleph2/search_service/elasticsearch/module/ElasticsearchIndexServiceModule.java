@@ -17,11 +17,10 @@ package com.ikanow.aleph2.search_service.elasticsearch.module;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.Scopes;
-import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
-import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
+import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConfigurationBean;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudServiceFactory;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory;
@@ -36,10 +35,11 @@ public class ElasticsearchIndexServiceModule extends AbstractModule {
 	 * @see com.google.inject.AbstractModule#configure()
 	 */
 	protected void configure() {
-		final Config config = ModuleUtils.getStaticConfig();				
-		ElasticsearchIndexServiceConfigBean bean;
+		final Config config = ModuleUtils.getStaticConfig();
 		try {
-			bean = BeanTemplateUtils.from(PropertiesUtils.getSubConfig(config, ElasticsearchIndexServiceConfigBean.PROPERTIES_ROOT).orElse(null), ElasticsearchIndexServiceConfigBean.class);
+			final ElasticsearchIndexServiceConfigBean config_bean = ElasticsearchIndexConfigUtils.buildConfigBean(config);
+			this.bind(ElasticsearchIndexServiceConfigBean.class).toInstance(config_bean); // (for es service)
+			this.bind(ElasticsearchConfigurationBean.class).toInstance(config_bean); // (for crud service)
 		} 
 		catch (Exception e) {
 			throw new RuntimeException(ErrorUtils.get(ErrorUtils.INVALID_CONFIG_ERROR,
@@ -47,9 +47,6 @@ public class ElasticsearchIndexServiceModule extends AbstractModule {
 					config.getConfig(ElasticsearchIndexServiceConfigBean.PROPERTIES_ROOT)
 					), e);
 		}
-		this.bind(ElasticsearchConfigurationBean.class).toInstance(bean); // (for crud service)
-		this.bind(ElasticsearchIndexServiceConfigBean.class).toInstance(bean); // (for es service)
-		
 		this.bind(IElasticsearchCrudServiceFactory.class).to(ElasticsearchCrudServiceFactory.class).in(Scopes.SINGLETON);
 	}
 

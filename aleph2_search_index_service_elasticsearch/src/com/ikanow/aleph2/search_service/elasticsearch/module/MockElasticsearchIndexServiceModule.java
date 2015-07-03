@@ -17,8 +17,14 @@ package com.ikanow.aleph2.search_service.elasticsearch.module;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.Scopes;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.ModuleUtils;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
+import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
+import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConfigurationBean;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.MockElasticsearchCrudServiceFactory;
+import com.typesafe.config.Config;
 
 /** Creates the bindings needed for the mock search index service
  * @author Alex
@@ -26,6 +32,18 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.services.MockElasticsearchCru
 public class MockElasticsearchIndexServiceModule extends AbstractModule {
 
 	protected void configure() {
+		final Config config = ModuleUtils.getStaticConfig();
+		try {
+			final ElasticsearchIndexServiceConfigBean config_bean = ElasticsearchIndexConfigUtils.buildConfigBean(config);
+			this.bind(ElasticsearchIndexServiceConfigBean.class).toInstance(config_bean); // (for es service)
+			this.bind(ElasticsearchConfigurationBean.class).toInstance(config_bean); // (for crud service)
+		} 
+		catch (Exception e) {
+			throw new RuntimeException(ErrorUtils.get(ErrorUtils.INVALID_CONFIG_ERROR,
+					ElasticsearchIndexServiceConfigBean.class.toString(),
+					config.getConfig(ElasticsearchIndexServiceConfigBean.PROPERTIES_ROOT)
+					), e);
+		}
 		this.bind(IElasticsearchCrudServiceFactory.class).to(MockElasticsearchCrudServiceFactory.class).in(Scopes.SINGLETON);
 	}
 
