@@ -203,6 +203,32 @@ public class TestElasticsearchIndexService {
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	// INDEX NOT ENABLED
+	
+	@Test
+	public void test_indexNotEnabled() {
+		
+		final DataBucketBean db1 = BeanTemplateUtils.build(DataBucketBean.class).done().get();
+		assertEquals(Optional.empty(), _index_service.getCrudService(JsonNode.class, db1));
+		
+		final DataBucketBean db2 = BeanTemplateUtils.build(DataBucketBean.class).with("data_schema",
+				BeanTemplateUtils.build(DataSchemaBean.class).done().get()
+			).done().get();
+		assertEquals(Optional.empty(), _index_service.getCrudService(JsonNode.class, db2));
+		
+		final DataBucketBean db3 = BeanTemplateUtils.build(DataBucketBean.class).with("data_schema",
+				BeanTemplateUtils.build(DataSchemaBean.class)
+					.with("search_index_schema", 
+							BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class).with("enabled", false)
+					.done().get()
+				).done().get()
+			).done().get();
+		assertEquals(Optional.empty(), _index_service.getCrudService(JsonNode.class, db3));
+		
+	}
+	
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	// INDEX MANAGEMENT
 	
 	@Test
@@ -370,7 +396,7 @@ public class TestElasticsearchIndexService {
 			assertTrue("No templates to start with", gtr.getIndexTemplates().isEmpty());
 		}				
 		
-		final ICrudService<JsonNode> index_service_crud = _index_service.getCrudService(JsonNode.class, bucket);
+		final ICrudService<JsonNode> index_service_crud = _index_service.getCrudService(JsonNode.class, bucket).get();
 		
 		// Check template added:
 
@@ -469,7 +495,7 @@ public class TestElasticsearchIndexService {
 			assertTrue("No templates to start with", gtr.getIndexTemplates().isEmpty());
 		}				
 		
-		final ICrudService<JsonNode> index_service_crud = _index_service.getCrudService(JsonNode.class, bucket);
+		final ICrudService<JsonNode> index_service_crud = _index_service.getCrudService(JsonNode.class, bucket).get();
 		
 		// Check template added:
 

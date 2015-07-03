@@ -98,7 +98,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService#getCrudService(java.lang.Class, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 	 */
 	@Override
-	public <O> ICrudService<O> getCrudService(final Class<O> clazz, final DataBucketBean bucket) {
+	public <O> Optional<ICrudService<O>> getCrudService(final Class<O> clazz, final DataBucketBean bucket) {
 		
 		// There's two different cases
 		// 1) Multi-bucket - equivalent to the other version of getCrudService
@@ -106,6 +106,16 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		
 		if ((null != bucket.multi_bucket_children()) && !bucket.multi_bucket_children().isEmpty()) {
 			return getCrudService(clazz, bucket.multi_bucket_children());
+		}
+		
+		// If single bucket, is the search index service enabled?
+		if (!Optional.ofNullable(bucket.data_schema())
+				.map(ds -> ds.search_index_schema())
+					.map(sis -> Optional.ofNullable(sis.enabled())
+					.orElse(true))
+			.orElse(false))
+		{
+			return Optional.empty();
 		}
 		
 		// OK so it's a legit single bucket ... first question ... does this already exist?
@@ -142,11 +152,11 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					? new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), type)
 					: new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext(type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME));
 		
-		return _crud_factory.getElasticsearchCrudService(clazz,
-				new ElasticsearchContext.ReadWriteContext(_crud_factory.getClient(), index_context, type_context),
-				Optional.empty(), 
-				CreationPolicy.OPTIMIZED, 
-				Optional.empty(), Optional.empty(), Optional.empty());
+		return Optional.of(_crud_factory.getElasticsearchCrudService(clazz,
+								new ElasticsearchContext.ReadWriteContext(_crud_factory.getClient(), index_context, type_context),
+								Optional.empty(), 
+								CreationPolicy.OPTIMIZED, 
+								Optional.empty(), Optional.empty(), Optional.empty()));
 	}
 
 	//TODO (ALEPH-14): Handle bucket deletion (eg remove template)
@@ -231,7 +241,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService#getCrudService(java.lang.Class, java.util.Collection)
 	 */
 	@Override
-	public <O> ICrudService<O> getCrudService(final Class<O> clazz, final Collection<String> buckets) {
+	public <O> Optional<ICrudService<O>> getCrudService(final Class<O> clazz, final Collection<String> buckets) {
 		
 		//TODO (ALEPH-14): expand aliases
 		
