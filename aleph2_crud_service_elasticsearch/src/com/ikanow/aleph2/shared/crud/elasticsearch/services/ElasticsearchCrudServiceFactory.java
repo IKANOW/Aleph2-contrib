@@ -32,6 +32,7 @@ import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConfigurationBean;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.CreationPolicy;
+import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ErrorUtils;
 
 /** A factory for returning real or "mock" Elasticsearch CRUD service
  * @author Alex
@@ -52,20 +53,25 @@ public class ElasticsearchCrudServiceFactory implements IElasticsearchCrudServic
 	 */
 	public synchronized Client getClient() {
 		if (!_client.isSet()) {
-			final Builder settings_builder = ImmutableSettings.settingsBuilder();
-			final Settings settings = null != _config_bean.cluster_name()
-					? settings_builder.put("cluster.name", _config_bean.cluster_name()).build()
-					: settings_builder.put("client.transport.ignore_cluster_name", true).build();
-			
-			_client.set(java.util.stream.Stream.of(_config_bean.elasticsearch_connection().split("\\s*,\\s*"))
-									.map(hostport -> {
-										final String[] host_port = hostport.split("\\s*:\\s*");
-										return Tuples._2T(host_port[0], host_port.length > 1 ? host_port[1] : "9300");
-									})
-									.reduce(new TransportClient(settings),
-											(acc, host_port) -> acc.addTransportAddress(new InetSocketTransportAddress(host_port._1(), Integer.parseInt(host_port._2()))),
-											(acc1, acc2) -> acc1) // (not possible)
-			);
+			try {
+				final Builder settings_builder = ImmutableSettings.settingsBuilder();
+				final Settings settings = null != _config_bean.cluster_name()
+						? settings_builder.put("cluster.name", _config_bean.cluster_name()).build()
+						: settings_builder.put("client.transport.ignore_cluster_name", true).build();
+				
+				_client.set(java.util.stream.Stream.of(_config_bean.elasticsearch_connection().split("\\s*,\\s*"))
+										.map(hostport -> {
+											final String[] host_port = hostport.split("\\s*:\\s*");
+											return Tuples._2T(host_port[0], host_port.length > 1 ? host_port[1] : "9300");
+										})
+										.reduce(new TransportClient(settings),
+												(acc, host_port) -> acc.addTransportAddress(new InetSocketTransportAddress(host_port._1(), Integer.parseInt(host_port._2()))),
+												(acc1, acc2) -> acc1) // (not possible)
+				);
+			}
+			catch (Exception e) {
+				throw new RuntimeException(ErrorUtils.get(ErrorUtils.INVALID_CONFIGURATION, _config_bean.elasticsearch_connection(), _config_bean.cluster_name(), e.getMessage()));
+			}
 		}		
 		return _client.get();		
 	}

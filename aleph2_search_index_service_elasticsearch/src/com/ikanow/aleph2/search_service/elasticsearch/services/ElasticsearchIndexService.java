@@ -100,6 +100,8 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	@Override
 	public <O> Optional<ICrudService<O>> getCrudService(final Class<O> clazz, final DataBucketBean bucket) {
 		
+		//TODO (ALEPH-14): Need to be able to configure batch settings (get batch service before returning, update defaults)
+		
 		// There's two different cases
 		// 1) Multi-bucket - equivalent to the other version of getCrudService
 		// 2) Single bucket - a read/write bucket

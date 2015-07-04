@@ -19,6 +19,7 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Scopes;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
+import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConfigurationBean;
@@ -44,7 +45,7 @@ public class ElasticsearchIndexServiceModule extends AbstractModule {
 		catch (Exception e) {
 			throw new RuntimeException(ErrorUtils.get(ErrorUtils.INVALID_CONFIG_ERROR,
 					ElasticsearchIndexServiceConfigBean.class.toString(),
-					config.getConfig(ElasticsearchIndexServiceConfigBean.PROPERTIES_ROOT)
+					PropertiesUtils.getSubConfig(config, ElasticsearchIndexServiceConfigBean.PROPERTIES_ROOT)
 					), e);
 		}
 		this.bind(IElasticsearchCrudServiceFactory.class).to(ElasticsearchCrudServiceFactory.class).in(Scopes.SINGLETON);

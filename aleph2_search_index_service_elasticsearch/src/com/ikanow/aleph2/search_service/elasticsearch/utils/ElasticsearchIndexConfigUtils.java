@@ -26,6 +26,7 @@ import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.ColumnarSchemaDefaultBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
+import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConfigurationBean;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
@@ -52,7 +53,10 @@ public class ElasticsearchIndexConfigUtils {
 					"com/ikanow/aleph2/search_service/elasticsearch/data_model/default_temporal_override.conf").atPath("temporal_technology_override");
 			
 			
-			final Config user_overrides = PropertiesUtils.getSubConfig(global_config, ElasticsearchIndexServiceConfigBean.PROPERTIES_ROOT).orElse(ConfigFactory.empty());
+			final Config user_overrides = PropertiesUtils.getSubConfig(global_config, ElasticsearchIndexServiceConfigBean.PROPERTIES_ROOT)
+											.orElse(ConfigFactory.empty())
+											.withFallback(PropertiesUtils.getSubConfig(global_config, ElasticsearchConfigurationBean.PROPERTIES_ROOT)
+													.orElse(ConfigFactory.empty()).root());
 			
 			return BeanTemplateUtils.from(
 					default_templates.withFallback(default_search).withFallback(default_temporal).entrySet().stream()

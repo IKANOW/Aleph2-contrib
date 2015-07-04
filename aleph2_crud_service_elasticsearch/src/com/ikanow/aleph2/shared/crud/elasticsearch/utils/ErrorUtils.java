@@ -32,5 +32,7 @@ public class ErrorUtils extends com.ikanow.aleph2.data_model.utils.ErrorUtils {
 	
 	public static final String STORE_OBJECTS_ALWAYS_COMPLETES = "Elasticsearch does not support continue_on_error:false in storeObjects";
 	
+	public static final String INVALID_CONFIGURATION = "Invalid configuration: connection={0} cluster={1}, err={2}";
+	
 	public static final String METAMODEL_ELASTICSEARCH_RESTRICTIONS = "Elasticsearch metadata only specified for fixed single (read-write) index/types";
 }
