@@ -110,7 +110,7 @@ public class ElasticsearchContextUtils {
 	private static ChronoUnit getIndexGroupingPeriod_slow(String date_format) {
 		
 		final SimpleDateFormat d = new SimpleDateFormat(date_format);
-		final long try_date_boxes[] = { 3601L, 21L*3600L, 8L*24L*3600L, 32L*24L*3600L, 367L*34L*3600L };
+		final long try_date_boxes[] = { 3601L, 25L*3600L, 8L*24L*3600L, 32L*24L*3600L, 367L*34L*3600L };
 		final ChronoUnit ret_date_boxes[] = { ChronoUnit.HOURS, ChronoUnit.DAYS, ChronoUnit.WEEKS, ChronoUnit.MONTHS, ChronoUnit.YEARS };
 		final Date now = new Date();
 		final String now_string = d.format(now);
