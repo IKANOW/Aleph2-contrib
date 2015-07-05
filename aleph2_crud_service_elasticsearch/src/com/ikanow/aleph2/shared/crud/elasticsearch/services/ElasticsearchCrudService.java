@@ -695,7 +695,16 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			
 			return ElasticsearchFutureUtils.wrap(dir.execute(), dr -> {
 				return dr.isAcknowledged();
-			});
+			},
+			(err, future) -> {
+				if (err instanceof IndexMissingException) {
+					future.complete(false);
+				}
+				else {
+					future.completeExceptionally(err);
+				}
+			}
+			);
 		}
 		catch (Exception e) {
 			return FutureUtils.returnError(e);

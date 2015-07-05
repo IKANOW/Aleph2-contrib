@@ -130,12 +130,11 @@ public class TestElasticsearchCrudService {
 				Optional.of(false), CreationPolicy.AVAILABLE_IMMEDIATELY,
 				Optional.empty(), Optional.empty(), Optional.empty());
 
-		try {
-			service.deleteDatastore().get();
-		}
-		catch (Exception e) {
-			// It's OK probably just doens't exist yet
-		}
+		service.deleteDatastore().get();
+		
+		//(check that deleteDatastore works)
+		Thread.sleep(2000L);
+		assertEquals(false, service.deleteDatastore().get());
 		
 		// Create an empty index
 		if (create_index) {
