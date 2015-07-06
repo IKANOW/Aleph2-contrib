@@ -623,6 +623,7 @@ public class TestElasticsearchCrudService {
 		// Single Object
 		
 		final Future<Optional<TestBean>> obj1 = service.getObjectById("id1");
+		final Future<Optional<TestBean>> obj2 = service.getObjectBySpec(CrudUtils.allOf(TestBean.class).when("test", "test"));
 		
 		assertTrue("Call succeeded but no object", !obj1.get().isPresent());
 		
@@ -637,6 +638,27 @@ public class TestElasticsearchCrudService {
 	}
 		
 
+	@Test
+	public void singleObjectRetrieve_autoIds() throws InterruptedException, ExecutionException {
+		final ElasticsearchCrudService<TestBean> service = getTestService("singleObjectRetrieve_autoIds", TestBean.class);
+
+		final List<TestBean> l = IntStream.rangeClosed(1, 10).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class)
+								.with("test_string", "test_string" + i)
+								.with("test_long", (Long)(long)i)
+								.done().get())
+				.collect(Collectors.toList());
+
+		for (TestBean t: l) {
+			service.storeObject(t).get();
+		}
+		assertEquals(10, service.countObjects().get().intValue());
+		
+		final Future<Optional<TestBean>> obj1 = service.getObjectBySpec(CrudUtils.allOf(TestBean.class).when("test_string", "test_string1"));
+		assertTrue("Object with auto id is found", obj1.get().isPresent());
+		assertTrue("Obj with auto id has an id", null != obj1.get().get()._id);
+		
+	}
 	
 	@Test
 	public void singleObjectRetrieve() throws InterruptedException, ExecutionException {

@@ -88,6 +88,8 @@ import fj.data.Either;
 
 //TODO (ALEPH-14) .... more thoughts on field list buckets ... options for auto generating .number fields and .raw fields (and nested - that might live in the search index bit though?)
 
+//TODO: currently the _id doesn't get put into the _source, is this what i want? (I don't think so)
+
 public class ElasticsearchCrudService<O> implements ICrudService<O> {
 
 	public enum CreationPolicy { AVAILABLE_IMMEDIATELY, SINGLE_OBJECT_AVAILABLE_IMMEDIATELY, OPTIMIZED };
@@ -443,13 +445,23 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				final SearchHit[] sh = sr.getHits().hits();
 				
 				if (sh.length > 0) {
-					final Map<String, Object> src_fields = sh[0].getSource();					
+					final Map<String, Object> src_fields = sh[0].getSource();
+					src_fields.computeIfAbsent("_id", __ -> sh[0].getId());
 					return Optional.ofNullable(_object_mapper.convertValue(src_fields, _state.clazz));
 				}
 				else {
 					return Optional.empty();
 				}
-			});
+			},
+			(err, future) -> {
+				if (err instanceof IndexMissingException) { // just treat this like an "object not found"
+					future.complete(Optional.empty());
+				}
+				else {
+					future.completeExceptionally(err);
+				}
+			}
+			);
 		}
 		catch (Exception e) {
 			return FutureUtils.returnError(e);
