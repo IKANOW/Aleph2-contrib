@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -609,8 +610,10 @@ public class TestIkanowV1SyncService_Buckets {
 		assertEquals(IkanowV1SyncService_Buckets.getBucketIdFromV1SourceKey("aleph...bucket.Template_V2_data_bucket."), f_res.get().get());
 		assertEquals(0, f_res.getManagementResults().get().size());
 		
-		assertEquals(1L, (long)bucket_db.countObjects().get());
-		assertEquals(1L, (long)bucket_status_db.countObjects().get());
+		assertEquals("Should have only 1 bucket", 1L, 
+				(long)bucket_db.countObjectsBySpec(CrudUtils.allOf(DataBucketBean.class).when("_id", f_res.get().get())).get());
+		assertEquals("Should have only 1 bucket status", 1L, 
+				(long)bucket_status_db.countObjectsBySpec(CrudUtils.allOf(DataBucketStatusBean.class).when("_id", f_res.get().get())).get());
 		
 		final Optional<DataBucketStatusBean> status = bucket_status_db.getObjectById(IkanowV1SyncService_Buckets.getBucketIdFromV1SourceKey("aleph...bucket.Template_V2_data_bucket.")).get();
 		assertEquals(true, status.get().suspended());
@@ -633,7 +636,9 @@ public class TestIkanowV1SyncService_Buckets {
 			fail("Should have errored");
 		}
 		catch (Exception e) {}
-		assertEquals(1, res_2.getManagementResults().get().size());
+		assertEquals("Should only have 1 management result: " + 
+				res_2.getManagementResults().get().stream().map(BasicMessageBean::message).collect(Collectors.joining()), 
+				1, res_2.getManagementResults().get().size());
 		assertEquals(false, res_2.getManagementResults().get().iterator().next().success());		
 	}
 	
