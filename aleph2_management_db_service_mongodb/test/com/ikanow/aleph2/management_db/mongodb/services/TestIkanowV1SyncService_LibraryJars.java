@@ -17,5 +17,5 @@ package com.ikanow.aleph2.management_db.mongodb.services;
 
 public class TestIkanowV1SyncService_LibraryJars {
 
-	//TODO
+	//TODO (ALEPH-19): Test code
 }

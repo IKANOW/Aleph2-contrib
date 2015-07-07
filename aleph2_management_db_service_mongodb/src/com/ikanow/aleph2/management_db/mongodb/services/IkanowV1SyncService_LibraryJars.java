@@ -58,6 +58,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
@@ -463,8 +464,7 @@ public class IkanowV1SyncService_LibraryJars {
 
 		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("_id", new ObjectId(id));
 		return FutureUtils.denestManagementFuture(share_db.getObjectBySpec(v1_query)
-			.<ManagementFuture<Supplier<Object>>>thenApply(jsonopt -> {
-				try {
+			.<ManagementFuture<Supplier<Object>>>thenApply(Lambdas.wrap_u(jsonopt -> {
 					final SharedLibraryBean new_object = getLibraryBeanFromV1Share(jsonopt.get());
 					
 					// Try to copy the file across before going crazy (going to leave this as single threaded for now, we'll live)
@@ -473,10 +473,10 @@ public class IkanowV1SyncService_LibraryJars {
 					
 					final ManagementFuture<Supplier<Object>> ret = library_mgmt.storeObject(new_object, !create_not_update);
 					return ret;
-				}			
-				catch (Exception e) {
+				}))
+				.exceptionally(e -> {
 					return FutureUtils.<Supplier<Object>>createManagementFuture(
-							FutureUtils.returnError(e), 
+							FutureUtils.returnError(new RuntimeException(e)), 
 							CompletableFuture.completedFuture(Arrays.asList(new BasicMessageBean(
 									new Date(),
 									false, 
@@ -489,7 +489,7 @@ public class IkanowV1SyncService_LibraryJars {
 									))
 							);
 				}				
-			}))
+			))
 			;
 	}
 

@@ -50,6 +50,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
@@ -137,7 +138,7 @@ public class IkanowV1SyncService_Buckets {
 					Leader_latch.start();
 					_leader_selector.set(Leader_latch);
 				}
-				catch (Exception e) {
+				catch (Throwable e) {
 					_logger.error(ErrorUtils.getLongForm("{0}", e));
 				}
 				_logger.info("SourceMonitor: joined the leadership candidate cluster");
@@ -271,9 +272,9 @@ public class IkanowV1SyncService_Buckets {
 				.<Boolean>thenCompose(res ->  {
 					try {
 						fres.get(); // (check if the DB side call has failed)
-						return updateV1SourceStatus(new Date(), key, res, disable_on_failure, source_db);	
+						return updateV1SourceStatus(new Date(), key, res, disable_on_failure, source_db);
 					}
-					catch (Exception e) { // DB-side call has failed, create ad hoc error
+					catch (Throwable e) { // DB-side call has failed, create ad hoc error
 						final Collection<BasicMessageBean> errs = res.isEmpty()
 								? Arrays.asList(
 									new BasicMessageBean(
@@ -328,7 +329,7 @@ public class IkanowV1SyncService_Buckets {
 									final Date v2_date = to_compare._2().get(id);
 									return v1_date.getTime() > v2_date.getTime();
 								}
-								catch (Exception e) {
+								catch (Throwable e) {
 									return false; // (just ignore)
 								}
 							})
@@ -415,9 +416,7 @@ public class IkanowV1SyncService_Buckets {
 
 		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("key", key);
 		return FutureUtils.denestManagementFuture(source_db.getObjectBySpec(v1_query)
-			.<ManagementFuture<Supplier<Object>>>thenApply(jsonopt -> {
-				try {
-					
+			.<ManagementFuture<Supplier<Object>>>thenApply(Lambdas.wrap_u(jsonopt -> {
 					final DataBucketBean new_object = getBucketFromV1Source(jsonopt.get());
 					final boolean is_now_suspended = safeJsonGet("searchCycle_secs", jsonopt.get()).asInt(1) < 0;
 					
@@ -432,10 +431,10 @@ public class IkanowV1SyncService_Buckets {
 							final ManagementFuture<Supplier<Object>> ret = bucket_mgmt.storeObject(new_object);
 							return ret;
 						}));
-				}			
-				catch (Exception e) {
+				}))
+				.exceptionally(e -> {
 					return FutureUtils.<Supplier<Object>>createManagementFuture(
-							FutureUtils.returnError(e), 
+							FutureUtils.returnError(new RuntimeException(e)), 
 							CompletableFuture.completedFuture(Arrays.asList(new BasicMessageBean(
 									new Date(),
 									false, 
@@ -447,8 +446,7 @@ public class IkanowV1SyncService_Buckets {
 									)
 									))
 							);
-				}				
-			}))
+				}))	
 			;
 	}
 
@@ -495,8 +493,7 @@ public class IkanowV1SyncService_Buckets {
 		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("key", key);
 		final CompletableFuture<Optional<JsonNode>> f_v1_source = source_db.getObjectBySpec(v1_query);		
 
-		return FutureUtils.denestManagementFuture(f_v1_source.<ManagementFuture<Supplier<Object>>>thenApply(v1_source -> {			
-			try {												
+		return FutureUtils.denestManagementFuture(f_v1_source.<ManagementFuture<Supplier<Object>>>thenApply(Lambdas.wrap_u(v1_source -> {			
 				// Once we have all the queries back, get some more information
 				final boolean is_now_suspended = safeJsonGet("searchCycle_secs", v1_source.get()).asInt(1) < 0;
 				final DataBucketBean new_object = getBucketFromV1Source(v1_source.get());
@@ -508,10 +505,10 @@ public class IkanowV1SyncService_Buckets {
 				// Then update the management db
 				
 				return FutureUtils.denestManagementFuture(update.thenApply(__ -> bucket_mgmt.storeObject(new_object, true)));
-			}
-			catch (Exception e) {
+			}))
+			.exceptionally(e -> {
 				return FutureUtils.<Supplier<Object>>createManagementFuture(
-						FutureUtils.returnError(e), 
+						FutureUtils.returnError(new RuntimeException(e)), 
 						CompletableFuture.completedFuture(Arrays.asList(new BasicMessageBean(
 								new Date(),
 								false, 
@@ -523,8 +520,7 @@ public class IkanowV1SyncService_Buckets {
 								)
 								))
 						);
-			}
-		}));
+			}));
 	}	
 	
 	/** Takes a collection of results from the management side-channel, and uses it to update a harvest node
