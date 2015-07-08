@@ -59,6 +59,8 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	protected final Optional<ProjectBean> _project;
 	protected final MongoDbManagementDbConfigBean _properties;
 	
+	protected final boolean _read_only;
+	
 	/** Guice generated constructor
 	 * @param crud_factory
 	 */
@@ -75,6 +77,8 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 		_project = Optional.empty();
 		_properties = properties;
 
+		_read_only = false;
+		
 		//DEBUG
 		//System.out.println("Hello world from: " + this.getClass() + ": underlying=" + crud_factory);
 	}
@@ -86,12 +90,13 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	 * @param project
 	 */
 	public MongoDbManagementDbService(IMongoDbCrudServiceFactory crud_factory, 
-			Optional<AuthorizationBean> auth, Optional<ProjectBean> project, final MongoDbManagementDbConfigBean properties)
+			Optional<AuthorizationBean> auth, Optional<ProjectBean> project, final MongoDbManagementDbConfigBean properties, final boolean read_only)
 	{
 		_crud_factory = crud_factory;
 		_auth = auth;
 		_project = project;		
 		_properties = properties;
+		_read_only = read_only;
 	}
 	
 	/* (non-Javadoc)
@@ -99,7 +104,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	 */
 	public MongoDbManagementDbService getFilteredDb(final Optional<AuthorizationBean> client_auth, final Optional<ProjectBean> project_auth)
 	{
-		return new MongoDbManagementDbService(_crud_factory, client_auth, project_auth, _properties);
+		return new MongoDbManagementDbService(_crud_factory, client_auth, project_auth, _properties, _read_only);
 	}
 	
 	
@@ -111,7 +116,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 				SharedLibraryBean.class, String.class, 
 				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.SHARED_LIBRARY_STORE), 
 				Optional.of(BeanTemplateUtils.from(SharedLibraryBean.class).field(SharedLibraryBean::access_rights)), 
-				_auth, _project));
+				_auth, _project)).readOnlyVersion(_read_only);
 	}
 
 	/* (non-Javadoc)
@@ -131,7 +136,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 				DataBucketBean.class, String.class, 
 				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.DATA_BUCKET_STORE), 
 				Optional.of(BeanTemplateUtils.from(DataBucketBean.class).field(DataBucketBean::access_rights)), 
-				_auth, _project));
+				_auth, _project)).readOnlyVersion(_read_only);
 	}
 
 	/* (non-Javadoc)
@@ -142,7 +147,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 				DataBucketStatusBean.class, String.class, 
 				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.DATA_BUCKET_STATUS_STORE), 
 				Optional.empty(), 
-				_auth, _project));
+				_auth, _project)).readOnlyVersion(_read_only);
 	}
 
 	/* (non-Javadoc)
@@ -162,7 +167,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 				AnalyticThreadBean.class, String.class, 
 				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.DATA_ANALYTIC_THREAD_STORE), 
 				Optional.of(BeanTemplateUtils.from(DataBucketBean.class).field(DataBucketBean::access_rights)), 
-				_auth, _project));
+				_auth, _project)).readOnlyVersion(_read_only);
 	}
 
 	/* (non-Javadoc)
@@ -259,7 +264,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 			return (ICrudService<T>) _crud_factory.getMongoDbCrudService(
 				retry_message_clazz, String.class, 
 				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.RETRY_DB, retry_message_clazz.getSimpleName()), 
-				Optional.empty(), Optional.empty(), Optional.empty());
+				Optional.empty(), Optional.empty(), Optional.empty()).readOnlyVersion(_read_only);
 	}
 
 	/* (non-Javadoc)
@@ -268,5 +273,13 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
 		return Arrays.asList(this, _crud_factory);
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#readOnlyVersion()
+	 */
+	@Override
+	public IManagementDbService readOnlyVersion() {
+		return new MongoDbManagementDbService(_crud_factory, _auth, _project, _properties, true);
 	}
 }

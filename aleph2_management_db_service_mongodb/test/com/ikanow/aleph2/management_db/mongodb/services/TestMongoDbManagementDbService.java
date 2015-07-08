@@ -21,7 +21,13 @@ import java.util.Optional;
 
 import org.junit.Test;
 
+import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
+import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
 import com.ikanow.aleph2.shared.crud.mongodb.services.MockMongoDbCrudServiceFactory;
 import com.mongodb.DB;
@@ -137,5 +143,55 @@ public class TestMongoDbManagementDbService {
 			fail("Should have thrown an exception");
 		}
 		catch (Exception e) {}
+		
+		// TEST READ-ONLY MODE:
+		
+		final IManagementDbService read_only_management_db_service = management_db_service.readOnlyVersion();
+		
+		// Bucket
+		ICrudService<DataBucketBean> bucket_service = read_only_management_db_service.getDataBucketStore();
+		assertTrue("Is read only", IManagementCrudService.IReadOnlyManagementCrudService.class.isAssignableFrom(bucket_service.getClass()));
+		try {
+			bucket_service.deleteDatastore();
+			fail("Should have thrown error");
+		}
+		catch (Exception e) {
+			assertEquals("Correct error message", ErrorUtils.READ_ONLY_CRUD_SERVICE, e.getMessage());
+		}
+		bucket_service.countObjects(); // (just check doesn't thrown)
+		// Bucket status
+		ICrudService<DataBucketStatusBean> bucket_status_service = read_only_management_db_service.getDataBucketStatusStore();
+		assertTrue("Is read only", IManagementCrudService.IReadOnlyManagementCrudService.class.isAssignableFrom(bucket_status_service.getClass()));
+		try {
+			bucket_status_service.deleteDatastore();
+			fail("Should have thrown error");
+		}
+		catch (Exception e) {
+			assertEquals("Correct error message", ErrorUtils.READ_ONLY_CRUD_SERVICE, e.getMessage());
+		}
+		bucket_status_service.countObjects(); // (just check doesn't thrown)
+		// Shared Library Store
+		ICrudService<SharedLibraryBean> shared_lib_service = read_only_management_db_service.getSharedLibraryStore();
+		assertTrue("Is read only", IManagementCrudService.IReadOnlyManagementCrudService.class.isAssignableFrom(shared_lib_service.getClass()));
+		try {
+			shared_lib_service.deleteDatastore();
+			fail("Should have thrown error");
+		}
+		catch (Exception e) {
+			assertEquals("Correct error message", ErrorUtils.READ_ONLY_CRUD_SERVICE, e.getMessage());
+		}
+		shared_lib_service.countObjects(); // (just check doesn't thrown)
+		// Retry Store
+		ICrudService<String> retry_service = read_only_management_db_service.getRetryStore(String.class);
+		assertTrue("Is read only", ICrudService.IReadOnlyCrudService.class.isAssignableFrom(retry_service.getClass()));
+		try {
+			retry_service.deleteDatastore();
+			fail("Should have thrown error");
+		}
+		catch (Exception e) {
+			assertEquals("Correct error message", ErrorUtils.READ_ONLY_CRUD_SERVICE, e.getMessage());
+		}
+		retry_service.countObjects(); // (just check doesn't thrown)
+		
 	}
 }
