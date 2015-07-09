@@ -172,7 +172,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			try {
 				final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, schema_config, _mapper, index_type);
 				
-				final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(bucket._id());
+				final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(ElasticsearchIndexUtils.getBaseIndexName(bucket));
 				final GetIndexTemplatesResponse gtr = _crud_factory.getClient().admin().indices().getTemplates(gt).actionGet();
 				
 				if (gtr.getIndexTemplates().isEmpty() 
@@ -180,7 +180,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					!mappingsAreEquivalent(gtr.getIndexTemplates().get(0), _mapper.readTree(mapping.bytes().toUtf8()), _mapper))
 				{
 					// If no template, or it's changed, then update
-					_crud_factory.getClient().admin().indices().preparePutTemplate(bucket._id()).setSource(mapping).execute().actionGet();
+					_crud_factory.getClient().admin().indices().preparePutTemplate(ElasticsearchIndexUtils.getBaseIndexName(bucket)).setSource(mapping).execute().actionGet();
 					
 					_logger.info(ErrorUtils.get("Updated mapping for bucket={0}, base_index={1}", bucket._id()));
 				}				
