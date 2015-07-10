@@ -56,3 +56,4 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 %dir /opt/aleph2-home/logs
 %dir /opt/aleph2-home/yarn-config
 %dir /opt/aleph2-home/cached-jars
+%dir /var/run/ikanow/
