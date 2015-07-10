@@ -65,7 +65,7 @@ public class ElasticsearchIndexUtils {
 	 * @return
 	 */
 	public static String getBaseIndexName(final DataBucketBean bucket) {
-		return bucket._id().toLowerCase().replace("-", "_");
+		return bucket._id().toLowerCase().replace("-", "_").replace(";", "");
 	}
 	
 	/** Returns either a specifc type name, or "_default_" if auto types are used
