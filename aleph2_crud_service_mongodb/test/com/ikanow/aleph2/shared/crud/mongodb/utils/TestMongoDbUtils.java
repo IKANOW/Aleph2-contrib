@@ -68,6 +68,7 @@ public class TestMongoDbUtils {
 		public List<NestedTestBean> nested_list() { return nested_list; }
 		public Map<String, String> map() { return map; }
 		public NestedTestBean nested_object() { return nested_object; }
+		public EnumField enum_field() { return enum_field; }
 		
 		protected TestBean() {}
 		private String string_field;
@@ -77,6 +78,8 @@ public class TestMongoDbUtils {
 		private List<NestedTestBean> nested_list;
 		private Map<String, String> map;
 		private NestedTestBean nested_object;
+		public enum EnumField { test1, test2 } ;
+		private EnumField enum_field;
 	}
 	
 	///////////////////////////////////////////////
@@ -147,8 +150,10 @@ public class TestMongoDbUtils {
 				.withAny(TestBean::string_field, Arrays.asList("test1a", "test1b"))
 				.withAll(TestBean::long_field, Arrays.asList(10, 11, 12))
 				.whenNot(TestBean::long_field, 13)
+				.when(TestBean::enum_field, TestBean.EnumField.test1)
 				.limit(100);
 
+		// (include +ve enums)
 		final SingleQueryComponent<TestBean> query_comp_2b = CrudUtils.anyOf(TestBean.class)
 				.when("string_field", "string_field")
 				.withPresent("bool_field")
@@ -156,6 +161,7 @@ public class TestMongoDbUtils {
 				.withAny("string_field", Arrays.asList("test1a", "test1b"))
 				.withAll("long_field", Arrays.asList(10, 11, 12))
 				.whenNot("long_field", 13)
+				.when("enum_field", TestBean.EnumField.test1)
 				.limit(100);		
 		
 		final Tuple2<DBObject, DBObject> query_meta_2 = MongoDbUtils.convertToMongoQuery(query_comp_2);
@@ -167,7 +173,8 @@ public class TestMongoDbUtils {
 										QueryBuilder.start("bool_field").exists(true).get(),
 										QueryBuilder.start("long_field").exists(false).get(),
 										QueryBuilder.start("long_field").all(Arrays.asList(10, 11, 12)).get(),
-										QueryBuilder.start("long_field").notEquals(13).get()										
+										QueryBuilder.start("long_field").notEquals(13).get(),								
+										QueryBuilder.start("enum_field").is("test1").get()										
 									).get();
 		
 		assertEquals(expected_2.toString(), query_meta_2._1().toString());
@@ -188,10 +195,13 @@ public class TestMongoDbUtils {
 				.rangeBelow(TestBean::long_field, 10000, true)
 				.rangeIn(TestBean::long_field, 2000, true, 20000, true)
 				.rangeIn(TestBean::long_field, 3000, true, 30000, false)
+
+				.rangeIn(TestBean::enum_field, TestBean.EnumField.test1, true, TestBean.EnumField.test2, false)				
 				
 				.orderBy(Tuples._2T("test_field_1", 1), Tuples._2T("test_field_2", -1))
 				.limit(200);
 
+		//(inc enums)
 		final SingleQueryComponent<TestBean> query_comp_1b = CrudUtils.allOf(TestBean.class)
 				.rangeAbove("string_field", "bbb", true)
 				.rangeBelow("string_field", "fff", false)
@@ -202,6 +212,8 @@ public class TestMongoDbUtils {
 				.rangeBelow("long_field", 10000, true)
 				.rangeIn("long_field", 2000, true, 20000, true)
 				.rangeIn("long_field", 3000, true, 30000, false)
+
+				.rangeIn("enum_field", TestBean.EnumField.test1, true, TestBean.EnumField.test2, false)				
 				
 				.orderBy(Tuples._2T("test_field_1", 1)).orderBy(Tuples._2T("test_field_2", -1))		
 				.limit(200);
@@ -218,7 +230,8 @@ public class TestMongoDbUtils {
 				QueryBuilder.start("long_field").greaterThanEquals(1000).get(),
 				QueryBuilder.start("long_field").lessThan(10000).get(),
 				QueryBuilder.start("long_field").greaterThan(2000).lessThan(20000).get(),
-				QueryBuilder.start("long_field").greaterThan(3000).lessThanEquals(30000).get()
+				QueryBuilder.start("long_field").greaterThan(3000).lessThanEquals(30000).get(),
+				QueryBuilder.start("enum_field").greaterThan("test1").lessThanEquals("test2").get()
 				
 				).get();
 
@@ -240,6 +253,7 @@ public class TestMongoDbUtils {
 		
 		final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(TestBean.class)
 														.when(TestBean::string_field, "a")
+														.whenNot(TestBean::enum_field, TestBean.EnumField.test1)
 														.nested(TestBean::nested_list, 
 																CrudUtils.anyOf(TestBean.NestedTestBean.class)
 																	.when(TestBean.NestedTestBean::nested_string_field, "x")
@@ -257,6 +271,7 @@ public class TestMongoDbUtils {
 				
 		final DBObject expected_1 = QueryBuilder.start().and(
 				QueryBuilder.start("string_field").is("a").get(),
+				QueryBuilder.start("enum_field").notEquals("test1").get(),
 				QueryBuilder.start("nested_list.nested_string_field").is("x").get(),
 				QueryBuilder.start("nested_list.nested_string_field").in(Arrays.asList("x", "y")).get(),
 				QueryBuilder.start("nested_list.nested_string_field").greaterThanEquals("ccc").lessThan("ddd").get(),
@@ -447,11 +462,12 @@ public class TestMongoDbUtils {
 					.unset(TestBean::bool_field) //(3b)
 					.unset(TestBean::nested_object) //(3c)
 					.remove(TestBean::nested_list, CrudUtils.allOf(TestBean.NestedTestBean.class).when("nested_string_field", "1")) //6)
+					.set(TestBean::enum_field, TestBean.EnumField.test1)
 					;
 		
 		final DBObject result1 = MongoDbUtils.createUpdateObject(test1);
 		
-		final String expected1 = "{ \"$push\" : { \"string_fields\" : \"AA\"} , \"$inc\" : { \"long_field\" : 4} , \"$set\" : { \"nested_list.nested_string_field\" : \"test1\"} , \"$unset\" : { \"nested_list.nested_string_field\" : 1 , \"bool_field\" : 1 , \"nested_object\" : 1} , \"$pullAll\" : { \"nested_list.nested_string_list\" : [ \"x\" , \"y\" , \"z\"]} , \"$addToSet\" : { \"nested_list.nested_string_list\" : \"A\"} , \"$pull\" : { \"nested_list\" : { \"$and\" : [ { \"nested_string_field\" : \"1\"}]}}}";
+		final String expected1 = "{ \"$push\" : { \"string_fields\" : \"AA\"} , \"$inc\" : { \"long_field\" : 4} , \"$set\" : { \"nested_list.nested_string_field\" : \"test1\" , \"enum_field\" : \"test1\"} , \"$unset\" : { \"nested_list.nested_string_field\" : 1 , \"bool_field\" : 1 , \"nested_object\" : 1} , \"$pullAll\" : { \"nested_list.nested_string_list\" : [ \"x\" , \"y\" , \"z\"]} , \"$addToSet\" : { \"nested_list.nested_string_list\" : \"A\"} , \"$pull\" : { \"nested_list\" : { \"$and\" : [ { \"nested_string_field\" : \"1\"}]}}}";
 		// (see above for analysis of results) 
 		
 		assertEquals(expected1, result1.toString());

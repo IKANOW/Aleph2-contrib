@@ -170,6 +170,17 @@ public class MongoDbUtils {
 						Characteristics.UNORDERED))); 
 	}	
 	
+	/** Remove enums (convert to strings) before putting anything in a DBObject
+	 * @param in
+	 * @return
+	 */
+	protected static Tuple2<Object, Object> removeEnums(final Tuple2<Object, Object> in) {
+		if (in._1() instanceof Enum && in._2() instanceof Enum) return Tuples._2T(in._1().toString(), in._2().toString());
+		else if (in._1() instanceof Enum) return Tuples._2T(in._1().toString(), in._2());
+		else if (in._2() instanceof Enum) return Tuples._2T(in._1(), in._2().toString());
+		else return in;
+	}
+	
 	/** Creates a big $and/$or list of the list of fields in the single query component
 	 * @param andVsOr - top level MongoDB operator
 	 * @param query_in - a single query (ie set of fields)
@@ -184,7 +195,9 @@ public class MongoDbUtils {
 				.when(f -> f.isEmpty(), f -> new BasicDBObject())
 				.otherwise(f -> f.asMap().entrySet().stream()
 					.<Tuple2<String, Tuple2<Operator, Tuple2<Object, Object>>>>
-						flatMap(entry -> entry.getValue().stream().map( val -> Tuples._2T(entry.getKey(), val) ) )
+						flatMap(entry -> entry.getValue().stream().
+								map( val -> Tuples._2T(entry.getKey(), Tuples._2T(val._1(), removeEnums(val._2()))) )
+						)
 					.collect(	
 						Collector.of(
 							BasicDBObject::new,
@@ -259,6 +272,8 @@ public class MongoDbUtils {
 								.<Map.Entry<String, Tuple2<UpdateOperator, Object>>>andReturn()
 								// Special case, handle bean template
 								.when(e -> null == e, __ -> kv)
+								.when(e -> e instanceof Enum,  e ->
+										Maps.immutableEntry(kv.getKey(),  Tuples._2T(kv.getValue()._1(), e.toString())))
 								.when(JsonNode.class, j -> 
 									Maps.immutableEntry(kv.getKey(),  Tuples._2T(kv.getValue()._1(), convertJsonBean(j, object_mapper))))
 								.when(BeanTemplate.class, e -> 
