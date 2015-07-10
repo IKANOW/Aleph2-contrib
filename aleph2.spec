@@ -50,6 +50,6 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 
 %files
 %defattr(-,tomcat,tomcat)
-/opt/ikanow/lib/
-/opt/ikanow/etc/
+/opt/aleph2-home/lib/
+/opt/aleph2-home/etc/
 /etc/init.d/
