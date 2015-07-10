@@ -52,3 +52,4 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 %defattr(-,tomcat,tomcat)
 /opt/ikanow/lib/
 /opt/ikanow/etc/
+/etc/init.d/
