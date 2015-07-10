@@ -1,0 +1,90 @@
+#!/bin/bash
+#
+# ikanow-aleph2         This shell script takes care of starting and stopping
+#
+# chkconfig: - 80 15
+# description: ikanow-aleph2
+
+### BEGIN INIT INFO
+# Provides: ikanow-aleph2
+# Required-Start: $network $local_fs $remote_fs
+# Required-Stop: $network $local_fs $remote_fs
+# Should-Start: 2 3 4 5
+# Should-Stop: 0 1 6
+# Short-Description: start and stop ikanow-aleph2
+# Description: ikanow-aleph2
+### END INIT INFO
+
+# Source function library.
+. /etc/init.d/functions
+
+prog=ikanow-aleph2
+lock_file=/var/lock/subsys/$prog
+pid_file=/var/run/ikanow/$prog.pid
+exec="java -classpath '/opt/aleph2-home/config/:/opt/aleph2-home/libs/*' com.ikanow.aleph2.data_import_manager.harvest.modules.IkanowV1SynchronizationModule /opt/aleph2-home/config/v1_sync_service.properties > /dev/null 2>&1 &"
+
+start() {
+        echo -n $"Starting $prog: "
+        status -p $pid_file
+        if [ $? -ne 0 ] || [ $? -eq 1 ]; then
+                runuser tomcat -c "$exec"
+                RETVAL=$?
+                pgrep -f "java.*v1_sync_service.properties" > $pid_file
+
+                if [ $RETVAL -eq 0 ]; then
+                        touch $lock_file
+                        success
+                        echo
+                else
+                        failure
+                fi
+
+                return $RETVAL
+        elif [ $? -eq 0 ]; then
+                echo "Process is already running $(cat $pid_file)"
+                success
+                echo
+        else
+                echo "Failed to start"
+                failure
+                echo
+        fi
+}
+
+stop() {
+        echo -n $"Shutting down $prog: "
+        killproc -p $pid_file
+        RETVAL=$?
+        echo
+        [ $RETVAL -eq 0 ] && rm -f $lock_file
+        return $RETVAL
+}
+
+# See how we were called.
+case "$1" in
+  start)
+        start
+        ;;
+  stop)
+        stop
+        ;;
+  status)
+        status -p $pid_file
+        ;;
+  restart|force-reload)
+        stop
+        start
+        ;;
+  try-restart|condrestart)
+        if status -p $pid_file > /dev/null; then
+            stop
+            start
+        fi
+        ;;
+  reload)
+        exit 3
+        ;;
+  *)
+        echo $"Usage: $0 {start|stop|status|restart|try-restart|force-reload}"
+        exit 2
+esac
