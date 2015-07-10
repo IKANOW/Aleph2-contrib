@@ -50,6 +50,9 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 
 %files
 %defattr(-,tomcat,tomcat)
+/etc/init.d/
 /opt/aleph2-home/lib/
 /opt/aleph2-home/etc/
-/etc/init.d/
+%dir /opt/aleph2-home/logs
+%dir /opt/aleph2-home/yarn-config
+%dir /opt/aleph2-home/cached-jars
