@@ -49,10 +49,13 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 # FILE LISTS
 
 %files
+%attr(755,root,root) /etc/init.d/ikanow-aleph2
 %defattr(-,tomcat,tomcat)
-/etc/init.d/
+/opt/aleph2-home/
 /opt/aleph2-home/lib/
 /opt/aleph2-home/etc/
+%config /opt/aleph2-home/etc/log4j2.xml
+%config /opt/aleph2-home/etc/v1_sync_service.properties
 %dir /opt/aleph2-home/logs
 %dir /opt/aleph2-home/yarn-config
 %dir /opt/aleph2-home/cached-jars
