@@ -1,5 +1,5 @@
 {
-    "template": "test_validate_success*",
+    "template": "test_validate_success__e93de293b3cb*",
     "settings": {
         "index.indices.fielddata.cache.size": "10%",
         "index.refresh_interval": "5s"

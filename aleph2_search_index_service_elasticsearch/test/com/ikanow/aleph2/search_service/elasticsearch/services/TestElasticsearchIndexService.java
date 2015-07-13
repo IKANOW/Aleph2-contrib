@@ -51,6 +51,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
+import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConfigurationBean;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudServiceFactory;
@@ -243,21 +244,23 @@ public class TestElasticsearchIndexService {
 		final String mapping_str = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_verbose_mapping_validate_results.json"), Charsets.UTF_8);
 		final JsonNode mapping_json = _mapper.readTree(mapping_str.getBytes());		
 		
+		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket); 
+		
 		try {
-			_crud_factory.getClient().admin().indices().prepareDeleteTemplate(bucket._id()).execute().actionGet();
+			_crud_factory.getClient().admin().indices().prepareDeleteTemplate(template_name).execute().actionGet();
 		}
 		catch (Exception e) {} // (This is fine, just means it doesn't exist)
 		
 		// Create index template from empty
 		
 		{
-			final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(bucket._id());
+			final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr = _crud_factory.getClient().admin().indices().getTemplates(gt).actionGet();
 			assertTrue("No templates to start with", gtr.getIndexTemplates().isEmpty());
 			
 			_index_service.handlePotentiallyNewIndex(bucket, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
 			
-			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(bucket._id());
+			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
 			assertEquals(1, _index_service._bucket_template_cache.size());
 			assertEquals(1, gtr2.getIndexTemplates().size());
@@ -270,7 +273,7 @@ public class TestElasticsearchIndexService {
 			
 			_index_service.handlePotentiallyNewIndex(bucket, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
 			
-			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(bucket._id());
+			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
 			assertEquals(1, _index_service._bucket_template_cache.size());
 			assertEquals(1, gtr2.getIndexTemplates().size());
@@ -284,10 +287,10 @@ public class TestElasticsearchIndexService {
 			
 			_index_service.handlePotentiallyNewIndex(bucket2, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
 			
-			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(bucket._id());
+			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
 			assertEquals(1, _index_service._bucket_template_cache.size());
-			assertEquals(next_time, _index_service._bucket_template_cache.get(bucket2._id()));
+			assertEquals(next_time, _index_service._bucket_template_cache.get(bucket._id()));
 			assertEquals(1, gtr2.getIndexTemplates().size());
 		}
 		
@@ -299,10 +302,10 @@ public class TestElasticsearchIndexService {
 			
 			_index_service.handlePotentiallyNewIndex(bucket2, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
 			
-			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(bucket._id());
+			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
 			assertEquals(1, _index_service._bucket_template_cache.size());
-			assertEquals(time_setter.getTime(), _index_service._bucket_template_cache.get(bucket2._id()));
+			assertEquals(time_setter.getTime(), _index_service._bucket_template_cache.get(bucket._id()));
 			assertEquals(1, gtr2.getIndexTemplates().size());
 			
 			assertFalse(ElasticsearchIndexService.mappingsAreEquivalent(gtr2.getIndexTemplates().get(0), mapping_json, _mapper)); // has changed
@@ -311,18 +314,18 @@ public class TestElasticsearchIndexService {
 		// Check if mapping is deleted then next time bucket modified is updated then the mapping is recreated
 		
 		{
-			_crud_factory.getClient().admin().indices().prepareDeleteTemplate(bucket._id()).execute().actionGet();
+			_crud_factory.getClient().admin().indices().prepareDeleteTemplate(template_name).execute().actionGet();
 
 			//(check with old date)
 			
-			final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(bucket._id());
+			final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr = _crud_factory.getClient().admin().indices().getTemplates(gt).actionGet();
 			assertTrue("No templates to start with", gtr.getIndexTemplates().isEmpty());
 			
 			{
 				_index_service.handlePotentiallyNewIndex(bucket, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
 				
-				final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(bucket._id());
+				final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 				final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
 				assertTrue("Initially no change", gtr2.getIndexTemplates().isEmpty());
 			}			
@@ -336,7 +339,7 @@ public class TestElasticsearchIndexService {
 				
 				_index_service.handlePotentiallyNewIndex(bucket2, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
 				
-				final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(bucket._id());
+				final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 				final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
 				assertEquals(1, _index_service._bucket_template_cache.size());
 				assertEquals(1, gtr2.getIndexTemplates().size());
@@ -376,22 +379,25 @@ public class TestElasticsearchIndexService {
 		final String bucket_str = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_end_2_end_bucket.json"), Charsets.UTF_8);
 		final DataBucketBean bucket = BeanTemplateUtils.build(bucket_str, DataBucketBean.class)
 													.with("_id", "test_end_2_end")
+													.with("full_name", "/test/end-end/auto-time")
 													.with("modified", time_setter.getTime())
 												.done().get();
 
+		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+		
 		// Check starting from clean
 		
 		{
 			try {
-				_crud_factory.getClient().admin().indices().prepareDeleteTemplate(bucket._id()).execute().actionGet();
+				_crud_factory.getClient().admin().indices().prepareDeleteTemplate(template_name).execute().actionGet();
 			}
 			catch (Exception e) {} // (This is fine, just means it doesn't exist)		
 			try {
-				_crud_factory.getClient().admin().indices().prepareDelete(bucket._id() + "*").execute().actionGet();
+				_crud_factory.getClient().admin().indices().prepareDelete(template_name + "*").execute().actionGet();
 			}
 			catch (Exception e) {} // (This is fine, just means it doesn't exist)		
 			
-			final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(bucket._id());
+			final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr = _crud_factory.getClient().admin().indices().getTemplates(gt).actionGet();
 			assertTrue("No templates to start with", gtr.getIndexTemplates().isEmpty());
 		}				
@@ -401,7 +407,7 @@ public class TestElasticsearchIndexService {
 		// Check template added:
 
 		{
-			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(bucket._id());
+			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
 			assertEquals(1, _index_service._bucket_template_cache.size());
 			assertEquals(1, gtr2.getIndexTemplates().size());
@@ -444,12 +450,12 @@ public class TestElasticsearchIndexService {
 		//(give it a chance to run)
 		Thread.sleep(5000L);
 		
-		final GetMappingsResponse gmr = es_context.client().admin().indices().prepareGetMappings(bucket._id() + "*").execute().actionGet();
+		final GetMappingsResponse gmr = es_context.client().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
 		
 		// Should have 5 different indexes, each with 2 types + _default_
 		
 		assertEquals(5, gmr.getMappings().keys().size());
-		final Set<String> expected_keys =  Arrays.asList(1, 2, 3, 4, 5).stream().map(i -> "test_end_2_end_2015-0" + (i+1) + "-01").collect(Collectors.toSet());
+		final Set<String> expected_keys =  Arrays.asList(1, 2, 3, 4, 5).stream().map(i -> template_name + "_2015-0" + (i+1) + "-01").collect(Collectors.toSet());
 		final Set<String> expected_types =  Arrays.asList("_default_", "type_1", "type_2").stream().collect(Collectors.toSet());
 		
 		StreamSupport.stream(gmr.getMappings().spliterator(), false)
@@ -475,22 +481,25 @@ public class TestElasticsearchIndexService {
 		final String bucket_str = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_end_2_end_bucket2.json"), Charsets.UTF_8);
 		final DataBucketBean bucket = BeanTemplateUtils.build(bucket_str, DataBucketBean.class)
 													.with("_id", "2b_test_end_2_end")
+													.with("full_name", "/test/end-end/fixed/fixed")
 													.with("modified", time_setter.getTime())
 												.done().get();
 
+		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+		
 		// Check starting from clean
 		
 		{
 			try {
-				_crud_factory.getClient().admin().indices().prepareDeleteTemplate(bucket._id()).execute().actionGet();
+				_crud_factory.getClient().admin().indices().prepareDeleteTemplate(template_name).execute().actionGet();
 			}
 			catch (Exception e) {} // (This is fine, just means it doesn't exist)		
 			try {
-				_crud_factory.getClient().admin().indices().prepareDelete(bucket._id() + "*").execute().actionGet();
+				_crud_factory.getClient().admin().indices().prepareDelete(template_name + "*").execute().actionGet();
 			}
 			catch (Exception e) {} // (This is fine, just means it doesn't exist)		
 			
-			final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(bucket._id());
+			final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr = _crud_factory.getClient().admin().indices().getTemplates(gt).actionGet();
 			assertTrue("No templates to start with", gtr.getIndexTemplates().isEmpty());
 		}				
@@ -500,7 +509,7 @@ public class TestElasticsearchIndexService {
 		// Check template added:
 
 		{
-			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(bucket._id());
+			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
 			assertEquals(1, _index_service._bucket_template_cache.size());
 			assertEquals(1, gtr2.getIndexTemplates().size());
@@ -543,12 +552,12 @@ public class TestElasticsearchIndexService {
 		//(give it a chance to run)
 		Thread.sleep(5000L);
 		
-		final GetMappingsResponse gmr = es_context.client().admin().indices().prepareGetMappings(bucket._id() + "*").execute().actionGet();
+		final GetMappingsResponse gmr = es_context.client().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
 		
 		// Should have 5 different indexes, each with 2 types + _default_
 		
 		assertEquals(1, gmr.getMappings().keys().size());
-		final Set<String> expected_keys =  Arrays.asList("2b_test_end_2_end").stream().collect(Collectors.toSet());
+		final Set<String> expected_keys =  Arrays.asList("test_fixed_fixed__1cb6bdcdf44f").stream().collect(Collectors.toSet());
 		final Set<String> expected_types =  Arrays.asList("data_object").stream().collect(Collectors.toSet());
 		
 		StreamSupport.stream(gmr.getMappings().spliterator(), false)
@@ -559,7 +568,6 @@ public class TestElasticsearchIndexService {
 				//DEBUG
 				//System.out.println(" ? " + x.key);
 				StreamSupport.stream(x.value.spliterator(), false).forEach(Lambdas.wrap_consumer_u(y -> {
-					/**/
 					//DEBUG
 					//System.out.println("?? " + y.key + " --- " + y.value.sourceAsMap().toString());
 					assertTrue("Is expected type: " + y.key, expected_types.contains(y.key));

@@ -68,13 +68,17 @@ public class TestElasticsearchIndexUtils {
 		
 		// Index stuff
 		{
-			final String uuid = "de305d54-75b4-431b-adb2-eb6b9e546014";
+			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1").done().get());
 			
-			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::_id, uuid).done().get());
+			assertEquals("test_1-1__514e7056b0d8", base_index);
 			
-			assertEquals("de305d54_75b4_431b_adb2_eb6b9e546014", base_index);
+			final String base_index2 = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1/another__test").done().get());
 			
-			assertEquals(uuid, ElasticsearchIndexUtils.getBucketIdFromIndexName("de305d54_75b4_431b_adb2_eb6b9e546014_2015"));
+			assertEquals("test_1-1_another_test__f73d191c0424", base_index2);
+			
+			final String base_index3 = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1/another__test/VERY/long/string").done().get());
+			
+			assertEquals("test_1-1_long_string__2711e659d5a6", base_index3);
 		}
 		
 		// Type stuff
@@ -664,11 +668,9 @@ public class TestElasticsearchIndexUtils {
 	
 	@Test
 	public void test_templateMapping() throws JsonProcessingException, IOException {
-		final String uuid = "de305d54-75b4-431b-adb2-eb6b9e546015";
-		
-		final DataBucketBean b = BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::_id, uuid).done().get();
+		final DataBucketBean b = BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test/template/mapping").done().get();
 
-		final String expected = "{\"template\":\"de305d54_75b4_431b_adb2_eb6b9e546015*\"}";
+		final String expected = "{\"template\":\"test_template_mapping__3f584adbcb13*\"}";
 		
 		assertEquals(expected, ElasticsearchIndexUtils.getTemplateMapping(b).bytes().toUtf8());
 	}
@@ -682,6 +684,7 @@ public class TestElasticsearchIndexUtils {
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
 				.with(DataBucketBean::_id, uuid)
+				.with(DataBucketBean::full_name, "/test/full/mapping")
 				.with(DataBucketBean::data_schema, 
 						BeanTemplateUtils.build(DataSchemaBean.class)
 							.with(DataSchemaBean::search_index_schema,
