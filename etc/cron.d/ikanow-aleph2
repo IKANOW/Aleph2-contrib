@@ -1,1 +1,1 @@
-@hourly /bin/rm -rf /tmp/*.jar 
+@hourly /bin/find /tmp/ -maxdepth 1 -name "*.jar" -mtime +30|xargs rm -rf
