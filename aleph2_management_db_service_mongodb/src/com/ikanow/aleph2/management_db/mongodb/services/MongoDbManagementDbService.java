@@ -37,6 +37,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ManagementDbUtils;
 import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
 import com.ikanow.aleph2.management_db.mongodb.module.MongoDbManagementDbModule;
+import com.ikanow.aleph2.management_db.mongodb.utils.MongoDbCollectionUtils;
 import com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
@@ -53,6 +54,10 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	public static final String DATA_BUCKET_STATUS_STORE = "aleph2_data_import.bucket_status";
 	public static final String DATA_ANALYTIC_THREAD_STORE = "aleph2_analytics.thread";
 	public static final String RETRY_DB = "aleph2_retry_store";
+	
+	final public static String BUCKET_STATE_DB_PREFIX = "aleph2_bucket_state";
+	final public static String LIBRARY_STATE_DB_PREFIX = "aleph2_library_state";
+	final public static String ANALYTICS_STATE_DB_PREFIX = "aleph2_analytics_state";
 	
 	protected final IMongoDbCrudServiceFactory _crud_factory;
 	protected final Optional<AuthorizationBean> _auth;
@@ -153,10 +158,22 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getPerBucketState(java.lang.Class, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Optional)
 	 */
-	public <T> ICrudService<T> getPerBucketState(Class<T> clazz,
-			DataBucketBean bucket, Optional<String> sub_collection) {
-		//TODO (ALEPH-19)
-		throw new RuntimeException("This method is currently not supported");
+	public <T> ICrudService<T> getPerBucketState(final Class<T> clazz,
+			final DataBucketBean bucket, final Optional<String> sub_collection) {
+
+		//TODO test and then port
+		
+		final String collection_name = MongoDbCollectionUtils.getBaseIndexName(bucket.full_name(), sub_collection);
+		
+		final DB db = MongoDbCollectionUtils.findDatabase(
+						_crud_factory.getMongoDb("test").getMongo(), 
+						MongoDbManagementDbService.BUCKET_STATE_DB_PREFIX, collection_name);
+
+		return ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
+				clazz, String.class,
+				db.getCollection(collection_name),
+				Optional.empty(), 
+				_auth, _project)).readOnlyVersion(_read_only);
 	}
 
 	/* (non-Javadoc)
