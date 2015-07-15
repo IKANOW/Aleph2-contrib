@@ -129,8 +129,19 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	 */
 	public <T> ICrudService<T> getPerLibraryState(Class<T> clazz,
 			SharedLibraryBean library, Optional<String> sub_collection) {
-		//TODO (ALEPH-19)
-		throw new RuntimeException("This method is currently not supported");
+		
+		final String collection_name = MongoDbCollectionUtils.getBaseIndexName(library.path_name(), sub_collection);
+		
+		final DB db = MongoDbCollectionUtils.findDatabase(
+						_crud_factory.getMongoDb("test").getMongo(), 
+						MongoDbManagementDbService.LIBRARY_STATE_DB_PREFIX, collection_name);
+
+		return ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
+				clazz, String.class,
+				db.getCollection(collection_name),
+				Optional.empty(), 
+				_auth, _project)).readOnlyVersion(_read_only);
+		
 	}
 
 	/* (non-Javadoc)
@@ -161,8 +172,6 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	public <T> ICrudService<T> getPerBucketState(final Class<T> clazz,
 			final DataBucketBean bucket, final Optional<String> sub_collection) {
 
-		//TODO test and then port
-		
 		final String collection_name = MongoDbCollectionUtils.getBaseIndexName(bucket.full_name(), sub_collection);
 		
 		final DB db = MongoDbCollectionUtils.findDatabase(
@@ -192,8 +201,19 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	 */
 	public <T> ICrudService<T> getPerAnalyticThreadState(Class<T> clazz,
 			AnalyticThreadBean analytic_thread, Optional<String> sub_collection) {
-		//TODO (ALEPH-19)
-		throw new RuntimeException("This method is currently not supported");
+		
+		final String collection_name = MongoDbCollectionUtils.getBaseIndexName(analytic_thread.path_name(), sub_collection);
+		
+		final DB db = MongoDbCollectionUtils.findDatabase(
+						_crud_factory.getMongoDb("test").getMongo(), 
+						MongoDbManagementDbService.ANALYTICS_STATE_DB_PREFIX, collection_name);
+
+		return ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
+				clazz, String.class,
+				db.getCollection(collection_name),
+				Optional.empty(), 
+				_auth, _project)).readOnlyVersion(_read_only);
+		
 	}
 
 	/* (non-Javadoc)
