@@ -585,34 +585,42 @@ public class IkanowV1SyncService_LibraryJars {
 		// Find possible JSON config
 		Optional<Tuple2<Integer, Integer>> json_config =
 				IntStream.range(1, description_lines.length).boxed().filter(i -> description_lines[i].trim().startsWith("{")).findFirst()
-					.<Tuple2<Integer, Integer>>flatMap(start -> {
-						return IntStream.range(start+1, description_lines.length).boxed().filter(i -> description_lines[i].trim().matches("[^{}\"']")).findFirst()
-							.<Tuple2<Integer, Integer>>map(end -> Tuples._2T(start, end));
+					.<Tuple2<Integer, Integer>>map(start -> {
+						return IntStream.range(start+1, description_lines.length).boxed()
+								.filter(i -> !description_lines[i].matches("^\\s*[{}\"'].*"))
+								.findFirst()
+								.<Tuple2<Integer, Integer>>map(end -> Tuples._2T(start, end))
+							.orElse(Tuples._2T(start, description_lines.length));
 					})
 					;
+		
 		@SuppressWarnings("unchecked")
 		final Optional<Map<String, Object>> json = json_config
 								.map(t2 ->description_lines_list.stream()
 									.limit(t2._2())
-									.skip(t2._1() - 1)
+									.skip(t2._1())
 									.collect(Collectors.joining("\n")))
 								.map(Lambdas.wrap_u(s -> _mapper.readTree(s)))
 								.<Map<String, Object>>map(j -> (Map<String, Object>) _mapper.convertValue(j, Map.class));
 								;
-		
+
+		final Set<String> tags = safeTruncate(description_lines[description_lines.length - 1], 5).toLowerCase().startsWith("tags:")
+				? new HashSet<String>(Arrays.asList(
+						description_lines[description_lines.length - 1]
+								.replaceFirst("(?i)tags:\\s*", "")
+								.split("\\s*,\\s*")))
+				: Collections.emptySet(); 
+								
 		final String description = description_lines_list.stream()
-				.limit(json_config.map(Tuple2::_1).orElse(description_lines.length)) // skip over the JSON if any
-				.skip(1)
+				.limit(Optional.of(description_lines.length) 
+								.map(n -> tags.isEmpty() ? n : n-1) // skip over the tags if any
+								.get()
+						) 
+				.skip(json_config.map(Tuple2::_2).orElse(1))
 				.collect(Collectors.joining("\n"));
 		
 		final LibraryType type = LibraryType.misc_archive;
 		final String owner_id = safeJsonGet("_id", safeJsonGet("owner", src_json)).asText();
-		final Set<String> tags = description_lines[description_lines.length - 1].substring(0, 5).toLowerCase().startsWith("tags:")
-								? new HashSet<String>(Arrays.asList(
-										description_lines[description_lines.length - 1]
-												.replaceFirst("(?i)tags:\\s*", "")
-												.split("\\s*,\\s*")))
-								: Collections.emptySet(); 
 		final JsonNode comm_objs = safeJsonGet("communities", src_json); // collection of { _id: $oid } types
 		final String misc_entry_point = description_lines[0];
 		
@@ -637,6 +645,9 @@ public class IkanowV1SyncService_LibraryJars {
 													.done().get();
 		
 		return bean;		
+	}	
+	private static String safeTruncate(final String in, int max_len) {
+		return in.length() < max_len ? in : in.substring(0, max_len);
 	}
 	
 	/** Gets a JSON field that may not be present (justs an empty JsonNode if no)

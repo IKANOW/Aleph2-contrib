@@ -64,6 +64,8 @@ public class TestIkanowV1SyncService_LibraryJars {
 
 	// TEST SETUP
 
+	protected ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
+	
 	@Inject 
 	protected IServiceContext _service_context = null;
 	
@@ -160,46 +162,151 @@ public class TestIkanowV1SyncService_LibraryJars {
 	public void testShareToLibraryConversion() throws Exception {
 		// FIRST OFF CHECK ALL THE FIELDS
 		
-		final JsonNode share1 = getLibraryMetadata(this, Arrays.asList(
-				"com.ikanow.aleph2.test.EntryPoint",
-				"This is a description.",
-				"More description."
-				//(no tags)
-				));
-		
-		SharedLibraryBean lib1 = IkanowV1SyncService_LibraryJars.getLibraryBeanFromV1Share(share1);
-		assertEquals("v1_555d44e3347d336b3e8c4cbe", lib1._id());
-		assertEquals("21 May 2015 02:37:23 GMT", lib1.created().toGMTString());
-		assertEquals("21 May 2015 02:37:24 GMT", lib1.modified().toGMTString());
-		assertEquals(ImmutableMap.builder()
-						.put("50bcd6fffbf0fd0b27875a7c", "rw")
-						.put("50bcd6fffbf0fd0b27875a7d", "rw").build(),
-				lib1.access_rights().auth_token());
-		assertEquals(null, lib1.batch_enrichment_entry_point());
-		assertEquals("This is a description.\nMore description.", lib1.description());
-		assertEquals("/app/aleph2/library/misc/library.jar", lib1.display_name());
-		assertEquals(null, lib1.library_config());
-		assertEquals("com.ikanow.aleph2.test.EntryPoint", lib1.misc_entry_point());
-		assertEquals("455d44e3347d336b3e8c4cbe", lib1.owner_id());
-		assertEquals("/app/aleph2/library/misc/library.jar", lib1.path_name());
-		assertEquals(null, lib1.streaming_enrichment_entry_point());
-		assertEquals(null, lib1.subtype());
-		assertEquals(ImmutableSet.builder().build(), lib1.tags());
+		{
+			final JsonNode share1 = getLibraryMetadata(this, Arrays.asList(
+					"com.ikanow.aleph2.test.EntryPoint",
+					"This is a description.",
+					"More description."
+					//(no tags)
+					));
+			
+			SharedLibraryBean lib1 = IkanowV1SyncService_LibraryJars.getLibraryBeanFromV1Share(share1);
+			assertEquals("v1_555d44e3347d336b3e8c4cbe", lib1._id());
+			assertEquals("21 May 2015 02:37:23 GMT", lib1.created().toGMTString());
+			assertEquals("21 May 2015 02:37:24 GMT", lib1.modified().toGMTString());
+			assertEquals(ImmutableMap.builder()
+							.put("50bcd6fffbf0fd0b27875a7c", "rw")
+							.put("50bcd6fffbf0fd0b27875a7d", "rw").build(),
+					lib1.access_rights().auth_token());
+			assertEquals(null, lib1.batch_enrichment_entry_point());
+			assertEquals("This is a description.\nMore description.", lib1.description());
+			assertEquals("/app/aleph2/library/misc/library.jar", lib1.display_name());
+			assertEquals(null, lib1.library_config());
+			assertEquals("com.ikanow.aleph2.test.EntryPoint", lib1.misc_entry_point());
+			assertEquals("455d44e3347d336b3e8c4cbe", lib1.owner_id());
+			assertEquals("/app/aleph2/library/misc/library.jar", lib1.path_name());
+			assertEquals(null, lib1.streaming_enrichment_entry_point());
+			assertEquals(null, lib1.subtype());
+			assertEquals(ImmutableSet.builder().build(), lib1.tags());
+		}
 		
 		// NOW A BUNCH OF ONES WHERE WE'LL JUST CHECK THE DESC/TAGS/ENTRY POINT
 
-		final JsonNode share2 = getLibraryMetadata(this, Arrays.asList(
-				"com.ikanow.aleph2.test.EntryPoint",
-				"This is a description.",
-				"More description.",
-				"tags:tag1,tag2"
-				));
+		//(desc, tags)
+		{
+			final JsonNode share2 = getLibraryMetadata(this, Arrays.asList(
+					"com.ikanow.aleph2.test.EntryPoint",
+					"This is a description.",
+					"More description.",
+					"tags:tag1,tag2"
+					));
+			
+			SharedLibraryBean lib2 = IkanowV1SyncService_LibraryJars.getLibraryBeanFromV1Share(share2);
+			assertEquals("This is a description.\nMore description.", lib2.description());
+			assertEquals(null, lib2.library_config());
+			assertEquals(ImmutableSet.builder().add("tag1").add("tag2").build(), lib2.tags());
+		}		
+
+		//(desc, tags, multi-line JSON)
+		{
+			final JsonNode share2 = getLibraryMetadata(this, Arrays.asList(
+					"com.ikanow.aleph2.test.EntryPoint",
+					"{",
+					"   \"test\": {",
+					"      \"test2\": \"test_val\"",
+					"   }",
+					"}",
+					"This is a description.",
+					"More description.",
+					"tags:tag1,tag2"
+					));
+			
+			SharedLibraryBean lib2 = IkanowV1SyncService_LibraryJars.getLibraryBeanFromV1Share(share2);
+			assertEquals("This is a description.\nMore description.", lib2.description());
+			assertEquals("{\"test\":{\"test2\":\"test_val\"}}", _mapper.convertValue(lib2.library_config(), JsonNode.class).toString());
+			assertEquals(ImmutableSet.builder().add("tag1").add("tag2").build(), lib2.tags());
+		}		
+
+		//(desc, no tags, multi-line JSON)
+		{
+			final JsonNode share2 = getLibraryMetadata(this, Arrays.asList(
+					"com.ikanow.aleph2.test.EntryPoint",
+					"{",
+					"   \"test\": {",
+					"      \"test2\": \"test_val\"",
+					"   }",
+					"}",
+					"This is a description.",
+					"More description."
+					));
+			
+			SharedLibraryBean lib2 = IkanowV1SyncService_LibraryJars.getLibraryBeanFromV1Share(share2);
+			assertEquals("This is a description.\nMore description.", lib2.description());
+			assertEquals("{\"test\":{\"test2\":\"test_val\"}}", _mapper.convertValue(lib2.library_config(), JsonNode.class).toString());
+			assertEquals(ImmutableSet.builder().build(), lib2.tags());
+		}		
+
+		//(NO desc, no tags, multi-line JSON)
+		{
+			final JsonNode share2 = getLibraryMetadata(this, Arrays.asList(
+					"com.ikanow.aleph2.test.EntryPoint",
+					"{",
+					"   \"test\": {",
+					"      \"test2\": \"test_val\"",
+					"   }",
+					"}"
+					));
+			
+			SharedLibraryBean lib2 = IkanowV1SyncService_LibraryJars.getLibraryBeanFromV1Share(share2);
+			assertEquals("", lib2.description());
+			assertEquals("{\"test\":{\"test2\":\"test_val\"}}", _mapper.convertValue(lib2.library_config(), JsonNode.class).toString());
+			assertEquals(ImmutableSet.builder().build(), lib2.tags());
+		}		
 		
-		SharedLibraryBean lib2 = IkanowV1SyncService_LibraryJars.getLibraryBeanFromV1Share(share2);
-		assertEquals("This is a description.\nMore description.\ntags:tag1,tag2", lib2.description());
-		assertEquals(null, lib2.library_config());
-		assertEquals(ImmutableSet.builder().add("tag1").add("tag2").build(), lib2.tags());
-		
+		//(desc, tags, single-line JSON)
+		{
+			final JsonNode share2 = getLibraryMetadata(this, Arrays.asList(
+					"com.ikanow.aleph2.test.EntryPoint",
+					"{\"test\":{\"test2\":\"test_val\"}}",
+					"This is a description.",
+					"More description.",
+					"tags:tag1,tag2"
+					));
+			
+			SharedLibraryBean lib2 = IkanowV1SyncService_LibraryJars.getLibraryBeanFromV1Share(share2);
+			assertEquals("This is a description.\nMore description.", lib2.description());
+			assertEquals("{\"test\":{\"test2\":\"test_val\"}}", _mapper.convertValue(lib2.library_config(), JsonNode.class).toString());
+			assertEquals(ImmutableSet.builder().add("tag1").add("tag2").build(), lib2.tags());
+		}		
+
+		//(NO desc, tags, single-line JSON)
+		{
+			final JsonNode share2 = getLibraryMetadata(this, Arrays.asList(
+					"com.ikanow.aleph2.test.EntryPoint",
+					"{\"test\":{\"test2\":\"test_val\"}}",
+					"tags:tag1,tag2"
+					));
+			
+			SharedLibraryBean lib2 = IkanowV1SyncService_LibraryJars.getLibraryBeanFromV1Share(share2);
+			assertEquals("", lib2.description());
+			assertEquals("{\"test\":{\"test2\":\"test_val\"}}", _mapper.convertValue(lib2.library_config(), JsonNode.class).toString());
+			assertEquals(ImmutableSet.builder().add("tag1").add("tag2").build(), lib2.tags());
+		}		
+
+		//(desc, no tags, single-line JSON)
+		{
+			final JsonNode share2 = getLibraryMetadata(this, Arrays.asList(
+					"com.ikanow.aleph2.test.EntryPoint",
+					"{\"test\":{\"test2\":\"test_val\"}}",
+					"This is a description.",
+					"More description."
+					));
+			
+			SharedLibraryBean lib2 = IkanowV1SyncService_LibraryJars.getLibraryBeanFromV1Share(share2);
+			assertEquals("This is a description.\nMore description.", lib2.description());
+			assertEquals("{\"test\":{\"test2\":\"test_val\"}}", _mapper.convertValue(lib2.library_config(), JsonNode.class).toString());
+			assertEquals(ImmutableSet.builder().build(), lib2.tags());
+		}		
 		
 //		final JsonNode share1 = getLibraryMetadata(this, Arrays.asList(
 //				"",
