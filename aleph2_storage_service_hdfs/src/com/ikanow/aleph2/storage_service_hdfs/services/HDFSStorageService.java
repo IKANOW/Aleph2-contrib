@@ -34,6 +34,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -72,10 +73,8 @@ public class HDFSStorageService implements IStorageService {
 					FileContext fs = FileContext.getFileContext(AbstractFileSystem.createFileSystem(uri, config), config);
 					return (Optional<T>) Optional.of(fs);
 				}
-				try {
-					driver = driver_class.newInstance();
-				} catch (Exception e) {
-					_logger.error("Error instanciating driver class",e);
+				else if(driver_class.isAssignableFrom(RawLocalFileSystem.class)){
+					return Optional.of(driver_class.newInstance());
 				}
 			} // !=null
 		} 

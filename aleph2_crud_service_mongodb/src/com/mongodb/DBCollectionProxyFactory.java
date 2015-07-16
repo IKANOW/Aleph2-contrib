@@ -23,6 +23,7 @@ import org.springframework.cglib.proxy.MethodProxy;
 
 /** Defensive extension to DBCollection, doesn't error out whenever a node goes down or master/slave assignments chage 
  * (but can block for a while)
+ *  THIS CLASS HAS NO COVERAGE SO NEED TO HANDLE TEST ON MODIFICATION
  * @author acp
  */
 public class DBCollectionProxyFactory {

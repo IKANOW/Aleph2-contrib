@@ -30,7 +30,9 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSc
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 
+import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.FileContext;
+import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.apache.hadoop.conf.Configuration;
 
 public class MockHdfsStorageService implements IStorageService {
@@ -60,11 +62,14 @@ public class MockHdfsStorageService implements IStorageService {
 				FileContext fs = FileContext.getLocalFSFileContext(new Configuration());
 				return (Optional<T>) Optional.of(fs);
 			}
-			try {
-				driver = driver_class.newInstance();
-			} catch (Exception e) {
-				logger.error("Error instanciating driver class",e);
+			else if(driver_class.isAssignableFrom(RawLocalFileSystem.class)){
+				return Optional.of(driver_class.newInstance());
 			}
+			else if (driver_class.isAssignableFrom(AbstractFileSystem.class)) {
+				FileContext fs = FileContext.getLocalFSFileContext(new Configuration());
+				return (Optional<T>) Optional.of(fs.getDefaultFileSystem());
+			}
+			
 		} // !=null
 		} catch (Exception e) {
 			logger.error("Caught Exception:",e);
