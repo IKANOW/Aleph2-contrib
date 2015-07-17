@@ -22,6 +22,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
@@ -29,6 +30,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSc
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.AbstractFileSystem;
@@ -37,6 +39,8 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import scala.Tuple2;
 
 public class HDFSStorageService implements IStorageService {
 	private static final Logger _logger = LogManager.getLogger();	
@@ -126,13 +130,36 @@ public class HDFSStorageService implements IStorageService {
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean)
 	 */
 	@Override
-	public List<BasicMessageBean> validateSchema(final StorageSchemaBean schema, final DataBucketBean bucket) {
-		return Collections.emptyList();
+	public Tuple2<String, List<BasicMessageBean>> validateSchema(final StorageSchemaBean schema, final DataBucketBean bucket) {
+		return Tuples._2T("",  Collections.emptyList());
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingArtefacts()
+	 */
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
 		return Arrays.asList(this);
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService#handleAgeOutRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
+	 */
+	@Override
+	public CompletableFuture<BasicMessageBean> handleAgeOutRequest(
+			DataBucketBean bucket) {
+		// TODO (ALEPH-???)
+		return null;
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService#handleBucketDeletionRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, boolean)
+	 */
+	@Override
+	public CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(
+			DataBucketBean bucket, boolean bucket_getting_deleted) {
+		// TODO (ALEPH-???) 
+		return null;
 	}
 
 }
