@@ -44,6 +44,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
 import com.typesafe.config.ConfigFactory;
 
 import fj.data.Either;
@@ -740,6 +741,147 @@ public class TestElasticsearchIndexUtils {
 			final XContentBuilder test_result = ElasticsearchIndexUtils.createIndexMapping(test_bucket, schema_config, _mapper, "_default_");			
 			assertEquals(expected_json.toString(), test_result.bytes().toUtf8());
 		}
+	}
+
+	
+	@Test
+	public void test_defaultMappings() {
+		
+		final DataBucketBean search_index_test = BeanTemplateUtils.build(DataBucketBean.class)
+				.with(DataBucketBean::full_name, "/test/test")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema, 
+									BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+										//(empty)
+									.done().get())
+						.done().get()
+						)
+			.done().get();
+		
+		final String expected = "{\"template\":\"test_test__f19167d49eac*\",\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true},\"properties\":{\"@timestamp\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"}},\"dynamic_templates\":[{\"STAR_STAR\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"index\":\"not_analyzed\",\"type\":\"{dynamic_type}\"},\"match\":\"*\"}},{\"STAR_string\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"fields\":{\"raw\":{\"fielddata\":{\"format\":\"disabled\"},\"ignore_above\":256,\"index\":\"not_analyzed\",\"type\":\"string\"}},\"index\":\"analyzed\",\"omit_norms\":true,\"type\":\"string\"},\"match\":\"*\",\"match_mapping_type\":\"string\"}}]}}}";
+		
+		// Search index schema only
+		{			
+			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(search_index_test, _config, _mapper);
+			
+			final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
+			final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+					.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
+						? "_default_"
+						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
+			
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(search_index_test, schema_config, _mapper, index_type);
+	
+			assertEquals("Get expected search_index_test schema", expected, mapping.bytes().toUtf8());
+		}
+		
+		// Temporal + search index schema
+		{
+			final DataBucketBean temporal_test = BeanTemplateUtils.clone(search_index_test)
+													.with(DataBucketBean::data_schema, 
+															BeanTemplateUtils.clone(search_index_test.data_schema())
+																.with(DataSchemaBean::temporal_schema, 
+																		BeanTemplateUtils.build(DataSchemaBean.TemporalSchemaBean.class).done().get()
+																		)
+																.done()
+															).done();
+			
+			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(temporal_test, _config, _mapper);
+			
+			final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
+			final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+					.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
+						? "_default_"
+						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
+			
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_test, schema_config, _mapper, index_type);
+	
+			assertEquals("Get expected search_index_test schema", expected, mapping.bytes().toUtf8());
+		}
+		
+		// Temporal + search index schema, with time field specified
+		{
+			final DataBucketBean temporal_test = BeanTemplateUtils.clone(search_index_test)
+													.with(DataBucketBean::data_schema, 
+															BeanTemplateUtils.clone(search_index_test.data_schema())
+																.with(DataSchemaBean::temporal_schema, 
+																		BeanTemplateUtils.build(DataSchemaBean.TemporalSchemaBean.class)
+																			.with(DataSchemaBean.TemporalSchemaBean::time_field, "testtime")
+																		.done().get()
+																		)
+																.done()
+															).done();
+			
+			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(temporal_test, _config, _mapper);
+			
+			//
+
+			//(has testtime inserted)
+			final String expected2 = "{\"template\":\"test_test__f19167d49eac*\",\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true},\"properties\":{\"@timestamp\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"},\"testtime\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"}},\"dynamic_templates\":[{\"STAR_STAR\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"index\":\"not_analyzed\",\"type\":\"{dynamic_type}\"},\"match\":\"*\"}},{\"STAR_string\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"fields\":{\"raw\":{\"fielddata\":{\"format\":\"disabled\"},\"ignore_above\":256,\"index\":\"not_analyzed\",\"type\":\"string\"}},\"index\":\"analyzed\",\"omit_norms\":true,\"type\":\"string\"},\"match\":\"*\",\"match_mapping_type\":\"string\"}}]}}}";
+
+			final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
+			final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+					.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
+						? "_default_"
+						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
+			
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_test, schema_config, _mapper, index_type);
+	
+			assertEquals("Get expected search_index_test schema", expected2, mapping.bytes().toUtf8());
+		}
+		
+		// Columnar + search index schema
+		{
+			final DataBucketBean columnar_test = BeanTemplateUtils.clone(search_index_test)
+													.with(DataBucketBean::data_schema, 
+															BeanTemplateUtils.clone(search_index_test.data_schema())
+																.with(DataSchemaBean::columnar_schema, 
+																		BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class).done().get()
+																		)
+																.done()
+															).done();
+			
+			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(columnar_test, _config, _mapper);
+			
+			final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
+			final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+					.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
+						? "_default_"
+						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
+			
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(columnar_test, schema_config, _mapper, index_type);
+	
+			assertEquals("Get expected search_index_test schema", expected, mapping.bytes().toUtf8());
+		}
+		
+		// Columnar + temporlal search index schema
+		{
+			final DataBucketBean temporal_columnar_test = BeanTemplateUtils.clone(search_index_test)
+													.with(DataBucketBean::data_schema, 
+															BeanTemplateUtils.clone(search_index_test.data_schema())
+																.with(DataSchemaBean::temporal_schema, 
+																		BeanTemplateUtils.build(DataSchemaBean.TemporalSchemaBean.class).done().get()
+																		)
+																.with(DataSchemaBean::columnar_schema, 
+																		BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class).done().get()
+																		)
+																.done()
+															).done();
+			
+			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(temporal_columnar_test, _config, _mapper);
+			
+			final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
+			final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+					.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
+						? "_default_"
+						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
+			
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_columnar_test, schema_config, _mapper, index_type);
+	
+			assertEquals("Get expected search_index_test schema", expected, mapping.bytes().toUtf8());
+		}
+		
 	}
 	
 }
