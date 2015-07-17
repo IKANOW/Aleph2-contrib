@@ -179,6 +179,33 @@ public class TestElasticsearchIndexService {
 
 			assertEquals(mapping_json.toString(), _mapper.readTree(res_search_message.message()).toString());
 		}
+		
+		// 3) Temporal
+		
+		{
+			final DataBucketBean bucket_temporal_no_grouping = BeanTemplateUtils.clone(bucket)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.clone(bucket.data_schema())
+								.with(DataSchemaBean::temporal_schema,
+										BeanTemplateUtils.build(DataSchemaBean.TemporalSchemaBean.class)
+										.done().get()
+								).done()
+						).done();
+			
+			assertEquals("", _index_service.validateSchema(bucket_temporal_no_grouping.data_schema().temporal_schema(), bucket)._1());
+			
+			final DataBucketBean bucket_temporal_grouping = BeanTemplateUtils.clone(bucket)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.clone(bucket.data_schema())
+								.with(DataSchemaBean::temporal_schema,
+										BeanTemplateUtils.build(DataSchemaBean.TemporalSchemaBean.class)
+											.with(DataSchemaBean.TemporalSchemaBean::grouping_time_period, "1d")
+										.done().get()
+								).done()
+						).done();
+			
+			assertEquals("_{yyyy-MM-dd}", _index_service.validateSchema(bucket_temporal_grouping.data_schema().temporal_schema(), bucket)._1());
+		}
 	}
 	
 	@Test

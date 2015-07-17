@@ -293,9 +293,14 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	@Override
 	public Tuple2<String, List<BasicMessageBean>> validateSchema(final TemporalSchemaBean schema, final DataBucketBean bucket) {
 		// (time buckets aka default schema options are already validated, nothing else to do)
+	
+		final Validation<String, ChronoUnit> time_period = TimeUtils.getTimePeriod(Optional.ofNullable(schema)
+																			.map(t -> t.grouping_time_period())
+																		.orElse(""));
 		
-		//TODO: ALEPH-14: this should return the temporal element
-		return Tuples._2T("", Collections.emptyList());
+		final String time_based_suffix = time_period.validation(fail -> "", success -> ElasticsearchContextUtils.getIndexSuffix(success));
+		
+		return Tuples._2T(time_based_suffix, Collections.emptyList());
 	}
 
 	/* (non-Javadoc)
