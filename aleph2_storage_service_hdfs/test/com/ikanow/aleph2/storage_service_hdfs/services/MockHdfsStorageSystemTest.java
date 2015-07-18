@@ -27,28 +27,27 @@ import org.junit.Test;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 
-public class HDFSStorageSystemTest {
+public class MockHdfsStorageSystemTest {
 	
 	@Test
 	public void test(){
 			GlobalPropertiesBean globals = BeanTemplateUtils.build(GlobalPropertiesBean.class)
 												.with(GlobalPropertiesBean::local_yarn_config_dir, System.getenv("HADOOP_CONF_DIR")).done().get();
 		
-			HDFSStorageService storageService = new HDFSStorageService(globals);
-			
+			MockHdfsStorageService storageService = new MockHdfsStorageService(globals);
+		
 			assertEquals(globals.distributed_root_dir(), storageService.getRootPath());
 			assertEquals(1, storageService.getUnderlyingArtefacts().size());
 			assertEquals(0, storageService.validateSchema(null, null)._2().size());
-						
+			
 			FileContext fs1 = storageService.getUnderlyingPlatformDriver(FileContext.class, Optional.<String>empty()).get();
 			assertNotNull(fs1);
 
-			RawLocalFileSystem fs2 = storageService.getUnderlyingPlatformDriver(RawLocalFileSystem.class,Optional.<String>empty()).get();
+			RawLocalFileSystem fs2 = storageService.getUnderlyingPlatformDriver(org.apache.hadoop.fs.RawLocalFileSystem.class,Optional.<String>empty()).get();
 			assertNotNull(fs2); 
 
 			AbstractFileSystem fs3 = storageService.getUnderlyingPlatformDriver(AbstractFileSystem.class,Optional.<String>empty()).get();
-			assertNotNull(fs3); 
-			
+			assertNotNull(fs3); 			
 			
 			assertFalse("Not found", storageService.getUnderlyingPlatformDriver(null, Optional.empty()).isPresent());
 			assertFalse("Not found", storageService.getUnderlyingPlatformDriver(String.class, Optional.empty()).isPresent());			

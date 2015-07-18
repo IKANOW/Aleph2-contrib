@@ -21,6 +21,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
 import org.apache.curator.framework.CuratorFramework;
@@ -39,6 +40,7 @@ import scala.Tuple3;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
@@ -71,6 +73,8 @@ import com.mongodb.gridfs.GridFSDBFile;
  */
 public class IkanowV1SyncService_LibraryJars {
 	private static final Logger _logger = LogManager.getLogger();	
+	
+	protected static final ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty()); 
 	
 	protected final MongoDbManagementDbConfigBean _config;
 	protected final IServiceContext _context;
@@ -575,15 +579,48 @@ public class IkanowV1SyncService_LibraryJars {
 		final String modified = safeJsonGet("modified", src_json).asText();
 		final String display_name = safeJsonGet("title", src_json).asText();
 		final String path_name = display_name;
-		final String description = Arrays.asList(description_lines).stream().skip(1).collect(Collectors.joining("\n"));
+		
+		final List<String> description_lines_list = Arrays.asList(description_lines);
+		
+		// Find possible JSON config
+		Optional<Tuple2<Integer, Integer>> json_config =
+				IntStream.range(1, description_lines.length).boxed().filter(i -> description_lines[i].trim().startsWith("{")).findFirst()
+					.<Tuple2<Integer, Integer>>map(start -> {
+						return IntStream.range(start+1, description_lines.length).boxed()
+								.filter(i -> !description_lines[i].matches("^\\s*[{}\"'].*"))
+								.findFirst()
+								.<Tuple2<Integer, Integer>>map(end -> Tuples._2T(start, end))
+							.orElse(Tuples._2T(start, description_lines.length));
+					})
+					;
+		
+		@SuppressWarnings("unchecked")
+		final Optional<Map<String, Object>> json = json_config
+								.map(t2 ->description_lines_list.stream()
+									.limit(t2._2())
+									.skip(t2._1())
+									.collect(Collectors.joining("\n")))
+								.map(Lambdas.wrap_u(s -> _mapper.readTree(s)))
+								.<Map<String, Object>>map(j -> (Map<String, Object>) _mapper.convertValue(j, Map.class));
+								;
+
+		final Set<String> tags = safeTruncate(description_lines[description_lines.length - 1], 5).toLowerCase().startsWith("tags:")
+				? new HashSet<String>(Arrays.asList(
+						description_lines[description_lines.length - 1]
+								.replaceFirst("(?i)tags:\\s*", "")
+								.split("\\s*,\\s*")))
+				: Collections.emptySet(); 
+								
+		final String description = description_lines_list.stream()
+				.limit(Optional.of(description_lines.length) 
+								.map(n -> tags.isEmpty() ? n : n-1) // skip over the tags if any
+								.get()
+						) 
+				.skip(json_config.map(Tuple2::_2).orElse(1))
+				.collect(Collectors.joining("\n"));
+		
 		final LibraryType type = LibraryType.misc_archive;
 		final String owner_id = safeJsonGet("_id", safeJsonGet("owner", src_json)).asText();
-		final Set<String> tags = description_lines[description_lines.length - 1].substring(0, 5).toLowerCase().startsWith("tags:")
-								? new HashSet<String>(Arrays.asList(
-										description_lines[description_lines.length - 1]
-												.replaceFirst("(?i)tags:\\s*", "")
-												.split("\\s*,\\s*")))
-								: Collections.emptySet(); 
 		final JsonNode comm_objs = safeJsonGet("communities", src_json); // collection of { _id: $oid } types
 		final String misc_entry_point = description_lines[0];
 		
@@ -598,6 +635,7 @@ public class IkanowV1SyncService_LibraryJars {
 													.with(SharedLibraryBean::type, type)
 													.with(SharedLibraryBean::misc_entry_point, misc_entry_point)
 													.with(SharedLibraryBean::owner_id, owner_id)
+													.with(SharedLibraryBean::library_config, json.orElse(null))
 													.with(SharedLibraryBean::access_rights,
 															new AuthorizationBean(
 																	StreamSupport.stream(comm_objs.spliterator(), false)
@@ -607,6 +645,9 @@ public class IkanowV1SyncService_LibraryJars {
 													.done().get();
 		
 		return bean;		
+	}	
+	private static String safeTruncate(final String in, int max_len) {
+		return in.length() < max_len ? in : in.substring(0, max_len);
 	}
 	
 	/** Gets a JSON field that may not be present (justs an empty JsonNode if no)

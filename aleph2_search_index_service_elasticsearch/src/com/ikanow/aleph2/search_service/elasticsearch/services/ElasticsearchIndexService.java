@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.StreamSupport;
 
@@ -35,6 +36,8 @@ import org.elasticsearch.cluster.metadata.IndexTemplateMetaData;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+
+import scala.Tuple2;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -56,6 +59,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
 import com.ikanow.aleph2.search_service.elasticsearch.module.ElasticsearchIndexServiceModule;
@@ -278,26 +282,32 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean)
 	 */
 	@Override
-	public List<BasicMessageBean> validateSchema(final ColumnarSchemaBean schema, final DataBucketBean bucket) {
+	public Tuple2<String, List<BasicMessageBean>> validateSchema(final ColumnarSchemaBean schema, final DataBucketBean bucket) {
 		// (Performed under search index schema)
-		return Collections.emptyList();
+		return Tuples._2T("", Collections.emptyList());
 	}
 
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean)
 	 */
 	@Override
-	public List<BasicMessageBean> validateSchema(final TemporalSchemaBean schema, final DataBucketBean bucket) {
+	public Tuple2<String, List<BasicMessageBean>> validateSchema(final TemporalSchemaBean schema, final DataBucketBean bucket) {
 		// (time buckets aka default schema options are already validated, nothing else to do)
+	
+		final Validation<String, ChronoUnit> time_period = TimeUtils.getTimePeriod(Optional.ofNullable(schema)
+																			.map(t -> t.grouping_time_period())
+																		.orElse(""));
 		
-		return Collections.emptyList();
+		final String time_based_suffix = time_period.validation(fail -> "", success -> ElasticsearchContextUtils.getIndexSuffix(success));
+		
+		return Tuples._2T(time_based_suffix, Collections.emptyList());
 	}
 
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchIndexSchemaBean)
 	 */
 	@Override
-	public List<BasicMessageBean> validateSchema(final SearchIndexSchemaBean schema, final DataBucketBean bucket) {
+	public Tuple2<String, List<BasicMessageBean>> validateSchema(final SearchIndexSchemaBean schema, final DataBucketBean bucket) {
 		try {
 			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);
 			
@@ -308,16 +318,17 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 											: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
 			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, schema_config, _mapper, index_type);
+			final String index_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
 			if (is_verbose(schema)) {
 				final BasicMessageBean success = new BasicMessageBean(
 						new Date(), true, bucket.full_name(), "validateSchema", null, 
 						mapping.bytes().toUtf8(), null);
 						
-				return Arrays.asList(success);
+				return Tuples._2T(index_name, Arrays.asList(success));
 				
 			}
 			else {
-				return Collections.emptyList();
+				return Tuples._2T(index_name, Collections.emptyList());
 			}
 		}
 		catch (Throwable e) {
@@ -325,7 +336,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					new Date(), false, bucket.full_name(), "validateSchema", null, 
 					ErrorUtils.getLongForm("{0}", e), null);
 					
-			return Arrays.asList(err);
+			return Tuples._2T("", Arrays.asList(err));
 		}
 	}
 	protected static boolean is_verbose(final SearchIndexSchemaBean schema) {
@@ -353,6 +364,20 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
 		return Arrays.asList(this, _crud_factory);
+	}
+
+	@Override
+	public CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(
+			DataBucketBean bucket, boolean bucket_getting_deleted) {
+		//TODO (ALEPH-14): handle data deletion and template deletion
+		return null;
+	}
+
+	@Override
+	public CompletableFuture<BasicMessageBean> handleAgeOutRequest(
+			DataBucketBean bucket) {
+		// TODO (ALEPH-14): handle age out
+		return null;
 	}
 
 }

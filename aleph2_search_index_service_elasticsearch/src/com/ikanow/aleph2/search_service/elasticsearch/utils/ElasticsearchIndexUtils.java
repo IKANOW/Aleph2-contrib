@@ -296,6 +296,7 @@ public class ElasticsearchIndexUtils {
 	
 	
 	/** Creates a mapping for the bucket - columnar elements
+	 *  ALSO INCLUDES THE PER-FIELD CONFIGURATION FROM THE SEARCH_INDEX_SCHEMA AND TEMPORAL_SCHMEA
 	 * @param bucket
 	 * @return
 	 * @throws IOException 
@@ -308,42 +309,55 @@ public class ElasticsearchIndexUtils {
 	{
 		try {
 			final XContentBuilder start = to_embed.orElse(XContentFactory.jsonBuilder().startObject());
-			if (!Optional.ofNullable(bucket.data_schema())
-					.map(DataSchemaBean::columnar_schema)
-					.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
-					.isPresent()) 
-						return start;			
+			final boolean columnar_enabled = 
+					Optional.ofNullable(bucket.data_schema())
+						.map(DataSchemaBean::columnar_schema)
+						.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+						.isPresent(); 
 			
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> column_lookups = Stream.of(			
-				createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_include_list()).stream(),
-						fn -> Either.left(fn), 
-						field_lookups, enabled_not_analyzed, enabled_analyzed, true, mapper, index_type
-						)
-						,
-				createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_exclude_list()).stream(),
-						fn -> Either.left(fn), 
-						field_lookups, mapper, index_type
-						)
-						,
-				createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_include_pattern_list()).stream(),
-						fn -> Either.right(Tuples._2T(fn, "*")), 
-						field_lookups, enabled_not_analyzed, enabled_analyzed, true, mapper, index_type
-						)
-						,	
-				createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_type_include_list()).stream(),
-						fn -> Either.right(Tuples._2T("*", fn)), 
-						field_lookups, enabled_not_analyzed, enabled_analyzed, true, mapper, index_type
-						)
-						,			
-				createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_exclude_pattern_list()).stream(),
-						fn -> Either.right(Tuples._2T(fn, "*")), 
-						field_lookups, mapper, index_type
-						)
-						,
-				createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_type_exclude_list()).stream(),
-						fn -> Either.right(Tuples._2T("*", fn)), 
-						field_lookups, mapper, index_type
-					),
+					columnar_enabled ?
+						createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_include_list()).stream(),
+								fn -> Either.left(fn), 
+								field_lookups, enabled_not_analyzed, enabled_analyzed, true, mapper, index_type
+								)
+						: Stream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>empty()
+					,
+					columnar_enabled ?
+						createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_exclude_list()).stream(),
+								fn -> Either.left(fn), 
+								field_lookups, mapper, index_type
+								)
+						: Stream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>empty()
+					,
+					columnar_enabled ?
+						createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_include_pattern_list()).stream(),
+								fn -> Either.right(Tuples._2T(fn, "*")), 
+								field_lookups, enabled_not_analyzed, enabled_analyzed, true, mapper, index_type
+								)
+						: Stream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>empty()
+					,	
+					columnar_enabled ?
+						createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_type_include_list()).stream(),
+								fn -> Either.right(Tuples._2T("*", fn)), 
+								field_lookups, enabled_not_analyzed, enabled_analyzed, true, mapper, index_type
+								)
+						: Stream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>empty()
+					,			
+					columnar_enabled ?
+						createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_exclude_pattern_list()).stream(),
+								fn -> Either.right(Tuples._2T(fn, "*")), 
+								field_lookups, mapper, index_type
+								)
+						: Stream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>empty()
+					,
+					columnar_enabled ?
+						createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_type_exclude_list()).stream(),
+								fn -> Either.right(Tuples._2T("*", fn)), 
+								field_lookups, mapper, index_type
+								)
+						: Stream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>empty()
+					,
 					
 				// Finally add the default columnar lookups to the unmentioned strings
 					
@@ -704,6 +718,24 @@ public class ElasticsearchIndexUtils {
 							: Optional.ofNullable(schema_config.search_technology_override().type_name_or_prefix())
 						);
 		
+		
+		// If a time field is present then adding the default mapping for it (overwrite @timestamp if that's the specified field):
+		
+		final Optional<JsonNode> time_mapping = Optional.ofNullable(schema_config.temporal_technology_override())
+													.map(DataSchemaBean.TemporalSchemaBean::technology_override_schema)
+													.map(t -> (Object) t.get("default_timefield_mapping"))
+													.map(js -> mapper.convertValue(js, JsonNode.class))										
+													;		
+		time_mapping.ifPresent(json -> {
+			Optional.ofNullable(bucket.data_schema())
+			.map(DataSchemaBean::temporal_schema)
+			.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+			.map(t -> t.time_field())
+			.ifPresent(time_field -> {
+				field_lookups.put(Either.left(time_field), json); //(MUTABLE CODE WARNING)
+			});
+		});
+				
 		final XContentBuilder test_result = getFullMapping(
 				bucket, schema_config, field_lookups, 
 				enabled_not_analyzed_field, enabled_analyzed_field, 

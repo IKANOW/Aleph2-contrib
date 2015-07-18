@@ -15,6 +15,8 @@
  ******************************************************************************/
 package com.ikanow.aleph2.search_service.elasticsearch.utils;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Optional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,6 +24,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.ColumnarSchemaDefaultBean;
@@ -116,10 +119,19 @@ public class ElasticsearchIndexConfigUtils {
 					.with(ColumnarSchemaDefaultBean::enabled_field_data_notanalyzed, Optional.ofNullable(columnar_bits_tmp.enabled_field_data_notanalyzed()).orElse(backup.columnar_technology_override().enabled_field_data_notanalyzed()))
 				.done();		
 		
-		// (no _tmp here because there are currently no technology overrides for temporal code)
-		final DataSchemaBean.TemporalSchemaBean temporal_bits = Optional.ofNullable(bucket.data_schema()).map(DataSchemaBean::temporal_schema)
+		final DataSchemaBean.TemporalSchemaBean temporal_bits_tmp = Optional.ofNullable(bucket.data_schema()).map(DataSchemaBean::temporal_schema)
 																	.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))				
 																	.orElse(backup.temporal_technology_override());
+		
+		final DataSchemaBean.TemporalSchemaBean temporal_bits =
+				BeanTemplateUtils.clone(temporal_bits_tmp)
+					.with(DataSchemaBean.TemporalSchemaBean::technology_override_schema, Lambdas.get(() -> {
+						HashMap<String, Object> tmp = new HashMap<>();
+						tmp.putAll(Optional.ofNullable(temporal_bits_tmp.technology_override_schema()).orElse(Collections.emptyMap()));
+						tmp.putAll(Optional.ofNullable(backup.temporal_technology_override().technology_override_schema()).orElse(Collections.emptyMap()));
+						return tmp;
+					}))
+				.done();		
 		
 		return BeanTemplateUtils.build(ElasticsearchIndexServiceConfigBean.class)
 				.with(ElasticsearchIndexServiceConfigBean::search_technology_override, search_index_bits)

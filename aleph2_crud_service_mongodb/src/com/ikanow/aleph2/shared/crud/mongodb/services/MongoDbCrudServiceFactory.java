@@ -32,6 +32,7 @@ import com.mongodb.MongoClient;
 import com.mongodb.ServerAddress;
 
 /** A factory for accessing the MongoDB instance and its generic wrapper - interface, real version
+ *  THIS CLASS HAS NO COVERAGE SO NEED TO HANDLE TEST ON MODIFICATION
  * @author acp
  */
 public class MongoDbCrudServiceFactory implements IMongoDbCrudServiceFactory {

@@ -1,0 +1,23 @@
+{
+    "_id": "555d44e3347d336b3e8c4cbe",
+    "created": "May 21, 2015 02:37:23 AM UTC",
+    "modified": "May 21, 2015 02:37:24 AM UTC",
+    "owner": {
+	    "_id": "455d44e3347d336b3e8c4cbe",
+	    "email": "test_user@ikanow.com",
+	    "displayName": "Dummy User"
+    },
+    "type": "binary",
+    "title": "/app/aleph2/library/misc/library.jar",
+    "description": "<<TEMPLATE>>",
+    "mediaType": "archive/jar",
+    "tags": [ "test1", "test2" ],
+    "communities": [{
+    	"_id": "50bcd6fffbf0fd0b27875a7c",
+    	"name": "commid1"    	
+    },
+    {
+    	"_id": "50bcd6fffbf0fd0b27875a7d",
+    	"name": "commid2"    	
+    }]    
+}
