@@ -318,16 +318,17 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 											: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
 			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, schema_config, _mapper, index_type);
+			final String index_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
 			if (is_verbose(schema)) {
 				final BasicMessageBean success = new BasicMessageBean(
 						new Date(), true, bucket.full_name(), "validateSchema", null, 
 						mapping.bytes().toUtf8(), null);
 						
-				return Tuples._2T(ElasticsearchIndexUtils.getBaseIndexName(bucket), Arrays.asList(success));
+				return Tuples._2T(index_name, Arrays.asList(success));
 				
 			}
 			else {
-				return Tuples._2T("", Collections.emptyList());
+				return Tuples._2T(index_name, Collections.emptyList());
 			}
 		}
 		catch (Throwable e) {
