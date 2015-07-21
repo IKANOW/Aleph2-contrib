@@ -607,31 +607,39 @@ public class IkanowV1SyncService_Buckets {
 		final JsonNode data_bucket_tmp = safeJsonGet("data_bucket", px_pipeline_first_el);// (WARNING: mutable, see below)
 		final JsonNode scripting = safeJsonGet("scripting", data_bucket_tmp);
 		
-		final String sub_prefix = safeJsonGet("sub_prefix", scripting).asText("$$SCRIPT_");
-		final String sub_suffix = safeJsonGet("sub_suffix", scripting).asText("$$");
+		// HANDLE SUBSTITUTION
+		final String sub_prefix = Optional.ofNullable(scripting.get("sub_prefix")).map(x -> x.asText()).orElse("$$SCRIPT_");
+		final String sub_suffix = Optional.ofNullable(scripting.get("sub_suffix")).map(x -> x.asText()).orElse("$$");
 		final List<UnaryOperator<String>> search_replace = 
 				StreamSupport.stream(Spliterators.spliteratorUnknownSize(scripting.fieldNames(), Spliterator.ORDERED), false)
+						.filter(f -> !f.equals("sub_prefix") && !f.equals("sub_suffix")) // (remove non language fields)
 						.map(lang -> Tuples._2T(scripting.get(lang), lang))
 						// Get (separator regex, entire script, sub prefix)
 						.map(scriptobj_lang -> Tuples._3T(safeJsonGet("separator_regex", scriptobj_lang._1()).asText(""), 
 															safeJsonGet("script", scriptobj_lang._1()).asText(""), 
 																sub_prefix + scriptobj_lang._2()))
-						// Split each "entire script" up into blocks
+						// Split each "entire script" up into blocks of format (bloc, lang)
 						.<Stream<Tuple2<String,String>>>
 							map(regex_script_lang -> Stream.concat(
 														Stream.of(Tuples._2T(regex_script_lang._2(), regex_script_lang._3()))
 														, 
 														regex_script_lang._1().isEmpty() 
-															? Stream.of(regex_script_lang)
-																.<Tuple2<String, String>>map(t3 -> Tuples._2T(t3._2(), t3._3()))
-															: Arrays.stream(regex_script_lang._2().split(regex_script_lang._1()))
+															? 
+															Stream.of(Tuples._2T(regex_script_lang._2(), regex_script_lang._3()))																	
+															:
+															Arrays.stream(regex_script_lang._2().split(regex_script_lang._1()))
 																.<Tuple2<String, String>>map(s -> Tuples._2T(s, regex_script_lang._3()))
 													))
 						// Associate a per-lang index with each  script block -> (replacement, string_sub)
 						.<Tuple2<String,String>>
 							flatMap(stream -> StreamUtils.zip(stream, 
-														Stream.iterate(1, i -> i+1), (script_lang, i) -> Tuples._2T(script_lang._1(), script_lang._2() + "_" + i)))
-						.<UnaryOperator<String>>map(t2 -> (String s) -> s.replace(t2._2() + sub_suffix, t2._1().replace("\"", "\\\"").replace("\n", "\\\n").replace("\r", "\\\r")))
+														Stream.iterate(0, i -> i+1), (script_lang, i) -> 
+															Tuples._2T(script_lang._1().replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r"), 
+																	i == 0
+																	? script_lang._2() + sub_suffix // (entire thing)
+																	: script_lang._2() + "_" + i + sub_suffix))) //(broken down components)
+
+						.<UnaryOperator<String>>map(t2 -> (String s) -> s.replace(t2._2(), t2._1()))
 							//(need to escape "s and newlines)
 						.collect(Collectors.toList())
 						;

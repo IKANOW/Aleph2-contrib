@@ -15,15 +15,20 @@
         "data_bucket": {
         	"scripting": {
         		"js": {
-        			"script": "string1\n//ALEPH2_MODULE------------------\nstring2"
+        			"script": "string1\n//ALEPH2_MODULE------------------\n\"string2\""
+        		},
+        		"csv": {
+        			"script": "a,",
+        			"separator_regex": ","
         		}
-        	}
+        	},
             "harvest_configs": [{
                 "config": {"test_all": "$$SCRIPT_js$$"},
+                "enabled": true
             }],
-            "harvest_technology_name_or_id": "/app/aleph2/library/import/harvest/tech/XXX",
+            "harvest_technology_name_or_id": "/app/aleph2/library/import/harvest/tech/$$SCRIPT_csv_1$$",
             "master_enrichment_type": "none",
-            "multi_node_enabled": false,
+            "multi_node_enabled": false
         },
         "display": "Currently this is the only supported element in the pipeline (TODO: enable other elements to be added, and aggregate them into a single bucket)owner_id"
     }],
