@@ -1,0 +1,33 @@
+{
+    "_id": "555d44e3347d336b3e8c4cbe",
+    "communityIds": ["50bcd6fffbf0fd0b27875a7c"],
+    "created": "May 21, 2015 02:37:23 AM UTC",
+    "description": "DESCRIPTION HERE.",
+    "extractType": "V2DataBucket",
+    "harvestBadSource": false,
+    "isApproved": true,
+    "isPublic": true,
+    "key": "aleph...bucket.Template_V2_data_bucket.",
+    "mediaType": "Record",
+    "modified": "May 25, 2015 01:52:01 PM UTC",
+    "ownerId": "506dc16dfbf042893dd6b8f2",
+    "processingPipeline": [{
+        "data_bucket": {
+        	"scripting": {
+        		"js": {
+        			"script": "string1\n//ALEPH2_MODULE------------------\nstring2"
+        		}
+        	}
+            "harvest_configs": [{
+                "config": {"test_all": "$$SCRIPT_js$$"},
+            }],
+            "harvest_technology_name_or_id": "/app/aleph2/library/import/harvest/tech/XXX",
+            "master_enrichment_type": "none",
+            "multi_node_enabled": false,
+        },
+        "display": "Currently this is the only supported element in the pipeline (TODO: enable other elements to be added, and aggregate them into a single bucket)owner_id"
+    }],
+    "shah256Hash": "ucTavC5F69awgzMgA3zP4YU8Ve7+Hl5bf4ulm8yiSdc=",
+    "tags": ["test"],
+    "title": "Template V2 data bucket"
+}
