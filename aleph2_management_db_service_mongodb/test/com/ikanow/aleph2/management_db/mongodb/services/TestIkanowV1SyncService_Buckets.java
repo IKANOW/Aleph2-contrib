@@ -203,6 +203,72 @@ public class TestIkanowV1SyncService_Buckets {
 		assertEquals("value1_streaming", bucket.streaming_enrichment_topology().config().get("key1"));
 		assertEquals(Collections.unmodifiableSet(new HashSet<String>(Arrays.asList("test"))), bucket.tags());
 	}
+
+	@SuppressWarnings("deprecation")
+	@Test 
+	public void testSourceToBucketConversion_scripting() throws JsonProcessingException, IOException, ParseException {		
+		final ObjectMapper mapper = BeanTemplateUtils.configureMapper(Optional.empty());
+		
+		{
+			final JsonNode v1_source = mapper.readTree(this.getClass().getResourceAsStream("test_scripting_1.json"));
+			final DataBucketBean bucket = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source);
+			
+			// (all the existing stuff)
+			assertEquals("aleph...bucket.Template_V2_data_bucket.;", bucket._id());
+			assertEquals(ImmutableMap.<String, String>builder().put("50bcd6fffbf0fd0b27875a7c", "rw").build(), bucket.access_rights().auth_token());
+			assertEquals("21 May 2015 02:37:23 GMT", bucket.created().toGMTString());
+			assertEquals(null, bucket.data_locations());
+			assertEquals("DESCRIPTION HERE.", bucket.description());
+			assertEquals("Template V2 data bucket", bucket.display_name());
+			assertEquals(1, bucket.harvest_configs().size());
+			assertEquals(true, bucket.harvest_configs().get(0).enabled());
+			assertEquals("/app/aleph2/library/import/harvest/tech/XXX", bucket.harvest_technology_name_or_id());
+			assertEquals("none", bucket.master_enrichment_type().toString());
+			assertEquals("25 May 2015 13:52:01 GMT", bucket.modified().toGMTString());
+			assertEquals(null, bucket.multi_bucket_children());
+			assertEquals(false, bucket.multi_node_enabled());
+			assertEquals("506dc16dfbf042893dd6b8f2", bucket.owner_id());
+			assertEquals(null, bucket.poll_frequency());
+			assertEquals(null, bucket.streaming_enrichment_configs());
+			assertEquals(null, bucket.streaming_enrichment_topology());
+			assertEquals(Collections.unmodifiableSet(new HashSet<String>(Arrays.asList("test"))), bucket.tags());
+			
+			//Plus check on the subvariables:
+			assertEquals(3, bucket.harvest_configs().get(0).config().size());
+			assertEquals("test1:string1\n", bucket.harvest_configs().get(0).config().get("test1"));
+			assertEquals("test2:\n\"string2\"\r:test2", bucket.harvest_configs().get(0).config().get("test2"));
+			assertEquals("string1\n//ALEPH2_MODULE------------------\n\"string2\"\r:test_all", bucket.harvest_configs().get(0).config().get("test_all"));			
+		}
+		
+		{
+			final JsonNode v1_source = mapper.readTree(this.getClass().getResourceAsStream("test_scripting_2.json"));
+			final DataBucketBean bucket = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source);
+			
+			// (all the existing stuff)
+			assertEquals("aleph...bucket.Template_V2_data_bucket.;", bucket._id());
+			assertEquals(ImmutableMap.<String, String>builder().put("50bcd6fffbf0fd0b27875a7c", "rw").build(), bucket.access_rights().auth_token());
+			assertEquals("21 May 2015 02:37:23 GMT", bucket.created().toGMTString());
+			assertEquals(null, bucket.data_locations());
+			assertEquals("DESCRIPTION HERE.", bucket.description());
+			assertEquals("Template V2 data bucket", bucket.display_name());
+			assertEquals(1, bucket.harvest_configs().size());
+			assertEquals(true, bucket.harvest_configs().get(0).enabled());
+			assertEquals("/app/aleph2/library/import/harvest/tech/a", bucket.harvest_technology_name_or_id());
+			assertEquals("none", bucket.master_enrichment_type().toString());
+			assertEquals("25 May 2015 13:52:01 GMT", bucket.modified().toGMTString());
+			assertEquals(null, bucket.multi_bucket_children());
+			assertEquals(false, bucket.multi_node_enabled());
+			assertEquals("506dc16dfbf042893dd6b8f2", bucket.owner_id());
+			assertEquals(null, bucket.poll_frequency());
+			assertEquals(null, bucket.streaming_enrichment_configs());
+			assertEquals(null, bucket.streaming_enrichment_topology());
+			assertEquals(Collections.unmodifiableSet(new HashSet<String>(Arrays.asList("test"))), bucket.tags());
+			
+			//Plus check on the subvariables:
+			assertEquals(1, bucket.harvest_configs().get(0).config().size());
+			assertEquals("string1\n//ALEPH2_MODULE------------------\n\"string2\"", bucket.harvest_configs().get(0).config().get("test_all"));			
+		}
+	}
 	
 	////////////////////////////////////////////////////
 	////////////////////////////////////////////////////
