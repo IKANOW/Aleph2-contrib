@@ -631,7 +631,8 @@ public class IkanowV1SyncService_Buckets {
 						.<Tuple2<String,String>>
 							flatMap(stream -> StreamUtils.zip(stream, 
 														Stream.iterate(1, i -> i+1), (script_lang, i) -> Tuples._2T(script_lang._1(), script_lang._2() + "_" + i)))
-						.<UnaryOperator<String>>map(t2 -> (String s) -> s.replace(t2._2() + sub_suffix, t2._1()))
+						.<UnaryOperator<String>>map(t2 -> (String s) -> s.replace(t2._2() + sub_suffix, t2._1().replace("\"", "\\\"").replace("\n", "\\\n")))
+							//(need to escape "s and newlines)
 						.collect(Collectors.toList())
 						;
 		
