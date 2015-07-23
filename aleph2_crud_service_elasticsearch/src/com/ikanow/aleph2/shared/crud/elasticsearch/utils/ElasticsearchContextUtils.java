@@ -149,6 +149,9 @@ public class ElasticsearchContextUtils {
 	 * @return the index suffix, ie added to the base index
 	 */
 	public static String getIndexSuffix(final ChronoUnit grouping_period) {
-		return "_{" + TimeUtils.getTimeBasedSuffix(grouping_period, Optional.of(ChronoUnit.HOURS)) + "}";
+		final String suffix = TimeUtils.getTimeBasedSuffix(grouping_period, Optional.of(ChronoUnit.HOURS));
+		return suffix.isEmpty() 
+					? ""
+					: "_{" + suffix + "}";
 	}
 }
