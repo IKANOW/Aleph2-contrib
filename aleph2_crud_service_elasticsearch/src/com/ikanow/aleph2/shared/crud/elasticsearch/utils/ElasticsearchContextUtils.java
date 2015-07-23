@@ -34,6 +34,7 @@ import scala.Tuple2;
 import com.codepoetics.protonpack.StreamUtils;
 import com.ikanow.aleph2.data_model.utils.Functions;
 import com.ikanow.aleph2.data_model.utils.Patterns;
+import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 
 /** Utilities around the ElasticsearchContext ADTs
@@ -148,14 +149,6 @@ public class ElasticsearchContextUtils {
 	 * @return the index suffix, ie added to the base index
 	 */
 	public static String getIndexSuffix(final ChronoUnit grouping_period) {
-		return Patterns.match(grouping_period).<String>andReturn()
-				.when(p -> ChronoUnit.SECONDS == p, __ -> "_{yyyy-MM-dd-HH}") // (too granular, just use hours)
-				.when(p -> ChronoUnit.MINUTES == p, __ -> "_{yyyy-MM-dd-HH}") // (too granular, just use hours)
-				.when(p -> ChronoUnit.HOURS == p, __ -> "_{yyyy-MM-dd-HH}")
-				.when(p -> ChronoUnit.DAYS == p, __ -> "_{yyyy-MM-dd}")
-				.when(p -> ChronoUnit.WEEKS == p, __ -> "_{YYYY.ww}") // (deliberately 'Y' (week-year) not 'y' since 'w' is week-of-year 
-				.when(p -> ChronoUnit.MONTHS == p, __ -> "_{yyyy-MM}")
-				.when(p -> ChronoUnit.YEARS == p, __ -> "_{yyyy}")
-				.otherwise(__ -> "");
+		return TimeUtils.getTimeBasedSuffix(grouping_period, Optional.of(ChronoUnit.HOURS));
 	}
 }
