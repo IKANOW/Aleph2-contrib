@@ -27,13 +27,15 @@ import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbServic
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
-import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
+import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean;
+import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean.StateDirectoryType;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.ManagementDbUtils;
 import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
 import com.ikanow.aleph2.management_db.mongodb.module.MongoDbManagementDbModule;
@@ -52,12 +54,14 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	public static final String SHARED_LIBRARY_STORE = "aleph2_shared.library";
 	public static final String DATA_BUCKET_STORE = "aleph2_data_import.bucket";
 	public static final String DATA_BUCKET_STATUS_STORE = "aleph2_data_import.bucket_status";
-	public static final String DATA_ANALYTIC_THREAD_STORE = "aleph2_analytics.thread";
-	public static final String RETRY_DB = "aleph2_retry_store";
+	public static final String RETRY_STORE_PREFIX = "aleph2_data_import.retry_store_";
+	public static final String BUCKET_DELETION_STORE = "aleph2_data_import.bucket_delete_store";
+	public static final String STATE_DIRECTORY_STORE = "aleph2_data_import.state_directory_store";
 	
-	final public static String BUCKET_STATE_DB_PREFIX = "aleph2_bucket_state";
+	final public static String BUCKET_STATE_HARVEST_DB_PREFIX = "aleph2_harvest_state";
+	final public static String BUCKET_STATE_ENRICH_DB_PREFIX = "aleph2_enrich_state";
+	final public static String BUCKET_STATE_ANALYTICS_DB_PREFIX = "aleph2_analytics_state";
 	final public static String LIBRARY_STATE_DB_PREFIX = "aleph2_library_state";
-	final public static String ANALYTICS_STATE_DB_PREFIX = "aleph2_analytics_state";
 	
 	protected final IMongoDbCrudServiceFactory _crud_factory;
 	protected final Optional<AuthorizationBean> _auth;
@@ -124,24 +128,39 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 				_auth, _project)).readOnlyVersion(_read_only);
 	}
 
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getPerLibraryState(java.lang.Class, com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean, java.util.Optional)
-	 */
-	public <T> ICrudService<T> getPerLibraryState(Class<T> clazz,
-			SharedLibraryBean library, Optional<String> sub_collection) {
+	protected <T> ICrudService<T> getAppStateStore(final Class<T> clazz, final String name, final Optional<String> collection, final AssetStateDirectoryBean.StateDirectoryType type) {
+		//TODO: handle empty collection
+		//TODO: handle adding entry
 		
-		final String collection_name = MongoDbCollectionUtils.getBaseIndexName(library.path_name(), sub_collection);
+		final String prefix = Lambdas.get(() -> {
+			switch (type) {
+				case analytic_thread: return MongoDbManagementDbService.BUCKET_STATE_ANALYTICS_DB_PREFIX;
+				case enrichment: return MongoDbManagementDbService.BUCKET_STATE_ENRICH_DB_PREFIX;
+				case harvest: return MongoDbManagementDbService.BUCKET_STATE_HARVEST_DB_PREFIX;
+				case library: return MongoDbManagementDbService.LIBRARY_STATE_DB_PREFIX;
+			}
+			return null;
+		});
+		
+		final String collection_name = MongoDbCollectionUtils.getBaseIndexName(name, collection);
 		
 		final DB db = MongoDbCollectionUtils.findDatabase(
 						_crud_factory.getMongoDb("test").getMongo(), 
-						MongoDbManagementDbService.LIBRARY_STATE_DB_PREFIX, collection_name);
+						prefix, collection_name);
 
 		return ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
 				clazz, String.class,
 				db.getCollection(collection_name),
 				Optional.empty(), 
 				_auth, _project)).readOnlyVersion(_read_only);
-		
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getPerLibraryState(java.lang.Class, com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean, java.util.Optional)
+	 */
+	public <T> ICrudService<T> getPerLibraryState(Class<T> clazz,
+			SharedLibraryBean library, Optional<String> sub_collection) {
+		return getAppStateStore(clazz, library.path_name(), sub_collection, AssetStateDirectoryBean.StateDirectoryType.library);
 	}
 
 	/* (non-Javadoc)
@@ -169,51 +188,25 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getPerBucketState(java.lang.Class, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Optional)
 	 */
-	public <T> ICrudService<T> getPerBucketState(final Class<T> clazz,
+	public <T> ICrudService<T> getBucketHarvestState(final Class<T> clazz,
 			final DataBucketBean bucket, final Optional<String> sub_collection) {
-
-		final String collection_name = MongoDbCollectionUtils.getBaseIndexName(bucket.full_name(), sub_collection);
-		
-		final DB db = MongoDbCollectionUtils.findDatabase(
-						_crud_factory.getMongoDb("test").getMongo(), 
-						MongoDbManagementDbService.BUCKET_STATE_DB_PREFIX, collection_name);
-
-		return ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
-				clazz, String.class,
-				db.getCollection(collection_name),
-				Optional.empty(), 
-				_auth, _project)).readOnlyVersion(_read_only);
+		return getAppStateStore(clazz, bucket.full_name(), sub_collection, AssetStateDirectoryBean.StateDirectoryType.harvest);
 	}
 
 	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getAnalyticThreadStore()
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getPerBucketState(java.lang.Class, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Optional)
 	 */
-	public IManagementCrudService<AnalyticThreadBean> getAnalyticThreadStore() {
-		return ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
-				AnalyticThreadBean.class, String.class, 
-				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.DATA_ANALYTIC_THREAD_STORE), 
-				Optional.of(BeanTemplateUtils.from(DataBucketBean.class).field(DataBucketBean::access_rights)), 
-				_auth, _project)).readOnlyVersion(_read_only);
+	public <T> ICrudService<T> getBucketEnrichmentState(final Class<T> clazz,
+			final DataBucketBean bucket, final Optional<String> sub_collection) {
+		return getAppStateStore(clazz, bucket.full_name(), sub_collection, AssetStateDirectoryBean.StateDirectoryType.enrichment);
 	}
 
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getPerAnalyticThreadState(java.lang.Class, com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean, java.util.Optional)
 	 */
-	public <T> ICrudService<T> getPerAnalyticThreadState(Class<T> clazz,
-			AnalyticThreadBean analytic_thread, Optional<String> sub_collection) {
-		
-		final String collection_name = MongoDbCollectionUtils.getBaseIndexName(analytic_thread.path_name(), sub_collection);
-		
-		final DB db = MongoDbCollectionUtils.findDatabase(
-						_crud_factory.getMongoDb("test").getMongo(), 
-						MongoDbManagementDbService.ANALYTICS_STATE_DB_PREFIX, collection_name);
-
-		return ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
-				clazz, String.class,
-				db.getCollection(collection_name),
-				Optional.empty(), 
-				_auth, _project)).readOnlyVersion(_read_only);
-		
+	public <T> ICrudService<T> getBucketAnalyticThreadState(Class<T> clazz,
+			DataBucketBean bucket, Optional<String> sub_collection) {
+		return getAppStateStore(clazz, bucket.full_name(), sub_collection, AssetStateDirectoryBean.StateDirectoryType.analytic_thread);
 	}
 
 	/* (non-Javadoc)
@@ -300,10 +293,36 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 			Class<T> retry_message_clazz) {
 			return (ICrudService<T>) _crud_factory.getMongoDbCrudService(
 				retry_message_clazz, String.class, 
-				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.RETRY_DB, retry_message_clazz.getSimpleName()), 
+				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.RETRY_STORE_PREFIX + retry_message_clazz.getSimpleName()), 
 				Optional.empty(), Optional.empty(), Optional.empty()).readOnlyVersion(_read_only);
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getBucketDeletionQueue(java.lang.Class)
+	 */
+	@Override
+	public <T> ICrudService<T> getBucketDeletionQueue(
+			Class<T> deletion_queue_clazz) {
+		return (ICrudService<T>) _crud_factory.getMongoDbCrudService(
+				deletion_queue_clazz, String.class, 
+				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.BUCKET_DELETION_STORE), 
+				Optional.empty(), Optional.empty(), Optional.empty()).readOnlyVersion(_read_only);
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getStateDirectory(java.util.Optional)
+	 */
+	@Override
+	public ICrudService<AssetStateDirectoryBean> getStateDirectory(
+			Optional<DataBucketBean> bucket_filter, Optional<StateDirectoryType> type_filter) {
+		//TODO: handle non-empty bucket filter etc
+		
+		return (ICrudService<AssetStateDirectoryBean>) _crud_factory.getMongoDbCrudService(
+				AssetStateDirectoryBean.class, String.class, 
+				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.STATE_DIRECTORY_STORE), 
+				Optional.empty(), Optional.empty(), Optional.empty()).readOnlyVersion(_read_only);
+	}
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getUnderlyingArtefacts()
 	 */
@@ -319,4 +338,5 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	public IManagementDbService readOnlyVersion() {
 		return new MongoDbManagementDbService(_crud_factory, _auth, _project, _properties, true);
 	}
+
 }

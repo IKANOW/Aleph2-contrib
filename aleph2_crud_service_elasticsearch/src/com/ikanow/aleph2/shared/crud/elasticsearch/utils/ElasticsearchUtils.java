@@ -206,10 +206,20 @@ public class ElasticsearchUtils {
 	 * @param query_in - a multi query
 	 * @return the Elasticsearch filter object (no meta - that is added above)
 	 */
+	@SuppressWarnings("unchecked")
 	protected static <T> FilterBuilder convertToElasticsearchFilter_multi(final Function<List<FilterBuilder>, FilterBuilder> andVsOr, final MultiQueryComponent<T> query_in, boolean id_ranges_ok) {
 		
-		return andVsOr.apply(query_in.getElements().stream().map(entry -> 
-								convertToElasticsearchFilter_single(getMultiOperator(entry.getOp()), entry, id_ranges_ok)).collect(Collectors.toList()));
+		return andVsOr.apply(query_in.getElements().stream()
+				.map(entry -> 
+						Patterns.match(entry).<FilterBuilder>andReturn()
+							.when(SingleQueryComponent.class, 
+									e -> convertToElasticsearchFilter_single(getMultiOperator(e.getOp()), e, id_ranges_ok))
+							.when(MultiQueryComponent.class, 
+									e -> convertToElasticsearchFilter_multi(getMultiOperator(e.getOp()), e, id_ranges_ok))
+							.otherwise(e -> { throw new RuntimeException("Internal Logic Error: type: " + e.getClass()); })
+						)
+						.collect(Collectors.toList()))
+						;
 	}	
 	
 	/** Creates a big $and/$or list of the list of fields in the single query component

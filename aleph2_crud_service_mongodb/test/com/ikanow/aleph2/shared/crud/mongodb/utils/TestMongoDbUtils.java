@@ -82,6 +82,8 @@ public class TestMongoDbUtils {
 		private EnumField enum_field;
 	}
 	
+	//TODO: test nested multi query
+	
 	///////////////////////////////////////////////
 	
 	// QUERY CREATION TESTING

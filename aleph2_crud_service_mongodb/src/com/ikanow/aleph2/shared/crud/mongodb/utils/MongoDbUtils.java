@@ -154,6 +154,7 @@ public class MongoDbUtils {
 	 * @param query_in - a multi query
 	 * @return the MongoDB query object (no meta - that is added above)
 	 */
+	@SuppressWarnings("unchecked")
 	protected static <T> DBObject convertToMongoQuery_multi(final String andVsOr, final MultiQueryComponent<T> query_in) {
 		
 		return Patterns.match(query_in.getElements())
@@ -163,7 +164,11 @@ public class MongoDbUtils {
 					Collector.of( 
 						BasicDBList::new,
 						(acc, entry) -> {
-							acc.add(convertToMongoQuery_single(getOperatorName(entry.getOp()), entry));
+									Patterns.match(entry).andAct()
+										.when(SingleQueryComponent.class, 
+												e -> acc.add(convertToMongoQuery_single(getOperatorName(e.getOp()), e)))
+										.when(MultiQueryComponent.class, 
+												e -> acc.add(convertToMongoQuery_multi(getOperatorName(e.getOp()), e)));
 						},
 						(a, b) -> { a.addAll(b); return a; },
 						acc -> (DBObject)new BasicDBObject(andVsOr, acc),

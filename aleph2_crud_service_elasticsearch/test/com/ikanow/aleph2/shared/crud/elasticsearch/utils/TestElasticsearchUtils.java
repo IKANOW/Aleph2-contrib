@@ -87,6 +87,8 @@ public class TestElasticsearchUtils {
 		private NestedTestBean nested_object;
 	}
 
+	//TODO: test nested multi query
+	
 	public static class MockSearchRequestBuilder {
 		final ArrayList<Tuple2<String, SortOrder>> sort = new ArrayList<>();
 		final ArgumentCaptor<Integer> size_arg = ArgumentCaptor.forClass(int.class);
