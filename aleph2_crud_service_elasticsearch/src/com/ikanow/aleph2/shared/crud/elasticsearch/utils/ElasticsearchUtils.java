@@ -210,16 +210,18 @@ public class ElasticsearchUtils {
 	protected static <T> FilterBuilder convertToElasticsearchFilter_multi(final Function<List<FilterBuilder>, FilterBuilder> andVsOr, final MultiQueryComponent<T> query_in, boolean id_ranges_ok) {
 		
 		return andVsOr.apply(query_in.getElements().stream()
-				.map(entry -> 
-						Patterns.match(entry).<FilterBuilder>andReturn()
+				.<FilterBuilder>map(entry -> 
+					(FilterBuilder)Patterns.match(entry).<FilterBuilder>andReturn()
+						//(^not sure why all this extra cast is needed here, ecj works fine but oraclej complains)
 							.when(SingleQueryComponent.class, 
 									e -> convertToElasticsearchFilter_single(getMultiOperator(e.getOp()), e, id_ranges_ok))
 							.when(MultiQueryComponent.class, 
-									e -> convertToElasticsearchFilter_multi(getMultiOperator(e.getOp()), e, id_ranges_ok))
+									e -> convertToElasticsearchFilter_multi(getMultiOperator(((MultiQueryComponent<?>)e).getOp()), (MultiQueryComponent<?>)e, id_ranges_ok))
+									//(^not sure why the extra cast is needed here, ecj works fine but oraclej complains)
 							.otherwise(e -> { throw new RuntimeException("Internal Logic Error: type: " + e.getClass()); })
-						)
-						.collect(Collectors.toList()))
-						;
+				)
+				.collect(Collectors.toList()))
+				;
 	}	
 	
 	/** Creates a big $and/$or list of the list of fields in the single query component
