@@ -55,9 +55,18 @@ public class TestMongoDbManagementDbService {
 		assertEquals(MongoDbManagementDbService.DATA_BUCKET_STORE,
 				management_db_service.getDataBucketStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
 		
+		assertEquals(MongoDbManagementDbService.BUCKET_DELETION_STORE,
+				management_db_service.getBucketDeletionQueue(String.class).getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
+		
+		assertEquals(MongoDbManagementDbService.BUCKET_TEST_STORE,
+				management_db_service.getBucketTestQueue(String.class).getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
+		
 		assertEquals(MongoDbManagementDbService.SHARED_LIBRARY_STORE,
 				management_db_service.getSharedLibraryStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
 
+		assertEquals(MongoDbManagementDbService.STATE_DIRECTORY_STORE,
+				management_db_service.getStateDirectory(Optional.empty(), Optional.empty()).getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
+		
 		// Check that the wrapped version also works
 		
 		MongoDbManagementDbService management_db_service2 = management_db_service.getFilteredDb(Optional.empty(), Optional.empty());
@@ -68,9 +77,19 @@ public class TestMongoDbManagementDbService {
 		assertEquals(MongoDbManagementDbService.DATA_BUCKET_STORE,
 				management_db_service2.getDataBucketStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
 		
+		assertEquals(MongoDbManagementDbService.BUCKET_DELETION_STORE,
+				management_db_service2.getBucketDeletionQueue(String.class).getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
+		
+		assertEquals(MongoDbManagementDbService.BUCKET_TEST_STORE,
+				management_db_service2.getBucketTestQueue(String.class).getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
+		
 		assertEquals(MongoDbManagementDbService.SHARED_LIBRARY_STORE,
 				management_db_service2.getSharedLibraryStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
 
+
+		assertEquals(MongoDbManagementDbService.STATE_DIRECTORY_STORE,
+				management_db_service2.getStateDirectory(Optional.empty(), Optional.empty()).getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
+		
 		assertEquals("test", management_db_service.getUnderlyingPlatformDriver(DB.class, Optional.of("test")).get().getName());
 		assertEquals("test1.test2", management_db_service.getUnderlyingPlatformDriver(DBCollection.class, Optional.of("test1.test2")).get().getFullName());
 		
@@ -161,6 +180,19 @@ public class TestMongoDbManagementDbService {
 			}
 			shared_lib_service.countObjects(); // (just check doesn't thrown)
 		}
+		// State Directory Store
+		{
+			ICrudService<AssetStateDirectoryBean> state_dir_service = read_only_management_db_service.getStateDirectory(Optional.empty(), Optional.empty());
+			assertTrue("Is read only", ICrudService.IReadOnlyCrudService.class.isAssignableFrom(state_dir_service.getClass()));
+			try {
+				state_dir_service.deleteDatastore();
+				fail("Should have thrown error");
+			}
+			catch (Exception e) {
+				assertEquals("Correct error message", ErrorUtils.READ_ONLY_CRUD_SERVICE, e.getMessage());
+			}
+			state_dir_service.countObjects(); // (just check doesn't thrown)
+		}
 		// Retry Store
 		{
 			ICrudService<String> retry_service = read_only_management_db_service.getRetryStore(String.class);
@@ -186,6 +218,19 @@ public class TestMongoDbManagementDbService {
 				assertEquals("Correct error message", ErrorUtils.READ_ONLY_CRUD_SERVICE, e.getMessage());
 			}
 			deletion_service.countObjects(); // (just check doesn't thrown)
+		}		
+		// Test queue
+		{
+			ICrudService<String> test_service = read_only_management_db_service.getBucketTestQueue(String.class);
+			assertTrue("Is read only", ICrudService.IReadOnlyCrudService.class.isAssignableFrom(test_service.getClass()));
+			try {
+				test_service.deleteDatastore();
+				fail("Should have thrown error");
+			}
+			catch (Exception e) {
+				assertEquals("Correct error message", ErrorUtils.READ_ONLY_CRUD_SERVICE, e.getMessage());
+			}
+			test_service.countObjects(); // (just check doesn't thrown)
 		}		
 	}
 	

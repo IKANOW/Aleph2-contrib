@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.ikanow.aleph2.management_db.mongodb.services;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -36,6 +37,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
 import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean;
 import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean.StateDirectoryType;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
+import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -43,6 +45,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils.MethodNamingHelper;
 import com.ikanow.aleph2.data_model.utils.CrudServiceUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
+import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.ManagementDbUtils;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
@@ -71,6 +74,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	public static final String DATA_BUCKET_STATUS_STORE = "aleph2_data_import.bucket_status";
 	public static final String RETRY_STORE_PREFIX = "aleph2_data_import.retry_store_";
 	public static final String BUCKET_DELETION_STORE = "aleph2_data_import.bucket_delete_store";	
+	public static final String BUCKET_TEST_STORE = "aleph2_data_import.bucket_test_store";	
 	
 	final public static String BUCKET_STATE_HARVEST_DB_PREFIX = "aleph2_harvest_state";
 	final public static String BUCKET_STATE_ENRICH_DB_PREFIX = "aleph2_enrich_state";
@@ -430,6 +434,26 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	@Override
 	public IManagementDbService readOnlyVersion() {
 		return new MongoDbManagementDbService(_crud_factory, _auth, _project, _properties, true);
+	}
+
+	@Override
+	public ManagementFuture<Boolean> purgeBucket(DataBucketBean to_purge,
+			Optional<Duration> in) {
+		throw new RuntimeException("This is implemented in the CoreManagementDbService not here");
+	}
+
+	@Override
+	public ManagementFuture<Boolean> testBucket(DataBucketBean to_test,
+			ProcessingTestSpecBean test_spec) {
+		throw new RuntimeException("This is implemented in the CoreManagementDbService not here");
+	}
+
+	@Override
+	public <T> ICrudService<T> getBucketTestQueue(Class<T> test_queue_clazz) {
+		return (ICrudService<T>) _crud_factory.getMongoDbCrudService(
+				test_queue_clazz, String.class, 
+				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.BUCKET_TEST_STORE), 
+				Optional.empty(), Optional.empty(), Optional.empty()).readOnlyVersion(_read_only);
 	}
 
 }
