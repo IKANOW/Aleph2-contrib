@@ -17,9 +17,10 @@ package com.ikanow.aleph2.management_db.mongodb.services;
 
 import static org.junit.Assert.*;
 
+import java.util.Arrays;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
@@ -27,8 +28,10 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
+import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
 import com.ikanow.aleph2.shared.crud.mongodb.services.MockMongoDbCrudServiceFactory;
@@ -191,9 +194,8 @@ public class TestMongoDbManagementDbService {
 		public String test_val;
 	}
 	
-	@Ignore
 	@Test
-	public void test_getPerBucketState() {
+	public void test_getPerBucketState() throws InterruptedException, ExecutionException {
 		
 		// Set up:
 		MockMongoDbCrudServiceFactory mock_crud_service_factory = new MockMongoDbCrudServiceFactory();
@@ -204,22 +206,26 @@ public class TestMongoDbManagementDbService {
 		
 		// No id, "top level collection"
 		{
-			//TODO: fix this:
-			fail("Should return directory");
+			// (check fails if use wrong clazz)
+			try {
+				management_db_service.getBucketHarvestState(StateTester.class, bucket, Optional.empty());
+				fail("Must return correct clazz");
+			}
+			catch (Exception e) {}
 			
-			final ICrudService<StateTester> test = management_db_service.getBucketHarvestState(StateTester.class, bucket, Optional.empty());
-			final ICrudService<StateTester> test_ro = management_db_service_ro.getBucketHarvestState(StateTester.class, bucket, Optional.empty());
+			final ICrudService<AssetStateDirectoryBean> test = management_db_service.getBucketHarvestState(AssetStateDirectoryBean.class, bucket, Optional.empty());
+			final ICrudService<AssetStateDirectoryBean> test_ro = management_db_service_ro.getBucketHarvestState(AssetStateDirectoryBean.class, bucket, Optional.empty());
 			
 			final DBCollection dbc1 = test.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 			final DBCollection dbc2 = test_ro.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 			
-			assertEquals("aleph2_bucket_state_1.test_ext_4354__bb8a6a382d7b", dbc1.getFullName());
-			assertEquals("aleph2_bucket_state_1.test_ext_4354__bb8a6a382d7b", dbc2.getFullName());
+			assertEquals("aleph2_shared.state_directory_store", dbc1.getFullName());
+			assertEquals("aleph2_shared.state_directory_store", dbc2.getFullName());
 			
 			dbc1.drop();
 			assertEquals(0, dbc1.count());
 			
-			final StateTester test_obj = BeanTemplateUtils.build(StateTester.class).with("test_val", "test").done().get();
+			final AssetStateDirectoryBean test_obj = BeanTemplateUtils.build(AssetStateDirectoryBean.class).with("_id", "test").done().get();
 			
 			try {
 				test_ro.storeObject(test_obj);
@@ -228,18 +234,23 @@ public class TestMongoDbManagementDbService {
 				// check didn't add:
 				assertEquals(0, dbc2.count());
 			}
-			test.storeObject(test_obj);
-			assertEquals(1, dbc1.count());
-			BasicDBObject test_dbo = (BasicDBObject) dbc1.findOne(new BasicDBObject("test_val", "test"));
-			assertTrue("Populated _id", null != test_dbo.get("_id"));
+			try {
+				test.storeObject(test_obj);
+			}
+			catch (Exception e) {
+				// check didn't add:
+				assertEquals(0, dbc2.count());
+			}			
 		}		
 		// Id, collection (harvest)
+		String harvest_name;
 		{
 			final ICrudService<StateTester> test = management_db_service.getBucketHarvestState(StateTester.class, bucket, Optional.of("t"));
 			final ICrudService<StateTester> test_ro = management_db_service_ro.getBucketHarvestState(StateTester.class, bucket, Optional.of("t"));
 			
 			final DBCollection dbc1 = test.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 			final DBCollection dbc2 = test_ro.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
+			harvest_name = dbc1.getFullName();
 			
 			assertEquals("aleph2_harvest_state_1.test_ext_4354_t_3b7ae2550a2e", dbc1.getFullName());
 			assertEquals("aleph2_harvest_state_1.test_ext_4354_t_3b7ae2550a2e", dbc2.getFullName());
@@ -260,14 +271,22 @@ public class TestMongoDbManagementDbService {
 			assertEquals(1, dbc1.count());
 			BasicDBObject test_dbo = (BasicDBObject) dbc1.findOne(new BasicDBObject("test_val", "test"));
 			assertEquals("Populated _id", "test_id", test_dbo.get("_id"));
+			
+			// Check it's been added (filtered on bucket + type)
+			final ICrudService<AssetStateDirectoryBean> dir_test = management_db_service.getBucketHarvestState(AssetStateDirectoryBean.class, bucket, Optional.empty());
+			assertEquals(1, dir_test.countObjects().get().intValue());
+			
+			assertTrue("Object present (harvest)", dir_test.getObjectById(harvest_name).get().isPresent());			
 		}		
 		// Id, collection (enrichment)
+		String enrich_name;
 		{
 			final ICrudService<StateTester> test = management_db_service.getBucketEnrichmentState(StateTester.class, bucket, Optional.of("t"));
 			final ICrudService<StateTester> test_ro = management_db_service_ro.getBucketEnrichmentState(StateTester.class, bucket, Optional.of("t"));
 			
 			final DBCollection dbc1 = test.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 			final DBCollection dbc2 = test_ro.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
+			enrich_name = dbc1.getFullName();
 			
 			assertEquals("aleph2_enrich_state_1.test_ext_4354_t_3b7ae2550a2e", dbc1.getFullName());
 			assertEquals("aleph2_enrich_state_1.test_ext_4354_t_3b7ae2550a2e", dbc2.getFullName());
@@ -288,13 +307,22 @@ public class TestMongoDbManagementDbService {
 			assertEquals(1, dbc1.count());
 			BasicDBObject test_dbo = (BasicDBObject) dbc1.findOne(new BasicDBObject("test_val", "test"));
 			assertEquals("Populated _id", "test_id", test_dbo.get("_id"));
+			
+			// Check it's been added (filtered on bucket + type)
+			final ICrudService<AssetStateDirectoryBean> dir_test = management_db_service.getBucketEnrichmentState(AssetStateDirectoryBean.class, bucket, Optional.empty());
+			assertEquals(1, dir_test.countObjects().get().intValue());
+			
+			assertTrue("Object present (enrich)", dir_test.getObjectBySpec(CrudUtils.allOf(AssetStateDirectoryBean.class).when("_id", enrich_name)).get().isPresent());
+			assertTrue("Object not present (harvest)", !dir_test.getObjectBySpec(CrudUtils.allOf(AssetStateDirectoryBean.class).when("_id", harvest_name)).get().isPresent());
 		}		
-		// Id, collection (analytics)
+		// Id, collection (analytics)		
+		final ICrudService<StateTester> test = management_db_service.getBucketAnalyticThreadState(StateTester.class, bucket, Optional.of("t"));
+		final DBCollection dbc1 = test.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
+		// (leave these out so we can delete them...)
+		
 		{
-			final ICrudService<StateTester> test = management_db_service.getBucketAnalyticThreadState(StateTester.class, bucket, Optional.of("t"));
 			final ICrudService<StateTester> test_ro = management_db_service_ro.getBucketAnalyticThreadState(StateTester.class, bucket, Optional.of("t"));
 			
-			final DBCollection dbc1 = test.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 			final DBCollection dbc2 = test_ro.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 			
 			assertEquals("aleph2_analytics_state_1.test_ext_4354_t_3b7ae2550a2e", dbc1.getFullName());
@@ -316,12 +344,36 @@ public class TestMongoDbManagementDbService {
 			assertEquals(1, dbc1.count());
 			BasicDBObject test_dbo = (BasicDBObject) dbc1.findOne(new BasicDBObject("test_val", "test"));
 			assertEquals("Populated _id", "test_id", test_dbo.get("_id"));
-		}		
+			
+			// Check it's been added (filtered on bucket + type)
+			final ICrudService<AssetStateDirectoryBean> dir_test = management_db_service.getBucketAnalyticThreadState(AssetStateDirectoryBean.class, bucket, Optional.empty());
+			assertEquals(1, dir_test.countObjects().get().intValue());				
+			
+			// (test both types of update by _id with extra query terms)
+			assertTrue("Object present (analytics)", dir_test.getObjectById(dbc1.getFullName()).get().isPresent());
+			assertTrue("Object not present (enrich)", !dir_test.getObjectById(enrich_name, Arrays.asList("_id"), true).get().isPresent());
+			assertTrue("Object not present (harvest)", !dir_test.getObjectById(harvest_name).get().isPresent());
+		}				
+		{
+			final ICrudService<AssetStateDirectoryBean> dir_test_all = management_db_service.getStateDirectory(Optional.empty(), Optional.empty());
+			assertEquals(3, dir_test_all.countObjects().get().intValue());
+			
+			final ICrudService<AssetStateDirectoryBean> dir_test_analytics = management_db_service.getStateDirectory(Optional.empty(), Optional.of(AssetStateDirectoryBean.StateDirectoryType.analytic_thread));
+			assertEquals(1, dir_test_analytics.countObjects().get().intValue());			
+			
+			test.deleteDatastore().get();
+			
+			assertEquals(0, dir_test_analytics.countObjects().get().intValue());			
+			assertEquals(2, dir_test_all.countObjects().get().intValue());
+
+			final ICrudService<AssetStateDirectoryBean> dir_test_enrich = management_db_service.getStateDirectory(Optional.empty(), Optional.of(AssetStateDirectoryBean.StateDirectoryType.enrichment));
+			assertTrue("Deleted enriched object", dir_test_enrich.deleteObjectById(enrich_name).get());
+			assertEquals(1, dir_test_all.countObjects().get().intValue());
+		}
 	}
 	
-	@Ignore
 	@Test
-	public void test_getPerLibraryState() {
+	public void test_getPerLibraryState() throws InterruptedException, ExecutionException {
 		
 		// Set up:
 		MockMongoDbCrudServiceFactory mock_crud_service_factory = new MockMongoDbCrudServiceFactory();
@@ -332,22 +384,19 @@ public class TestMongoDbManagementDbService {
 		
 		// No id, "top level collection"
 		{
-			//TODO: fix this:
-			fail("Should return directory");
-			
-			final ICrudService<StateTester> test = management_db_service.getPerLibraryState(StateTester.class, library, Optional.empty());
-			final ICrudService<StateTester> test_ro = management_db_service_ro.getPerLibraryState(StateTester.class, library, Optional.empty());
+			final ICrudService<AssetStateDirectoryBean> test = management_db_service.getPerLibraryState(AssetStateDirectoryBean.class, library, Optional.empty());
+			final ICrudService<AssetStateDirectoryBean> test_ro = management_db_service_ro.getPerLibraryState(AssetStateDirectoryBean.class, library, Optional.empty());
 			
 			final DBCollection dbc1 = test.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 			final DBCollection dbc2 = test_ro.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 			
-			assertEquals("aleph2_library_state_1.test_ext_4354__bb8a6a382d7b", dbc1.getFullName());
-			assertEquals("aleph2_library_state_1.test_ext_4354__bb8a6a382d7b", dbc2.getFullName());
+			assertEquals("aleph2_shared.state_directory_store", dbc1.getFullName());
+			assertEquals("aleph2_shared.state_directory_store", dbc2.getFullName());
 			
 			dbc1.drop();
 			assertEquals(0, dbc1.count());
 			
-			final StateTester test_obj = BeanTemplateUtils.build(StateTester.class).with("test_val", "test").done().get();
+			final AssetStateDirectoryBean test_obj = BeanTemplateUtils.build(AssetStateDirectoryBean.class).with("_id", "test").done().get();
 			
 			try {
 				test_ro.storeObject(test_obj);
@@ -356,17 +405,20 @@ public class TestMongoDbManagementDbService {
 				// check didn't add:
 				assertEquals(0, dbc2.count());
 			}
-			test.storeObject(test_obj);
-			assertEquals(1, dbc1.count());
-			BasicDBObject test_dbo = (BasicDBObject) dbc1.findOne(new BasicDBObject("test_val", "test"));
-			assertTrue("Populated _id", null != test_dbo.get("_id"));
+			try {
+				test.storeObject(test_obj);
+			}
+			catch (Exception e) {
+				// check didn't add:
+				assertEquals(0, dbc2.count());
+			}			
 		}		
 		// Id, sub-collection
+		final ICrudService<StateTester> test = management_db_service.getPerLibraryState(StateTester.class, library, Optional.of("t"));
+		final DBCollection dbc1 = test.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 		{
-			final ICrudService<StateTester> test = management_db_service.getPerLibraryState(StateTester.class, library, Optional.of("t"));
 			final ICrudService<StateTester> test_ro = management_db_service_ro.getPerLibraryState(StateTester.class, library, Optional.of("t"));
 			
-			final DBCollection dbc1 = test.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 			final DBCollection dbc2 = test_ro.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 			
 			assertEquals("aleph2_library_state_1.test_ext_4354_t_3b7ae2550a2e", dbc1.getFullName());
@@ -388,7 +440,26 @@ public class TestMongoDbManagementDbService {
 			assertEquals(1, dbc1.count());
 			BasicDBObject test_dbo = (BasicDBObject) dbc1.findOne(new BasicDBObject("test_val", "test"));
 			assertEquals("Populated _id", "test_id", test_dbo.get("_id"));
+			
+			// Check it's been added (filtered on bucket + type)
+			final ICrudService<AssetStateDirectoryBean> dir_test = management_db_service.getPerLibraryState(AssetStateDirectoryBean.class, library, Optional.empty());
+			assertEquals(1, dir_test.countObjects().get().intValue());
+			
+			assertTrue("Object present (harvest)", dir_test.getObjectById(dbc1.getFullName()).get().isPresent());			
+			
 		}		
+		{
+			final ICrudService<AssetStateDirectoryBean> dir_test_all = management_db_service.getStateDirectory(Optional.empty(), Optional.empty());
+			assertEquals(1, dir_test_all.countObjects().get().intValue());
+			
+			final ICrudService<AssetStateDirectoryBean> dir_test_lib = management_db_service.getStateDirectory(Optional.empty(), Optional.of(AssetStateDirectoryBean.StateDirectoryType.library));
+			assertEquals(1, dir_test_lib.countObjects().get().intValue());			
+			
+			test.deleteDatastore().get();
+			
+			assertEquals(0, dir_test_lib.countObjects().get().intValue());			
+			assertEquals(0, dir_test_all.countObjects().get().intValue());
+		}
 	}
 	
 }
