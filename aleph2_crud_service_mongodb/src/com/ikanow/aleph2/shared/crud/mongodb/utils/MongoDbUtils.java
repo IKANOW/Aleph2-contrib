@@ -168,7 +168,8 @@ public class MongoDbUtils {
 										.when(SingleQueryComponent.class, 
 												e -> acc.add(convertToMongoQuery_single(getOperatorName(e.getOp()), e)))
 										.when(MultiQueryComponent.class, 
-												e -> acc.add(convertToMongoQuery_multi(getOperatorName(e.getOp()), e)));
+												e -> acc.add(convertToMongoQuery_multi(getOperatorName(((MultiQueryComponent<?>)e).getOp()), (MultiQueryComponent<?>)e)));
+											//(at various other points in the code, oraclej has complained about this though ecj is happy, so just added these casts for safety)
 						},
 						(a, b) -> { a.addAll(b); return a; },
 						acc -> (DBObject)new BasicDBObject(andVsOr, acc),

@@ -87,8 +87,6 @@ public class TestElasticsearchUtils {
 		private NestedTestBean nested_object;
 	}
 
-	//TODO: test nested multi query
-	
 	public static class MockSearchRequestBuilder {
 		final ArrayList<Tuple2<String, SortOrder>> sort = new ArrayList<>();
 		final ArgumentCaptor<Integer> size_arg = ArgumentCaptor.forClass(int.class);
@@ -1121,5 +1119,119 @@ public class TestElasticsearchUtils {
 			assertEquals(0, (int)msrb6.size_arg.getAllValues().size());
 		}
 	}
+	
+	@Test
+	public void testNestedMultiQuery() throws IOException {
+		
+		final BeanTemplate<TestBean> template1a = BeanTemplateUtils.build(TestBean.class).with(TestBean::string_field, "string_field").done();
+		final SingleQueryComponent<TestBean> query_comp_1a = CrudUtils.anyOf(template1a);		
+		final SingleQueryComponent<TestBean> query_comp_2a = CrudUtils.allOf(TestBean.class).when(TestBean::bool_field, true);	
+		final MultiQueryComponent<TestBean> multi_query_1 = CrudUtils.allOf(Arrays.asList(query_comp_1a, query_comp_2a));
+
+		final BeanTemplate<TestBean> template1b = BeanTemplateUtils.build(TestBean.class).with(TestBean::string_field, "string_field_b").done();
+		final SingleQueryComponent<TestBean> query_comp_1b = CrudUtils.allOf(template1b);		
+		final SingleQueryComponent<TestBean> query_comp_2b = CrudUtils.anyOf(TestBean.class).when(TestBean::bool_field, false);		
+		final MultiQueryComponent<TestBean> multi_query_2 = CrudUtils.allOf(query_comp_1b, query_comp_2b);
+		
+		final MultiQueryComponent<TestBean> multi_query_test_1 = CrudUtils.anyOf(multi_query_1, multi_query_2);
+		final MultiQueryComponent<TestBean> multi_query_test_2 = CrudUtils.allOf(multi_query_1, query_comp_1b);
+		
+		final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> multi_query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_test_1);
+		final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> multi_query_meta_2 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_test_2);
+		
+		final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
+				.startObject("or").startArray("filters")
+					.startObject()				
+						.startObject("and").startArray("filters")
+							.startObject()
+								.startObject("or").startArray("filters")
+									.startObject()				
+										.startObject("term")
+											.field("string_field", "string_field")
+										.endObject()
+									.endObject()
+								.endArray().endObject()
+							.endObject()
+							.startObject()
+								.startObject("and").startArray("filters")
+									.startObject()
+										.startObject("term")
+											.field("bool_field", true)
+										.endObject()
+									.endObject()
+								.endArray().endObject()
+							.endObject()
+						.endArray().endObject()
+					.endObject()
+					
+					.startObject()				
+						.startObject("and").startArray("filters")
+							.startObject()
+								.startObject("and").startArray("filters")
+									.startObject()
+										.startObject("term")
+											.field("string_field", "string_field_b")
+										.endObject()
+									.endObject()
+								.endArray().endObject()
+							.endObject()
+							.startObject()
+								.startObject("or").startArray("filters")
+									.startObject()
+										.startObject("term")
+											.field("bool_field", false)
+										.endObject()
+									.endObject()
+								.endArray().endObject()
+							.endObject()
+						.endArray().endObject()
+					.endObject()
+					
+				.endArray().endObject()
+			.endObject();
+		
+		final XContentBuilder expected_2 = XContentFactory.jsonBuilder().startObject()
+				.startObject("and").startArray("filters")
+					.startObject()				
+						.startObject("and").startArray("filters")
+							.startObject()
+								.startObject("or").startArray("filters")
+									.startObject()				
+										.startObject("term")
+											.field("string_field", "string_field")
+										.endObject()
+									.endObject()
+								.endArray().endObject()
+							.endObject()
+							.startObject()
+								.startObject("and").startArray("filters")
+									.startObject()
+										.startObject("term")
+											.field("bool_field", true)
+										.endObject()
+									.endObject()
+								.endArray().endObject()
+							.endObject()
+						.endArray().endObject()
+					.endObject()
+					
+					.startObject()				
+						.startObject("and").startArray("filters")
+							.startObject()
+								.startObject("term")
+									.field("string_field", "string_field_b")
+								.endObject()
+							.endObject()
+						.endArray().endObject()
+					.endObject()
+					
+				.endArray().endObject()
+			.endObject();
+		
+		assertEquals(sortOutQuotesAndStuff(expected_1.string()), toXContentThenString(multi_query_meta_1._1()));
+		assertEquals(sortOutQuotesAndStuff(expected_2.string()), toXContentThenString(multi_query_meta_2._1()));
+
+	}
+	
 	
 }
