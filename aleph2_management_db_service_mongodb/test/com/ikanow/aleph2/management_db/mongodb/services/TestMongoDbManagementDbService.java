@@ -406,7 +406,7 @@ public class TestMongoDbManagementDbService {
 			final ICrudService<AssetStateDirectoryBean> dir_test_analytics = management_db_service.getStateDirectory(Optional.empty(), Optional.of(AssetStateDirectoryBean.StateDirectoryType.analytic_thread));
 			assertEquals(1, dir_test_analytics.countObjects().get().intValue());			
 			
-			test.deleteDatastore().get();
+			dir_test_analytics.deleteDatastore();
 			
 			assertEquals(0, dir_test_analytics.countObjects().get().intValue());			
 			assertEquals(2, dir_test_all.countObjects().get().intValue());
