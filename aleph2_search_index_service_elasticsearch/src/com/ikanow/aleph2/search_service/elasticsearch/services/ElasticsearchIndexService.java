@@ -29,6 +29,7 @@ import java.util.stream.StreamSupport;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.elasticsearch.action.admin.indices.template.delete.DeleteIndexTemplateResponse;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesRequest;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesResponse;
 import org.elasticsearch.client.Client;
@@ -69,6 +70,7 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConte
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.CreationPolicy;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUtils;
+import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchFutureUtils;
 
 import fj.data.Validation;
 
@@ -165,8 +167,6 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 								Optional.empty(), Optional.empty(), Optional.empty()));
 	}
 
-	//TODO (ALEPH-14): Handle bucket deletion (eg remove template)
-	
 	/** Checks if an index/set-of-indexes spawned from a bucket
 	 * @param bucket
 	 */
@@ -339,6 +339,10 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			return Tuples._2T("", Arrays.asList(err));
 		}
 	}
+	/** Utility function - returns verboseness of schema being validated
+	 * @param schema
+	 * @return
+	 */
 	protected static boolean is_verbose(final SearchIndexSchemaBean schema) {
 		return Optional.ofNullable(schema)
 					.map(SearchIndexSchemaBean::technology_override_schema)
@@ -361,18 +365,49 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		//(done!)
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingArtefacts()
+	 */
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
 		return Arrays.asList(this, _crud_factory);
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService#handleBucketDeletionRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, boolean)
+	 */
 	@Override
-	public CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(
-			DataBucketBean bucket, boolean bucket_getting_deleted) {
-		//TODO (ALEPH-14): handle data deletion and template deletion
-		return null;
+	public CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(final DataBucketBean bucket, final boolean bucket_getting_deleted) {
+	
+		Optional<ICrudService<JsonNode>> to_delete = this.getCrudService(JsonNode.class, bucket);
+		if (!to_delete.isPresent()) {
+			
+			return CompletableFuture.completedFuture(new BasicMessageBean(new Date(), true, "ElasticsearchIndexService", "handleBucketDeletionRequest", null, 
+					ErrorUtils.get("(No search index for bucket {0})", bucket.full_name()),
+					null));			
+		}
+		else {
+			// delete the data
+			
+			final CompletableFuture<Boolean> data_deletion_future = to_delete.get().deleteDatastore();
+			
+			// delete the template
+						
+			final CompletableFuture<DeleteIndexTemplateResponse> cf = ElasticsearchFutureUtils.
+					<DeleteIndexTemplateResponse, DeleteIndexTemplateResponse>
+						wrap(_crud_factory.getClient().admin().indices().prepareDeleteTemplate(ElasticsearchIndexUtils.getBaseIndexName(bucket)).execute(),								
+								x -> x);
+
+			return data_deletion_future.thenCombine(cf, (Boolean b, DeleteIndexTemplateResponse ditr) -> {
+				//TODO: combine the 2
+				return null;
+			});
+		}
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService#handleAgeOutRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
+	 */
 	@Override
 	public CompletableFuture<BasicMessageBean> handleAgeOutRequest(
 			DataBucketBean bucket) {
