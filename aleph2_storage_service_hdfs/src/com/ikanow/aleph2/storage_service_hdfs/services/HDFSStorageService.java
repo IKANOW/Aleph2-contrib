@@ -20,9 +20,11 @@ import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
@@ -30,6 +32,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSc
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 
 import org.apache.hadoop.conf.Configuration;
@@ -37,6 +40,7 @@ import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RawLocalFileSystem;
+import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -46,6 +50,7 @@ public class HDFSStorageService implements IStorageService {
 	private static final Logger _logger = LogManager.getLogger();	
 	
 	final protected GlobalPropertiesBean _globals;
+	final protected ConcurrentHashMap<Tuple2<String, Optional<String>>, Optional<Object>> _obj_cache = new ConcurrentHashMap<>();
 	
 	@Inject 
 	HDFSStorageService(GlobalPropertiesBean globals) {
@@ -57,9 +62,26 @@ public class HDFSStorageService implements IStorageService {
 		return _globals.distributed_root_dir();
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingPlatformDriver(java.lang.Class, java.util.Optional)
+	 */
 	@SuppressWarnings("unchecked")
 	@Override
 	public <T> Optional<T> getUnderlyingPlatformDriver(
+			Class<T> driver_class, Optional<String> driver_options) {
+		
+		return (Optional<T>)_obj_cache.computeIfAbsent(Tuples._2T(driver_class.toString(), driver_options), 
+				__ -> getUnderlyingPlatformDriver_internal(driver_class, driver_options).map(o -> (T)o)
+				);
+	}
+	
+	/** Internal version of getUnderlyingPlatform driver, ie input to cache
+	 * @param driver_class
+	 * @param driver_options
+	 * @return
+	 */
+	@SuppressWarnings("unchecked")
+	public <T> Optional<T> getUnderlyingPlatformDriver_internal(
 			Class<T> driver_class, Optional<String> driver_options) {
 		T driver = null;
 		try {
@@ -158,8 +180,25 @@ public class HDFSStorageService implements IStorageService {
 	@Override
 	public CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(
 			DataBucketBean bucket, boolean bucket_getting_deleted) {
-		// TODO (ALEPH-???) 
-		return null;
+		
+		final FileContext dfs = this.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
+		final String bucket_root = this.getRootPath() + "/" + bucket.full_name();
+		try {			
+			final Path p = new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX);
+			
+			dfs.delete(p, true);			
+			dfs.mkdir(p, FsPermission.getDefault(), true);
+			
+			return CompletableFuture.completedFuture(
+					new BasicMessageBean(new Date(), true, "HDFSStorageService", "handleBucketDeletionRequest", null, 
+							ErrorUtils.get("Deleted data from bucket = {0}", bucket.full_name()), 
+							null));			
+		}
+		catch (Throwable t) {			
+			return CompletableFuture.completedFuture(
+					new BasicMessageBean(new Date(), false, "HDFSStorageService", "handleBucketDeletionRequest", null, 
+							ErrorUtils.getLongForm("Error deleting data from bucket = {1} : {0}", t, bucket.full_name()), 
+							null));
+		}
 	}
-
 }

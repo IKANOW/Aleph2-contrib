@@ -42,16 +42,27 @@ public class HDFSStorageSystemTest {
 						
 			FileContext fs1 = storageService.getUnderlyingPlatformDriver(FileContext.class, Optional.<String>empty()).get();
 			assertNotNull(fs1);
+			FileContext fs1b = storageService.getUnderlyingPlatformDriver(FileContext.class, Optional.<String>empty()).get();
+			assertEquals(fs1, fs1b);
 
 			RawLocalFileSystem fs2 = storageService.getUnderlyingPlatformDriver(RawLocalFileSystem.class,Optional.<String>empty()).get();
 			assertNotNull(fs2); 
+			RawLocalFileSystem fs2b = storageService.getUnderlyingPlatformDriver(RawLocalFileSystem.class,Optional.<String>empty()).get();
+			assertEquals(fs2, fs2b);
 
 			AbstractFileSystem fs3 = storageService.getUnderlyingPlatformDriver(AbstractFileSystem.class,Optional.<String>empty()).get();
 			assertNotNull(fs3); 
+			AbstractFileSystem fs3b = storageService.getUnderlyingPlatformDriver(AbstractFileSystem.class,Optional.<String>empty()).get();
+			assertEquals(fs3, fs3b);
 			
-			
-			assertFalse("Not found", storageService.getUnderlyingPlatformDriver(null, Optional.empty()).isPresent());
+			try {
+				storageService.getUnderlyingPlatformDriver(null, Optional.empty());
+				fail("Should have thrown, NPE");
+			}
+			catch (Exception e) {} // don't care what
 			assertFalse("Not found", storageService.getUnderlyingPlatformDriver(String.class, Optional.empty()).isPresent());			
 	}
 
+	
+	//TODO (ALEPH-23): handleBucketDeletionRequest
 }
