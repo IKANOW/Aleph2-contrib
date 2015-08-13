@@ -838,7 +838,11 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 										while (it.hasNext()) {										
 											final BulkItemResponse bir = it.next();
 											if (bir.isFailed()) {								
-												if (bir.getFailure().getMessage().startsWith("MapperParsingException")) {
+												final String error_message = bir.getFailure().getMessage();
+												if (error_message.startsWith("MapperParsingException")
+														||
+													error_message.startsWith("WriteFailureException; nested: MapperParsingException"))
+												{
 													String failed_json = null;
 													final ActionRequest<?> ar = in.requests().get(bir.getItemId());
 													if (ar instanceof IndexRequest) {											
