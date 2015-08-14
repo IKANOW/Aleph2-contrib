@@ -8,6 +8,8 @@
 	   "_all":{"enabled":false},
 	   "_source":{"enabled":true},
        "properties" : {
+         "@timestamp": { "type": "date", "fielddata": { "format": "fst" } },
+         "@version": { "type": "string", "index": "analyzed", "fielddata": {"format":"fst"} },       
          "sourceKey": { "type": "string", "index": "not_analyzed", "fielddata": { "format": "disabled" } },
          "geoip"  : {
            "type" : "object",
@@ -17,36 +19,46 @@
                "location" : { "type" : "geo_point" }
              },
              "fielddata": { "format": "disabled" }
-         },
-         "@timestamp": { "type": "date", "fielddata": { "format": "fst" } },
-         "@version": { "type": "string", "index": "analyzed", "fielddata": {"format":"fst"} }
+         }
        },
        "dynamic_templates" : [
        {
-         "columnBARonlyBARdisabled2STAR_STAR" : {
+         "columnBARonlyBARenabled_STAR" : {
+           "mapping" : {
+           	"index":"not_analyzed","type":"{dynamic_type}","fielddata":{"format":"doc_values"}
+           },
+           "path_match" : "column_only_enabled",
+           "match_mapping_type" : "*"
+         }
+       },
+       {
+         "columnBARonlyBARdisabled_STAR" : {
            "mapping" : {
            	"index":"not_analyzed","type":"{dynamic_type}","fielddata":{"format":"disabled"}
            },
-           "path_match" : "column_only_disabled2*",
+           "path_match" : "column_only_disabled",
            "match_mapping_type" : "*"
          }
-       }, 
+       },       
        {
-         "STAR_number" : {
-           "mapping" : {
-           	"index":"not_analyzed","type":"number","fielddata":{"format":"disabled"}
-           },
-           "path_match" : "*",
-           "match_mapping_type" : "number"
-         }
-       }, 
-       {
-         "STARnoindex_STAR" : {
-           "match" : "*noindex",
+         "testSTAR_STAR" : {
+           "match" : "test*",
            "match_mapping_type" : "*",
            "mapping" : {
-             "type" : "string", "index" : "not_analyzed", "fielddata": {"format":"disabled"}
+             "type" : "string", "index" : "analyzed", "omit_norms" : true, 
+               "fields" : {
+                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256,"fielddata":{"format":"doc_values"}}
+               }, "fielddata": {"format":"fst"}
            }
+         }
+       },
+       {
+         "columnBARonlyBARenabled2STAR_STAR" : {
+           "mapping" : {
+           	"index":"not_analyzed","type":"{dynamic_type}","fielddata":{"format":"doc_values"}
+           },
+           "path_match" : "column_only_enabled2*",
+           "match_mapping_type" : "*"
          }
        },
        {
@@ -62,44 +74,32 @@
          }
        }, 
        {
-         "columnBARonlyBARenabled2STAR_STAR" : {
-           "mapping" : {
-           	"index":"not_analyzed","type":"{dynamic_type}","fielddata":{"format":"doc_values"}
-           },
-           "path_match" : "column_only_enabled2*",
-           "match_mapping_type" : "*"
-         }
-       }, 
-       {
-         "testSTAR_STAR" : {
-           "match" : "test*",
+         "STARnoindex_STAR" : {
+           "match" : "*noindex",
            "match_mapping_type" : "*",
            "mapping" : {
-             "type" : "string", "index" : "analyzed", "omit_norms" : true, 
-               "fields" : {
-                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256,"fielddata":{"format":"doc_values"}}
-               }, "fielddata": {"format":"fst"}
+             "type" : "string", "index" : "not_analyzed", "fielddata": {"format":"disabled"}
            }
          }
        },
        {
-         "columnBARonlyBARdisabled_STAR" : {
+         "columnBARonlyBARdisabled2STAR_STAR" : {
            "mapping" : {
            	"index":"not_analyzed","type":"{dynamic_type}","fielddata":{"format":"disabled"}
            },
-           "path_match" : "column_only_disabled",
+           "path_match" : "column_only_disabled2*",
            "match_mapping_type" : "*"
          }
-       }, 
+       },
        {
-         "columnBARonlyBARenabled_STAR" : {
+         "STAR_number" : {
            "mapping" : {
-           	"index":"not_analyzed","type":"{dynamic_type}","fielddata":{"format":"doc_values"}
+           	"index":"not_analyzed","type":"number","fielddata":{"format":"disabled"}
            },
-           "path_match" : "column_only_enabled",
-           "match_mapping_type" : "*"
+           "path_match" : "*",
+           "match_mapping_type" : "number"
          }
-       }        
+       } 
        ]
     }
   }

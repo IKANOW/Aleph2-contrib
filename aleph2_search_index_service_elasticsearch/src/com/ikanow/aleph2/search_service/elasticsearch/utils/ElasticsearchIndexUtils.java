@@ -315,7 +315,7 @@ public class ElasticsearchIndexUtils {
 						.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
 						.isPresent(); 
 			
-			final Map<Either<String, Tuple2<String, String>>, JsonNode> column_lookups = Stream.of(			
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> column_lookups = Stream.of(			
 					columnar_enabled ?
 						createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_include_list()).stream(),
 								fn -> Either.left(fn), 
@@ -370,7 +370,8 @@ public class ElasticsearchIndexUtils {
 			.collect(Collectors.toMap(
 					t2 -> t2._1(),
 					t2 -> t2._2(),
-					(v1, v2) -> v1 // (ie ignore duplicates)
+					(v1, v2) -> v1, // (ie ignore duplicates)
+					() -> new LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>()
 					));
 			;			
 			
