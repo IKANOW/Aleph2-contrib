@@ -29,18 +29,6 @@
             },
             "dynamic_templates": [
                 {
-                    "STAR_STAR": {
-                        "mapping": {
-                            "fielddata": {
-                                "format": "disabled"
-                            },
-                            "index": "not_analyzed",
-                            "type": "{dynamic_type}"
-                        },
-                        "match": "*"
-                    }
-                },
-                {
                     "STAR_string": {
                         "mapping": {
                             "fielddata": {
@@ -62,6 +50,18 @@
                         },
                         "match": "*",
                         "match_mapping_type": "string"
+                    }
+                },
+                {
+                    "STAR_STAR": {
+                        "mapping": {
+                            "fielddata": {
+                                "format": "disabled"
+                            },
+                            "index": "not_analyzed",
+                            "type": "{dynamic_type}"
+                        },
+                        "match": "*"
                     }
                 }
             ]
