@@ -386,22 +386,37 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					ErrorUtils.get("(No search index for bucket {0})", bucket.full_name()),
 					null));			
 		}
-		else {
-			// delete the data
-			
+		else { // delete the data			
 			final CompletableFuture<Boolean> data_deletion_future = to_delete.get().deleteDatastore();
-			
-			// delete the template
-						
-			final CompletableFuture<DeleteIndexTemplateResponse> cf = ElasticsearchFutureUtils.
-					<DeleteIndexTemplateResponse, DeleteIndexTemplateResponse>
-						wrap(_crud_factory.getClient().admin().indices().prepareDeleteTemplate(ElasticsearchIndexUtils.getBaseIndexName(bucket)).execute(),								
-								x -> x);
 
-			return data_deletion_future.thenCombine(cf, (Boolean b, DeleteIndexTemplateResponse ditr) -> {
-				//TODO: combine the 2
-				return null;
-			});
+			final CompletableFuture<BasicMessageBean> combined_future = Lambdas.get(() -> {				
+				// delete the template if fully deleting the bucket (vs purging)
+				if (bucket_getting_deleted) {
+					final CompletableFuture<DeleteIndexTemplateResponse> cf = ElasticsearchFutureUtils.
+							<DeleteIndexTemplateResponse, DeleteIndexTemplateResponse>
+								wrap(_crud_factory.getClient().admin().indices().prepareDeleteTemplate(ElasticsearchIndexUtils.getBaseIndexName(bucket)).execute(),								
+										x -> x);
+					
+					return data_deletion_future.thenCombine(cf, (Boolean b, DeleteIndexTemplateResponse ditr) -> {
+						return null; // don't care what the return value is, just care about catching exceptions
+					});
+				}
+				else {					
+					return data_deletion_future; // (see above)
+				}
+			})
+			.thenApply(__ -> {
+				return new BasicMessageBean(new Date(), true, "ElasticsearchIndexService", "handleBucketDeletionRequest", null, 
+						ErrorUtils.get("Deleted search index for bucket {0}", bucket.full_name()), 
+						null);
+			})
+			.exceptionally(t -> {
+				return new BasicMessageBean(new Date(), false, "ElasticsearchIndexService", "handleBucketDeletionRequest", null, 
+						ErrorUtils.getLongForm("Error deleting search index for bucket {1}: {0}", t, bucket.full_name()), 
+						null);
+			})
+			;
+			return combined_future;
 		}
 	}
 

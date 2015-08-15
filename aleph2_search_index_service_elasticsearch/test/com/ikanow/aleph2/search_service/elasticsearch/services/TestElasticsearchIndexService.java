@@ -26,6 +26,7 @@ import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.Set;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -37,6 +38,8 @@ import org.elasticsearch.common.collect.ImmutableSet;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -400,7 +403,7 @@ public class TestElasticsearchIndexService {
 	// (including getCrudService)
 	
 	@Test
-	public void test_endToEnd_autoTime() throws IOException, InterruptedException {
+	public void test_endToEnd_autoTime() throws IOException, InterruptedException, ExecutionException {
 		final Calendar time_setter = GregorianCalendar.getInstance();
 		time_setter.set(2015, 1, 1, 13, 0, 0);
 		final String bucket_str = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_end_2_end_bucket.json"), Charsets.UTF_8);
@@ -499,10 +502,13 @@ public class TestElasticsearchIndexService {
 				// Size 3: _default_, type_1, type_2 
 				assertEquals(3, x.value.size());
 			});
+		
+		//TEST DELETION:
+		test_handleDeleteOrPurge(bucket, true);
 	}
 	
 	@Test
-	public void test_endToEnd_fixedFixed() throws IOException, InterruptedException {
+	public void test_endToEnd_fixedFixed() throws IOException, InterruptedException, ExecutionException {
 		final Calendar time_setter = GregorianCalendar.getInstance();
 		time_setter.set(2015, 1, 1, 13, 0, 0);
 		final String bucket_str = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_end_2_end_bucket2.json"), Charsets.UTF_8);
@@ -600,5 +606,77 @@ public class TestElasticsearchIndexService {
 					assertTrue("Is expected type: " + y.key, expected_types.contains(y.key));
 				}));
 			});
-	}	
+		
+		//TEST DELETION:
+		test_handleDeleteOrPurge(bucket, false);
+	}
+	
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	// TEST DELETION
+	
+	// (these are called from the code above)
+	
+	public void test_handleDeleteOrPurge(final DataBucketBean to_handle, boolean delete_not_purge) throws InterruptedException, ExecutionException {
+		System.out.println("****** Checking delete/purge");
+		
+		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(to_handle);
+		final ICrudService<JsonNode> index_service_crud = _index_service.getCrudService(JsonNode.class, to_handle).get();
+		final ElasticsearchContext es_context = (ElasticsearchContext) index_service_crud.getUnderlyingPlatformDriver(ElasticsearchContext.class, Optional.empty()).get();
+		
+		// (Actually first off, check there's data and templates)
+		// Data:
+		{
+			final GetMappingsResponse gmr = es_context.client().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
+			assertTrue("There are indexes", gmr.getMappings().keys().size() > 0);			
+		}
+		// Templates:
+		{
+			final GetIndexTemplatesRequest gt_pre = new GetIndexTemplatesRequest().names(template_name);
+			final GetIndexTemplatesResponse gtr_pre = _crud_factory.getClient().admin().indices().getTemplates(gt_pre).actionGet();
+			assertEquals(1, _index_service._bucket_template_cache.size());
+			assertEquals(1, gtr_pre.getIndexTemplates().size());			
+		}
+		
+		// Then, perform request
+		final BasicMessageBean result = _index_service.handleBucketDeletionRequest(to_handle, delete_not_purge).get();
+		assertEquals("Deletion should succeed: " + result.message(), true, result.success());
+		
+		// Check templates gone iff deleting not purging
+				
+		if (delete_not_purge) {
+			final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(template_name);
+			final GetIndexTemplatesResponse gtr = _crud_factory.getClient().admin().indices().getTemplates(gt).actionGet();
+			assertTrue("No templates after deletion", gtr.getIndexTemplates().isEmpty());			
+		}
+		else {
+			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
+			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
+			assertEquals(1, _index_service._bucket_template_cache.size());
+			assertEquals(1, gtr2.getIndexTemplates().size());			
+		}
+		
+		// Check all files deleted
+
+		// Check via mappings
+		{
+			final GetMappingsResponse gmr = es_context.client().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
+			assertEquals(0, gmr.getMappings().keys().size());						
+		}
+		// Check via index size (recreates templates)
+		
+		assertEquals(0, _index_service.getCrudService(JsonNode.class, to_handle).get().countObjects().get().intValue());
+	}
+
+	@Test
+	public void test_deleteNonexistantBucket() throws JsonParseException, JsonMappingException, IOException, InterruptedException, ExecutionException {
+		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class)
+													.with("_id", "2b_test_end_2_end_not_exist")
+													.with("full_name", "/test/end-end/fixed/fixed/not/exist")
+												.done().get();
+	
+				
+		final BasicMessageBean result = _index_service.handleBucketDeletionRequest(bucket, true).get();
+		assertEquals("Deletion should succeed: " + result.message(), true, result.success());
+	}
 }

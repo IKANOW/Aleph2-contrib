@@ -703,7 +703,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		try {
 			final ReadWriteContext rw_context = getRwContextOrThrow(_state.es_context, "deleteDatastore");
 			
-			DeleteIndexRequestBuilder dir = _state.client.admin().indices().prepareDelete(rw_context.indexContext().getWritableIndex(Optional.empty()));
+			DeleteIndexRequestBuilder dir = _state.client.admin().indices().prepareDelete(rw_context.indexContext().getReadableIndexArray(Optional.empty()));
 			
 			return ElasticsearchFutureUtils.wrap(dir.execute(), dr -> {
 				return dr.isAcknowledged();

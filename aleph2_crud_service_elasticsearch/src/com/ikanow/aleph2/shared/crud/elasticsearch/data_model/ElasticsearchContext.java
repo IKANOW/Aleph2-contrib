@@ -224,7 +224,7 @@ public abstract class ElasticsearchContext {
 				@Override
 				public List<String> getReadableIndexList(final Optional<Tuple2<Long, Long>> date_range) {
 					if (!date_range.isPresent()) { // Convert to wildcards
-						return Arrays.asList(_index.replaceFirst("_[^_]+*$", "_*"));
+						return Arrays.asList(_index.replaceFirst("_[^_]+$", "_*"));
 					}
 					else {
 						return ElasticsearchContextUtils.getIndexesFromDateRange(_index, date_range.get()).map(s -> s + '*').collect(Collectors.toList());
