@@ -86,7 +86,11 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	protected final Optional<ProjectBean> _project;
 	protected final MongoDbManagementDbConfigBean _properties;
 	
+	// Some saved management db services
 	protected final SetOnce<ICrudService<AssetStateDirectoryBean>> _optimized_state_directory = new SetOnce<>();
+	protected final SetOnce<ICrudService<?>> _bucket_deletion_q = new SetOnce<>();
+	protected final SetOnce<ICrudService<?>> _bucket_test_q = new SetOnce<>();
+	protected final SetOnce<ICrudService<?>> _bucket_retry_q = new SetOnce<>();
 	
 	protected final boolean _read_only;
 	
@@ -347,28 +351,58 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 		// (done see above)		
 	}
 
+	@SuppressWarnings("unchecked")
+	@Override
+	public <T> ICrudService<T> getBucketTestQueue(Class<T> test_queue_clazz) {
+		synchronized (this) {
+			if (!_bucket_test_q.isSet()) {
+				_bucket_test_q.set(
+						(ICrudService<T>) _crud_factory.getMongoDbCrudService(
+								test_queue_clazz, String.class, 
+								_crud_factory.getMongoDbCollection(MongoDbManagementDbService.BUCKET_TEST_STORE), 
+								Optional.empty(), Optional.empty(), Optional.empty()).readOnlyVersion(_read_only)
+						);
+			}
+		}
+		return (ICrudService<T>) _bucket_test_q.get();
+	}
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getRetryStore(java.lang.Class)
 	 */
+	@SuppressWarnings("unchecked")
 	@Override
-	public <T> ICrudService<T> getRetryStore(
-			Class<T> retry_message_clazz) {
-			return (ICrudService<T>) _crud_factory.getMongoDbCrudService(
-				retry_message_clazz, String.class, 
-				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.RETRY_STORE_PREFIX + retry_message_clazz.getSimpleName()), 
-				Optional.empty(), Optional.empty(), Optional.empty()).readOnlyVersion(_read_only);
+	public <T> ICrudService<T> getRetryStore(Class<T> retry_message_clazz) {
+		synchronized (this) {
+			if (!_bucket_retry_q.isSet()) {
+				_bucket_retry_q.set(
+						(ICrudService<T>) _crud_factory.getMongoDbCrudService(
+								retry_message_clazz, String.class, 
+								_crud_factory.getMongoDbCollection(MongoDbManagementDbService.RETRY_STORE_PREFIX + retry_message_clazz.getSimpleName()), 
+								Optional.empty(), Optional.empty(), Optional.empty()).readOnlyVersion(_read_only)
+						);
+			}
+		}
+		return (ICrudService<T>) _bucket_retry_q.get();
 	}
 
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getBucketDeletionQueue(java.lang.Class)
 	 */
+	@SuppressWarnings("unchecked")
 	@Override
-	public <T> ICrudService<T> getBucketDeletionQueue(
-			Class<T> deletion_queue_clazz) {
-		return (ICrudService<T>) _crud_factory.getMongoDbCrudService(
-				deletion_queue_clazz, String.class, 
-				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.BUCKET_DELETION_STORE), 
-				Optional.empty(), Optional.empty(), Optional.empty()).readOnlyVersion(_read_only);
+	public <T> ICrudService<T> getBucketDeletionQueue(Class<T> deletion_queue_clazz) {		
+		synchronized (this) {
+			if (!_bucket_deletion_q.isSet()) {
+				_bucket_deletion_q.set(
+						(ICrudService<T>) _crud_factory.getMongoDbCrudService(
+							deletion_queue_clazz, String.class, 
+							_crud_factory.getMongoDbCollection(MongoDbManagementDbService.BUCKET_DELETION_STORE), 
+							Optional.empty(), Optional.empty(), Optional.empty()).readOnlyVersion(_read_only)
+						);
+			}
+		}
+		return (ICrudService<T>) _bucket_deletion_q.get();
 	}
 
 	/* (non-Javadoc)
@@ -388,30 +422,24 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 				;		
 		
 		final ICrudService<AssetStateDirectoryBean> raw_state_crud = Lambdas.get(() -> {
-			if (!_optimized_state_directory.isSet()) {
-				final ICrudService<AssetStateDirectoryBean> raw_state_crud_internal = 
-						(ICrudService<AssetStateDirectoryBean>)
-						_crud_factory.getMongoDbCrudService(
-							AssetStateDirectoryBean.class, String.class, 
-							_crud_factory.getMongoDbCollection(MongoDbManagementDbService.STATE_DIRECTORY_STORE), 
-							Optional.empty(), Optional.empty(), Optional.empty());
-						
-				final MethodNamingHelper<AssetStateDirectoryBean> h = BeanTemplateUtils.from(AssetStateDirectoryBean.class);
-				raw_state_crud_internal.optimizeQuery(Arrays.asList(h.field(AssetStateDirectoryBean::asset_path), h.field(AssetStateDirectoryBean::state_type)));
-				raw_state_crud_internal.optimizeQuery(Arrays.asList(h.field(AssetStateDirectoryBean::state_type)));
-				_optimized_state_directory.set(raw_state_crud_internal);
+			synchronized (this) {
+				if (!_optimized_state_directory.isSet()) {
+					final ICrudService<AssetStateDirectoryBean> raw_state_crud_internal = 
+							(ICrudService<AssetStateDirectoryBean>)
+							_crud_factory.getMongoDbCrudService(
+								AssetStateDirectoryBean.class, String.class, 
+								_crud_factory.getMongoDbCollection(MongoDbManagementDbService.STATE_DIRECTORY_STORE), 
+								Optional.empty(), Optional.empty(), Optional.empty());
+							
+					final MethodNamingHelper<AssetStateDirectoryBean> h = BeanTemplateUtils.from(AssetStateDirectoryBean.class);
+					raw_state_crud_internal.optimizeQuery(Arrays.asList(h.field(AssetStateDirectoryBean::asset_path), h.field(AssetStateDirectoryBean::state_type)));
+					raw_state_crud_internal.optimizeQuery(Arrays.asList(h.field(AssetStateDirectoryBean::state_type)));
+					_optimized_state_directory.set(raw_state_crud_internal);
+				}
 			}
 			return _optimized_state_directory.get();
 		});
 
-		// Optimize queries first time through:
-		if (!_optimized_state_directory.isSet()) {
-			final MethodNamingHelper<AssetStateDirectoryBean> h = BeanTemplateUtils.from(AssetStateDirectoryBean.class);
-			raw_state_crud.optimizeQuery(Arrays.asList(h.field(AssetStateDirectoryBean::asset_path), h.field(AssetStateDirectoryBean::state_type)));
-			raw_state_crud.optimizeQuery(Arrays.asList(h.field(AssetStateDirectoryBean::state_type)));
-			_optimized_state_directory.set(raw_state_crud);
-		}
-		
 		return extra_terms
 					.<ICrudService<AssetStateDirectoryBean>>
 						map(et -> CrudServiceUtils.intercept(AssetStateDirectoryBean.class, raw_state_crud, extra_terms, Collections.emptyMap(), Optional.empty()))
@@ -447,13 +475,4 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 			ProcessingTestSpecBean test_spec) {
 		throw new RuntimeException("This is implemented in the CoreManagementDbService not here");
 	}
-
-	@Override
-	public <T> ICrudService<T> getBucketTestQueue(Class<T> test_queue_clazz) {
-		return (ICrudService<T>) _crud_factory.getMongoDbCrudService(
-				test_queue_clazz, String.class, 
-				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.BUCKET_TEST_STORE), 
-				Optional.empty(), Optional.empty(), Optional.empty()).readOnlyVersion(_read_only);
-	}
-
 }
