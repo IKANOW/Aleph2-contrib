@@ -184,13 +184,14 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					!mappingsAreEquivalent(gtr.getIndexTemplates().get(0), _mapper.readTree(mapping.bytes().toUtf8()), _mapper))
 				{
 					// If no template, or it's changed, then update
-					_crud_factory.getClient().admin().indices().preparePutTemplate(ElasticsearchIndexUtils.getBaseIndexName(bucket)).setSource(mapping).execute().actionGet();
+					final String base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+					_crud_factory.getClient().admin().indices().preparePutTemplate(base_name).setSource(mapping).execute().actionGet();
 					
-					_logger.info(ErrorUtils.get("Updated mapping for bucket={0}, base_index={1}", bucket._id()));
+					_logger.info(ErrorUtils.get("Updated mapping for bucket={0}, base_index={1}", bucket.full_name(), base_name));
 				}				
 			}
 			catch (Exception e) {
-				_logger.error(ErrorUtils.getLongForm("Error updating mapper bucket={1} err={0}", e, bucket._id()));
+				_logger.error(ErrorUtils.getLongForm("Error updating mapper bucket={1} err={0}", e, bucket.full_name()));
 			}
 			_bucket_template_cache.put(bucket._id(), bucket.modified());			
 		}
