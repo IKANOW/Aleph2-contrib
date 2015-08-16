@@ -15,6 +15,7 @@
 ******************************************************************************/
 package com.ikanow.aleph2.storage_service_hdfs.services;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
@@ -186,13 +187,21 @@ public class HDFSStorageService implements IStorageService {
 		try {			
 			final Path p = new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX);
 			
-			dfs.delete(p, true);			
-			dfs.mkdir(p, FsPermission.getDefault(), true);
-			
-			return CompletableFuture.completedFuture(
-					new BasicMessageBean(new Date(), true, "HDFSStorageService", "handleBucketDeletionRequest", null, 
-							ErrorUtils.get("Deleted data from bucket = {0}", bucket.full_name()), 
-							null));			
+			if (doesPathExist(dfs, p)) {			
+				dfs.delete(p, true);			
+				dfs.mkdir(p, FsPermission.getDefault(), true);
+				
+				return CompletableFuture.completedFuture(
+						new BasicMessageBean(new Date(), true, "HDFSStorageService", "handleBucketDeletionRequest", null, 
+								ErrorUtils.get("Deleted data from bucket = {0}", bucket.full_name()), 
+								null));
+			}
+			else {
+				return CompletableFuture.completedFuture(
+						new BasicMessageBean(new Date(), true, "HDFSStorageService", "handleBucketDeletionRequest", null, 
+								ErrorUtils.get("(No storage for bucket {0})", bucket.full_name()), 
+								null));				
+			}
 		}
 		catch (Throwable t) {			
 			return CompletableFuture.completedFuture(
@@ -201,4 +210,21 @@ public class HDFSStorageService implements IStorageService {
 							null));
 		}
 	}
+	
+	/** Utility function for checking existence of a path
+	 * @param dfs
+	 * @param path
+	 * @param storage_service
+	 * @return
+	 * @throws Exception
+	 */
+	public static boolean doesPathExist(final FileContext dfs, final Path path) throws Exception {
+		try {
+			dfs.getFileStatus(path);
+			return true;
+		}
+		catch (FileNotFoundException fe) {
+			return false;
+		} 		
+	}	
 }
