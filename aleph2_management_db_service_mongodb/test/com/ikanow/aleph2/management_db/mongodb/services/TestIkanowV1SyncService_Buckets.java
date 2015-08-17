@@ -329,7 +329,7 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		v1_source_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStore();
+		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getCoreManagementDbService().getDataBucketStore();
 		
 		bucket_db.deleteDatastore();
 		
@@ -477,10 +477,10 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		v1_source_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStore();		
+		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getCoreManagementDbService().getDataBucketStore();		
 		bucket_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStatusStore();		
+		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getCoreManagementDbService().getDataBucketStatusStore();		
 		bucket_status_db.deleteDatastore();
 		
 		// Create 2 V1 sources
@@ -574,10 +574,10 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		v1_source_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStore();		
+		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getCoreManagementDbService().getDataBucketStore();		
 		bucket_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStatusStore();		
+		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getCoreManagementDbService().getDataBucketStatusStore();		
 		bucket_status_db.deleteDatastore();
 		
 		// Create 2 V1 sources
@@ -638,10 +638,10 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		v1_source_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStore();		
+		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getCoreManagementDbService().getDataBucketStore();		
 		bucket_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStatusStore();		
+		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getCoreManagementDbService().getDataBucketStatusStore();		
 		bucket_status_db.deleteDatastore();
 		
 		// Create 2 V1 sources
@@ -729,10 +729,10 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		v1_source_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStore();		
+		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getCoreManagementDbService().getDataBucketStore();		
 		bucket_db.deleteDatastore();
 		
-		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get().getDataBucketStatusStore();		
+		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getCoreManagementDbService().getDataBucketStatusStore();		
 		bucket_status_db.deleteDatastore();
 		
 		// Create 3 V1 sources (only going to save 1 of them)
