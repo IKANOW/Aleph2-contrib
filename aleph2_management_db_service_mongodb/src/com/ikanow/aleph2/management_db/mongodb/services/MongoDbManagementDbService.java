@@ -87,10 +87,14 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	protected final MongoDbManagementDbConfigBean _properties;
 	
 	// Some saved management db services
+	// (this is mainly for helping with test code since Fongo sometimes(?) creates new collections instead of returning a new wrapper to an existing ones)
 	protected final SetOnce<ICrudService<AssetStateDirectoryBean>> _optimized_state_directory = new SetOnce<>();
 	protected final SetOnce<ICrudService<?>> _bucket_deletion_q = new SetOnce<>();
 	protected final SetOnce<ICrudService<?>> _bucket_test_q = new SetOnce<>();
 	protected final SetOnce<ICrudService<?>> _bucket_retry_q = new SetOnce<>();
+	protected final SetOnce<IManagementCrudService<DataBucketBean>> _bucket_crud = new SetOnce<>();
+	protected final SetOnce<IManagementCrudService<DataBucketStatusBean>> _bucket_status_crud = new SetOnce<>();
+	protected final SetOnce<IManagementCrudService<SharedLibraryBean>> _library_crud = new SetOnce<>();
 	
 	protected final boolean _read_only;
 	
@@ -145,11 +149,18 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getSharedLibraryStore()
 	 */
 	public IManagementCrudService<SharedLibraryBean> getSharedLibraryStore() {
-		return ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
-				SharedLibraryBean.class, String.class, 
-				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.SHARED_LIBRARY_STORE), 
-				Optional.of(BeanTemplateUtils.from(SharedLibraryBean.class).field(SharedLibraryBean::access_rights)), 
-				_auth, _project)).readOnlyVersion(_read_only);
+		synchronized (this) {
+			if (!_library_crud.isSet()) {
+				_library_crud.set(		
+						ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
+								SharedLibraryBean.class, String.class, 
+								_crud_factory.getMongoDbCollection(MongoDbManagementDbService.SHARED_LIBRARY_STORE), 
+								Optional.of(BeanTemplateUtils.from(SharedLibraryBean.class).field(SharedLibraryBean::access_rights)), 
+								_auth, _project)).readOnlyVersion(_read_only)
+						);
+			}
+		}
+		return this._library_crud.get();
 	}
 
 	/** Utility function handling all the functionality required for getPerLibraryState, getBucket*State
@@ -233,22 +244,36 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getDataBucketStore()
 	 */
 	public IManagementCrudService<DataBucketBean> getDataBucketStore() {
-		return ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
-				DataBucketBean.class, String.class, 
-				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.DATA_BUCKET_STORE), 
-				Optional.of(BeanTemplateUtils.from(DataBucketBean.class).field(DataBucketBean::access_rights)), 
-				_auth, _project)).readOnlyVersion(_read_only);
+		synchronized (this) {
+			if (!_bucket_crud.isSet()) {
+				_bucket_crud.set(		
+						ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
+								DataBucketBean.class, String.class, 
+								_crud_factory.getMongoDbCollection(MongoDbManagementDbService.DATA_BUCKET_STORE), 
+								Optional.of(BeanTemplateUtils.from(DataBucketBean.class).field(DataBucketBean::access_rights)), 
+								_auth, _project)).readOnlyVersion(_read_only)
+							);
+			}
+		}
+		return this._bucket_crud.get();
 	}
 
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getDataBucketStatusStore()
 	 */
 	public IManagementCrudService<DataBucketStatusBean> getDataBucketStatusStore() {
-		return ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
-				DataBucketStatusBean.class, String.class, 
-				_crud_factory.getMongoDbCollection(MongoDbManagementDbService.DATA_BUCKET_STATUS_STORE), 
-				Optional.empty(), 
-				_auth, _project)).readOnlyVersion(_read_only);
+		synchronized (this) {
+			if (!_bucket_status_crud.isSet()) {
+				_bucket_status_crud.set(		
+					ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
+						DataBucketStatusBean.class, String.class, 
+						_crud_factory.getMongoDbCollection(MongoDbManagementDbService.DATA_BUCKET_STATUS_STORE), 
+						Optional.empty(), 
+						_auth, _project)).readOnlyVersion(_read_only)
+						);
+			}
+		}
+		return this._bucket_status_crud.get();
 	}
 
 	/* (non-Javadoc)
