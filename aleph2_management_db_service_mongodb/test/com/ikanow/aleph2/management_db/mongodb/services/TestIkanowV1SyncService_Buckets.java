@@ -33,6 +33,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -69,7 +71,8 @@ import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
 
 public class TestIkanowV1SyncService_Buckets {
-
+	final static protected Logger _logger = LogManager.getLogger();	
+	
 	////////////////////////////////////////////////////
 	////////////////////////////////////////////////////
 
@@ -107,6 +110,8 @@ public class TestIkanowV1SyncService_Buckets {
 	
 	@Test
 	public void testSetup() {
+		_logger.info("Starting testSetup");
+		
 		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 		
 		assertTrue("setup completed - service context", _service_context != null);
@@ -127,6 +132,7 @@ public class TestIkanowV1SyncService_Buckets {
 	
 	@Test
 	public void testSynchronization() throws InterruptedException, ExecutionException {
+		_logger.info("Starting testSynchronization");
 		
 		IkanowV1SyncService_Buckets s1 = new IkanowV1SyncService_Buckets(BeanTemplateUtils.clone(_service_config).with("v1_enabled", true).done(), 
 				_service_context);
@@ -160,6 +166,7 @@ public class TestIkanowV1SyncService_Buckets {
 	@SuppressWarnings("deprecation")
 	@Test
 	public void testSourceToBucketConversion() throws JsonProcessingException, IOException, ParseException {
+		_logger.info("Starting testSourceToBucketConversion");
 
 		final ObjectMapper mapper = BeanTemplateUtils.configureMapper(Optional.empty());		
 		final JsonNode v1_source = mapper.readTree(this.getClass().getResourceAsStream("test_v1_sync_sample_source.json"));
@@ -207,6 +214,8 @@ public class TestIkanowV1SyncService_Buckets {
 	@SuppressWarnings("deprecation")
 	@Test 
 	public void testSourceToBucketConversion_scripting() throws JsonProcessingException, IOException, ParseException {		
+		_logger.info("Starting testSourceToBucketConversion_scripting");
+		
 		final ObjectMapper mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 		
 		{
@@ -278,6 +287,7 @@ public class TestIkanowV1SyncService_Buckets {
 	@SuppressWarnings("deprecation")
 	@Test
 	public void test_compareSourcesToBuckets_categorize() throws ParseException {
+		_logger.info("Starting test_compareSourcesToBuckets_categorize");
 		
 		final String same_date = "21 May 2015 02:37:23 GMT";
 		
@@ -322,16 +332,17 @@ public class TestIkanowV1SyncService_Buckets {
 	
 	@Test
 	public void test_compareSourcesToBuckets_get() throws JsonProcessingException, IOException, ParseException, InterruptedException, ExecutionException {
-		
+		_logger.info("Starting test_compareSourcesToBuckets_get");
+				
 		@SuppressWarnings("unchecked")
-		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get()
-										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
+		ICrudService<JsonNode> v1_source_db = this._service_context.getCoreManagementDbService()
+																	.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
 		
-		v1_source_db.deleteDatastore();
+		v1_source_db.deleteDatastore().get();
 		
 		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getCoreManagementDbService().getDataBucketStore();
 		
-		bucket_db.deleteDatastore();
+		bucket_db.deleteDatastore().get();
 		
 		// Create 2 V1 sources
 		
@@ -387,13 +398,15 @@ public class TestIkanowV1SyncService_Buckets {
 	
 	@Test
 	public void test_updateV1SourceStatus() throws JsonProcessingException, IOException, InterruptedException, ExecutionException, ParseException {
+		_logger.info("Starting test_updateV1SourceStatus");
+		
 		final Date some_date_str = IkanowV1SyncService_Buckets.parseJavaDate("21 May 2015 02:38:23 GMT");
 		
 		@SuppressWarnings("unchecked")
-		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get()
-										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
+		ICrudService<JsonNode> v1_source_db = this._service_context.getCoreManagementDbService()
+												.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
 		
-		v1_source_db.deleteDatastore();
+		v1_source_db.deleteDatastore().get();
 		
 		// Create 2 V1 sources
 		
@@ -470,18 +483,19 @@ public class TestIkanowV1SyncService_Buckets {
 		
 	@Test
 	public void test_updateBucket() throws JsonProcessingException, IOException, InterruptedException, ExecutionException, ParseException {
-		
+		_logger.info("Starting test_updateBucket");
+				
 		@SuppressWarnings("unchecked")
 		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get()
-										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
+																	.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
 		
-		v1_source_db.deleteDatastore();
+		v1_source_db.deleteDatastore().get();
 		
 		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getCoreManagementDbService().getDataBucketStore();		
-		bucket_db.deleteDatastore();
+		bucket_db.deleteDatastore().get();
 		
 		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getCoreManagementDbService().getDataBucketStatusStore();		
-		bucket_status_db.deleteDatastore();
+		bucket_status_db.deleteDatastore().get();
 		
 		// Create 2 V1 sources
 		
@@ -567,18 +581,19 @@ public class TestIkanowV1SyncService_Buckets {
 	
 	@Test
 	public void deleteBucket() throws JsonProcessingException, IOException, InterruptedException, ExecutionException, ParseException {
-		
+		_logger.info("Starting deleteBucket");
+				
 		@SuppressWarnings("unchecked")
-		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get()
-										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
+		ICrudService<JsonNode> v1_source_db = this._service_context.getCoreManagementDbService()
+																	.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
 		
-		v1_source_db.deleteDatastore();
+		v1_source_db.deleteDatastore().get();
 		
 		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getCoreManagementDbService().getDataBucketStore();		
-		bucket_db.deleteDatastore();
+		bucket_db.deleteDatastore().get();
 		
 		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getCoreManagementDbService().getDataBucketStatusStore();		
-		bucket_status_db.deleteDatastore();
+		bucket_status_db.deleteDatastore().get();
 		
 		// Create 2 V1 sources
 		
@@ -630,19 +645,19 @@ public class TestIkanowV1SyncService_Buckets {
 	
 	@Test
 	public void test_createNewBucket() throws JsonProcessingException, IOException, InterruptedException, ExecutionException, ParseException {
-		
+		_logger.info("Starting test_createNewBucket");		
 		
 		@SuppressWarnings("unchecked")
-		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get()
-										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
+		ICrudService<JsonNode> v1_source_db = this._service_context.getCoreManagementDbService()
+																	.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
 		
-		v1_source_db.deleteDatastore();
+		v1_source_db.deleteDatastore().get();
 		
 		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getCoreManagementDbService().getDataBucketStore();		
-		bucket_db.deleteDatastore();
+		bucket_db.deleteDatastore().get();
 		
 		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getCoreManagementDbService().getDataBucketStatusStore();		
-		bucket_status_db.deleteDatastore();
+		bucket_status_db.deleteDatastore().get();
 		
 		// Create 2 V1 sources
 		
@@ -670,8 +685,7 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		final ManagementFuture<Supplier<Object>> f_res = IkanowV1SyncService_Buckets.createNewBucket("aleph...bucket.Template_V2_data_bucket.", 
 																			bucket_db, bucket_status_db,
-																			v1_source_db
-				);
+																			v1_source_db);
 
 		assertEquals(IkanowV1SyncService_Buckets.getBucketIdFromV1SourceKey("aleph...bucket.Template_V2_data_bucket."), f_res.get().get());
 		assertEquals(0, f_res.getManagementResults().get().size());
@@ -716,7 +730,8 @@ public class TestIkanowV1SyncService_Buckets {
 	@SuppressWarnings("deprecation")
 	@Test
 	public void test_puttingItAllTogether() throws JsonProcessingException, IOException, ParseException, InterruptedException, ExecutionException {
-
+		_logger.info("Starting test_puttingItAllTogether");		
+		
 		// Set up 3 different scenarios:
 		// 1 - doc to be deleted
 		// 1 - doc to be updated (+1 that would be updated if it was non-approveD)
@@ -725,15 +740,15 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		@SuppressWarnings("unchecked")
 		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get()
-										.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
+																	.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
 		
-		v1_source_db.deleteDatastore();
+		v1_source_db.deleteDatastore().get();
 		
 		IManagementCrudService<DataBucketBean> bucket_db = this._service_context.getCoreManagementDbService().getDataBucketStore();		
-		bucket_db.deleteDatastore();
+		bucket_db.deleteDatastore().get();
 		
 		IManagementCrudService<DataBucketStatusBean> bucket_status_db = this._service_context.getCoreManagementDbService().getDataBucketStatusStore();		
-		bucket_status_db.deleteDatastore();
+		bucket_status_db.deleteDatastore().get();
 		
 		// Create 3 V1 sources (only going to save 1 of them)
 		
