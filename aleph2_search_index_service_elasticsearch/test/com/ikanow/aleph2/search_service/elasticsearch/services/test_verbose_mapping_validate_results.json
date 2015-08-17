@@ -61,7 +61,8 @@
                             "index": "not_analyzed",
                             "type": "{dynamic_type}"
                         },
-                        "match": "*"
+                        "match": "*",
+                        "match_mapping_type": "*"
                     }
                 }
             ]
