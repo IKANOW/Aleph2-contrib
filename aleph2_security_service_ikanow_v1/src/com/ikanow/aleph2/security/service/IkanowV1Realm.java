@@ -129,4 +129,20 @@ public class IkanowV1Realm extends AuthorizingRealm {
 */
         return info;
     }
+    
+/*	public IManagementCrudService<AuthenticationBean> getAuthenticationStore() {
+		synchronized (this) {
+			if (!_authentication_crud.isSet()) {
+				_authentication_crud.set(		
+						ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
+								AuthenticationBean.class, String.class, 
+								_crud_factory.getMongoDbCollection(MongoDbManagementDbService.AUTHENTICATION_STORE), 
+								Optional.empty(), 
+								_auth, _project)).readOnlyVersion(_read_only)
+							);
+			}
+		}
+		return this._authentication_crud.get();
+	}*/
+
 }

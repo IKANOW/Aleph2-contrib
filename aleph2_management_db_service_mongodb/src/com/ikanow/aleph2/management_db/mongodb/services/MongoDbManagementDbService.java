@@ -36,7 +36,6 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
 import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean;
 import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean.StateDirectoryType;
-import com.ikanow.aleph2.data_model.objects.shared.AuthenticationBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
@@ -97,7 +96,6 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	protected final SetOnce<IManagementCrudService<DataBucketBean>> _bucket_crud = new SetOnce<>();
 	protected final SetOnce<IManagementCrudService<DataBucketStatusBean>> _bucket_status_crud = new SetOnce<>();
 	protected final SetOnce<IManagementCrudService<SharedLibraryBean>> _library_crud = new SetOnce<>();
-	protected final SetOnce<IManagementCrudService<AuthenticationBean>> _authentication_crud = new SetOnce<>();
 	
 	protected final boolean _read_only;
 	
@@ -504,19 +502,4 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 		throw new RuntimeException("This is implemented in the CoreManagementDbService not here");
 	}
 
-	@Override
-	public IManagementCrudService<AuthenticationBean> getAuthenticationStore() {
-		synchronized (this) {
-			if (!_authentication_crud.isSet()) {
-				_authentication_crud.set(		
-						ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
-								AuthenticationBean.class, String.class, 
-								_crud_factory.getMongoDbCollection(MongoDbManagementDbService.AUTHENTICATION_STORE), 
-								Optional.empty(), 
-								_auth, _project)).readOnlyVersion(_read_only)
-							);
-			}
-		}
-		return this._authentication_crud.get();
-	}
 }
