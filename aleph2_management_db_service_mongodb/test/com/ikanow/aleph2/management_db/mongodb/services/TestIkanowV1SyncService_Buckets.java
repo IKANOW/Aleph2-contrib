@@ -153,7 +153,7 @@ public class TestIkanowV1SyncService_Buckets {
 		s1.stop(); s2.stop(); s3.stop();
 		
 		// Now sleep a bit more to let the monitor have time to finish:
-		Thread.sleep(5000L);
+		Thread.sleep(3000L);
 		
 		assertEquals(old + 1, IkanowV1SyncService_Buckets._num_leader_changes);
 		
@@ -847,7 +847,7 @@ public class TestIkanowV1SyncService_Buckets {
 		assertEquals(old + 1, IkanowV1SyncService_Buckets._num_leader_changes);
 		
 		// Now sleep a bit more to let the monitor have time to finish:
-		Thread.sleep(5000L);
+		Thread.sleep(3000L);
 		
 		// Check a few things have happened:
 		

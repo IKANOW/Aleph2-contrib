@@ -111,11 +111,12 @@ public class IkanowV1SyncService_Buckets {
 				//(give it 10 seconds before starting, let everything else settle down - eg give the bucket choose handler time to register)			
 		}
 	}
-	/** Immediately start
+	/** Immediately start (this is test code, so fine to overwrite the SetOnce)
 	 */
+	@SuppressWarnings("deprecation")
 	public void start() {
 		_source_monitor_handle.get().cancel(true);
-		_source_monitor_handle.set(_source_scheduler.scheduleWithFixedDelay(new SourceMonitor(), 1, 1L, TimeUnit.SECONDS));
+		_source_monitor_handle.forceSet(_source_scheduler.scheduleWithFixedDelay(new SourceMonitor(), 1, 1L, TimeUnit.SECONDS));
 	}
 	
 	/** Stop threads (just for testing I think)
