@@ -1,8 +1,11 @@
 package com.ikanow.aleph2.security.service;
 
 import java.sql.Connection;
+import java.util.Optional;
 import java.util.Set;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.shiro.authc.AccountException;
 import org.apache.shiro.authc.AuthenticationException;
 import org.apache.shiro.authc.AuthenticationInfo;
@@ -16,8 +19,27 @@ import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
 import org.apache.shiro.util.ByteSource;
 
-public class IkanowV1Realm extends AuthorizingRealm {
+import com.google.inject.Inject;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 
+public class IkanowV1Realm extends AuthorizingRealm {
+	private static final Logger logger = LogManager.getLogger(IkanowV1Realm.class);
+
+	
+	protected final IServiceContext _context;
+	protected final IManagementDbService _core_management_db;
+	protected final IManagementDbService _underlying_management_db;
+
+	
+	public IkanowV1Realm(final IServiceContext service_context) {		
+		super();
+		_context = service_context;
+		_core_management_db = _context.getCoreManagementDbService();		
+		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
+	}
+	 
     /**
      * This implementation of the interface expects the principals collection to return a String username keyed off of
      * this realm's {@link #getName() name}
@@ -130,8 +152,16 @@ public class IkanowV1Realm extends AuthorizingRealm {
         return info;
     }
     
-/*	public IManagementCrudService<AuthenticationBean> getAuthenticationStore() {
-		synchronized (this) {
+	public IManagementCrudService<AuthenticationBean> getAuthenticationStore() {
+/*		_authentication_crud.set(		
+				ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
+						AuthenticationBean.class, String.class, 
+						_crud_factory.getMongoDbCollection(MongoDbManagementDbService.AUTHENTICATION_STORE), 
+						Optional.empty(), 
+						_auth, _project)).readOnlyVersion(_read_only)
+					);
+*/
+/*		synchronized (this) {
 			if (!_authentication_crud.isSet()) {
 				_authentication_crud.set(		
 						ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
@@ -143,6 +173,8 @@ public class IkanowV1Realm extends AuthorizingRealm {
 			}
 		}
 		return this._authentication_crud.get();
-	}*/
+		*/
+		return null;
+	}
 
 }
