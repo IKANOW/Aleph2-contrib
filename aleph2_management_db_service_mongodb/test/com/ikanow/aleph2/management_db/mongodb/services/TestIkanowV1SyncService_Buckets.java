@@ -51,7 +51,6 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
-import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
@@ -90,6 +89,9 @@ public class TestIkanowV1SyncService_Buckets {
 	@Before
 	public void setupDependencies() throws Exception {
 		try {
+			//IMPORTANT NOTE: WE USE CORE MANAGEMENT DB == UNDERLYING MANAGEMENT DB (==mongodb) HERE SO JUST USE getCoreManagementDbService() ANYWHERE 
+			//YOU WANT AN IManagementDbService, NOT SURE fongo ALWAYS WORKS IF YOU GRAB getService(IManagementDbService.class, ...) 
+			
 			final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 			
 			// OK we're going to use guice, it was too painful doing this by hand...				
@@ -144,8 +146,9 @@ public class TestIkanowV1SyncService_Buckets {
 		int old = IkanowV1SyncService_Buckets._num_leader_changes;
 		
 		s1.start(); s2.start(); s3.start();
-		for (int i = 0; i < 4; ++i) {
+		for (int i = 0; i < 20; ++i) {
 			try { Thread.sleep(1000); } catch (Exception e) {}
+			if ((old + 1) == IkanowV1SyncService_Buckets._num_leader_changes) break;
 		}
 		s1.stop(); s2.stop(); s3.stop();
 		
@@ -486,7 +489,7 @@ public class TestIkanowV1SyncService_Buckets {
 		_logger.info("Starting test_updateBucket");
 				
 		@SuppressWarnings("unchecked")
-		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get()
+		ICrudService<JsonNode> v1_source_db = this._service_context.getCoreManagementDbService()
 																	.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
 		
 		v1_source_db.deleteDatastore().get();
@@ -739,7 +742,7 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		
 		@SuppressWarnings("unchecked")
-		ICrudService<JsonNode> v1_source_db = this._service_context.getService(IManagementDbService.class, Optional.empty()).get()
+		ICrudService<JsonNode> v1_source_db = this._service_context.getCoreManagementDbService()
 																	.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();
 		
 		v1_source_db.deleteDatastore().get();
@@ -831,8 +834,10 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		int old = IkanowV1SyncService_Buckets._num_leader_changes;
 		s1.start();
-		for (int i = 0; i < 4; ++i) {
+		for (int i = 0; i < 20; ++i) {
 			try { Thread.sleep(1000); } catch (Exception e) {}
+			
+			if ((old + 1) == IkanowV1SyncService_Buckets._num_leader_changes) break;
 		}
 		s1.stop();
 
