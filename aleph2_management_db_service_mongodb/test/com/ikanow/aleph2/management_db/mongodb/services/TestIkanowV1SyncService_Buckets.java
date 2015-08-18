@@ -111,8 +111,8 @@ public class TestIkanowV1SyncService_Buckets {
 	}
 	
 	@Test
-	public void testSetup() {
-		_logger.info("Starting testSetup");
+	public void test_setup() {
+		_logger.info("Starting test_Setup");
 		
 		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 		
@@ -133,8 +133,8 @@ public class TestIkanowV1SyncService_Buckets {
 	// WORKER THREADS
 	
 	@Test
-	public void testSynchronization() throws InterruptedException, ExecutionException {
-		_logger.info("Starting testSynchronization");
+	public void test_synchronization() throws InterruptedException, ExecutionException {
+		_logger.info("Starting test_synchronization");
 		
 		IkanowV1SyncService_Buckets s1 = new IkanowV1SyncService_Buckets(BeanTemplateUtils.clone(_service_config).with("v1_enabled", true).done(), 
 				_service_context);
@@ -168,8 +168,8 @@ public class TestIkanowV1SyncService_Buckets {
 	
 	@SuppressWarnings("deprecation")
 	@Test
-	public void testSourceToBucketConversion() throws JsonProcessingException, IOException, ParseException {
-		_logger.info("Starting testSourceToBucketConversion");
+	public void test_sourceToBucketConversion() throws JsonProcessingException, IOException, ParseException {
+		_logger.info("Starting test_SourceToBucketConversion");
 
 		final ObjectMapper mapper = BeanTemplateUtils.configureMapper(Optional.empty());		
 		final JsonNode v1_source = mapper.readTree(this.getClass().getResourceAsStream("test_v1_sync_sample_source.json"));
@@ -216,8 +216,8 @@ public class TestIkanowV1SyncService_Buckets {
 
 	@SuppressWarnings("deprecation")
 	@Test 
-	public void testSourceToBucketConversion_scripting() throws JsonProcessingException, IOException, ParseException {		
-		_logger.info("Starting testSourceToBucketConversion_scripting");
+	public void test_sourceToBucketConversion_scripting() throws JsonProcessingException, IOException, ParseException {		
+		_logger.info("Starting test_SourceToBucketConversion_scripting");
 		
 		final ObjectMapper mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 		
@@ -583,8 +583,8 @@ public class TestIkanowV1SyncService_Buckets {
 	}
 	
 	@Test
-	public void deleteBucket() throws JsonProcessingException, IOException, InterruptedException, ExecutionException, ParseException {
-		_logger.info("Starting deleteBucket");
+	public void test_deleteBucket() throws JsonProcessingException, IOException, InterruptedException, ExecutionException, ParseException {
+		_logger.info("Starting test_deleteBucket");
 				
 		@SuppressWarnings("unchecked")
 		ICrudService<JsonNode> v1_source_db = this._service_context.getCoreManagementDbService()

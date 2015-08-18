@@ -17,6 +17,8 @@ package com.ikanow.aleph2.shared.crud.mongodb.services;
 
 import java.util.Optional;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import com.github.fakemongo.Fongo;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
@@ -30,6 +32,7 @@ import com.typesafe.config.Config;
  * @author acp
  */
 public class MockMongoDbCrudServiceFactory implements IMongoDbCrudServiceFactory {
+	private static final Logger _logger = LogManager.getLogger();
 
 	// Compromize: create different fongos for each thread - that way within a thread/test it will work
 	// but different threads (/tests) will see different dbs
@@ -46,9 +49,12 @@ public class MockMongoDbCrudServiceFactory implements IMongoDbCrudServiceFactory
 	public MockMongoDbCrudServiceFactory() {		
 		Config static_config = ModuleUtils.getStaticConfig();
 		
-		if (!static_config.hasPath(THREAD_CONFIG) || !static_config.getBoolean(THREAD_CONFIG)) {
-			if (null == _fongo_single) {
-				_fongo_single = new Fongo("aleph2");
+		synchronized (MockMongoDbCrudServiceFactory.class) {
+			if (!static_config.hasPath(THREAD_CONFIG) || !static_config.getBoolean(THREAD_CONFIG)) {
+				if (null == _fongo_single) {
+					_logger.info("Creating single 'fongo' DB instance called 'aleph2'");
+					_fongo_single = new Fongo("aleph2");
+				}
 			}
 		}
 	}

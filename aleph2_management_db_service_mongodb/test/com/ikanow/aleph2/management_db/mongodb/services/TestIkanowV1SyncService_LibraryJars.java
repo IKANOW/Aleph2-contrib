@@ -97,7 +97,7 @@ public class TestIkanowV1SyncService_LibraryJars {
 	}
 	
 	@Test
-	public void testSetup() {
+	public void test_setup() {
 		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 		
 		assertTrue("setup completed - service context", _service_context != null);
@@ -117,7 +117,7 @@ public class TestIkanowV1SyncService_LibraryJars {
 	// WORKER THREADS
 	
 	@Test
-	public void testSynchronization() throws InterruptedException, ExecutionException {
+	public void test_synchronization() throws InterruptedException, ExecutionException {
 		
 		IkanowV1SyncService_LibraryJars s1 = new IkanowV1SyncService_LibraryJars(BeanTemplateUtils.clone(_service_config).with("v1_enabled", true).done(), 
 				_service_context);
@@ -159,7 +159,7 @@ public class TestIkanowV1SyncService_LibraryJars {
 	
 	@SuppressWarnings("deprecation")
 	@Test
-	public void testShareToLibraryConversion() throws Exception {
+	public void test_shareToLibraryConversion() throws Exception {
 		// FIRST OFF CHECK ALL THE FIELDS
 		
 		{

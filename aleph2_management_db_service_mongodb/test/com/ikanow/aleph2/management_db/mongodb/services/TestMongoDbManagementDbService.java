@@ -43,7 +43,7 @@ public class TestMongoDbManagementDbService {
 
 	@SuppressWarnings("unchecked")
 	@Test
-	public void testCrudAccess() {
+	public void test_CrudAccess() {
 		
 		MockMongoDbCrudServiceFactory mock_crud_service_factory = new MockMongoDbCrudServiceFactory();
 
