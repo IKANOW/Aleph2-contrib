@@ -36,6 +36,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
 import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean;
 import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean.StateDirectoryType;
+import com.ikanow.aleph2.data_model.objects.shared.AuthenticationBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
@@ -499,5 +500,10 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	public ManagementFuture<Boolean> testBucket(DataBucketBean to_test,
 			ProcessingTestSpecBean test_spec) {
 		throw new RuntimeException("This is implemented in the CoreManagementDbService not here");
+	}
+
+	@Override
+	public IManagementCrudService<AuthenticationBean> getAuthenticationStore() {
+		return null;
 	}
 }
