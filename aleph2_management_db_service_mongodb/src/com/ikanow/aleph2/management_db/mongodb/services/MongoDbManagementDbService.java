@@ -81,6 +81,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	final public static String BUCKET_STATE_ENRICH_DB_PREFIX = "aleph2_enrich_state";
 	final public static String BUCKET_STATE_ANALYTICS_DB_PREFIX = "aleph2_analytics_state";
 	final public static String LIBRARY_STATE_DB_PREFIX = "aleph2_library_state";
+	public static final String AUTHENTICATION_STORE = "authentication";
 	
 	protected final IMongoDbCrudServiceFactory _crud_factory;
 	protected final Optional<AuthorizationBean> _auth;
@@ -96,6 +97,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	protected final SetOnce<IManagementCrudService<DataBucketBean>> _bucket_crud = new SetOnce<>();
 	protected final SetOnce<IManagementCrudService<DataBucketStatusBean>> _bucket_status_crud = new SetOnce<>();
 	protected final SetOnce<IManagementCrudService<SharedLibraryBean>> _library_crud = new SetOnce<>();
+	protected final SetOnce<IManagementCrudService<AuthenticationBean>> _authentication_crud = new SetOnce<>();
 	
 	protected final boolean _read_only;
 	
@@ -504,6 +506,17 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 
 	@Override
 	public IManagementCrudService<AuthenticationBean> getAuthenticationStore() {
-		return null;
+		synchronized (this) {
+			if (!_authentication_crud.isSet()) {
+				_authentication_crud.set(		
+						ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
+								AuthenticationBean.class, String.class, 
+								_crud_factory.getMongoDbCollection(MongoDbManagementDbService.AUTHENTICATION_STORE), 
+								Optional.empty(), 
+								_auth, _project)).readOnlyVersion(_read_only)
+							);
+			}
+		}
+		return this._authentication_crud.get();
 	}
 }
