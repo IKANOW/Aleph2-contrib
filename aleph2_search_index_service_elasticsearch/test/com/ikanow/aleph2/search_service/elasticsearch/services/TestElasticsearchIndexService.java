@@ -500,7 +500,7 @@ public class TestElasticsearchIndexService {
 					assertTrue("Is expected type: " + y.key, expected_types.contains(y.key));
 				}));
 				// Size 3: _default_, type_1, type_2 
-				assertEquals(3, x.value.size());
+				assertEquals("Should have 3 indexes: " + x.value.toString(), 3, x.value.size());
 			});
 		
 		//TEST DELETION:
