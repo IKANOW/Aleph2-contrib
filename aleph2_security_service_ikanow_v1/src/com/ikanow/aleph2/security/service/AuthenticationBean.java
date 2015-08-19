@@ -38,6 +38,9 @@ public class AuthenticationBean implements Serializable{
 	private String password;
 	private String profileId; // ObjId?
 	private String username;
+	private Date lastSudo;
+	private String apiKey;
+	
 	public String get_id() {
 		return _id;
 	}
@@ -94,6 +97,18 @@ public class AuthenticationBean implements Serializable{
 	}
 	public static long getSerialversionuid() {
 		return serialVersionUID;
+	}
+	public Date getLastSudo() {
+		return lastSudo;
+	}
+	public void setLastSudo(Date lastSudo) {
+		this.lastSudo = lastSudo;
+	}
+	public String getApiKey() {
+		return apiKey;
+	}
+	public void setApiKey(String apiKey) {
+		this.apiKey = apiKey;
 	}
 	
 	/* "_id" : ObjectId("4ca4a7c5b94b6296f3468d35"),

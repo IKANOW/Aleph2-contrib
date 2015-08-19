@@ -6,15 +6,19 @@ import com.ikanow.aleph2.security.service.IkanowV1Realm;
 public class IkanowV1SecurityModule extends CoreSecurityModule{
 	
 	
-	protected IServiceContext serviceContext;
-	public IkanowV1SecurityModule(IServiceContext serviceContext){
-		this.serviceContext = serviceContext;
+	public IkanowV1SecurityModule(){
 	}
 	
 	@Override
 	protected void bindRealms() {
 		super.bindRealms();
-		bindRealm().toInstance(new IkanowV1Realm(serviceContext));
+		
+		try {
+			bindRealm().toConstructor(IkanowV1Realm.class.getConstructor(IServiceContext.class));
+		} catch (NoSuchMethodException | SecurityException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 
 }

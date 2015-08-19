@@ -19,25 +19,40 @@ import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
 import org.apache.shiro.util.ByteSource;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 
 public class IkanowV1Realm extends AuthorizingRealm {
 	private static final Logger logger = LogManager.getLogger(IkanowV1Realm.class);
 
 	
 	protected final IServiceContext _context;
-	protected final IManagementDbService _core_management_db;
-	protected final IManagementDbService _underlying_management_db;
+	protected IManagementDbService _core_management_db = null;
+	protected IManagementDbService _underlying_management_db = null;
 
+	private ICrudService<AuthenticationBean> v1_db = null;
 	
+	@Inject
 	public IkanowV1Realm(final IServiceContext service_context) {		
 		super();
 		_context = service_context;
+	}
+	
+	protected ICrudService<AuthenticationBean> getDb(){
+		if(v1_db == null){
 		_core_management_db = _context.getCoreManagementDbService();		
 		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
+		String options = "security.authentication/"+AuthenticationBean.class.getName();
+	      v1_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of(options)).get();
+		}
+	      return v1_db;		
 	}
 	 
     /**
@@ -97,12 +112,21 @@ public class IkanowV1Realm extends AuthorizingRealm {
             throw new AccountException("Null usernames are not allowed by this realm.");
         }
 
-        Connection conn = null;
         SimpleAuthenticationInfo info = null;
+        try {
+        
+
+        
+		SingleQueryComponent<AuthenticationBean> queryUsername = CrudUtils.anyOf(AuthenticationBean.class).when("username",username);		
+        Optional<AuthenticationBean> result = getDb().getObjectBySpec(queryUsername).get();
+        if(result.isPresent()){
+        	AuthenticationBean b = result.get();
+        	logger.debug("Loaded user info from db:"+b);
+/*
+        Connection conn = null;
         String password = null;
         String salt = null;
         
-/*        try {
             conn = dataSource.getConnection();
 
             String password = null;
@@ -129,52 +153,27 @@ public class IkanowV1Realm extends AuthorizingRealm {
                 throw new UnknownAccountException("No account found for user [" + username + "]");
             }
 
-*/
+
         	
 			info = new SimpleAuthenticationInfo(username, password.toCharArray(), getName());
             
             if (salt != null) {
                 info.setCredentialsSalt(ByteSource.Util.bytes(salt));
             }
-
-/*        } catch (SQLException e) {
-            final String message = "There was a SQL error while authenticating user [" + username + "]";
-            if (log.isErrorEnabled()) {
-                log.error(message, e);
-            }
+*/
+        }
+        } catch (Exception e) {
+            final String message = "There was a Connection error while authenticating user [" + username + "]";
+            logger.error(message,e);
 
             // Rethrow any SQL errors as an authentication exception
             throw new AuthenticationException(message, e);
         } finally {
-            JdbcUtils.closeConnection(conn);
+            //JdbcUtils.closeConnection(conn);
         }
-*/
+
         return info;
     }
     
-	public IManagementCrudService<AuthenticationBean> getAuthenticationStore() {
-/*		_authentication_crud.set(		
-				ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
-						AuthenticationBean.class, String.class, 
-						_crud_factory.getMongoDbCollection(MongoDbManagementDbService.AUTHENTICATION_STORE), 
-						Optional.empty(), 
-						_auth, _project)).readOnlyVersion(_read_only)
-					);
-*/
-/*		synchronized (this) {
-			if (!_authentication_crud.isSet()) {
-				_authentication_crud.set(		
-						ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
-								AuthenticationBean.class, String.class, 
-								_crud_factory.getMongoDbCollection(MongoDbManagementDbService.AUTHENTICATION_STORE), 
-								Optional.empty(), 
-								_auth, _project)).readOnlyVersion(_read_only)
-							);
-			}
-		}
-		return this._authentication_crud.get();
-		*/
-		return null;
-	}
 
 }
