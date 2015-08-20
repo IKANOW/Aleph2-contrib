@@ -12,6 +12,7 @@ import org.apache.shiro.authc.AuthenticationInfo;
 import org.apache.shiro.authc.AuthenticationToken;
 import org.apache.shiro.authc.SimpleAuthenticationInfo;
 import org.apache.shiro.authc.UsernamePasswordToken;
+import org.apache.shiro.authc.credential.CredentialsMatcher;
 import org.apache.shiro.authz.AuthorizationException;
 import org.apache.shiro.authz.AuthorizationInfo;
 import org.apache.shiro.authz.SimpleAuthorizationInfo;
@@ -40,8 +41,8 @@ public class IkanowV1Realm extends AuthorizingRealm {
 	private ICrudService<AuthenticationBean> v1_db = null;
 	
 	@Inject
-	public IkanowV1Realm(final IServiceContext service_context) {		
-		super();
+	public IkanowV1Realm(final IServiceContext service_context,CredentialsMatcher matcher) {		
+		super(matcher);
 		_context = service_context;
 	}
 	
@@ -122,51 +123,15 @@ public class IkanowV1Realm extends AuthorizingRealm {
         if(result.isPresent()){
         	AuthenticationBean b = result.get();
         	logger.debug("Loaded user info from db:"+b);
-/*
-        Connection conn = null;
-        String password = null;
-        String salt = null;
-        
-            conn = dataSource.getConnection();
+            String password = b.getPassword();
 
-            String password = null;
-            String salt = null;
-            switch (saltStyle) {
-            case NO_SALT:
-                password = getPasswordForUser(conn, username)[0];
-                break;
-            case CRYPT:
-                // TODO: separate password and hash from getPasswordForUser[0]
-                throw new ConfigurationException("Not implemented yet");
-                //break;
-            case COLUMN:
-                String[] queryResults = getPasswordForUser(conn, username);
-                password = queryResults[0];
-                salt = queryResults[1];
-                break;
-            case EXTERNAL:
-                password = getPasswordForUser(conn, username)[0];
-                salt = getSaltForUser(username);
-            }
-
-            if (password == null) {
-                throw new UnknownAccountException("No account found for user [" + username + "]");
-            }
-
-
-        	
-			info = new SimpleAuthenticationInfo(username, password.toCharArray(), getName());
-            
-            if (salt != null) {
-                info.setCredentialsSalt(ByteSource.Util.bytes(salt));
-            }
-*/
+			info = new SimpleAuthenticationInfo(username, password,username);
         }
         } catch (Exception e) {
             final String message = "There was a Connection error while authenticating user [" + username + "]";
             logger.error(message,e);
 
-            // Rethrow any SQL errors as an authentication exception
+            // Rethrow any errors as an authentication exception
             throw new AuthenticationException(message, e);
         } finally {
             //JdbcUtils.closeConnection(conn);

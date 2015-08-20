@@ -7,9 +7,11 @@ import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.Optional;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.shiro.authc.AuthenticationException;
 import org.apache.shiro.authc.UsernamePasswordToken;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.inject.Inject;
@@ -24,6 +26,8 @@ import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
 
 public class IkanowV1RealmTest {
+	private static final Logger logger = LogManager.getLogger(IkanowV1RealmTest.class);
+
 	protected Config config = null;
 
 	@Inject
@@ -60,16 +64,19 @@ public class IkanowV1RealmTest {
 	}
 
 	
-	@Test
-	@Ignore
-	public void testAuthenticated() {
+	@Test	
+	public void testNotAuthenticated() {
 		ISubject subject = securityService.getSubject();
 		assertNotNull(subject);
-        UsernamePasswordToken token = new UsernamePasswordToken("jfreydank@ikanow.com", "nogoodpassword");
+        UsernamePasswordToken token = new UsernamePasswordToken("jfreydank@ikanow.com", "Dont_even_think_I_hardcoded_my_password_here!");
         token.setRememberMe(true);
-        
-		securityService.login(subject,token);
-		assertEquals(true, subject.isAuthenticated());		
+        try {
+    		securityService.login(subject,token);			
+		} catch (AuthenticationException e) {
+			logger.info("Caught (expected) Authentication exception:"+e.getMessage());
+			
+		}
+		assertEquals(false, subject.isAuthenticated());		
 	}
 
 }
