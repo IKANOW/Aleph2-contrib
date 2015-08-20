@@ -16,12 +16,23 @@
 package com.ikanow.aleph2.analytics.storm.services;
 
 import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import backtype.storm.generated.StormTopology;
+
+import com.google.inject.Inject;
+import com.google.inject.Module;
+import com.ikanow.aleph2.analytics.storm.data_model.IStormController;
+import com.ikanow.aleph2.analytics.storm.modules.StormAnalyticTechnologyModule;
 import com.ikanow.aleph2.analytics.storm.utils.StormAnalyticTechnologyUtils;
+import com.ikanow.aleph2.analytics.storm.utils.StormControllerUtil;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyModule;
+import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentStreamingTopology;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadTriggerBean.AnalyticThreadComplexTriggerBean;
 import com.ikanow.aleph2.data_model.objects.data_import.BucketDiffBean;
@@ -34,20 +45,36 @@ import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 
 import java.util.Arrays;
 
+import scala.Tuple2;
+
 /** Storm analytic technology module - provides the interface between Storm and Aleph2
  * @author Alex
  */
-public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModule {
+public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModule, IExtraDependencyLoader {
 
 	////////////////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////
 	
-	// GENERAL CALLBACKS
+	// GENERAL INITIALIZATION
+	
+	protected final IStormController _storm_controller;	
+	
+	/** Guice constructor
+	 */
+	@Inject
+	public StormAnalyticTechnologyService(final IStormController storm_controller) {
+		_storm_controller = storm_controller;
+	}	
+
+	/** User constructor
+	 */
+	public StormAnalyticTechnologyService() {
+		_storm_controller = StormAnalyticTechnologyModule.getController();
+	}
 	
 	@Override
 	public void onInit(final IAnalyticsContext context) {
-		// TODO Auto-generated method stub
-		
+		//(nothing to do currently)		
 	}
 
 	@Override
@@ -56,8 +83,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 					final Collection<AnalyticThreadJobBean> jobs, 
 					final IAnalyticsContext context)
 	{
-		// TODO Auto-generated method stub
-		return false;
+		return (null != _storm_controller) && !NoStormController.class.isAssignableFrom(_storm_controller.getClass());
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////
@@ -207,13 +233,30 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 												final AnalyticThreadJobBean job_to_start, 
 												final IAnalyticsContext context)
 	{
-		// (already validated)
-		
-		// If it's an IEnrichmentModule then need to wrap the streaming enrichment context 
-		// If it's a harvest module then wrap the harvest context
-		
-		// TODO Auto-generated method stub
-		return null;
+		try {
+			// (already validated)
+			final Collection<Object> underlying_artefacts = context.getUnderlyingArtefacts();
+			final Collection<String> user_lib_paths = context.getAnalyticsLibraries(Optional.of(analytic_bucket)).join().values();
+			final Class<?> module_type = Class.forName(job_to_start.entry_point());
+			final String cached_jars_dir = context.getServiceContext().getGlobalProperties().local_cached_jar_dir();
+			if (IEnrichmentStreamingTopology.class.isAssignableFrom(module_type)) {
+				
+				// CASE 1) ENRICHMENT TOPOLOGY FORMAT
+				
+				final StreamingEnrichmentContextService wrapped_context = new StreamingEnrichmentContextService(context, analytic_bucket, job_to_start);
+				final IEnrichmentStreamingTopology generic_topology = (IEnrichmentStreamingTopology) module_type.newInstance();
+				final Tuple2<Object,Map<String,String>> storm_topology = generic_topology.getTopologyAndConfiguration(analytic_bucket, wrapped_context);				
+				return StormControllerUtil.startJob(_storm_controller, analytic_bucket, underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir);
+				
+				// (other, future, cases: enrichment module format, harvest module format; related, built-in modules: javascript)				
+			}
+			// (no other options -currently- possible because of validation that has taken place)
+			
+			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this, "startAnalyticJob", ErrorUtils.get("Bucket={0} Job={1} Error=Module_class_not_recognized: {2}", analytic_bucket, job_to_start.name(), job_to_start.entry_point())));
+		}
+		catch (Throwable t) {
+			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this, "startAnalyticJob", ErrorUtils.getLongForm("Bucket={1} Job={2} Error={0}", t, analytic_bucket, job_to_start.name())));
+		}
 	}
 
 	/* (non-Javadoc)
@@ -226,8 +269,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 												final AnalyticThreadJobBean job_to_stop, 
 												final IAnalyticsContext context)
 	{
-		// TODO Auto-generated method stub
-		return null;
+		return StormControllerUtil.stopJob(_storm_controller, analytic_bucket);
 	}
 
 	/* (non-Javadoc)
@@ -294,6 +336,19 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 						)
 				)
 			);
+	}
+
+
+	/** This service needs to load some additional classes via Guice. Here's the module that defines the bindings
+	 * @return
+	 */
+	public static List<Module> getExtraDependencyModules() {
+		return Arrays.asList((Module)new StormAnalyticTechnologyModule());
+	}
+	
+	@Override
+	public void youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules() {
+		//(done see above)
 	}
 
 }

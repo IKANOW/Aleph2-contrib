@@ -24,7 +24,6 @@ import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,18 +36,15 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.yaml.snakeyaml.Yaml;
 
-import scala.Tuple2;
 import backtype.storm.generated.StormTopology;
 import backtype.storm.generated.TopologyInfo;
 
 import com.google.common.collect.Sets;
-import com.ikanow.aleph2.analytics.storm.services.IStormController;
+import com.ikanow.aleph2.analytics.storm.data_model.IStormController;
 import com.ikanow.aleph2.analytics.storm.services.LocalStormController;
 import com.ikanow.aleph2.analytics.storm.services.RemoteStormController;
-import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentStreamingTopology;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
-import com.ikanow.aleph2.data_model.utils.Lambdas;
 
 /**
  * Factory for returning a local or remote storm controller.
@@ -190,31 +186,40 @@ public class StormControllerUtil {
 	 * 3. Submit megajar to storm with jobname of the bucket id
 	 * 
 	 * @param bucket
-	 * @param context
+	 * @param underlying_artefacts
 	 * @param yarn_config_dir
 	 * @param user_lib_paths
-	 * @param enrichment_toplogy
+	 * @param topology
 	 * @return
 	 */
-	//TODO:
-//	public static CompletableFuture<BasicMessageBean> startJob(IStormController storm_controller, DataBucketBean bucket, StreamingEnrichmentContext context, List<String> user_lib_paths, IEnrichmentStreamingTopology enrichment_toplogy, final String cached_jar_dir) {
-//		final CompletableFuture<BasicMessageBean> start_future = new CompletableFuture<BasicMessageBean>();
-//
-//		//Get topology from user
+	public static CompletableFuture<BasicMessageBean> startJob(
+														final IStormController storm_controller, 
+														final DataBucketBean bucket, 
+														final Collection<Object> underlying_artefacts, 
+														final Collection<String> user_lib_paths, 
+														final StormTopology topology, 
+														final Map<String, String> config, 
+														final String cached_jar_dir)
+	{
+		final CompletableFuture<BasicMessageBean> start_future = new CompletableFuture<BasicMessageBean>();
+
+		//Get topology from user
+		//TODO (ALEPH-12): find somewhere to put this code:
 //		final Tuple2<Object, Map<String, String>> top_ret_val = enrichment_toplogy.getTopologyAndConfiguration(bucket, context);
-//		final StormTopology topology = (StormTopology) top_ret_val._1;
+//		final StormTopology topology = (StormTopology) top_ret_val._1;		
 //		if (null == topology) {
 //			start_future.complete(
-//					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "startJob", ErrorUtils.TOPOLOGY_NULL_ERROR, enrichment_toplogy.getClass().getName(), bucket.full_name())
+//					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "startJob", ErrorUtils.TOPOLOGY_NULL_ERROR, topology.getClass().getName(), bucket.full_name())
 //					 );
 //			return start_future;
 //		}
-//		
-//		logger.info("Retrieved user Storm config topology: spouts=" + topology.get_spouts_size() + " bolts=" + topology.get_bolts_size() + " configs=" + top_ret_val._2().toString());
-//		
-//		final List<String> jars_to_merge = new LinkedList<String>();
-//		
-//		//add in all the underlying artefacts file paths
+		
+		logger.info("Retrieved user Storm config topology: spouts=" + topology.get_spouts_size() + " bolts=" + topology.get_bolts_size() + " configs=" + config.toString());
+		
+		final List<String> jars_to_merge = new LinkedList<String>();
+		
+		//add in all the underlying artefacts file paths
+		//TODO (ALEPH-12): find somewhere to put this code:
 //		final Collection<Object> underlying_artefacts = Lambdas.get(() -> {
 //			// Check if the user has overridden the context, and set to the defaults if not
 //			try {
@@ -226,31 +231,31 @@ public class StormControllerUtil {
 //				return context.getUnderlyingArtefacts();
 //			}			
 //		});
-//				
-//		jars_to_merge.addAll( underlying_artefacts.stream().map( artefact -> LiveInjector.findPathJar(artefact.getClass(), "")).collect(Collectors.toList()));
-//		
-//		//add in the user libs
-//		jars_to_merge.addAll(user_lib_paths);
-//		
-//		//create jar
-//		final CompletableFuture<String> jar_future = buildOrReturnCachedStormTopologyJar(jars_to_merge, cached_jar_dir);
-//		try {
-//			final String jar_file_location = jar_future.get();
-//			//submit to storm		
-//			final CompletableFuture<BasicMessageBean> submit_future = storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
-//			if ( submit_future.get().success() ) {
-//				ErrorUtils.buildSuccessMessage(StormControllerUtil.class, "startJob", "Started storm job succesfully");
-//			} else {
-//				start_future.complete(submit_future.get());				
-//			}						
-//		} catch ( Exception ex ) {
-//			start_future.complete(
-//					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "startJob", ErrorUtils.getLongForm("Error starting storm job: {0}", ex))
-//			 );
-//		}
-//		
-//		return start_future;
-//	}
+				
+		jars_to_merge.addAll( underlying_artefacts.stream().map( artefact -> LiveInjector.findPathJar(artefact.getClass(), "")).collect(Collectors.toList()));
+		
+		//add in the user libs
+		jars_to_merge.addAll(user_lib_paths);
+		
+		//create jar
+		final CompletableFuture<String> jar_future = buildOrReturnCachedStormTopologyJar(jars_to_merge, cached_jar_dir);
+		try {
+			final String jar_file_location = jar_future.get();
+			//submit to storm		
+			final CompletableFuture<BasicMessageBean> submit_future = storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
+			if ( submit_future.get().success() ) {
+				ErrorUtils.buildSuccessMessage(StormControllerUtil.class, "startJob", "Started storm job succesfully");
+			} else {
+				start_future.complete(submit_future.get());				
+			}						
+		} catch ( Exception ex ) {
+			start_future.complete(
+					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "startJob", ErrorUtils.getLongForm("Error starting storm job: {0}", ex))
+			 );
+		}
+		
+		return start_future;
+	}
 	
 	/**
 	 * Checks the jar cache to see if an entry already exists for this list of jars,
@@ -331,29 +336,36 @@ public class StormControllerUtil {
 		return stop_future;
 	}
 
-	//TODO
 	/**
 	 * Restarts a storm job by first calling stop, then calling start
 	 * 
 	 * @param bucket
-	 * @param context
+	 * @param underlying_artefacts
 	 * @param yarn_config_dir
 	 * @param user_lib_paths
-	 * @param enrichment_toplogy
+	 * @param topology
 	 * @return
 	 */
-//	public static CompletableFuture<BasicMessageBean> restartJob(IStormController storm_controller, DataBucketBean bucket, StreamingEnrichmentContext context, List<String> user_lib_paths, IEnrichmentStreamingTopology enrichment_toplogy, final String cached_jar_dir) {
-//		CompletableFuture<BasicMessageBean> stop_future = stopJob(storm_controller, bucket);
-//		try {
-//			stop_future.get(5, TimeUnit.SECONDS);
-//		} catch (InterruptedException | ExecutionException | TimeoutException e) {
-//			CompletableFuture<BasicMessageBean> error_future = new CompletableFuture<BasicMessageBean>();
-//			error_future.complete(
-//					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "restartJob", ErrorUtils.getLongForm("Error stopping storm job: {0}", e))
-//					);
-//		}
-//		return startJob(storm_controller, bucket, context, user_lib_paths, enrichment_toplogy, cached_jar_dir);
-//	}
+	public static CompletableFuture<BasicMessageBean> restartJob(
+														final IStormController storm_controller, 
+														final DataBucketBean bucket, 
+														final Collection<Object> underlying_artefacts, 
+														final Collection<String> user_lib_paths, 
+														final StormTopology topology, 
+														final Map<String, String> config, 
+														final String cached_jar_dir)
+	{
+		CompletableFuture<BasicMessageBean> stop_future = stopJob(storm_controller, bucket);
+		try {
+			stop_future.get(5, TimeUnit.SECONDS);
+		} catch (InterruptedException | ExecutionException | TimeoutException e) {
+			CompletableFuture<BasicMessageBean> error_future = new CompletableFuture<BasicMessageBean>();
+			error_future.complete(
+					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "restartJob", ErrorUtils.getLongForm("Error stopping storm job: {0}", e))
+					);
+		}
+		return startJob(storm_controller, bucket, underlying_artefacts, user_lib_paths, topology, config, cached_jar_dir);
+	}
 	
 	/**
 	 * Converts a buckets path to a use-able topology name
