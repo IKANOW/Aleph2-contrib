@@ -19,14 +19,28 @@ import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import scala.Tuple2;
+import storm.kafka.BrokerHosts;
+import storm.kafka.KafkaSpout;
+import storm.kafka.SpoutConfig;
+import storm.kafka.StringScheme;
+import storm.kafka.ZkHosts;
+import storm.kafka.bolt.KafkaBolt;
+import storm.kafka.bolt.mapper.TupleToKafkaMapper;
+import backtype.storm.spout.ISpout;
+import backtype.storm.spout.SchemeAsMultiScheme;
+import backtype.storm.tuple.Tuple;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.ikanow.aleph2.analytics.storm.assets.OutputBolt;
 import com.ikanow.aleph2.analytics.storm.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
+import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentStreamingTopology;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService;
@@ -36,8 +50,12 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
 import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean.StateDirectoryType;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
+import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
+import com.ikanow.aleph2.distributed_services.utils.KafkaUtils;
 
 /** An enrichment context service that just wraps the analytics service
  * @author Alex
@@ -45,17 +63,19 @@ import com.ikanow.aleph2.data_model.utils.SetOnce;
  */
 public class StreamingEnrichmentContextService implements IEnrichmentModuleContext {
 	protected IAnalyticsContext _delegate;
-	protected SetOnce<DataBucketBean> _bucket;
-	protected SetOnce<AnalyticThreadJobBean> _job;
+	protected final SetOnce<IEnrichmentStreamingTopology> _user_topology = new SetOnce<>();
+	protected final SetOnce<DataBucketBean> _bucket = new SetOnce<>();
+	protected final SetOnce<AnalyticThreadJobBean> _job = new SetOnce<>();
 	
 	/** User constructor - in technology
 	 * @param analytics_context - the context to wrap
 	 * @param bucket - the bucket being processed
 	 * @param job - the job being processed
 	 */
-	public StreamingEnrichmentContextService(final IAnalyticsContext analytics_context, final DataBucketBean bucket, final AnalyticThreadJobBean job)
+	public StreamingEnrichmentContextService(final IAnalyticsContext analytics_context, final IEnrichmentStreamingTopology user_topology, final DataBucketBean bucket, final AnalyticThreadJobBean job)
 	{
 		_delegate = analytics_context;
+		_user_topology.set(user_topology);
 		_bucket.set(bucket);
 		_job.set(job);
 	}
@@ -101,21 +121,72 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getTopologyEntryPoints(java.lang.Class, java.util.Optional)
 	 */
+	@SuppressWarnings("unchecked")
 	@Override
 	public <T> Collection<Tuple2<T, String>> getTopologyEntryPoints(
 												final Class<T> clazz, 
 												final Optional<DataBucketBean> bucket)
 	{
-		// TODO OK this is actually a non trivial case here - wants to be the actual inputs from the actual job
-		return null;
+		if (!ISpout.class.isAssignableFrom(clazz)) {
+			throw new RuntimeException(ErrorUtils.get(ErrorUtils.INVALID_TOPOLOGY_CLASSES, clazz));
+		}
+		final DataBucketBean my_bucket = bucket.orElseGet(() -> _bucket.get());
+		final BrokerHosts hosts = new ZkHosts(KafkaUtils.getZookeperConnectionString());
+		final String full_path = (_delegate.getServiceContext().getGlobalProperties().distributed_root_dir() + GlobalPropertiesBean.BUCKET_DATA_ROOT_OFFSET + my_bucket.full_name()).replace("//", "/");
+		
+		final ICoreDistributedServices cds = _delegate.getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();
+		
+		return _job.get().inputs().stream().flatMap(input -> {
+			return Optional.of(input.data_service().split(":"))
+						.filter(stream_stage -> stream_stage[0].equalsIgnoreCase("stream"))
+						.map(stream_stage -> stream_stage.length > 1 ? stream_stage[1] : "")
+						.map(stage -> {							
+							//TODO: add + ":" + blah if it's not the start of the queue
+							
+							final String topic_name = KafkaUtils.bucketPathToTopicName(my_bucket.full_name());
+							cds.createTopic(topic_name);
+							final SpoutConfig spout_config = new SpoutConfig(hosts, topic_name, full_path, my_bucket._id()); 
+							spout_config.scheme = new SchemeAsMultiScheme(new StringScheme());
+							final KafkaSpout kafka_spout = new KafkaSpout(spout_config);
+							return Tuples._2T((T) kafka_spout, topic_name);			
+						})
+						// convert optional to stream:
+						.map(Stream::of).orElseGet(Stream::empty)
+						;
+		})
+		.collect(Collectors.toList());
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getTopologyStorageEndpoint(java.lang.Class, java.util.Optional)
+	 */
+	@SuppressWarnings("unchecked")
 	@Override
 	public <T> T getTopologyStorageEndpoint(final Class<T> clazz,
 											final Optional<DataBucketBean> bucket)
 	{
-		// TODO OK this is actually a non trivial case here - wants to be the actual output for the actual job
-		return null;
+		if (!_job.get().output().is_transient()) { // Final output for this analytic
+			// Just return an aleph2 output bolt:
+			final DataBucketBean my_bucket = bucket.orElseGet(() -> _bucket.get());
+			return (T) new OutputBolt(my_bucket, _delegate.getAnalyticsContextSignature(bucket, Optional.empty()), _user_topology.get().getClass().getName());			
+		}
+		else {
+			final ICoreDistributedServices cds = _delegate.getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();			
+			
+			//TODO: if it's transient then return a kafka bolt using the name
+			final String topic_name = "todo";
+			cds.createTopic(topic_name);
+			
+			return (T) new KafkaBolt<String, String>().withTopicSelector(__ -> topic_name).withTupleToKafkaMapper(new TupleToKafkaMapper<String, String>() {
+				private static final long serialVersionUID = -1651711778714775009L;
+				public String getKeyFromTuple(final Tuple tuple) {
+					return null;
+				}
+				public String getMessageFromTuple(final Tuple tuple) {
+					return null;
+				}
+			});
+		}
 	}
 
 	@Override

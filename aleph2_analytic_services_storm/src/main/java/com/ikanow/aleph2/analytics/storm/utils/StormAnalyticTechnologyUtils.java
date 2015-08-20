@@ -54,7 +54,9 @@ public class StormAnalyticTechnologyUtils {
 	 * @return the validated bean (check for success:false)
 	 */
 	public static BasicMessageBean validateJob(final DataBucketBean analytic_bucket, final Collection<AnalyticThreadJobBean> jobs, final AnalyticThreadJobBean job) {
-		//TODO
+		//TODO bucket validation - check "names" for simpleness (alphanum + _ only)
+		//TODO here - check for unimplemented functions
+		//TOOD here - check for non streaming operations
 		return null;
 	}
 }

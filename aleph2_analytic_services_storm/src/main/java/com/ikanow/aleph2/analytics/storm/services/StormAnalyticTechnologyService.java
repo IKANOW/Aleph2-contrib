@@ -241,10 +241,12 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 			final String cached_jars_dir = context.getServiceContext().getGlobalProperties().local_cached_jar_dir();
 			if (IEnrichmentStreamingTopology.class.isAssignableFrom(module_type)) {
 				
+				//TODO (ALEPH-12): check built-in: passthrough, javascript
+				
 				// CASE 1) ENRICHMENT TOPOLOGY FORMAT
 				
-				final StreamingEnrichmentContextService wrapped_context = new StreamingEnrichmentContextService(context, analytic_bucket, job_to_start);
 				final IEnrichmentStreamingTopology generic_topology = (IEnrichmentStreamingTopology) module_type.newInstance();
+				final StreamingEnrichmentContextService wrapped_context = new StreamingEnrichmentContextService(context, generic_topology, analytic_bucket, job_to_start);
 				final Tuple2<Object,Map<String,String>> storm_topology = generic_topology.getTopologyAndConfiguration(analytic_bucket, wrapped_context);				
 				return StormControllerUtil.startJob(_storm_controller, analytic_bucket, underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir);
 				
