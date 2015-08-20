@@ -31,7 +31,10 @@
 		<version>0.7.2.201409121644</version>
 		<configuration>
 			<excludes>
+				<!-- (note that this appeared to fix a bamboo issue, but otherwise that "." construct appears to do nothing) -->
+				<exclude>**backtype.storm**</exclude>
 				<!--  This actually removes code from coveralls.io -->
+				<exclude>**/backtype/storm/*</exclude>
 				<!-- Example:
 				<exclude>**/path/to/package/*</exclude>
 				-->
@@ -121,5 +124,20 @@
 		<scope>${aleph2.scope}</scope>
 	</dependency>
 	<!-- Other external dependencies here -->
+	<dependency>
+		<groupId>org.apache.storm</groupId>
+		<artifactId>storm-core</artifactId>
+		<version>0.9.3</version>
+	</dependency>
+	<dependency>
+		<groupId>org.apache.storm</groupId>
+		<artifactId>storm-kafka</artifactId>
+		<version>0.9.5</version>
+	</dependency>
+	<dependency>
+		<groupId>org.yaml</groupId>
+		<artifactId>snakeyaml</artifactId>
+		<version>1.15</version>
+	</dependency>
   </dependencies>
 </project>
