@@ -232,21 +232,16 @@ public abstract class ElasticsearchContext {
 				}
 				@Override
 				public String getWritableIndex(final Optional<JsonNode> writable_object) {
-					try {
-						final Date d = _time_field
+					final Date d = _time_field
 											.filter(__ -> writable_object.isPresent())
 											.map(t -> writable_object.get().get(t))
 											.filter(j -> j.isLong())
 											.map(j -> new Date(j.asLong()))
 										.orElseGet(() -> new Date()); // (else just use "now")
-								
-						final String formatted_date = _formatter.get().format(d);
-	
-						return ElasticsearchContextUtils.reconstructTimedBasedSplitIndex(_index_split._1(), formatted_date);
-					}
-					catch (Exception e) { // just treat like a non-time-based index
-						return _index;
-					}
+							
+					final String formatted_date = _formatter.get().format(d);
+
+					return ElasticsearchContextUtils.reconstructTimedBasedSplitIndex(_index_split._1(), formatted_date);
 				}
 			}
 		}

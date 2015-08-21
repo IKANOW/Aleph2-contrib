@@ -106,7 +106,7 @@ public class TestElasticsearchCrudService_Mappings {
 	}
 	
 	@Test
-	public void testMultipleMappingsPerIndex_singleStore() throws InterruptedException, ExecutionException {
+	public void test_MultipleMappingsPerIndex_singleStore() throws InterruptedException, ExecutionException {
 		
 		// Using normal type system: should fail
 		
@@ -199,7 +199,7 @@ public class TestElasticsearchCrudService_Mappings {
 	}
 	
 	@Test
-	public void testMultipleMappingsPerIndex_multiStore() throws InterruptedException, ExecutionException {
+	public void test_MultipleMappingsPerIndex_multiStore() throws InterruptedException, ExecutionException {
 		
 		// 1) Check fails with mixed mapping
 		
@@ -324,7 +324,7 @@ public class TestElasticsearchCrudService_Mappings {
 	/////////////////////////////////////////////////////
 
 	@Test
-	public void testMultipleMappingsPerIndex_multiStore_batch() throws InterruptedException, ExecutionException {
+	public void test_MultipleMappingsPerIndex_multiStore_batch() throws InterruptedException, ExecutionException {
 		
 		// 1) Check fails with mixed mapping
 		
@@ -337,7 +337,7 @@ public class TestElasticsearchCrudService_Mappings {
 			@SuppressWarnings("unchecked")
 			final ElasticsearchCrudService<TestBean>.ElasticsearchBatchSubsystem batch_service = service.getUnderlyingPlatformDriver(ElasticsearchBatchSubsystem.class, Optional.empty()).get();
 
-			batch_service.setBatchProperties(Optional.empty(), Optional.empty(), Optional.of(Duration.of(1, ChronoUnit.SECONDS)));			
+			batch_service.setBatchProperties(Optional.empty(), Optional.empty(), Optional.of(Duration.of(1, ChronoUnit.SECONDS)), Optional.empty());			
 			
 			// Set up the mapping
 			
@@ -386,7 +386,7 @@ public class TestElasticsearchCrudService_Mappings {
 		@SuppressWarnings("unchecked")
 		final ElasticsearchCrudService<TestBean>.ElasticsearchBatchSubsystem batch_service = service.getUnderlyingPlatformDriver(ElasticsearchBatchSubsystem.class, Optional.empty()).get();
 
-		batch_service.setBatchProperties(Optional.empty(), Optional.empty(), Optional.of(Duration.of(1, ChronoUnit.SECONDS)));			
+		batch_service.setBatchProperties(Optional.empty(), Optional.empty(), Optional.of(Duration.of(1, ChronoUnit.SECONDS)), Optional.of(5));			
 		
 		{
 

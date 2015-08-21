@@ -151,7 +151,7 @@ public class TestElasticsearchCrudService {
 	// CREATION
 	
 	@Test
-	public void testCreateSingleObject() throws InterruptedException, ExecutionException {
+	public void test_CreateSingleObject() throws InterruptedException, ExecutionException {
 		
 		final ElasticsearchCrudService<TestBean> service = getTestService("testCreateSingleObject", TestBean.class);
 
@@ -243,7 +243,92 @@ public class TestElasticsearchCrudService {
 	}
 	
 	@Test
-	public void testCreateMultipleObjects() throws InterruptedException, ExecutionException {
+	public void test_CreateSingleObject_Batch() throws InterruptedException, ExecutionException {
+		
+		final ElasticsearchCrudService<TestBean> service = getTestService("testCreateSingleObject", TestBean.class);
+
+		@SuppressWarnings("unchecked")
+		final ElasticsearchCrudService<TestBean>.ElasticsearchBatchSubsystem batch_service = service.getUnderlyingPlatformDriver(ElasticsearchBatchSubsystem.class, Optional.empty()).get();
+		
+		batch_service.setBatchProperties(Optional.empty(), Optional.empty(), Optional.of(Duration.of(1, ChronoUnit.SECONDS)), Optional.empty());
+		
+		assertEquals(0, service.countObjects().get().intValue());		
+		
+		final TestBean test = new TestBean();
+		test._id = "_id_1";
+		test.test_string = "test_string_1";
+		
+		// 1) Add a new object to an empty DB
+		{
+			batch_service.storeObject(test, false);
+			Thread.sleep(3000L);
+			
+			assertEquals(1, service.countObjects().get().intValue());
+			
+			final CompletableFuture<Optional<TestBean>> f_retval = service.getObjectById(test._id());
+			
+			assertTrue("Need to find an object", f_retval.get().isPresent());
+			
+			final TestBean retval = f_retval.get().get();
+			
+			assertEquals(1, service.countObjects().get().intValue());
+			
+			assertEquals("{\"_id\":\"_id_1\",\"test_string\":\"test_string_1\"}", BeanTemplateUtils.toJson(retval).toString());
+		}		
+		// 2) Add the _id again, should fail
+		
+		final TestBean test2 = BeanTemplateUtils.clone(test).with("test_string", "test_string_2").done();
+		
+		{
+			batch_service.storeObject(test2, false);
+			Thread.sleep(3000L);
+			
+			assertEquals(1, service.countObjects().get().intValue());
+			
+			final CompletableFuture<Optional<TestBean>> f_retval2 = service.getObjectById("_id_1");
+			
+			assertTrue("Found an object", f_retval2.get().isPresent());
+			
+			final TestBean retval2 = f_retval2.get().get();
+			
+			assertEquals("{\"_id\":\"_id_1\",\"test_string\":\"test_string_1\"}", BeanTemplateUtils.toJson(retval2).toString());		
+		}
+		// 3) Add the same with override set 
+		{
+			batch_service.storeObject(test2, true);
+			Thread.sleep(3000L);
+			
+			assertEquals(1, service.countObjects().get().intValue());
+			
+			final CompletableFuture<Optional<TestBean>> f_retval3 = service.getObjectBySpec(CrudUtils.allOf(TestBean.class));
+			//final CompletableFuture<Optional<TestBean>> f_retval3 = service.getObjectById("_id_1");
+			//^ note these 2 commands are equivalent because of the level of optimization configured for these tests
+
+			final TestBean retval3 = f_retval3.get().get();
+			
+			assertEquals("{\"_id\":\"_id_1\",\"test_string\":\"test_string_2\"}", BeanTemplateUtils.toJson(retval3).toString());		
+			
+			//4) add with no id
+			
+			final TestBean test4 = new TestBean();
+			test4.test_string = "test_string_4";
+			
+			batch_service.storeObject(test4, true);
+			Thread.sleep(3000L);
+			
+			assertEquals(2, service.countObjects().get().intValue());
+			
+			final CompletableFuture<Optional<TestBean>> f_retval4 = service.getObjectBySpec(CrudUtils.allOf(TestBean.class).when("test_string", "test_string_4"));
+
+			final TestBean retval4 = f_retval4.get().get();
+			
+			assertTrue("Was assigned _id", retval4._id != null);
+			assertEquals("test_string_4", retval4.test_string);
+		}
+	}
+	
+	@Test
+	public void test_CreateMultipleObjects() throws InterruptedException, ExecutionException {
 		
 		final ElasticsearchCrudService<TestBean> service = getTestService("testCreateMultipleObjects", TestBean.class);
 		
@@ -318,7 +403,7 @@ public class TestElasticsearchCrudService {
 	}
 
 	@Test
-	public void testCreateMultipleObjects_JSON() throws InterruptedException, ExecutionException {
+	public void test_CreateMultipleObjects_JSON() throws InterruptedException, ExecutionException {
 		
 		final ElasticsearchCrudService<JsonNode> service = getTestService("testCreateMultipleObjects_json", TestBean.class).getRawCrudService();
 		
@@ -399,14 +484,14 @@ public class TestElasticsearchCrudService {
 
 	
 	@Test
-	public void testCreateMultipleObjects_JSON_batch() throws InterruptedException, ExecutionException {
+	public void test_CreateMultipleObjects_JSON_batch() throws InterruptedException, ExecutionException {
 		
 		final ElasticsearchCrudService<JsonNode> service = getTestService("testCreateMultipleObjects_json_batch", TestBean.class).getRawCrudService();
 		
 		@SuppressWarnings("unchecked")
 		final ElasticsearchCrudService<JsonNode>.ElasticsearchBatchSubsystem batch_service = service.getUnderlyingPlatformDriver(ElasticsearchBatchSubsystem.class, Optional.empty()).get();
 		
-		batch_service.setBatchProperties(Optional.empty(), Optional.empty(), Optional.of(Duration.of(2, ChronoUnit.SECONDS)));
+		batch_service.setBatchProperties(Optional.empty(), Optional.empty(), Optional.of(Duration.of(2, ChronoUnit.SECONDS)), Optional.of(10));
 		
 		// 1) Insertion without ids
 		
@@ -436,7 +521,7 @@ public class TestElasticsearchCrudService {
 			
 		service.deleteDatastore().get();
 
-		batch_service.setBatchProperties(Optional.of(30), Optional.empty(), Optional.empty());		
+		batch_service.setBatchProperties(Optional.of(30), Optional.empty(), Optional.empty(), Optional.of(0));		
 		
 		final List<JsonNode> l2 = IntStream.rangeClosed(51, 100).boxed()
 								.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done().get())
@@ -462,7 +547,7 @@ public class TestElasticsearchCrudService {
 		
 		// 4) Insertion with dups - fail on insert dups
 		
-		batch_service.setBatchProperties(Optional.empty(), Optional.of(10000L), Optional.empty());				
+		batch_service.setBatchProperties(Optional.empty(), Optional.of(10000L), Optional.empty(), Optional.of(5));				
 		
 		final List<JsonNode> l4 = IntStream.rangeClosed(21, 120).boxed()
 				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string2" + i).done().get())
@@ -478,7 +563,7 @@ public class TestElasticsearchCrudService {
 				
 		// 5) Insertion with dups - overwrite 
 
-		batch_service.setBatchProperties(Optional.of(20), Optional.empty(), Optional.of(Duration.of(4, ChronoUnit.SECONDS)));						
+		batch_service.setBatchProperties(Optional.of(20), Optional.empty(), Optional.of(Duration.of(4, ChronoUnit.SECONDS)), Optional.empty());						
 		try { Thread.sleep(100L); } catch (Exception e) {}
 		
 		final List<JsonNode> l5_1 = IntStream.rangeClosed(21, 59).boxed()
@@ -538,7 +623,7 @@ public class TestElasticsearchCrudService {
 
 	//TODO
 //	@Test
-//	public void testIndexes() throws InterruptedException, ExecutionException {		
+//	public void test_Indexes() throws InterruptedException, ExecutionException {		
 //		
 //		final MongoDbCrudService<TestBean, String> service = getTestService("testIndexes", TestBean.class, String.class);
 //
@@ -835,7 +920,7 @@ public class TestElasticsearchCrudService {
 //	}
 	
 	@Test
-	public void testCounting() throws InterruptedException, ExecutionException {
+	public void test_Counting() throws InterruptedException, ExecutionException {
 		
 		final ElasticsearchCrudService<TestBean> service = getTestService("testCounting", TestBean.class);
 
@@ -931,7 +1016,7 @@ public class TestElasticsearchCrudService {
 //	
 //	
 //	@Test
-//	public void testUpdateDocs() throws InterruptedException, ExecutionException {
+//	public void test_UpdateDocs() throws InterruptedException, ExecutionException {
 //		
 //		final MongoDbCrudService<UpdateTestBean, String> service = getTestService("testUpdateDocs", UpdateTestBean.class, String.class);
 //
@@ -1075,7 +1160,7 @@ public class TestElasticsearchCrudService {
 //	}
 //	
 //	@Test
-//	public void testUpdateAndReturnDocs() throws InterruptedException, ExecutionException {
+//	public void test_UpdateAndReturnDocs() throws InterruptedException, ExecutionException {
 //		
 //		//TODO: upsert, before+after updated, delete doc, field_list/include, field_list/exclude
 //		
@@ -1121,7 +1206,7 @@ public class TestElasticsearchCrudService {
 //	}
 //	
 //	@Test
-//	public void testDeletion() throws InterruptedException, ExecutionException {
+//	public void test_Deletion() throws InterruptedException, ExecutionException {
 //		
 //		final MongoDbCrudService<TestBean, String> service = getTestService("testDeletion", TestBean.class, String.class);
 //
@@ -1262,7 +1347,7 @@ public class TestElasticsearchCrudService {
 	
 	//TODO
 //	@Test
-//	public void testJsonRepositoryCalls() throws InterruptedException, ExecutionException {
+//	public void test_JsonRepositoryCalls() throws InterruptedException, ExecutionException {
 //		final MongoDbCrudService<TestBean, String> bean_service = getTestService("testJsonRepositoryCalls", TestBean.class, String.class);
 //		final MongoDbCrudService<JsonNode, String> json_service = getTestService("testJsonRepositoryCalls", JsonNode.class, String.class);
 //		
@@ -1275,7 +1360,7 @@ public class TestElasticsearchCrudService {
 //		testJsonRepositoryCalls_common(bean_service.getRawCrudService(), json_service);
 //	}
 //	
-//	public void testJsonRepositoryCalls_common(final ICrudService<JsonNode> service,  MongoDbCrudService<JsonNode, String> original) throws InterruptedException, ExecutionException {
+//	public void test_JsonRepositoryCalls_common(final ICrudService<JsonNode> service,  MongoDbCrudService<JsonNode, String> original) throws InterruptedException, ExecutionException {
 //		
 //		// Single object get
 //
@@ -1323,66 +1408,86 @@ public class TestElasticsearchCrudService {
 //		//TODO: also need to do an update and a findAndModify
 //	}
 
-	//TODO
-//	@Test
-//	public void testMiscFunctions() throws InterruptedException, ExecutionException {
-//		
-//		final MongoDbCrudService<TestBean, String> service = getTestService("testMiscFunctions", TestBean.class, String.class);
-//
-//		service.optimizeQuery(Arrays.asList("test_string")).get(); // (The get() waits for completion)
-//		
-//		replenishDocsForDeletion(service);
-//		
-//		// Search service - currently not implemented
-//		
-//		assertEquals(Optional.empty(), service.getSearchService());
-//		
-//		// Mongo DB collection
-//		
-//		final com.mongodb.DBCollection dbc = service.getUnderlyingPlatformDriver(com.mongodb.DBCollection.class, Optional.empty()).get();
-//		
-//		assertEquals(2, dbc.getIndexInfo().size());
-//
-//		// Mongojack DB collection
-//		
-//		final JacksonDBCollection<?, ?> dbc2 = service.getUnderlyingPlatformDriver(JacksonDBCollection.class, Optional.empty()).get();
-//
-//		assertEquals(10, dbc2.count());		
-//
-//		// Nothing else
-//		
-//		final Optional<String> fail = service.getUnderlyingPlatformDriver(String.class, Optional.empty());
-//		
-//		assertEquals(Optional.empty(), fail);
-//		
-//		// Meta model - more complicated, tested below
-//		// JSON service - more complicated, tested below...		
-//	}
+	@Test
+	public void test_MiscFunctions() throws InterruptedException, ExecutionException {
+		
+		final ElasticsearchCrudService<TestBean> service = getTestService("test_MiscFunctions", TestBean.class);
+		
+		// Meta model - more complicated, tested below (test_MetaModelInterface)
+		// Batch service - more complicated, tested above under *_Batch...
+		
+		//ElasticsearchContext		
+		
+		final Optional<ElasticsearchContext> context = service.getUnderlyingPlatformDriver(ElasticsearchContext.class, Optional.empty());
+		
+		assertTrue("Received a context back", context.isPresent());
+		assertTrue("Received a context - type should be ElasticsearchContext", context.get() instanceof ElasticsearchContext);
+		
+		// Nothing else
+		
+		final Optional<String> fail = service.getUnderlyingPlatformDriver(String.class, Optional.empty());
+		
+		assertEquals(Optional.empty(), fail);		
+	}
 
-	//TODO
-//	@Test
-//	public void testMetaModelInterface() throws InterruptedException, ExecutionException {
+	@Test
+	public void test_MetaModelInterface() throws InterruptedException, ExecutionException {
+		
+		final ElasticsearchCrudService<TestBean> service = getTestService("test_MetaModelInterface", TestBean.class);
+
+		service.optimizeQuery(Arrays.asList("test_string")).get(); // (The get() waits for completion)
+		
+		replenishDocsForDeletion(service);
+			
+		final ICrudService.IMetaModel meta_model_1 = service.getUnderlyingPlatformDriver(ICrudService.IMetaModel.class, Optional.empty()).get();	
+		final ICrudService.IMetaModel meta_model_2 = service.getUnderlyingPlatformDriver(ICrudService.IMetaModel.class, Optional.empty()).get();
+		
+		// Check the object is created just once
+		assertEquals(meta_model_1, meta_model_2);
+
+		DataSet data = meta_model_1.getContext().query().from(meta_model_1.getTable()).select(meta_model_1.getTable().getColumns()).where("test_long").greaterThan(5).execute();
+
+		int count = 0;
+		while (data.next()) {			
+		    org.apache.metamodel.data.Row row = data.getRow();
+		    assertEquals(row.getValue(2), "test_string" + (count + 6));
+		    count++;
+		}		
+		assertEquals(4,count);
+	}
+
+	// UTILITY
+	
+	protected static void replenishDocsForDeletion(ICrudService<TestBean> service) throws InterruptedException, ExecutionException {
+		
+		final List<TestBean> l = IntStream.rangeClosed(0, 9).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class)
+								.with("_id", "id" + i)
+								.with("test_string", "test_string" + i)
+								.with("test_long", (Long)(long)i)
+								.done().get())
+				.collect(Collectors.toList());
+
+		service.storeObjects(l, false).get();
+		
+		assertEquals(10, service.countObjects().get().intValue());
+	}
+	
+	// (not yet needed)
+//	protected static void replenishDocsForDeletion_JSON(ICrudService<JsonNode> service) {
 //		
-//		final MongoDbCrudService<TestBean, String> service = getTestService("testMetaModelInterface", TestBean.class, String.class);
+//		final List<JsonNode> l = IntStream.rangeClosed(0, 9).boxed()
+//				.map(i -> BeanTemplateUtils.build(TestBean.class)
+//								.with("_id", "id" + i)
+//								.with("test_string", "test_string" + i)
+//								.with("test_long", (Long)(long)i)
+//								.done().get())
+//				.map(b -> BeanTemplateUtils.toJson(b))
+//				.collect(Collectors.toList());
 //
-//		service.optimizeQuery(Arrays.asList("test_string")).get(); // (The get() waits for completion)
+//		service.storeObjects(l, false).get();
 //		
-//		replenishDocsForDeletion(service);
-//			
-//		final ICrudService.IMetaModel meta_model_1 = service.getUnderlyingPlatformDriver(ICrudService.IMetaModel.class, Optional.empty()).get();	
-//		final ICrudService.IMetaModel meta_model_2 = service.getUnderlyingPlatformDriver(ICrudService.IMetaModel.class, Optional.empty()).get();
-//		
-//		// Check the object is created just once
-//		assertEquals(meta_model_1, meta_model_2);
-//
-//		DataSet data = meta_model_1.getContext().query().from(meta_model_1.getTable()).select(meta_model_1.getTable().getColumns()).where("_id").greaterThan("id5").execute();
-//
-//		int count = 0;
-//		while (data.next()) {			
-//		    org.apache.metamodel.data.Row row = data.getRow();
-//		    assertEquals(row.getValue(2), "test_string" + (count + 6));
-//		    count++;
-//		}		
-//		assertEquals(4,count);
+//		assertEquals(10, service.countObjects().get().intValue());
 //	}
+	
 }
