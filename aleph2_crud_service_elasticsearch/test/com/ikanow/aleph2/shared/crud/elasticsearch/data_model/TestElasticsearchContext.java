@@ -127,7 +127,7 @@ public class TestElasticsearchContext {
 			final ElasticsearchContext.TypeContext.ReadOnlyTypeContext.FixedRoTypeContext test_ro_auto_type = 
 					new ElasticsearchContext.TypeContext.ReadOnlyTypeContext.FixedRoTypeContext(Arrays.asList("test_context_1b", "test_context_2b"));
 			
-			assertEquals(Arrays.asList("test_context_1b", "test_context_2b"), test_ro_type.getReadableTypeList());
+			assertEquals(Arrays.asList("test_context_1b", "test_context_2b"), test_ro_auto_type.getReadableTypeList());
 			
 			final ElasticsearchContext.ReadOnlyContext test = new ElasticsearchContext.ReadOnlyContext(factory.getClient(), test_ro_index, test_ro_type);
 					
