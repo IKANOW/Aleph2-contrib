@@ -68,6 +68,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IBasicSearchService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -97,10 +98,12 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	public ElasticsearchCrudService(final Class<O> bean_clazz, 
 			final ElasticsearchContext es_context, 
 			final Optional<Boolean> id_ranges_ok, final CreationPolicy creation_policy, 
-			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project)
+			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project,
+			final Optional<DataSchemaBean.WriteSettings> batch_write_settings)
 	{
 		_state = new State(bean_clazz, es_context, id_ranges_ok.orElse(false), creation_policy, auth_fieldname, auth, project);
 		_object_mapper = BeanTemplateUtils.configureMapper(Optional.empty());
+		_batch_write_settings = batch_write_settings;
 	}
 	protected class State {
 		State(final Class<O> bean_clazz, final ElasticsearchContext es_context, 
@@ -130,6 +133,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	}
 	protected final State _state;
 	protected final ObjectMapper _object_mapper;
+	protected final Optional<DataSchemaBean.WriteSettings> _batch_write_settings;
 	
 	/////////////////////////////////////////////////////
 	
@@ -728,7 +732,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 */
 	@Override
 	public ElasticsearchCrudService<JsonNode> getRawCrudService() {
-		return new ElasticsearchCrudService<JsonNode>(JsonNode.class, _state.es_context, Optional.of(_state.id_ranges_ok), _state.creation_policy, _state.auth_fieldname, _state.auth, _state.project); 
+		return new ElasticsearchCrudService<JsonNode>(JsonNode.class, _state.es_context, Optional.of(_state.id_ranges_ok), _state.creation_policy, _state.auth_fieldname, _state.auth, _state.project, _batch_write_settings); 
 	}
 
 	/* (non-Javadoc)
@@ -772,7 +776,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				for (;;) {
 					if (_flush_now) {
 						synchronized (this) {
-							_current.flush();
+							_current.flush(); // (must always be non-null because _flush_now can only be set if _current exists)
 							_flush_now = false;
 						}
 					}
@@ -792,10 +796,18 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			if (null != old) old.close();
 		}
 
+		protected BulkProcessor buildBulkProcessor() {
+			return buildBulkProcessor(_batch_write_settings.map(DataSchemaBean.WriteSettings::batch_max_objects), 
+					_batch_write_settings.map(DataSchemaBean.WriteSettings::batch_max_size_kb), 
+					_batch_write_settings.map(DataSchemaBean.WriteSettings::batch_flush_interval).map(i -> Duration.of(i, ChronoUnit.SECONDS)), 
+					_batch_write_settings.map(DataSchemaBean.WriteSettings::target_write_concurrency)
+					);
+		}
+		
 		@Override
 		public synchronized void storeObjects(final List<O> new_objects, final boolean replace_if_present) {
 			if (null == _current) {
-				_current = buildBulkProcessor(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+				_current = buildBulkProcessor();
 			}
 			new_objects.stream().forEach(new_object -> 			
 				_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
@@ -805,7 +817,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		@Override
 		public synchronized void storeObject(final O new_object, final boolean replace_if_present) {
 			if (null == _current) {
-				_current = buildBulkProcessor(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+				_current = buildBulkProcessor();
 			}			
 			_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
 							Either.left(new_object), replace_if_present, true).request());

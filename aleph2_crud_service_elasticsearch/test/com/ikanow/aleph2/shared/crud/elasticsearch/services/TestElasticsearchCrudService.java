@@ -56,6 +56,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableMap;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils.BeanTemplate;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
@@ -117,9 +118,9 @@ public class TestElasticsearchCrudService {
 	protected IElasticsearchCrudServiceFactory _factory = null; 
 	
 	public <O> ElasticsearchCrudService<O> getTestService(String test_name_case, Class<O> bean_clazz) throws InterruptedException, ExecutionException {
-		return getTestService(test_name_case, bean_clazz, true);
+		return getTestService(test_name_case, bean_clazz, true, Optional.empty());
 	}
-	public <O> ElasticsearchCrudService<O> getTestService(String test_name_case, Class<O> bean_clazz, boolean create_index) throws InterruptedException, ExecutionException {
+	public <O> ElasticsearchCrudService<O> getTestService(String test_name_case, Class<O> bean_clazz, boolean create_index, Optional<DataSchemaBean.WriteSettings> write_settings) throws InterruptedException, ExecutionException {
 		
 		final String test_name = test_name_case.toLowerCase();
 		
@@ -128,7 +129,7 @@ public class TestElasticsearchCrudService {
 						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(test_name),
 						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext("test")),
 				Optional.of(false), CreationPolicy.AVAILABLE_IMMEDIATELY,
-				Optional.empty(), Optional.empty(), Optional.empty());
+				Optional.empty(), Optional.empty(), Optional.empty(), write_settings);
 
 		service.deleteDatastore().get();
 		
@@ -245,12 +246,13 @@ public class TestElasticsearchCrudService {
 	@Test
 	public void test_CreateSingleObject_Batch() throws InterruptedException, ExecutionException {
 		
-		final ElasticsearchCrudService<TestBean> service = getTestService("testCreateSingleObject", TestBean.class);
+		DataSchemaBean.WriteSettings write_settings =  new DataSchemaBean.WriteSettings(100, 1023L, 1, 3);		
+		final ElasticsearchCrudService<TestBean> service = getTestService("testCreateSingleObject", TestBean.class, true, Optional.of(write_settings));
 
+		assertEquals(write_settings, service._batch_write_settings.get());
+		
 		@SuppressWarnings("unchecked")
 		final ElasticsearchCrudService<TestBean>.ElasticsearchBatchSubsystem batch_service = service.getUnderlyingPlatformDriver(ElasticsearchBatchSubsystem.class, Optional.empty()).get();
-		
-		batch_service.setBatchProperties(Optional.empty(), Optional.empty(), Optional.of(Duration.of(1, ChronoUnit.SECONDS)), Optional.empty());
 		
 		assertEquals(0, service.countObjects().get().intValue());		
 		
@@ -703,7 +705,7 @@ public class TestElasticsearchCrudService {
 
 	@Test
 	public void objectRetrieve_missingIndex() throws InterruptedException, ExecutionException {
-		final ElasticsearchCrudService<TestBean> service = getTestService("objectRetrieve_missingIndex", TestBean.class, false); //(didn't create index)
+		final ElasticsearchCrudService<TestBean> service = getTestService("objectRetrieve_missingIndex", TestBean.class, false, Optional.empty()); //(didn't create index)
 		
 		// Single Object
 		

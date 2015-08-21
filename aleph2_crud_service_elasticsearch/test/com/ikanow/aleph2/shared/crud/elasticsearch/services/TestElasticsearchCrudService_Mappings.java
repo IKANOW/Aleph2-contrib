@@ -68,7 +68,7 @@ public class TestElasticsearchCrudService_Mappings {
 		
 		final ElasticsearchCrudService<O> service = _factory.getElasticsearchCrudService(bean_clazz, es_context, 
 				Optional.of(false), CreationPolicy.AVAILABLE_IMMEDIATELY,
-				Optional.empty(), Optional.empty(), Optional.empty());
+				Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
 
 		try {
 			service.deleteDatastore().get();
