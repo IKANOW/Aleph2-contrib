@@ -137,10 +137,18 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 		final ICoreDistributedServices cds = _delegate.getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();
 		
 		return _job.get().inputs().stream().flatMap(input -> {
-			return Optional.of(input.data_service().split(":"))
-						.filter(stream_stage -> stream_stage[0].equalsIgnoreCase("stream"))
-						.map(stream_stage -> stream_stage.length > 1 ? stream_stage[1] : "")
-						.map(stage -> {							
+			return Optional.of(input)
+						.filter(i -> "stream".equalsIgnoreCase(i.data_service()))
+						.map(i -> {					
+							//TODO: Topic naming: 5 cases: 
+							// 1) i.resource_name_or_id is a bucket path, ie starts with "/", and then:
+							// 1.1) if it ends ":name" then it points to a specific point in the bucket processing
+							// 1.2) if it ends ":" then it points to the start of that bucket's processing (ie the output of its harvester)
+							// 1.3) otherwise it points to the end of the bucket's processing (ie immediately before it's output)
+							// 2) i.resource_name_or_id does not, in which case
+							// 2.1) if it's a non-empty string, then it's the name of  
+							// 2.2) if it's "" or null then it's pointing to the output of its own bucket's harvester
+							
 							//TODO: add + ":" + blah if it's not the start of the queue
 							
 							final String topic_name = KafkaUtils.bucketPathToTopicName(my_bucket.full_name());
@@ -180,19 +188,21 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 			return (T) new KafkaBolt<String, String>().withTopicSelector(__ -> topic_name).withTupleToKafkaMapper(new TupleToKafkaMapper<String, String>() {
 				private static final long serialVersionUID = -1651711778714775009L;
 				public String getKeyFromTuple(final Tuple tuple) {
-					return null;
+					return null; // (no key, will randomly assign across partition)
 				}
 				public String getMessageFromTuple(final Tuple tuple) {
-					return null;
+					return  _user_topology.get().rebuildObject(tuple, OutputBolt::tupleToLinkedHashMap).toString();
 				}
 			});
 		}
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getTopologyErrorEndpoint(java.lang.Class, java.util.Optional)
+	 */
 	@Override
 	public <T> T getTopologyErrorEndpoint(Class<T> clazz, Optional<DataBucketBean> bucket) {
-		// TODO OK this is actually a non trivial case here - wants to be the actual output for the actual job
-		return null;
+		throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "getTopologyErrorEndpoint"));
 	}
 
 	/* (non-Javadoc)
@@ -216,6 +226,11 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 */
 	@Override
 	public void emitMutableObject(final long id, final ObjectNode mutated_json, final Optional<AnnotationBean> annotation) {
+		
+		//TODO: actually this does need to be supported (see OutputBolt)
+		// Also: 
+		//every "N" seconds check if anyone has registered interest in my data and stream to an output queue as well if so
+		// (this needs to get moved to somewhere more generic .. I think the idea was to use the core output library) 		
 		throw new RuntimeException(ErrorUtils.get(ErrorUtils.INVALID_CALL_FROM_WRAPPED_ANALYTICS_CONTEXT_ENRICH, "emitMutableObject"));
 	}
 
