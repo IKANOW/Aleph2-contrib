@@ -18,15 +18,11 @@ import org.apache.shiro.authz.AuthorizationInfo;
 import org.apache.shiro.authz.SimpleAuthorizationInfo;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
-import org.apache.shiro.util.ByteSource;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
-import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 
@@ -46,7 +42,8 @@ public class IkanowV1Realm extends AuthorizingRealm {
 		_context = service_context;
 	}
 	
-	protected ICrudService<AuthenticationBean> getDb(){
+	@SuppressWarnings("unchecked")
+	protected ICrudService<AuthenticationBean> getAuthenticationStore(){
 		if(v1_db == null){
 		_core_management_db = _context.getCoreManagementDbService();		
 		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
@@ -119,7 +116,7 @@ public class IkanowV1Realm extends AuthorizingRealm {
 
         
 		SingleQueryComponent<AuthenticationBean> queryUsername = CrudUtils.anyOf(AuthenticationBean.class).when("username",username);		
-        Optional<AuthenticationBean> result = getDb().getObjectBySpec(queryUsername).get();
+        Optional<AuthenticationBean> result = getAuthenticationStore().getObjectBySpec(queryUsername).get();
         if(result.isPresent()){
         	AuthenticationBean b = result.get();
         	logger.debug("Loaded user info from db:"+b);

@@ -36,6 +36,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.shared.crud.elasticsearch.services.MockElasticsearchCrudServiceFactory;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUtils;
 
 @SuppressWarnings("unused")
@@ -44,47 +45,97 @@ public class TestElasticsearchContext {
 	@Test
 	public void test_context() throws JsonProcessingException, IOException {
 		
-		// Just going to test the non-trivial logic:
-		
-		final ElasticsearchContext.IndexContext.ReadOnlyIndexContext.TimedRoIndexContext index_context_1 = 
-				new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.TimedRoIndexContext(Arrays.asList("test1_{yyyy}", "test_2_{yyyy.MM}", "test3"));
-		
-		assertEquals(Arrays.asList("test1_*", "test_2_*", "test3"), index_context_1.getReadableIndexList(Optional.empty()));
-		
 		final Calendar c1 = GregorianCalendar.getInstance();
-		final Calendar c2 = GregorianCalendar.getInstance();		
-		c1.set(2004, 11, 28); c2.set(2005,  0, 2);
-		assertEquals(Arrays.asList("test1_2004*", "test1_2005*", "test_2_2004.12*", "test_2_2005.01*", "test3*"), 
-				index_context_1.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
-
+		final Calendar c2 = GregorianCalendar.getInstance();
+		final Calendar cnow = GregorianCalendar.getInstance();
 		
-		final ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext index_context_2 = 
-				new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test1_{yyyy}", Optional.of("@timestamp"));
+		// Just going to test the non-trivial logic:
+		{
+			final ElasticsearchContext.IndexContext.ReadOnlyIndexContext.TimedRoIndexContext index_context_1 = 
+					new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.TimedRoIndexContext(Arrays.asList("test1_{yyyy}", "test_2_{yyyy.MM}", "test3"));
+			
+			assertEquals(Arrays.asList("test1_*", "test_2_*", "test3"), index_context_1.getReadableIndexList(Optional.empty()));
+			
+			c1.set(2004, 11, 28); c2.set(2005,  0, 2);
+			assertEquals(Arrays.asList("test1_2004*", "test1_2005*", "test_2_2004.12*", "test_2_2005.01*", "test3*"), 
+					index_context_1.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
+		}
 		
-		final ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext index_context_3 = 
-				new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test_2_{yyyy.MM}", Optional.empty());
+		// Some timestamp testing
+		{
+			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext index_context_2 = 
+					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test1_{yyyy}", Optional.of("@timestamp"));
+			
+			assertTrue("timestamp field present", index_context_2.timeField().isPresent());
+			assertEquals("@timestamp", index_context_2.timeField().get());
+			
+			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext index_context_3 = 
+					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test_2_{yyyy.MM}", Optional.empty());		
 
-		// This isn't supported any more, valid strings only
-//		final ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext index_context_4 = 
-//				new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test3", Optional.of("@timestamp"));
+			assertFalse("no timestamp field", index_context_3.timeField().isPresent());
+			
+			cnow.setTime(new Date());
+			int month = cnow.get(Calendar.MONTH) + 1;
+			assertEquals("test_2_" + cnow.get(Calendar.YEAR) + "." + ((month < 10) ? ("0" + month) : (month)), 
+					index_context_3.getWritableIndex(Optional.of(BeanTemplateUtils.configureMapper(Optional.empty()).createObjectNode())));
+			
+			// This isn't supported any more, valid strings only
+//			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext index_context_4 = 
+//					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test3", Optional.of("@timestamp"));
+			
+			assertEquals(Arrays.asList("test1_*"), index_context_2.getReadableIndexList(Optional.empty()));
+			assertEquals(Arrays.asList("test_2_*"), index_context_3.getReadableIndexList(Optional.empty()));
+			
+			assertEquals(Arrays.asList("test1_2004*", "test1_2005*"), index_context_2.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
+			assertEquals(Arrays.asList("test_2_2004.12*", "test_2_2005.01*"), index_context_3.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
+			// (see index_context_4 declaration, above)
+//			assertEquals(Arrays.asList("test3*"), index_context_4.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
 		
-		assertEquals(Arrays.asList("test1_2004*", "test1_2005*"), index_context_2.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
-		assertEquals(Arrays.asList("test_2_2004.12*", "test_2_2005.01*"), index_context_3.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
-		// (see index_context_4 declaration, above)
-//		assertEquals(Arrays.asList("test3*"), index_context_4.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
-
 		// Check gets the right timestamp when writing objects into an index
 		
-		c1.set(2004, 11, 28, 12, 00, 01);
-		final ObjectNode obj = ((ObjectNode)BeanTemplateUtils.configureMapper
-									(Optional.empty()).readTree("{\"val\":\"test1\"}".getBytes()))
-										.put("@timestamp", c1.getTime().getTime());
-		
-		final String expected3 = new SimpleDateFormat("yyyy.MM").format(new Date());
-		
-		assertEquals("test1_2004", index_context_2.getWritableIndex(Optional.of(obj)));
-		assertEquals("test_2_" + expected3, index_context_3.getWritableIndex(Optional.of(obj)));
-		// (see index_context_4 declaration, above)
-//		assertEquals("test3", index_context_4.getWritableIndex(Optional.of(obj)));
+			c1.set(2004, 11, 28, 12, 00, 01);
+			final ObjectNode obj = ((ObjectNode)BeanTemplateUtils.configureMapper
+										(Optional.empty()).readTree("{\"val\":\"test1\"}".getBytes()))
+											.put("@timestamp", c1.getTime().getTime());
+			
+			final String expected3 = new SimpleDateFormat("yyyy.MM").format(new Date());
+			
+			assertEquals("test1_2004", index_context_2.getWritableIndex(Optional.of(obj)));
+			assertEquals("test_2_" + expected3, index_context_3.getWritableIndex(Optional.of(obj)));
+			// (see index_context_4 declaration, above)
+//			assertEquals("test3", index_context_4.getWritableIndex(Optional.of(obj)));
+		}
 	}
+	
+	@Test
+	public void test_contextContainers() {
+		
+		final MockElasticsearchCrudServiceFactory factory = new MockElasticsearchCrudServiceFactory();
+		
+		// Some misc coverage:
+		{
+			final ElasticsearchContext.IndexContext.ReadOnlyIndexContext.FixedRoIndexContext test_ro_index = 
+					new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.FixedRoIndexContext(Arrays.asList("test_ro_1", "test_ro_2"));
+			
+			assertEquals(Arrays.asList("test_ro_1", "test_ro_2"), test_ro_index.getReadableIndexList(Optional.empty()));
+			
+			final ElasticsearchContext.TypeContext.ReadOnlyTypeContext.FixedRoTypeContext test_ro_type = 
+					new ElasticsearchContext.TypeContext.ReadOnlyTypeContext.FixedRoTypeContext(Arrays.asList("test_context_1", "test_context_2"));
+			
+			assertEquals(Arrays.asList("test_context_1", "test_context_2"), test_ro_type.getReadableTypeList());
+			
+			final ElasticsearchContext.TypeContext.ReadOnlyTypeContext.FixedRoTypeContext test_ro_auto_type = 
+					new ElasticsearchContext.TypeContext.ReadOnlyTypeContext.FixedRoTypeContext(Arrays.asList("test_context_1b", "test_context_2b"));
+			
+			assertEquals(Arrays.asList("test_context_1b", "test_context_2b"), test_ro_auto_type.getReadableTypeList());
+			
+			final ElasticsearchContext.ReadOnlyContext test = new ElasticsearchContext.ReadOnlyContext(factory.getClient(), test_ro_index, test_ro_type);
+					
+			assertEquals(test_ro_index, test.indexContext());
+			assertEquals(test_ro_type, test.typeContext());
+		}
+	}
+	
+	// (Other code is covered by TestElasticsearchCrudService - we'll live with that for now)
+	
 }

@@ -782,12 +782,12 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		}
 		
 		@Override
-		public void setBatchProperties(final Optional<Integer> max_objects, final Optional<Long> size_kb, final Optional<Duration> flush_interval)
+		public void setBatchProperties(final Optional<Integer> max_objects, final Optional<Long> size_kb, final Optional<Duration> flush_interval, final Optional<Integer> write_threads)
 		{
 			BulkProcessor old = null;
 			synchronized (this) {
 				old = _current;
-				_current = buildBulkProcessor(max_objects, size_kb, flush_interval);
+				_current = buildBulkProcessor(max_objects, size_kb, flush_interval, write_threads);
 			}
 			if (null != old) old.close();
 		}
@@ -795,7 +795,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		@Override
 		public synchronized void storeObjects(final List<O> new_objects, final boolean replace_if_present) {
 			if (null == _current) {
-				_current = buildBulkProcessor(Optional.empty(), Optional.empty(), Optional.empty());
+				_current = buildBulkProcessor(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
 			}
 			new_objects.stream().forEach(new_object -> 			
 				_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
@@ -805,7 +805,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		@Override
 		public synchronized void storeObject(final O new_object, final boolean replace_if_present) {
 			if (null == _current) {
-				_current = buildBulkProcessor(Optional.empty(), Optional.empty(), Optional.empty());
+				_current = buildBulkProcessor(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
 			}			
 			_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
 							Either.left(new_object), replace_if_present, true).request());
@@ -813,7 +813,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		
 		private boolean _flush_now = false; // (_very_ simple inter-thread comms via this mutable var, NOTE: don't let it get more complex than this without refactoring)
 		
-		protected BulkProcessor buildBulkProcessor(final Optional<Integer> max_objects, final Optional<Long> size_kb, final Optional<Duration> flush_interval) {
+		protected BulkProcessor buildBulkProcessor(final Optional<Integer> max_objects, final Optional<Long> size_kb, final Optional<Duration> flush_interval, final Optional<Integer> write_threads) {
 			return BulkProcessor.builder(_state.client, 
 						new BulkProcessor.Listener() {							
 							@Override
@@ -870,7 +870,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 					.setBulkActions(max_objects.orElse(1000))
 					.setBulkSize(new ByteSizeValue(size_kb.orElse(10240L), ByteSizeUnit.KB))
 					.setFlushInterval(TimeValue.timeValueSeconds(flush_interval.orElse(Duration.of(3, ChronoUnit.SECONDS)).get(ChronoUnit.SECONDS)))
-					.setConcurrentRequests(1)
+					.setConcurrentRequests(1 + write_threads.orElse(0))
 					.build();
 		}
 		

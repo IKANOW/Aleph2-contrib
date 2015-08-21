@@ -121,7 +121,7 @@ public class TestElasticsearchUtils {
 	// QUERY CREATION TESTING
 	
 	@Test
-	public void emptyQuery() {
+	public void test_emptyQuery() {
 		
 		// No meta:
 		
@@ -153,7 +153,7 @@ public class TestElasticsearchUtils {
 	}
 	
 	@Test
-	public void basicSingleTest() throws IOException {
+	public void test_basicSingleTest() throws IOException {
 		
 		// Queries starting with allOf
 		
@@ -274,7 +274,7 @@ public class TestElasticsearchUtils {
 	}
 	
 	@Test
-	public void testAllTheRangeQueries() throws IOException {
+	public void test_AllTheRangeQueries() throws IOException {
 		
 		final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(TestBean.class)
 				.rangeAbove(TestBean::string_field, "bbb", true)
@@ -410,7 +410,7 @@ public class TestElasticsearchUtils {
 	}
 
 	@Test 
-	public void testNestedQueries() throws IOException {
+	public void test_NestedQueries() throws IOException {
 		
 		// 1 level of nesting
 		{
@@ -563,7 +563,7 @@ public class TestElasticsearchUtils {
 	}
 	
 	@Test
-	public void handleIdAndTypeDifferently() throws IOException {
+	public void test_handleIdAndTypeDifferently() throws IOException {
 		
 		// id - single value
 
@@ -852,7 +852,7 @@ public class TestElasticsearchUtils {
 	}
 		
 	@Test
-	public void testMultipleQueries() throws IOException {
+	public void test_MultipleQueries() throws IOException {
 
 		// Just to test .. single node versions
 
@@ -1121,7 +1121,7 @@ public class TestElasticsearchUtils {
 	}
 	
 	@Test
-	public void testNestedMultiQuery() throws IOException {
+	public void test_NestedMultiQuery() throws IOException {
 		
 		final BeanTemplate<TestBean> template1a = BeanTemplateUtils.build(TestBean.class).with(TestBean::string_field, "string_field").done();
 		final SingleQueryComponent<TestBean> query_comp_1a = CrudUtils.anyOf(template1a);		
