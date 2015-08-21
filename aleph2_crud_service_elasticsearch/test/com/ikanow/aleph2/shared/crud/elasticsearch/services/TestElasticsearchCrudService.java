@@ -126,7 +126,7 @@ public class TestElasticsearchCrudService {
 		
 		final ElasticsearchCrudService<O> service = _factory.getElasticsearchCrudService(bean_clazz,
 				new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
-						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(test_name),
+						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(test_name, Optional.empty()),
 						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext("test")),
 				Optional.of(false), CreationPolicy.AVAILABLE_IMMEDIATELY,
 				Optional.empty(), Optional.empty(), Optional.empty(), write_settings);

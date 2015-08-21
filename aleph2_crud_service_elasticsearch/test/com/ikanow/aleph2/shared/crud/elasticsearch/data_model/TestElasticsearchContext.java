@@ -64,13 +64,13 @@ public class TestElasticsearchContext {
 		// Some timestamp testing
 		{
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext index_context_2 = 
-					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test1_{yyyy}", Optional.of("@timestamp"));
+					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test1_{yyyy}", Optional.of("@timestamp"), Optional.empty());
 			
 			assertTrue("timestamp field present", index_context_2.timeField().isPresent());
 			assertEquals("@timestamp", index_context_2.timeField().get());
 			
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext index_context_3 = 
-					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test_2_{yyyy.MM}", Optional.empty());		
+					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test_2_{yyyy.MM}", Optional.empty(), Optional.empty());		
 
 			assertFalse("no timestamp field", index_context_3.timeField().isPresent());
 			

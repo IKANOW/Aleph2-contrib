@@ -149,10 +149,10 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		// Index
 		final String index_base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
 		final ElasticsearchContext.IndexContext.ReadWriteIndexContext index_context = time_period.validation(
-				fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name)
+				fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name, Optional.empty())
 				, 
 				success -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext(index_base_name + ElasticsearchContextUtils.getIndexSuffix(success), 
-									Optional.ofNullable(schema_config.temporal_technology_override().time_field()))
+									Optional.ofNullable(schema_config.temporal_technology_override().time_field()), Optional.empty())
 				);
 		
 		// Type
