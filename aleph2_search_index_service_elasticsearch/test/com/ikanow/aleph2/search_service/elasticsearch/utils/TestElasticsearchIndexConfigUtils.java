@@ -198,5 +198,16 @@ public class TestElasticsearchIndexConfigUtils {
 			assertEquals(false, schema_config.temporal_technology_override().enabled());
 			
 		}
+		
+		final String bucket_index_override = bucket_str.replace("\"collide_policy\": \"error\"", "\"index_name_override\": \"test_index_override\"");
+		
+		{
+			final DataBucketBean bucket = BeanTemplateUtils.from(bucket_index_override, DataBucketBean.class).get();
+			
+			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);
+			
+			assertEquals("test_index_override", ElasticsearchIndexUtils.getBaseIndexName(bucket));
+			assertEquals("test_index_override", schema_config.search_technology_override().index_name_override());
+		}
 	}
 }

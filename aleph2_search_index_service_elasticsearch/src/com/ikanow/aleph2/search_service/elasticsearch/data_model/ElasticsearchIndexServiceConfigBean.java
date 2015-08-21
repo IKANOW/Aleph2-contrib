@@ -42,7 +42,9 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 	
 	// Can only construct this from a config element
 	
-	public static class SearchIndexSchemaDefaultBean {
+	public static class SearchIndexSchemaDefaultBean {		
+		public static final String index_name_override_ = "index_name_override";
+		
 		public CollidePolicy collide_policy() { return collide_policy; }
 		public String type_name_or_prefix() { return type_name_or_prefix; }
 		public Boolean verbose() { return verbose; };
@@ -50,6 +52,7 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		public Map<String, Object> settings() { return settings; }
 		public Map<String, Object> mappings() { return mappings; }
 		public Map<String, Map<String, Object>> mapping_overrides() { return mapping_overrides; }
+		public String index_name_override() { return index_name_override; }
 		
 		public enum CollidePolicy { error, new_type };
 		private CollidePolicy collide_policy;
@@ -59,6 +62,7 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		private Map<String, Object> mappings;
 		private Map<String, Object> aliases;
 		private Map<String, Map<String, Object>> mapping_overrides;
+		private String index_name_override;
 	}
 	public static class ColumnarSchemaDefaultBean {
 		// the contents of the "fielddata" sub-object of a property for which an include has been specifed, takes from "_default", or field_type if the field_type can be inferred

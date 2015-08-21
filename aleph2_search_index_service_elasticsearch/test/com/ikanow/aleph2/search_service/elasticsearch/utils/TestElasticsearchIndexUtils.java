@@ -82,6 +82,25 @@ public class TestElasticsearchIndexUtils {
 			assertEquals("test_1-1_long_string__2711e659d5a6", base_index3);
 		}
 		
+		// More complex index case: override set:
+		{
+			final DataBucketBean test_index_override = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::search_index_schema,
+										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+											.with("technology_override_schema",
+													ImmutableMap.builder().put("index_name_override", "test_index_override").build()
+													)
+								.done().get())
+							.done().get())
+					.done().get();
+
+			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(test_index_override);
+			
+			assertEquals("test_index_override", base_index);
+		}
+		
 		// Type stuff
 		{
 			// Tests:

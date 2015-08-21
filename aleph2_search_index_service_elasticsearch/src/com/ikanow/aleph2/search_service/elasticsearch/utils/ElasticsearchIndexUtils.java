@@ -68,17 +68,22 @@ public class ElasticsearchIndexUtils {
 	 */
 	public static String getBaseIndexName(final DataBucketBean bucket) {
 		
-		String[] components = bucket.full_name().substring(1).split("[/]");
-		if (1 == components.length) {
-			return tidyUpIndexName(components[0]) + generateUuidSuffix(bucket.full_name());
-		}
-		else if (2 == components.length) {
-			return tidyUpIndexName(components[0] + "_" + components[1]) + generateUuidSuffix(bucket.full_name());
-		}
-		else { // take the first and the last 2
-			final int n = components.length;
-			return tidyUpIndexName(components[0] + "_" + components[n-2] + "_" + components[n-1]) + generateUuidSuffix(bucket.full_name());
-		}
+		final Optional<String> override_string = Optionals.<String>of(() -> 
+			((String) bucket.data_schema().search_index_schema().technology_override_schema().get(SearchIndexSchemaDefaultBean.index_name_override_)));
+		
+		return override_string.orElseGet(() -> {		
+			String[] components = bucket.full_name().substring(1).split("[/]");
+			if (1 == components.length) {
+				return tidyUpIndexName(components[0]) + generateUuidSuffix(bucket.full_name());
+			}
+			else if (2 == components.length) {
+				return tidyUpIndexName(components[0] + "_" + components[1]) + generateUuidSuffix(bucket.full_name());
+			}
+			else { // take the first and the last 2
+				final int n = components.length;
+				return tidyUpIndexName(components[0] + "_" + components[n-2] + "_" + components[n-1]) + generateUuidSuffix(bucket.full_name());
+			}
+		});
 	}
 	// Utils for getBaseIndexName
 	private static String tidyUpIndexName(final String in) {
