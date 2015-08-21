@@ -28,6 +28,7 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudSe
 import com.typesafe.config.Config;
 
 /** Creates the bindings needed for the real search index service
+ *  THIS CLASS HAS NO COVERAGE SO NEED TO HANDLE TEST ON MODIFICATION
  * @author Alex
  */
 public class ElasticsearchIndexServiceModule extends AbstractModule {

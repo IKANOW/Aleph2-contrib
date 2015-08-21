@@ -47,6 +47,13 @@
 		<groupId>org.jacoco</groupId>
 		<artifactId>jacoco-maven-plugin</artifactId>
 		<version>0.7.2.201409121644</version>
+		<configuration>
+			<excludes>
+				<!--  This actually removes code from coveralls.io -->
+				<!-- Trivial/untestable code -->
+				<exclude>**/com/ikanow/aleph2/management_db/mongodb/modules/*</exclude>
+			</excludes>
+		</configuration>
 		<executions>
 			<execution>
 				<id>prepare-agent</id>

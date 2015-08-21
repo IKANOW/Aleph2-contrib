@@ -35,6 +35,7 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudSer
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ErrorUtils;
 
 /** A factory for returning real or "mock" Elasticsearch CRUD service
+ *  THIS CLASS HAS NO COVERAGE SO NEED TO HANDLE TEST ON MODIFICATION
  * @author Alex
  */
 public class ElasticsearchCrudServiceFactory implements IElasticsearchCrudServiceFactory {

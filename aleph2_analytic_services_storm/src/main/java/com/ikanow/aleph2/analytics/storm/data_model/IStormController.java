@@ -13,7 +13,7 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 ******************************************************************************/
-package com.ikanow.aleph2.analytics.storm.services;
+package com.ikanow.aleph2.analytics.storm.data_model;
 
 import java.util.concurrent.CompletableFuture;
 

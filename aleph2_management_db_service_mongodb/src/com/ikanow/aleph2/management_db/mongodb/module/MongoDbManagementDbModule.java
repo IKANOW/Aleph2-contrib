@@ -31,6 +31,7 @@ import com.ikanow.aleph2.shared.crud.mongodb.services.MongoDbCrudServiceFactory;
 import com.typesafe.config.Config;
 
 /** A module to instantiate private services in the MongoDB "underlying" management DB service
+ *  THIS CLASS HAS NO COVERAGE SO NEED TO HANDLE TEST ON MODIFICATION
  * @author acp
  */
 public class MongoDbManagementDbModule extends AbstractModule {
