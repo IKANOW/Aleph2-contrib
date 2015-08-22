@@ -50,6 +50,8 @@ import com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
@@ -101,92 +103,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		_crud_factory = crud_factory;
 		_config = configuration;
 	}
-	
-	//TODO should i have another shared interface to encapsulate the concept of writable (not necessarily crud based though - eg if it's a graph?)
-//	public static interface IReadWriteDataService {
-//		<O> Optional<ICrudService<O>> getWritableCrudService(final Class<O> clazz, final DataBucketBean bucket, final Optional<String> options, final Optional<String> secondary_buffer);
-//		<O> Optional<ICrudService<O>> getReadableCrudService(final Class<O> clazz, final Collection<DataBucketBean> buckets, final Optional<String> options);
-//		void switchCrudServiceToPrimaryBuffer(final DataBucketBean bucket, final Optional<String> secondary_buffer);
-//		Collection<String> getSecondaryBufferList(final DataBucketBean bucket);
-//		CompletableFuture<BasicMessageBean> handleAgeOutRequest(final DataBucketBean bucket);
-//		CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(final DataBucketBean bucket, final Optional<String> secondary_buffer, final boolean bucket_getting_deleted);
-//	};
-	
-	//TODO what does this actually do? 1) updates the aliases, 2) update the data location
-	//public switchToSecondaryBuffer(final DataBucketBean bucket) {
-	//}
-	//TODO change getBaseIndex to include secondary buffer
-	//TODO: don't update the aliases if writing into secondary buffer (pass info into context?)
-	
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService#getCrudService(java.lang.Class, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
-	 */
-	@Override
-	//TODO: public <O> Optional<ICrudService<O>> getCrudService(final Class<O> clazz, final DataBucketBean bucket, final Optional<Void> secondary_buffer) {
-	public <O> Optional<ICrudService<O>> getCrudService(final Class<O> clazz, final DataBucketBean bucket) {
 		
-		//TODO (ALEPH-14): Need to be able to configure batch settings (get batch service before returning, update defaults)
-		
-		// There's two different cases
-		// 1) Multi-bucket - equivalent to the other version of getCrudService
-		// 2) Single bucket - a read/write bucket
-		
-		if ((null != bucket.multi_bucket_children()) && !bucket.multi_bucket_children().isEmpty()) {
-			return getCrudService(clazz, bucket.multi_bucket_children());
-		}
-		
-		// If single bucket, is the search index service enabled?
-		if (!Optional.ofNullable(bucket.data_schema())
-				.map(ds -> ds.search_index_schema())
-					.map(sis -> Optional.ofNullable(sis.enabled())
-					.orElse(true))
-			.orElse(false))
-		{
-			return Optional.empty();
-		}
-		
-		// OK so it's a legit single bucket ... first question ... does this already exist?
-		
-		final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);
-		
-		final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
-		final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
-									.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
-										? "_default_"
-										: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
-		
-		this.handlePotentiallyNewIndex(bucket, schema_config, index_type);
-		
-		// Need to decide a) if it's a time based index b) an auto type index
-		// And then build the context from there
-		
-		final Validation<String, ChronoUnit> time_period = TimeUtils.getTimePeriod(Optional.ofNullable(schema_config.temporal_technology_override())
-																.map(t -> t.grouping_time_period()).orElse(""));
-
-		// Index
-		final String index_base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
-		final ElasticsearchContext.IndexContext.ReadWriteIndexContext index_context = time_period.validation(
-				fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name, Optional.empty())
-				, 
-				success -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext(index_base_name + ElasticsearchContextUtils.getIndexSuffix(success), 
-									Optional.ofNullable(schema_config.temporal_technology_override().time_field()), Optional.empty())
-				);
-		
-		// Type
-		final ElasticsearchContext.TypeContext.ReadWriteTypeContext type_context =
-				CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
-						.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
-					? new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), type)
-					: new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext(type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME));
-		
-		final Optional<DataSchemaBean.WriteSettings> write_settings = Optionals.of(() -> bucket.data_schema().search_index_schema().target_write_settings());
-		return Optional.of(_crud_factory.getElasticsearchCrudService(clazz,
-								new ElasticsearchContext.ReadWriteContext(_crud_factory.getClient(), index_context, type_context),
-								Optional.empty(), 
-								CreationPolicy.OPTIMIZED, 
-								Optional.empty(), Optional.empty(), Optional.empty(), write_settings));
-	}
-
 	/** Checks if an index/set-of-indexes spawned from a bucket
 	 * @param bucket
 	 */
@@ -264,20 +181,177 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		return stored_json_mappings.equals(new_json_mappings) && stored_json_settings.equals(new_json_settings) && stored_json_aliases.equals(new_json_aliases);		
 	}
 	
+	////////////////////////////////////////////////////////////////////////////////
+	
+	// GENERIC DATA INTERFACE
+	
 	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService#getCrudService(java.lang.Class, java.util.Collection)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider#getDataService()
 	 */
 	@Override
-	public <O> Optional<ICrudService<O>> getCrudService(final Class<O> clazz, final Collection<String> buckets) {
-		
-		//TODO (ALEPH-14): expand aliases
-		
-		// Grab all the _existing_ buckets 
-		
-		//TODO (ALEPH-14): Handle the read only case
-		
-		throw new RuntimeException("Read-only interface: Not yet implemented");
+	public Optional<IDataServiceProvider.IGenericDataService> getDataService() {
+		return _data_service;
 	}
+
+	/** Implementation of GenericDataService
+	 * @author alex
+	 */
+	public class ElasticsearchDataService implements IDataServiceProvider.IGenericDataService {
+
+		//TODO what does this actually do? 1) updates the aliases, 2) update the data location
+		//TODO change getBaseIndex to include secondary buffer
+		//TODO: don't update the aliases if writing into secondary buffer (pass info into context?)
+		
+		@Override
+		public <O> Optional<IDataWriteService<O>> getWritableDataService(
+				Class<O> clazz, DataBucketBean bucket,
+				Optional<String> options, Optional<String> secondary_buffer) {
+			if (secondary_buffer.isPresent()) {
+				throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "ElasticsearchDataService.getWritableDataService, secondary_buffer != Optional.empty()"));
+			}
+			// There's two different cases
+			// 1) Multi-bucket - equivalent to the other version of getCrudService
+			// 2) Single bucket - a read/write bucket
+			
+			if ((null != bucket.multi_bucket_children()) && !bucket.multi_bucket_children().isEmpty()) {
+				throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "ElasticsearchDataService.getWritableDataService, multi_bucket_children"));
+			}
+			
+			// If single bucket, is the search index service enabled?
+			if (!Optional.ofNullable(bucket.data_schema())
+					.map(ds -> ds.search_index_schema())
+						.map(sis -> Optional.ofNullable(sis.enabled())
+						.orElse(true))
+				.orElse(false))
+			{
+				return Optional.empty();
+			}
+			
+			// OK so it's a legit single bucket ... first question ... does this already exist?
+			
+			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);
+			
+			final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
+			final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+										.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
+											? "_default_"
+											: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
+			
+			handlePotentiallyNewIndex(bucket, schema_config, index_type);
+			
+			// Need to decide a) if it's a time based index b) an auto type index
+			// And then build the context from there
+			
+			final Validation<String, ChronoUnit> time_period = TimeUtils.getTimePeriod(Optional.ofNullable(schema_config.temporal_technology_override())
+																	.map(t -> t.grouping_time_period()).orElse(""));
+
+			// Index
+			final String index_base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+			final ElasticsearchContext.IndexContext.ReadWriteIndexContext index_context = time_period.validation(
+					fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name, Optional.empty())
+					, 
+					success -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext(index_base_name + ElasticsearchContextUtils.getIndexSuffix(success), 
+										Optional.ofNullable(schema_config.temporal_technology_override().time_field()), Optional.empty())
+					);
+			
+			// Type
+			final ElasticsearchContext.TypeContext.ReadWriteTypeContext type_context =
+					CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+							.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
+						? new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), type)
+						: new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext(type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME));
+			
+			final Optional<DataSchemaBean.WriteSettings> write_settings = Optionals.of(() -> bucket.data_schema().search_index_schema().target_write_settings());
+			return Optional.of(_crud_factory.getElasticsearchCrudService(clazz,
+									new ElasticsearchContext.ReadWriteContext(_crud_factory.getClient(), index_context, type_context),
+									Optional.empty(), 
+									CreationPolicy.OPTIMIZED, 
+									Optional.empty(), Optional.empty(), Optional.empty(), write_settings));
+		}
+
+		@Override
+		public <O> Optional<ICrudService<O>> getReadableCrudService(
+				Class<O> clazz, Collection<DataBucketBean> buckets,
+				Optional<String> options) {
+			throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "ElasticsearchDataService.getReadableCrudService"));
+		}
+
+		@Override
+		public Collection<String> getSecondaryBufferList(DataBucketBean bucket) {
+			// TODO (#28): support secondary buffers
+			return Collections.emptyList();
+		}
+
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#switchCrudServiceToPrimaryBuffer(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Optional)
+		 */
+		@Override
+		public CompletableFuture<BasicMessageBean> switchCrudServiceToPrimaryBuffer(
+				DataBucketBean bucket, Optional<String> secondary_buffer) {
+			// TODO (#28): support secondary buffers
+			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", ErrorUtils.NOT_YET_IMPLEMENTED, "switchCrudServiceToPrimaryBuffer"));
+		}
+
+		@Override
+		public CompletableFuture<BasicMessageBean> handleAgeOutRequest(
+				DataBucketBean bucket) {
+			// TODO (ALEPH-XXX)
+			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("ElasticsearchDataService", "handleAgeOutRequest", ErrorUtils.NOT_YET_IMPLEMENTED, "handleAgeOutRequest"));
+		}
+
+		@Override
+		public CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(
+				DataBucketBean bucket, Optional<String> secondary_buffer,
+				boolean bucket_getting_deleted) {
+			if (secondary_buffer.isPresent()) {
+				return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("ElasticsearchDataService", "handleBucketDeletionRequest", ErrorUtils.NOT_YET_IMPLEMENTED, "secondary_buffer != Optional.empty()"));				
+			}
+			
+			Optional<ICrudService<JsonNode>> to_delete = this.getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.empty())
+															.map(IDataWriteService::getCrudService)
+															.get();
+			if (!to_delete.isPresent()) {
+				
+				return CompletableFuture.completedFuture(new BasicMessageBean(new Date(), true, "ElasticsearchIndexService", "handleBucketDeletionRequest", null, 
+						ErrorUtils.get("(No search index for bucket {0})", bucket.full_name()),
+						null));			
+			}
+			else { // delete the data			
+				final CompletableFuture<Boolean> data_deletion_future = to_delete.get().deleteDatastore();
+
+				final CompletableFuture<BasicMessageBean> combined_future = Lambdas.get(() -> {				
+					// delete the template if fully deleting the bucket (vs purging)
+					if (bucket_getting_deleted) {
+						final CompletableFuture<DeleteIndexTemplateResponse> cf = ElasticsearchFutureUtils.
+								<DeleteIndexTemplateResponse, DeleteIndexTemplateResponse>
+									wrap(_crud_factory.getClient().admin().indices().prepareDeleteTemplate(ElasticsearchIndexUtils.getBaseIndexName(bucket)).execute(),								
+											x -> x);
+						
+						return data_deletion_future.thenCombine(cf, (Boolean b, DeleteIndexTemplateResponse ditr) -> {
+							return null; // don't care what the return value is, just care about catching exceptions
+						});
+					}
+					else {					
+						return data_deletion_future; // (see above)
+					}
+				})
+				.thenApply(__ -> {
+					return new BasicMessageBean(new Date(), true, "ElasticsearchIndexService", "handleBucketDeletionRequest", null, 
+							ErrorUtils.get("Deleted search index for bucket {0}", bucket.full_name()), 
+							null);
+				})
+				.exceptionally(t -> {
+					return new BasicMessageBean(new Date(), false, "ElasticsearchIndexService", "handleBucketDeletionRequest", null, 
+							ErrorUtils.getLongForm("Error deleting search index for bucket {1}: {0}", t, bucket.full_name()), 
+							null);
+				})
+				;
+				return combined_future;
+			}
+		}
+		
+	}
+	private final Optional<IDataServiceProvider.IGenericDataService> _data_service = Optional.of(new ElasticsearchDataService());
 	
 	////////////////////////////////////////////////////////////////////////////////
 
@@ -392,53 +466,6 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
 		return Arrays.asList(this, _crud_factory);
-	}
-
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService#handleBucketDeletionRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, boolean)
-	 */
-	@Override
-	public CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(final DataBucketBean bucket, final boolean bucket_getting_deleted) {
-	
-		Optional<ICrudService<JsonNode>> to_delete = this.getCrudService(JsonNode.class, bucket);
-		if (!to_delete.isPresent()) {
-			
-			return CompletableFuture.completedFuture(new BasicMessageBean(new Date(), true, "ElasticsearchIndexService", "handleBucketDeletionRequest", null, 
-					ErrorUtils.get("(No search index for bucket {0})", bucket.full_name()),
-					null));			
-		}
-		else { // delete the data			
-			final CompletableFuture<Boolean> data_deletion_future = to_delete.get().deleteDatastore();
-
-			final CompletableFuture<BasicMessageBean> combined_future = Lambdas.get(() -> {				
-				// delete the template if fully deleting the bucket (vs purging)
-				if (bucket_getting_deleted) {
-					final CompletableFuture<DeleteIndexTemplateResponse> cf = ElasticsearchFutureUtils.
-							<DeleteIndexTemplateResponse, DeleteIndexTemplateResponse>
-								wrap(_crud_factory.getClient().admin().indices().prepareDeleteTemplate(ElasticsearchIndexUtils.getBaseIndexName(bucket)).execute(),								
-										x -> x);
-					
-					return data_deletion_future.thenCombine(cf, (Boolean b, DeleteIndexTemplateResponse ditr) -> {
-						return null; // don't care what the return value is, just care about catching exceptions
-					});
-				}
-				else {					
-					return data_deletion_future; // (see above)
-				}
-			})
-			.thenApply(__ -> {
-				return new BasicMessageBean(new Date(), true, "ElasticsearchIndexService", "handleBucketDeletionRequest", null, 
-						ErrorUtils.get("Deleted search index for bucket {0}", bucket.full_name()), 
-						null);
-			})
-			.exceptionally(t -> {
-				return new BasicMessageBean(new Date(), false, "ElasticsearchIndexService", "handleBucketDeletionRequest", null, 
-						ErrorUtils.getLongForm("Error deleting search index for bucket {1}: {0}", t, bucket.full_name()), 
-						null);
-			})
-			;
-			return combined_future;
-		}
 	}
 
 	/* (non-Javadoc)
