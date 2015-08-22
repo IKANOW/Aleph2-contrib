@@ -21,18 +21,23 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
-import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
 import org.elasticsearch.client.Client;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUtils;
+import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchFutureUtils;
 
 import scala.Tuple2;
+import scala.Tuple3;
 
 /** Algebraic data type (ADT) encapsulating the state of an elasticsearch crud "service" (which could point at multiple/auto indexes and types)
  * ElasticsearchContext = ReadOnlyContext(ReadOnlyTypeContext, ReadOnlyIndexContext) 
@@ -186,12 +191,16 @@ public abstract class ElasticsearchContext {
 			public final Optional<Long> target_max_index_size_mb() { return target_max_index_size_mb; }
 			private final Optional<Long> target_max_index_size_mb;
 			
+			// INDEX SIZING UTILITY:
+			
 			private static long MB = 1024L*1024L;
 			private static String BAR = "_";
-			private static final long INDEX_SIZE_CHECK_MS = 10000L; // (Every 10s)
-			private Long _last_checked; // (WARNING - mutable)
-			private Tuple2<String, Integer> _last_suffix = Tuples._2T("", 0); // (WARNING - mutable)
-			private String _last_base_index = null; // (WARNING - mutable)
+			private static final long INDEX_SIZE_CHECK_MS = 10000L; // (Every 10s)			
+			public static class MutableState {
+				private AtomicBoolean _is_working = new AtomicBoolean(false); 
+				private ConcurrentHashMap<String, Tuple3<Long, String, Integer>> _base_index_states = new ConcurrentHashMap<>();
+			}
+			private final MutableState _mutable_state = new MutableState(); // (WARNING - mutable)
 			
 			/** Every 10s check the index size and increment the index suffix if too large
 			 * @return
@@ -200,50 +209,64 @@ public abstract class ElasticsearchContext {
 				if (!target_max_index_size_mb.isPresent()) {
 					return base_index;
 				}
-				else synchronized (this) {
-					if (!base_index.equals(_last_base_index)) {
-						_last_checked = null;
-						_last_base_index = base_index;
-						_last_suffix = Tuples._2T("", 0);
-					}
-					return base_index +
-							target_max_index_size_mb
+				else {
+					
+					final Tuple3<Long, String, Integer> last_suffix = _mutable_state._base_index_states.computeIfAbsent(base_index, __ -> Tuples._3T(null, "", 0));
+					final Long last_checked = last_suffix._1();
+					
+					//TODO: in 2 cases check for aliases:
+					// 1) if null == _mutable_state._last_checked
+					// 2) whenever we are creating a new index
+					// check => just recreate with "*"?
+					
+					final long now = new Date().getTime();
+					return target_max_index_size_mb
 							.filter(__ -> { // only check first time or every 10s
-								long now = new Date().getTime();
-								if ((null == _last_checked) || ((now - _last_checked) >= INDEX_SIZE_CHECK_MS)) {
-									_last_checked = now; // WARNING - mutable code
+								if ((null == last_checked) || ((now - last_checked) >= INDEX_SIZE_CHECK_MS)) {
+									_mutable_state._base_index_states.put(base_index, Tuples._3T(now, last_suffix._2(), last_suffix._3()));
 									return true;
 								}
 								else return false;
 							})
-							.map(m -> {								
-								final IndicesStatsResponse stats = this.client().admin().indices().prepareStats()
-					                    .clear()
-					                    .setIndices(base_index + BAR + "*")
-					                    .setStore(true)
-					                    .execute().actionGet();								
+							.filter(__ -> _mutable_state._is_working.compareAndSet(false, true)) // (if it's processing a previous request, keep going with the current suffix)
+							.map(m -> {	
+								final CompletableFuture<Tuple3<Long, String, Integer>> future = ElasticsearchFutureUtils.wrap(
+										this.client().admin().indices().prepareStats()
+						                    .clear()
+						                    .setIndices(base_index + BAR + "*")
+						                    .setStore(true)
+						                    .execute()								
+										,
+										stats -> {
+											final int suffix_index = Lambdas.get(() -> {
+												final IndexStats index_stats = stats.getIndex(base_index + last_suffix._2());
+												if (index_stats.getTotal().getStore().getSizeInBytes()*MB > m) {
+													int max_index = 1;
+													// find a new index to use:									
+													for (; ; max_index++) {
+														final IndexStats candidate_index_stats = stats.getIndex(base_index + BAR + max_index);
+														if (null == candidate_index_stats) break;
+														else if (candidate_index_stats.getTotal().getStore().getSizeInBytes()*MB > m) break;
+													}
+													return max_index;
+												}
+												else {
+													return last_suffix._3();
+												}
+											});
+											return _mutable_state._base_index_states.put(base_index, Tuples._3T(now, BAR + suffix_index, suffix_index));
+										});
 								
-								final IndexStats index_stats = stats.getIndex(base_index + _last_suffix._1());
-								if (index_stats.getTotal().getStore().getSizeInBytes()*MB > m) {
-									int max_index = 1;
-									// find a new index to use:									
-									for (; ; max_index++) {
-										final IndexStats candidate_index_stats = stats.getIndex(base_index + BAR + max_index);
-										if (null == candidate_index_stats) break;
-										else if (candidate_index_stats.getTotal().getStore().getSizeInBytes()*MB > m) break;
-									}
-									return max_index;
+								if (null == last_checked) { // first time through, wait for the code to complete
+									return base_index + future.join()._2();
 								}
-								else {
-									return _last_suffix._2();
-								}
+								else return null; // pass through to default
 							})
-							.map(i -> (_last_suffix = Tuples._2T(BAR + i, i))) // WARNING - mutable code
-							.orElse(_last_suffix)
-							._1()
+							.orElseGet(() -> base_index + last_suffix._2())
 							;
-				}
-			}
+					
+				} //(end if checking index sizes)
+			}//(end getIndexSuffix)
 			
 			/** Gets the index to write to
 			 * @param writable_object - only used in time-based indexes, if optional then "now" is used
