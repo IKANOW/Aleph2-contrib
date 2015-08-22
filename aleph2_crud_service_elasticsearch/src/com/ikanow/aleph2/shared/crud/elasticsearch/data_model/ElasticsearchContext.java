@@ -209,7 +209,7 @@ public abstract class ElasticsearchContext {
 				if (!target_max_index_size_mb.isPresent()) {
 					return base_index;
 				}
-				else {
+				else synchronized (this) { // (just need this sync point so that multiple threads first time through don't fall through to default)
 					
 					final Tuple3<Long, String, Integer> last_suffix = _mutable_state._base_index_states.computeIfAbsent(base_index, __ -> Tuples._3T(null, "", 0));
 					final Long last_checked = last_suffix._1();
@@ -228,7 +228,8 @@ public abstract class ElasticsearchContext {
 								}
 								else return false;
 							})
-							.filter(__ -> _mutable_state._is_working.compareAndSet(false, true)) // (if it's processing a previous request, keep going with the current suffix)
+							// (if it's processing a previous request, keep going with the current suffix)
+							.filter(__ -> _mutable_state._is_working.compareAndSet(false, true)) 
 							.map(m -> {	
 								final CompletableFuture<Tuple3<Long, String, Integer>> future = ElasticsearchFutureUtils.wrap(
 										this.client().admin().indices().prepareStats()
@@ -258,14 +259,19 @@ public abstract class ElasticsearchContext {
 										});
 								
 								if (null == last_checked) { // first time through, wait for the code to complete
-									return base_index + future.join()._2();
+									try {
+										return base_index + future.join()._2();
+									}
+									catch (Exception e) { // pass through to default on error
+										return null;
+									}
 								}
 								else return null; // pass through to default
 							})
 							.orElseGet(() -> base_index + last_suffix._2())
 							;
 					
-				} //(end if checking index sizes)
+				} //(end sync/if checking index sizes)
 			}//(end getIndexSuffix)
 			
 			/** Gets the index to write to
