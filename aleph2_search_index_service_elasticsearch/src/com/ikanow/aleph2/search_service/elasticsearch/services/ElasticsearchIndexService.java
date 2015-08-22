@@ -102,10 +102,27 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		_config = configuration;
 	}
 	
+	//TODO should i have another shared interface to encapsulate the concept of writable (not necessarily crud based though - eg if it's a graph?)
+//	public static interface IReadWriteDataService {
+//		<O> Optional<ICrudService<O>> getWritableCrudService(final Class<O> clazz, final DataBucketBean bucket, final Optional<String> options, final Optional<String> secondary_buffer);
+//		<O> Optional<ICrudService<O>> getReadableCrudService(final Class<O> clazz, final Collection<DataBucketBean> buckets, final Optional<String> options);
+//		void switchCrudServiceToPrimaryBuffer(final DataBucketBean bucket, final Optional<String> secondary_buffer);
+//		Collection<String> getSecondaryBufferList(final DataBucketBean bucket);
+//		CompletableFuture<BasicMessageBean> handleAgeOutRequest(final DataBucketBean bucket);
+//		CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(final DataBucketBean bucket, final Optional<String> secondary_buffer, final boolean bucket_getting_deleted);
+//	};
+	
+	//TODO what does this actually do? 1) updates the aliases, 2) update the data location
+	//public switchToSecondaryBuffer(final DataBucketBean bucket) {
+	//}
+	//TODO change getBaseIndex to include secondary buffer
+	//TODO: don't update the aliases if writing into secondary buffer (pass info into context?)
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService#getCrudService(java.lang.Class, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 	 */
 	@Override
+	//TODO: public <O> Optional<ICrudService<O>> getCrudService(final Class<O> clazz, final DataBucketBean bucket, final Optional<Void> secondary_buffer) {
 	public <O> Optional<ICrudService<O>> getCrudService(final Class<O> clazz, final DataBucketBean bucket) {
 		
 		//TODO (ALEPH-14): Need to be able to configure batch settings (get batch service before returning, update defaults)
