@@ -407,7 +407,7 @@ public class TestElasticsearchCrudService {
 	@Test
 	public void test_CreateMultipleObjects_JSON() throws InterruptedException, ExecutionException {
 		
-		final ElasticsearchCrudService<JsonNode> service = getTestService("testCreateMultipleObjects_json", TestBean.class).getRawCrudService();
+		final ElasticsearchCrudService<JsonNode> service = getTestService("testCreateMultipleObjects_json", TestBean.class).getRawService();
 		
 		// 1) Insertion without ids
 		
@@ -488,7 +488,7 @@ public class TestElasticsearchCrudService {
 	@Test
 	public void test_CreateMultipleObjects_JSON_batch() throws InterruptedException, ExecutionException {
 		
-		final ElasticsearchCrudService<JsonNode> service = getTestService("testCreateMultipleObjects_json_batch", TestBean.class).getRawCrudService();
+		final ElasticsearchCrudService<JsonNode> service = getTestService("testCreateMultipleObjects_json_batch", TestBean.class).getRawService();
 		
 		@SuppressWarnings("unchecked")
 		final ElasticsearchCrudService<JsonNode>.ElasticsearchBatchSubsystem batch_service = service.getUnderlyingPlatformDriver(ElasticsearchBatchSubsystem.class, Optional.empty()).get();

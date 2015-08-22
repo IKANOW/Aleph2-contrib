@@ -68,6 +68,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IBasicSearchService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
@@ -731,7 +732,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getRawCrudService()
 	 */
 	@Override
-	public ElasticsearchCrudService<JsonNode> getRawCrudService() {
+	public ElasticsearchCrudService<JsonNode> getRawService() {
 		return new ElasticsearchCrudService<JsonNode>(JsonNode.class, _state.es_context, Optional.of(_state.id_ranges_ok), _state.creation_policy, _state.auth_fieldname, _state.auth, _state.project, _batch_write_settings); 
 	}
 
@@ -751,14 +752,8 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	@Override
 	public <T> Optional<T> getUnderlyingPlatformDriver(final Class<T> driver_class, final Optional<String> driver_options) {
 		if (ElasticsearchContext.class == driver_class) return (Optional<T>) Optional.of(_state.es_context);
-		else if (IMetaModel.class == driver_class) return (Optional<T>) Optional.of(((null == _meta_model) 
-														? (_meta_model = new ElasticsearchDbMetaModel(_state.es_context)) 
-														: _meta_model));
-		else if (((ElasticsearchBatchSubsystem.class == driver_class) || (ICrudService.IBatchSubservice.class == driver_class)) 
-					&& (_state.es_context instanceof ReadWriteContext)) {
-			if (null == _batch_processor) _batch_processor = new ElasticsearchBatchSubsystem();
-			return (Optional<T>) Optional.of(_batch_processor);
-		}
+		else if (IMetaModel.class == driver_class) return (Optional<T>) getMetaModel(); 
+		else if (IDataWriteService.IBatchSubservice.class.isAssignableFrom(driver_class)) return (Optional<T>) this.getBatchWriteSubservice(); 
 		else return Optional.empty();
 	}
 
@@ -887,6 +882,22 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		}
 		
 		protected BulkProcessor _current; // (note: mutable)
+
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService.IBatchSubservice#storeObjects(java.util.List)
+		 */
+		@Override
+		public void storeObjects(List<O> new_objects) {
+			storeObjects(new_objects, false);			
+		}
+
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService.IBatchSubservice#storeObject(java.lang.Object)
+		 */
+		@Override
+		public void storeObject(O new_object) {
+			storeObject(new_object, false);			
+		}
 	}
 	protected ElasticsearchBatchSubsystem _batch_processor = null;
 	
@@ -927,4 +938,36 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		}
 	}
 	protected ElasticsearchDbMetaModel _meta_model = null;
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getMetaModel()
+	 */
+	public Optional<IMetaModel> getMetaModel() {
+		return Optional.of(((null == _meta_model) 
+				? (_meta_model = new ElasticsearchDbMetaModel(_state.es_context)) 
+				: _meta_model));		
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#getCrudService()
+	 */
+	@Override
+	public Optional<ICrudService<O>> getCrudService() {
+		return Optional.of(this);
+	}
+	
+	@Override
+	public Optional<IBatchSubservice<O>> getBatchCrudSubservice() {
+		if (_state.es_context instanceof ReadWriteContext) {
+			if (null == _batch_processor) _batch_processor = new ElasticsearchBatchSubsystem();
+			return Optional.of(_batch_processor);
+		}
+		else return Optional.empty();
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public Optional<IDataWriteService.IBatchSubservice<O>> getBatchWriteSubservice() {
+		return (Optional<IDataWriteService.IBatchSubservice<O>>)(Optional<?>)getBatchCrudSubservice();
+	}
 }
