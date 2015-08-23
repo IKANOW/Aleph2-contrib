@@ -138,4 +138,10 @@ public class TestElasticsearchContext {
 	
 	// (Other code is covered by TestElasticsearchCrudService - we'll live with that for now)
 	
+	//TODO: test fixed write with max size on/off
+	//TODO: test unlimited if <0 (don't forget to put some sanity checks into the search index code)
+	
+	//TODO: use size==0 to test
+	
+	//TODO: test secondary
 }
