@@ -88,7 +88,7 @@ public class MockHdfsStorageSystemTest {
 		FileUtils.writeStringToFile(new File(bucket_path + IStorageService.STORED_DATA_SUFFIX + "/test"), "");
 		assertTrue("The extra file path has been created", new File(bucket_path + IStorageService.STORED_DATA_SUFFIX + "/test").exists());		
 		
-		final CompletableFuture<BasicMessageBean> res1 = storage_service.handleBucketDeletionRequest(bucket, false);
+		final CompletableFuture<BasicMessageBean> res1 = storage_service.getDataService().get().handleBucketDeletionRequest(bucket, Optional.empty(), false);
 		assertEquals(true, res1.get().success());
 		
 		// Test:
@@ -104,7 +104,7 @@ public class MockHdfsStorageSystemTest {
 		FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + File.separator + bucket2.full_name()));
 		assertFalse("The file path for bucket2 does not exist", new File(System.getProperty("java.io.tmpdir") + File.separator + bucket2.full_name()).exists());
 		
-		final CompletableFuture<BasicMessageBean> res2 = storage_service.handleBucketDeletionRequest(bucket2, false);
+		final CompletableFuture<BasicMessageBean> res2 = storage_service.getDataService().get().handleBucketDeletionRequest(bucket2, Optional.empty(), false);
 		assertEquals(true, res2.get().success());
 		
 		//(check didn't create anything)

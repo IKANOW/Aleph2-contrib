@@ -21,7 +21,6 @@ import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -29,6 +28,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
@@ -165,51 +167,100 @@ public class HDFSStorageService implements IStorageService {
 		return Arrays.asList(this);
 	}
 
+	////////////////////////////////////////////////////////////////////////////////
+	
+	// GENERIC DATA INTERFACE
+	
 	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService#handleAgeOutRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider#getDataService()
 	 */
 	@Override
-	public CompletableFuture<BasicMessageBean> handleAgeOutRequest(
-			DataBucketBean bucket) {
-		// TODO (ALEPH-???)
-		return null;
+	public Optional<IDataServiceProvider.IGenericDataService> getDataService() {
+		return _data_service;
 	}
 
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService#handleBucketDeletionRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, boolean)
+	/** Implementation of GenericDataService
+	 * @author alex
 	 */
-	@Override
-	public CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(
-			DataBucketBean bucket, boolean bucket_getting_deleted) {
-		
-		final FileContext dfs = this.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
-		final String bucket_root = this.getRootPath() + "/" + bucket.full_name();
-		try {			
-			final Path p = new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX);
-			
-			if (doesPathExist(dfs, p)) {			
-				dfs.delete(p, true);			
-				dfs.mkdir(p, FsPermission.getDefault(), true);
-				
-				return CompletableFuture.completedFuture(
-						new BasicMessageBean(new Date(), true, "HDFSStorageService", "handleBucketDeletionRequest", null, 
-								ErrorUtils.get("Deleted data from bucket = {0}", bucket.full_name()), 
-								null));
-			}
-			else {
-				return CompletableFuture.completedFuture(
-						new BasicMessageBean(new Date(), true, "HDFSStorageService", "handleBucketDeletionRequest", null, 
-								ErrorUtils.get("(No storage for bucket {0})", bucket.full_name()), 
-								null));				
-			}
+	public class HdfsDataService implements IDataServiceProvider.IGenericDataService {
+
+		@Override
+		public <O> Optional<IDataWriteService<O>> getWritableDataService(
+				Class<O> clazz, DataBucketBean bucket,
+				Optional<String> options, Optional<String> secondary_buffer) {
+			// TODO (ALEPH-??): Support this, the basic idea is - create a uuid based on process + thread id
+			// (in a path possibly based on the timestamp)
+			// append all data into that (add write settings to generic settings and implement - batch size would be the max file size before segmenting etc)
+			return null;
 		}
-		catch (Throwable t) {			
-			return CompletableFuture.completedFuture(
-					new BasicMessageBean(new Date(), false, "HDFSStorageService", "handleBucketDeletionRequest", null, 
-							ErrorUtils.getLongForm("Error deleting data from bucket = {1} : {0}", t, bucket.full_name()), 
-							null));
+
+		@Override
+		public <O> Optional<ICrudService<O>> getReadableCrudService(
+				Class<O> clazz, Collection<DataBucketBean> buckets,
+				Optional<String> options) {
+			// Not supported by HDFS
+			return Optional.empty();
+		}
+
+		@Override
+		public Collection<String> getSecondaryBufferList(DataBucketBean bucket) {
+			return Collections.emptyList();
+		}
+
+		@Override
+		public CompletableFuture<BasicMessageBean> switchCrudServiceToPrimaryBuffer(
+				DataBucketBean bucket, Optional<String> secondary_buffer) {
+			// TODO (#28): support secondary buffers
+			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("HdfsDataService", "switchCrudServiceToPrimaryBuffer", ErrorUtils.NOT_YET_IMPLEMENTED, "switchCrudServiceToPrimaryBuffer"));
+		}
+
+		@Override
+		public CompletableFuture<BasicMessageBean> handleAgeOutRequest(
+				DataBucketBean bucket) {
+			// TODO (ALEPH-??): support age out request
+			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("HdfsDataService", "handleAgeOutRequest", ErrorUtils.NOT_YET_IMPLEMENTED, "handleAgeOutRequest"));
+		}
+
+		@Override
+		public CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(
+				DataBucketBean bucket, Optional<String> secondary_buffer,
+				boolean bucket_getting_deleted) {
+			
+			if (secondary_buffer.isPresent()) {
+				return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("HdfsDataService", "handleBucketDeletionRequest", ErrorUtils.NOT_YET_IMPLEMENTED, "secondary_buffer != Optional.empty()"));				
+			}
+			
+			final FileContext dfs = getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
+			final String bucket_root = getRootPath() + "/" + bucket.full_name();
+			try {			
+				final Path p = new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX);
+				
+				if (doesPathExist(dfs, p)) {			
+					dfs.delete(p, true);			
+					dfs.mkdir(p, FsPermission.getDefault(), true);
+					
+					return CompletableFuture.completedFuture(
+							ErrorUtils.buildSuccessMessage("HdfsDataService", "handleBucketDeletionRequest", ErrorUtils.get("Deleted data from bucket = {0}", bucket.full_name()))
+							);
+				}
+				else {
+					return CompletableFuture.completedFuture(
+							ErrorUtils.buildSuccessMessage("HdfsDataService", "handleBucketDeletionRequest", ErrorUtils.get("(No storage for bucket {0})", bucket.full_name()))
+							);
+				}
+			}
+			catch (Throwable t) {			
+				return CompletableFuture.completedFuture(
+						ErrorUtils.buildErrorMessage("HdfsDataService", "handleBucketDeletionRequest", ErrorUtils.getLongForm("Error deleting data from bucket = {1} : {0}", t, bucket.full_name()))
+						);
+			}
 		}
 	}
+	protected Optional<IDataServiceProvider.IGenericDataService> _data_service = Optional.of(new HdfsDataService());
+	
+	/////////////////////////////////////////////////////////////////////////////////
+	
+	// UTILITY
 	
 	/** Utility function for checking existence of a path
 	 * @param dfs
@@ -227,4 +278,5 @@ public class HDFSStorageService implements IStorageService {
 			return false;
 		} 		
 	}	
+		
 }
