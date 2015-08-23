@@ -46,6 +46,7 @@ import com.ikanow.aleph2.data_model.utils.CrudServiceUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.ManagementDbUtils;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
@@ -193,7 +194,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 			return null;
 		});
 		
-		final String collection_name = MongoDbCollectionUtils.getBaseIndexName(name, collection);
+		final String collection_name = BucketUtils.getUniqueSignature(name, collection);
 		
 		final DB db = MongoDbCollectionUtils.findDatabase(
 						_crud_factory.getMongoDb("test").getMongo(), 
