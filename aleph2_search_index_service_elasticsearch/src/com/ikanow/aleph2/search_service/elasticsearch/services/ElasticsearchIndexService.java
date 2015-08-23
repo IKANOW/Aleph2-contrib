@@ -308,13 +308,12 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			}
 			
 			Optional<ICrudService<JsonNode>> to_delete = this.getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.empty())
-															.map(IDataWriteService::getCrudService)
-															.get();
+															.flatMap(IDataWriteService::getCrudService);
 			if (!to_delete.isPresent()) {
 				
-				return CompletableFuture.completedFuture(new BasicMessageBean(new Date(), true, "ElasticsearchIndexService", "handleBucketDeletionRequest", null, 
-						ErrorUtils.get("(No search index for bucket {0})", bucket.full_name()),
-						null));			
+				return CompletableFuture.completedFuture(
+						ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "handleBucketDeletionRequest", "(No search index for bucket {0})", bucket.full_name())
+						);
 			}
 			else { // delete the data			
 				final CompletableFuture<Boolean> data_deletion_future = to_delete.get().deleteDatastore();
@@ -336,14 +335,10 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					}
 				})
 				.thenApply(__ -> {
-					return new BasicMessageBean(new Date(), true, "ElasticsearchIndexService", "handleBucketDeletionRequest", null, 
-							ErrorUtils.get("Deleted search index for bucket {0}", bucket.full_name()), 
-							null);
+					return ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "handleBucketDeletionRequest", "Deleted search index for bucket {0}", bucket.full_name());
 				})
 				.exceptionally(t -> {
-					return new BasicMessageBean(new Date(), false, "ElasticsearchIndexService", "handleBucketDeletionRequest", null, 
-							ErrorUtils.getLongForm("Error deleting search index for bucket {1}: {0}", t, bucket.full_name()), 
-							null);
+					return ErrorUtils.buildErrorMessage("ElasticsearchDataService", "handleBucketDeletionRequest", ErrorUtils.getLongForm("Error deleting search index for bucket {1}: {0}", t, bucket.full_name()));
 				})
 				;
 				return combined_future;
