@@ -21,14 +21,24 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.client.Client;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.SetOnce;
+import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUtils;
+import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchFutureUtils;
 
 import scala.Tuple2;
+import scala.Tuple3;
 
 /** Algebraic data type (ADT) encapsulating the state of an elasticsearch crud "service" (which could point at multiple/auto indexes and types)
  * ElasticsearchContext = ReadOnlyContext(ReadOnlyTypeContext, ReadOnlyIndexContext) 
@@ -93,6 +103,7 @@ public abstract class ElasticsearchContext {
 			super(client);
 			_index_context = index_context;
 			_type_context = type_context;
+			_index_context.client(client);
 		}
 		@Override
 		public IndexContext.ReadWriteIndexContext indexContext() {
@@ -111,6 +122,12 @@ public abstract class ElasticsearchContext {
 	 */
 	public static abstract class IndexContext {
 		private IndexContext() {}
+		
+		protected Client client(final Client client) {
+			return _client.trySet(client);
+		}
+		protected Client client() { return _client.get(); }
+		private final SetOnce<Client> _client = new SetOnce<>();
 		
 		/** Returns a list of indexes that can be used directly
 		 * @param date_range - ignored for FixedRoIndexContext; for TimeBasedIndexContext, can be used to narrow down the indexes searched 
@@ -169,7 +186,134 @@ public abstract class ElasticsearchContext {
 		 * @author Alex
 		 */
 		public static abstract class ReadWriteIndexContext extends IndexContext {
-			private ReadWriteIndexContext() {}
+			private ReadWriteIndexContext(Optional<Long> target_max_index_size_mb, boolean create_aliases) {
+				_target_max_index_size_mb = target_max_index_size_mb.filter(i -> i >= 0); // (negative means no limit)
+				_create_aliases = create_aliases;
+			}			
+			public final Optional<Long> target_max_index_size_mb() { return _target_max_index_size_mb; }
+			protected final Optional<Long> _target_max_index_size_mb;
+			protected final boolean _create_aliases;
+			
+			// INDEX SIZING UTILITY:
+			
+			private static long MB = 1024L*1024L;
+			public static String BAR = "_";
+			public static final long INDEX_SIZE_CHECK_MS = 10000L; // (Every 10s)			
+			public static class MutableState {
+				private AtomicBoolean _is_working = new AtomicBoolean(false); 
+				private ConcurrentHashMap<String, Tuple3<Long, String, Integer>> _base_index_states = new ConcurrentHashMap<>();
+			}
+			private final MutableState _mutable_state = new MutableState(); // (WARNING - mutable)
+			
+			/** Every 10s check the index size and increment the index suffix if too large
+			 * @return
+			 */
+			protected String getIndexSuffix(String base_index) {
+				if (!_target_max_index_size_mb.isPresent()) {
+					return base_index;
+				}
+				else synchronized (this) { // (just need this sync point so that multiple threads first time through don't fall through to default)
+					
+					final Tuple3<Long, String, Integer> last_suffix = _mutable_state._base_index_states.computeIfAbsent(base_index, __ -> Tuples._3T(null, "", 0));
+					final Long last_checked = last_suffix._1();
+
+					if (_create_aliases) {
+						//TODO: in 2 cases check for aliases:
+						// 1) if null == _mutable_state._last_checked
+						// 2) whenever we are creating a new index
+						// check => just recreate with "*"?
+					}					
+					final long now = new Date().getTime();
+					/**/
+					System.out.println("?????????????? " + last_suffix + " vs " + now);
+										
+					return _target_max_index_size_mb
+							.filter(__ -> { // only check first time or every 10s
+								if ((null == last_checked) || ((now - last_checked) >= INDEX_SIZE_CHECK_MS)) {
+									/**/
+									System.out.println("?HERE... " + _mutable_state._is_working.get());
+									
+									_mutable_state._base_index_states.put(base_index, Tuples._3T(now, last_suffix._2(), last_suffix._3()));
+									return true;
+								}
+								else return false;
+							})
+							// (if it's processing a previous request, keep going with the current suffix)
+							.filter(__ -> _mutable_state._is_working.compareAndSet(false, true)) 
+							.map(m -> {	
+								final CompletableFuture<Tuple3<Long, String, Integer>> future = ElasticsearchFutureUtils.wrap(
+										this.client().admin().indices().prepareStats()
+						                    .clear()
+						                    .setIndices(base_index + "*")
+						                    .setStore(true)
+						                    .execute()								
+										,
+										stats -> {
+											final int suffix_index = Lambdas.get(() -> {
+												/**/
+												System.out.println("???! " + getName(base_index, last_suffix));
+												
+												final IndexStats index_stats = stats.getIndex(getName(base_index, last_suffix));												
+												if ((null != index_stats) && (index_stats.getTotal().getStore().getSizeInBytes()*MB > m))
+												{
+													int max_index = 1;
+													// find a new index to use:									
+													for (; ; max_index++) {
+														final IndexStats candidate_index_stats = stats.getIndex(base_index + BAR + max_index);
+														
+														/**/
+														System.out.println("***?! " + max_index + ": " + ((null != candidate_index_stats)
+																? ("" + candidate_index_stats.getTotal().getStore().getSizeInBytes())
+																: "null"));
+														
+														if (null == candidate_index_stats) break;
+														else if (candidate_index_stats.getTotal().getStore().getSizeInBytes()*MB > m) break;
+													}
+													return max_index;
+												}
+												else {
+													return last_suffix._3();
+												}
+											});
+											return _mutable_state._base_index_states.put(base_index, Tuples._3T(now, BAR + suffix_index, suffix_index));
+										})
+										// Just stick a future at the end of the chain to ensure the mutable state is always fixed
+										.thenApply(x -> {
+											_mutable_state._is_working.set(false);
+											return x;
+										})
+										.exceptionally(t -> {
+											/**/
+											t.printStackTrace();
+											
+											_mutable_state._is_working.set(false);
+											return last_suffix;
+										});
+										;
+								
+								if (null == last_checked) { // first time through, wait for the code to complete
+									try {
+										return getName(base_index, future.join());
+									}
+									catch (Exception e) { // pass through to default on error
+										return null;
+									}
+								}
+								else return null; // pass through to default
+							})
+							.orElseGet(() -> getName(base_index, last_suffix))
+							;
+					
+				} //(end sync/if checking index sizes)
+			}//(end getIndexSuffix)
+			
+			//(util function)
+			private static String getName(final String index, final Tuple3<Long, String, Integer> suffix_meta) {
+				return index + 
+						((0 != suffix_meta._3())
+								? suffix_meta._2()
+										: "");
+			}
 			
 			/** Gets the index to write to
 			 * @param writable_object - only used in time-based indexes, if optional then "now" is used
@@ -181,19 +325,46 @@ public abstract class ElasticsearchContext {
 			 * @author Alex
 			 */
 			public static class FixedRwIndexContext extends ReadWriteIndexContext {
-				public FixedRwIndexContext(final String index) {
+				/** Creates a fixed name index
+				 * @param index - the base index name
+				 * @param target_max_index_size_mb - the target max index size
+				 * @param create_aliases - if true tries to maintain a read-only alias across the different indexes comprising this context
+				 */
+				public FixedRwIndexContext(final String index, Optional<Long> target_max_index_size_mb, boolean create_aliases) {
+					super(target_max_index_size_mb, create_aliases);
 					_index = index;
 				}
-				final String _index;
+				/** Creates a fixed name index (will create a read only index)
+				 * @param index - the base index name
+				 * @param target_max_index_size_mb - the target max index size
+				 */
+				public FixedRwIndexContext(final String index, Optional<Long> target_max_index_size_mb) {
+					this(index, target_max_index_size_mb, true);
+				}
+				protected final String _index;
 				
+				/* (non-Javadoc)
+				 * @see com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext.IndexContext#getReadableIndexList(java.util.Optional)
+				 */
 				@Override
 				public List<String> getReadableIndexList(Optional<Tuple2<Long, Long>> date_range) {
-					return Arrays.asList(_index);
+					return Arrays.asList(_index + _target_max_index_size_mb.map(__ -> "*").orElse(""));
 				}
 
+				/* (non-Javadoc)
+				 * @see com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext.IndexContext.ReadWriteIndexContext#getWritableIndex(java.util.Optional)
+				 */
 				@Override
 				public String getWritableIndex(Optional<JsonNode> writable_object) {
-					return _index;
+					return this.getIndexSuffix(_index);
+				}
+			}
+			/** Least interesting case ever! Secondary buffer version - doesn't create indexes
+			 * @author Alex
+			 */
+			public static class FixedRwIndexSecondaryContext extends FixedRwIndexContext {
+				public FixedRwIndexSecondaryContext(final String index, Optional<Long> target_max_index_size_mb) {
+					super(index, target_max_index_size_mb, false);
 				}
 			}
 			
@@ -204,13 +375,24 @@ public abstract class ElasticsearchContext {
 				/** Created a time-based index context
 				 * @param index - index name including pattern
 				 * @param time_field - the field to use, will just use "now" if left blank
+				 * @param target_max_index_size_mb - the target max index size
+				 * @param create_aliases - if true tries to maintain a read-only alias across the different indexes comprising this context
 				 */
-				public TimedRwIndexContext(final String index, final Optional<String> time_field) {
+				public TimedRwIndexContext(final String index, final Optional<String> time_field, Optional<Long> target_max_index_size_mb, boolean create_aliases) {
+					super(target_max_index_size_mb, create_aliases);
 					_index = index;
 					_time_field = time_field;
 					_index_split = ElasticsearchContextUtils.splitTimeBasedIndex(_index);
 					_formatter = ThreadLocal.withInitial(() -> new SimpleDateFormat(_index_split._2()));
 					
+				}
+				/** Created a time-based index context (will create a read-only alias across all indexes in the context)
+				 * @param index - index name including pattern
+				 * @param time_field - the field to use, will just use "now" if left blank
+				 * @param target_max_index_size_mb - the target max index size
+				 */
+				public TimedRwIndexContext(final String index, final Optional<String> time_field, Optional<Long> target_max_index_size_mb) {
+					this(index, time_field, target_max_index_size_mb, true);					
 				}
 				final String _index;
 				final Optional<String> _time_field;
@@ -221,6 +403,9 @@ public abstract class ElasticsearchContext {
 					return _time_field;
 				}
 				
+				/* (non-Javadoc)
+				 * @see com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext.IndexContext#getReadableIndexList(java.util.Optional)
+				 */
 				@Override
 				public List<String> getReadableIndexList(final Optional<Tuple2<Long, Long>> date_range) {
 					if (!date_range.isPresent()) { // Convert to wildcards
@@ -230,6 +415,9 @@ public abstract class ElasticsearchContext {
 						return ElasticsearchContextUtils.getIndexesFromDateRange(_index, date_range.get()).map(s -> s + '*').collect(Collectors.toList());
 					}
 				}
+				/* (non-Javadoc)
+				 * @see com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext.IndexContext.ReadWriteIndexContext#getWritableIndex(java.util.Optional)
+				 */
 				@Override
 				public String getWritableIndex(final Optional<JsonNode> writable_object) {
 					final Date d = _time_field
@@ -241,11 +429,18 @@ public abstract class ElasticsearchContext {
 							
 					final String formatted_date = _formatter.get().format(d);
 
-					return ElasticsearchContextUtils.reconstructTimedBasedSplitIndex(_index_split._1(), formatted_date);
+					return getIndexSuffix(ElasticsearchContextUtils.reconstructTimedBasedSplitIndex(_index_split._1(), formatted_date));
 				}
 			}
 		}
-		
+		/** Just one index but it is time-based ie contains _{TIME_SIGNATURE} - secondary buffer version
+		 * @author Alex
+		 */
+		public static class TimedRwIndexSecondaryContext extends TimedRwIndexContext {
+			public TimedRwIndexSecondaryContext(final String index, final Optional<String> time_field, Optional<Long> target_max_index_size_mb) {
+				super(index, time_field, target_max_index_size_mb, false);
+			}
+		}
 	}
 
 	/** ADT encapsulating information about a type or set of types within an index or set of indexes

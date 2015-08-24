@@ -46,6 +46,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.IBatchSubservice;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
@@ -240,12 +241,12 @@ public class TestElasticsearchIndexService {
 	public void test_indexNotEnabled() {
 		
 		final DataBucketBean db1 = BeanTemplateUtils.build(DataBucketBean.class).done().get();
-		assertEquals(Optional.empty(), _index_service.getCrudService(JsonNode.class, db1));
+		assertEquals(Optional.empty(), _index_service.getDataService().flatMap(s -> s.getWritableDataService(JsonNode.class, db1, Optional.empty(), Optional.empty())));
 		
 		final DataBucketBean db2 = BeanTemplateUtils.build(DataBucketBean.class).with("data_schema",
 				BeanTemplateUtils.build(DataSchemaBean.class).done().get()
 			).done().get();
-		assertEquals(Optional.empty(), _index_service.getCrudService(JsonNode.class, db2));
+		assertEquals(Optional.empty(), _index_service.getDataService().flatMap(s -> s.getWritableDataService(JsonNode.class, db2, Optional.empty(), Optional.empty())));
 		
 		final DataBucketBean db3 = BeanTemplateUtils.build(DataBucketBean.class).with("data_schema",
 				BeanTemplateUtils.build(DataSchemaBean.class)
@@ -254,7 +255,7 @@ public class TestElasticsearchIndexService {
 					.done().get()
 				).done().get()
 			).done().get();
-		assertEquals(Optional.empty(), _index_service.getCrudService(JsonNode.class, db3));
+		assertEquals(Optional.empty(), _index_service.getDataService().flatMap(s -> s.getWritableDataService(JsonNode.class, db3, Optional.empty(), Optional.empty())));
 		
 	}
 	
@@ -288,7 +289,7 @@ public class TestElasticsearchIndexService {
 			final GetIndexTemplatesResponse gtr = _crud_factory.getClient().admin().indices().getTemplates(gt).actionGet();
 			assertTrue("No templates to start with", gtr.getIndexTemplates().isEmpty());
 			
-			_index_service.handlePotentiallyNewIndex(bucket, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
+			_index_service.handlePotentiallyNewIndex(bucket, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
 			
 			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
@@ -301,7 +302,7 @@ public class TestElasticsearchIndexService {
 		// Check is ignored subsequently (same date, same content; same date, different content)
 		{
 			
-			_index_service.handlePotentiallyNewIndex(bucket, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
+			_index_service.handlePotentiallyNewIndex(bucket, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
 			
 			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
@@ -315,8 +316,8 @@ public class TestElasticsearchIndexService {
 			final Date next_time = time_setter.getTime();
 			final DataBucketBean bucket2 = BeanTemplateUtils.clone(bucket).with("modified", next_time).done();
 			
-			_index_service.handlePotentiallyNewIndex(bucket2, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
-			
+			_index_service.handlePotentiallyNewIndex(bucket2, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
+
 			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
 			assertEquals(1, _index_service._bucket_template_cache.size());
@@ -330,7 +331,7 @@ public class TestElasticsearchIndexService {
 			final String bucket_str2 = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_bucket2_validate_success.json"), Charsets.UTF_8);
 			final DataBucketBean bucket2 = BeanTemplateUtils.build(bucket_str2, DataBucketBean.class).with("modified", time_setter.getTime()).done().get();
 			
-			_index_service.handlePotentiallyNewIndex(bucket2, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
+			_index_service.handlePotentiallyNewIndex(bucket2, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
 			
 			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
@@ -353,7 +354,7 @@ public class TestElasticsearchIndexService {
 			assertTrue("No templates to start with", gtr.getIndexTemplates().isEmpty());
 			
 			{
-				_index_service.handlePotentiallyNewIndex(bucket, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
+				_index_service.handlePotentiallyNewIndex(bucket, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
 				
 				final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 				final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
@@ -367,7 +368,7 @@ public class TestElasticsearchIndexService {
 				final Date next_time = time_setter.getTime();
 				final DataBucketBean bucket2 = BeanTemplateUtils.clone(bucket).with("modified", next_time).done();				
 				
-				_index_service.handlePotentiallyNewIndex(bucket2, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
+				_index_service.handlePotentiallyNewIndex(bucket2, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
 				
 				final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 				final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
@@ -392,7 +393,7 @@ public class TestElasticsearchIndexService {
 																		.with("multi_bucket_children", ImmutableSet.builder().add("test1").build()).done().get();
 		
 		try {
-			_index_service.getCrudService(JsonNode.class, multi_bucket);
+			_index_service.getDataService().flatMap(s -> s.getWritableDataService(JsonNode.class, multi_bucket, Optional.empty(), Optional.empty()));
 			fail("Should have thrown an exception");
 		}
 		catch (Exception e) {
@@ -432,7 +433,11 @@ public class TestElasticsearchIndexService {
 			assertTrue("No templates to start with", gtr.getIndexTemplates().isEmpty());
 		}				
 		
-		final ICrudService<JsonNode> index_service_crud = _index_service.getCrudService(JsonNode.class, bucket).get();
+		final ICrudService<JsonNode> index_service_crud = 
+				_index_service.getDataService()
+					.flatMap(s -> s.getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.empty()))
+					.flatMap(IDataWriteService::getCrudService)
+					.get();
 		
 		// Check template added:
 
@@ -537,7 +542,11 @@ public class TestElasticsearchIndexService {
 			assertTrue("No templates to start with", gtr.getIndexTemplates().isEmpty());
 		}				
 		
-		final ICrudService<JsonNode> index_service_crud = _index_service.getCrudService(JsonNode.class, bucket).get();
+		final ICrudService<JsonNode> index_service_crud = 
+				_index_service.getDataService()
+					.flatMap(s -> s.getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.empty()))
+					.flatMap(IDataWriteService::getCrudService)
+					.get();
 		
 		// Check template added:
 
@@ -621,7 +630,12 @@ public class TestElasticsearchIndexService {
 		System.out.println("****** Checking delete/purge");
 		
 		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(to_handle);
-		final ICrudService<JsonNode> index_service_crud = _index_service.getCrudService(JsonNode.class, to_handle).get();
+		final ICrudService<JsonNode> index_service_crud = 
+				_index_service.getDataService()
+					.flatMap(s -> s.getWritableDataService(JsonNode.class, to_handle, Optional.empty(), Optional.empty()))
+					.flatMap(IDataWriteService::getCrudService)
+					.get();
+		
 		final ElasticsearchContext es_context = (ElasticsearchContext) index_service_crud.getUnderlyingPlatformDriver(ElasticsearchContext.class, Optional.empty()).get();
 		
 		// (Actually first off, check there's data and templates)
@@ -639,7 +653,7 @@ public class TestElasticsearchIndexService {
 		}
 		
 		// Then, perform request
-		final BasicMessageBean result = _index_service.handleBucketDeletionRequest(to_handle, delete_not_purge).get();
+		final BasicMessageBean result = _index_service.getDataService().get().handleBucketDeletionRequest(to_handle, Optional.empty(), delete_not_purge).get();
 		assertEquals("Deletion should succeed: " + result.message(), true, result.success());
 		
 		// Check templates gone iff deleting not purging
@@ -664,8 +678,14 @@ public class TestElasticsearchIndexService {
 			assertEquals(0, gmr.getMappings().keys().size());						
 		}
 		// Check via index size (recreates templates)
+
+		final ICrudService<JsonNode> index_service_crud_2 = 
+				_index_service.getDataService()
+					.flatMap(s -> s.getWritableDataService(JsonNode.class, to_handle, Optional.empty(), Optional.empty()))
+					.flatMap(IDataWriteService::getCrudService)
+					.get();
 		
-		assertEquals(0, _index_service.getCrudService(JsonNode.class, to_handle).get().countObjects().get().intValue());
+		assertEquals(0, index_service_crud_2.countObjects().get().intValue());
 	}
 
 	@Test
@@ -676,7 +696,7 @@ public class TestElasticsearchIndexService {
 												.done().get();
 	
 				
-		final BasicMessageBean result = _index_service.handleBucketDeletionRequest(bucket, true).get();
+		final BasicMessageBean result = _index_service.getDataService().get().handleBucketDeletionRequest(bucket, Optional.empty(), true).get();
 		assertEquals("Deletion should succeed: " + result.message(), true, result.success());
 	}
 }

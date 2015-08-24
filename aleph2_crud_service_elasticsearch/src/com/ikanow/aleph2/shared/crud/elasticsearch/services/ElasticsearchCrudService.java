@@ -41,6 +41,7 @@ import org.apache.metamodel.schema.Table;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequestBuilder;
+import org.elasticsearch.action.admin.indices.stats.IndicesStatsRequestBuilder;
 import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.elasticsearch.action.bulk.BulkProcessor;
 import org.elasticsearch.action.bulk.BulkRequest;
@@ -68,6 +69,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IBasicSearchService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -75,6 +78,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
@@ -97,10 +101,12 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	public ElasticsearchCrudService(final Class<O> bean_clazz, 
 			final ElasticsearchContext es_context, 
 			final Optional<Boolean> id_ranges_ok, final CreationPolicy creation_policy, 
-			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project)
+			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project,
+			final Optional<DataSchemaBean.WriteSettings> batch_write_settings)
 	{
 		_state = new State(bean_clazz, es_context, id_ranges_ok.orElse(false), creation_policy, auth_fieldname, auth, project);
 		_object_mapper = BeanTemplateUtils.configureMapper(Optional.empty());
+		_batch_write_settings = batch_write_settings;
 	}
 	protected class State {
 		State(final Class<O> bean_clazz, final ElasticsearchContext es_context, 
@@ -130,6 +136,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	}
 	protected final State _state;
 	protected final ObjectMapper _object_mapper;
+	protected final Optional<DataSchemaBean.WriteSettings> _batch_write_settings;
 	
 	/////////////////////////////////////////////////////
 	
@@ -703,20 +710,45 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		try {
 			final ReadWriteContext rw_context = getRwContextOrThrow(_state.es_context, "deleteDatastore");
 			
-			DeleteIndexRequestBuilder dir = _state.client.admin().indices().prepareDelete(rw_context.indexContext().getReadableIndexArray(Optional.empty()));
-			
-			return ElasticsearchFutureUtils.wrap(dir.execute(), dr -> {
-				return dr.isAcknowledged();
-			},
-			(err, future) -> {
-				if (err instanceof IndexMissingException) {
-					future.complete(false);
+			final String[] index_list = rw_context.indexContext().getReadableIndexArray(Optional.empty());
+			final boolean involves_wildcards = Arrays.stream(index_list).anyMatch(s -> s.contains("*"));
+			DeleteIndexRequestBuilder dir = _state.client.admin().indices().prepareDelete(index_list);
+
+			// First check if the indexes even exist, so can return false if they don't
+			// (can bypass this if there are no wildcards, will get an exception instead)
+			final CompletableFuture<Boolean> intermed = Lambdas.get(() -> {
+				if (involves_wildcards) {
+					final IndicesStatsRequestBuilder irb = _state.client.admin().indices().prepareStats(index_list);
+					final CompletableFuture<Boolean> check_indexes =
+						ElasticsearchFutureUtils.wrap(irb.execute(), 
+						ir -> {
+							return !ir.getIndices().isEmpty();
+						},
+						(err, future) -> {
+							future.completeExceptionally(err);
+						});
+					return check_indexes;
 				}
-				else {
-					future.completeExceptionally(err);
+				else return CompletableFuture.completedFuture(true);
+			});
+			// Now try deleting the indexes
+			return intermed.thenCompose(b -> {
+				if (b) {
+					return ElasticsearchFutureUtils.wrap(dir.execute(), dr -> {
+						return true;
+					},
+					(err, future) -> {
+						if (err instanceof IndexMissingException) {
+							future.complete(false);
+						}
+						else {
+							future.completeExceptionally(err);
+						}
+					}
+					);					
 				}
-			}
-			);
+				else return CompletableFuture.completedFuture(false);
+			});
 		}
 		catch (Exception e) {
 			return FutureUtils.returnError(e);
@@ -727,8 +759,8 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getRawCrudService()
 	 */
 	@Override
-	public ElasticsearchCrudService<JsonNode> getRawCrudService() {
-		return new ElasticsearchCrudService<JsonNode>(JsonNode.class, _state.es_context, Optional.of(_state.id_ranges_ok), _state.creation_policy, _state.auth_fieldname, _state.auth, _state.project); 
+	public ElasticsearchCrudService<JsonNode> getRawService() {
+		return new ElasticsearchCrudService<JsonNode>(JsonNode.class, _state.es_context, Optional.of(_state.id_ranges_ok), _state.creation_policy, _state.auth_fieldname, _state.auth, _state.project, _batch_write_settings); 
 	}
 
 	/* (non-Javadoc)
@@ -747,14 +779,8 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	@Override
 	public <T> Optional<T> getUnderlyingPlatformDriver(final Class<T> driver_class, final Optional<String> driver_options) {
 		if (ElasticsearchContext.class == driver_class) return (Optional<T>) Optional.of(_state.es_context);
-		else if (IMetaModel.class == driver_class) return (Optional<T>) Optional.of(((null == _meta_model) 
-														? (_meta_model = new ElasticsearchDbMetaModel(_state.es_context)) 
-														: _meta_model));
-		else if (((ElasticsearchBatchSubsystem.class == driver_class) || (ICrudService.IBatchSubservice.class == driver_class)) 
-					&& (_state.es_context instanceof ReadWriteContext)) {
-			if (null == _batch_processor) _batch_processor = new ElasticsearchBatchSubsystem();
-			return (Optional<T>) Optional.of(_batch_processor);
-		}
+		else if (IMetaModel.class == driver_class) return (Optional<T>) getMetaModel(); 
+		else if (IDataWriteService.IBatchSubservice.class.isAssignableFrom(driver_class)) return (Optional<T>) this.getBatchWriteSubservice(); 
 		else return Optional.empty();
 	}
 
@@ -772,7 +798,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				for (;;) {
 					if (_flush_now) {
 						synchronized (this) {
-							_current.flush();
+							_current.flush(); // (must always be non-null because _flush_now can only be set if _current exists)
 							_flush_now = false;
 						}
 					}
@@ -792,10 +818,18 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			if (null != old) old.close();
 		}
 
+		protected BulkProcessor buildBulkProcessor() {
+			return buildBulkProcessor(_batch_write_settings.map(DataSchemaBean.WriteSettings::batch_max_objects), 
+					_batch_write_settings.map(DataSchemaBean.WriteSettings::batch_max_size_kb), 
+					_batch_write_settings.map(DataSchemaBean.WriteSettings::batch_flush_interval).map(i -> Duration.of(i, ChronoUnit.SECONDS)), 
+					_batch_write_settings.map(DataSchemaBean.WriteSettings::target_write_concurrency)
+					);
+		}
+		
 		@Override
 		public synchronized void storeObjects(final List<O> new_objects, final boolean replace_if_present) {
 			if (null == _current) {
-				_current = buildBulkProcessor(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+				_current = buildBulkProcessor();
 			}
 			new_objects.stream().forEach(new_object -> 			
 				_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
@@ -805,7 +839,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		@Override
 		public synchronized void storeObject(final O new_object, final boolean replace_if_present) {
 			if (null == _current) {
-				_current = buildBulkProcessor(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+				_current = buildBulkProcessor();
 			}			
 			_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
 							Either.left(new_object), replace_if_present, true).request());
@@ -875,6 +909,22 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		}
 		
 		protected BulkProcessor _current; // (note: mutable)
+
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService.IBatchSubservice#storeObjects(java.util.List)
+		 */
+		@Override
+		public void storeObjects(List<O> new_objects) {
+			storeObjects(new_objects, false);			
+		}
+
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService.IBatchSubservice#storeObject(java.lang.Object)
+		 */
+		@Override
+		public void storeObject(O new_object) {
+			storeObject(new_object, false);			
+		}
 	}
 	protected ElasticsearchBatchSubsystem _batch_processor = null;
 	
@@ -915,4 +965,36 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		}
 	}
 	protected ElasticsearchDbMetaModel _meta_model = null;
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getMetaModel()
+	 */
+	public Optional<IMetaModel> getMetaModel() {
+		return Optional.of(((null == _meta_model) 
+				? (_meta_model = new ElasticsearchDbMetaModel(_state.es_context)) 
+				: _meta_model));		
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#getCrudService()
+	 */
+	@Override
+	public Optional<ICrudService<O>> getCrudService() {
+		return Optional.of(this);
+	}
+	
+	@Override
+	public Optional<IBatchSubservice<O>> getBatchCrudSubservice() {
+		if (_state.es_context instanceof ReadWriteContext) {
+			if (null == _batch_processor) _batch_processor = new ElasticsearchBatchSubsystem();
+			return Optional.of(_batch_processor);
+		}
+		else return Optional.empty();
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public Optional<IDataWriteService.IBatchSubservice<O>> getBatchWriteSubservice() {
+		return (Optional<IDataWriteService.IBatchSubservice<O>>)(Optional<?>)getBatchCrudSubservice();
+	}
 }

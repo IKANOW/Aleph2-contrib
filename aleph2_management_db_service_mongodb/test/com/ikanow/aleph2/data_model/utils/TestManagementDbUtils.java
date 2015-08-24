@@ -80,7 +80,7 @@ public class TestManagementDbUtils {
 		
 		// (response with no future - left alone or wrapped...)
 		
-		IManagementCrudService<JsonNode> wrapped_raw_service = wrapped_service.getRawCrudService();
+		IManagementCrudService<JsonNode> wrapped_raw_service = wrapped_service.getRawService();
 		
 		assertEquals(1L, (long)wrapped_raw_service.countObjects().get());
 		

@@ -297,8 +297,8 @@ public class TestMongoDbManagementDbService {
 			final DBCollection dbc2 = test_ro.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 			harvest_name = dbc1.getFullName();
 			
-			assertEquals("aleph2_harvest_state_1.test_ext_4354_t_3b7ae2550a2e", dbc1.getFullName());
-			assertEquals("aleph2_harvest_state_1.test_ext_4354_t_3b7ae2550a2e", dbc2.getFullName());
+			assertEquals("aleph2_harvest_state_1.test_ext_4354_t__bb8a6a382d7b", dbc1.getFullName());
+			assertEquals("aleph2_harvest_state_1.test_ext_4354_t__bb8a6a382d7b", dbc2.getFullName());
 			
 			dbc1.drop();
 			assertEquals(0, dbc1.count());
@@ -333,8 +333,8 @@ public class TestMongoDbManagementDbService {
 			final DBCollection dbc2 = test_ro.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 			enrich_name = dbc1.getFullName();
 			
-			assertEquals("aleph2_enrich_state_1.test_ext_4354_t_3b7ae2550a2e", dbc1.getFullName());
-			assertEquals("aleph2_enrich_state_1.test_ext_4354_t_3b7ae2550a2e", dbc2.getFullName());
+			assertEquals("aleph2_enrich_state_1.test_ext_4354_t__bb8a6a382d7b", dbc1.getFullName());
+			assertEquals("aleph2_enrich_state_1.test_ext_4354_t__bb8a6a382d7b", dbc2.getFullName());
 			
 			dbc1.drop();
 			assertEquals(0, dbc1.count());
@@ -370,8 +370,8 @@ public class TestMongoDbManagementDbService {
 			
 			final DBCollection dbc2 = test_ro.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 			
-			assertEquals("aleph2_analytics_state_1.test_ext_4354_t_3b7ae2550a2e", dbc1.getFullName());
-			assertEquals("aleph2_analytics_state_1.test_ext_4354_t_3b7ae2550a2e", dbc2.getFullName());
+			assertEquals("aleph2_analytics_state_1.test_ext_4354_t__bb8a6a382d7b", dbc1.getFullName());
+			assertEquals("aleph2_analytics_state_1.test_ext_4354_t__bb8a6a382d7b", dbc2.getFullName());
 			
 			dbc1.drop();
 			assertEquals(0, dbc1.count());
@@ -466,8 +466,8 @@ public class TestMongoDbManagementDbService {
 			
 			final DBCollection dbc2 = test_ro.getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get();
 			
-			assertEquals("aleph2_library_state_1.test_ext_4354_t_3b7ae2550a2e", dbc1.getFullName());
-			assertEquals("aleph2_library_state_1.test_ext_4354_t_3b7ae2550a2e", dbc2.getFullName());
+			assertEquals("aleph2_library_state_1.test_ext_4354_t__bb8a6a382d7b", dbc1.getFullName());
+			assertEquals("aleph2_library_state_1.test_ext_4354_t__bb8a6a382d7b", dbc2.getFullName());
 			
 			dbc1.drop();
 			assertEquals(0, dbc1.count());

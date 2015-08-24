@@ -19,6 +19,7 @@ import java.util.Optional;
 
 import org.elasticsearch.client.Client;
 
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
@@ -46,5 +47,6 @@ public interface IElasticsearchCrudServiceFactory {
 	<O> ElasticsearchCrudService<O> getElasticsearchCrudService(final Class<O> bean_clazz,  
 			final ElasticsearchContext es_context, 
 			final Optional<Boolean> id_ranges_ok, final CreationPolicy creation_policy, 
-			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project);	
+			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project,
+			final Optional<DataSchemaBean.WriteSettings> batch_write_settings);	
 }

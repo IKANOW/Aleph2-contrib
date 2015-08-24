@@ -22,6 +22,7 @@ import java.util.stream.IntStream;
 
 import org.junit.Test;
 
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.shared.crud.mongodb.services.MockMongoDbCrudServiceFactory;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
@@ -36,22 +37,22 @@ public class TestMongoDbCollectionUtils {
 		final String path2 = "/test+extra/4354____42";
 		final String path3 = "test+extra/4354____42/some/more/COMPONENTS";
 		
-		assertEquals("test_ext_c1651d4c69ed", MongoDbCollectionUtils.getBaseIndexName(path1, Optional.empty()));
-		assertEquals("test_ext_test_12_b540d8622174", MongoDbCollectionUtils.getBaseIndexName(path1, Optional.of("test+;12345")));
-		assertEquals("test_ext_4354__bb8a6a382d7b", MongoDbCollectionUtils.getBaseIndexName(path2, Optional.empty()));
-		assertEquals("test_ext_4354_t_3b7ae2550a2e", MongoDbCollectionUtils.getBaseIndexName(path2, Optional.of("t")));
-		assertEquals("test_ext_more_componen_ec9cbb79741c", MongoDbCollectionUtils.getBaseIndexName(path3, Optional.empty()));
-		assertEquals("test_ext_more_componen_xx__e1f3feb12442", MongoDbCollectionUtils.getBaseIndexName(path3, Optional.of("XX__________")));
+		assertEquals("test_ext__c1651d4c69ed", BucketUtils.getUniqueSignature(path1, Optional.empty()));
+		assertEquals("test_ext_test_12__c1651d4c69ed", BucketUtils.getUniqueSignature(path1, Optional.of("test+;12345")));
+		assertEquals("test_ext_4354__bb8a6a382d7b", BucketUtils.getUniqueSignature(path2, Optional.empty()));
+		assertEquals("test_ext_4354_t__bb8a6a382d7b", BucketUtils.getUniqueSignature(path2, Optional.of("t")));
+		assertEquals("test_ext_more_componen__ec9cbb79741c", BucketUtils.getUniqueSignature(path3, Optional.empty()));
+		assertEquals("test_ext_more_componen_xx__ec9cbb79741c", BucketUtils.getUniqueSignature(path3, Optional.of("XX__________")));
 	}
 	
 	@Test
 	public void test_findDatabase() {
 
 		final String path1 = "/test+extra/4354____42";
-		final String coll_name1 = "test_ext_4354_t_3b7ae2550a2e";
-		assertEquals(coll_name1, MongoDbCollectionUtils.getBaseIndexName(path1, Optional.of("t")));		
+		final String coll_name1 = "test_ext_4354_t__bb8a6a382d7b";
+		assertEquals(coll_name1, BucketUtils.getUniqueSignature(path1, Optional.of("t")));		
 		final String coll_name2 = "test_ext_4354__bb8a6a382d7b";
-		assertEquals(coll_name2, MongoDbCollectionUtils.getBaseIndexName(path1, Optional.empty()));		
+		assertEquals(coll_name2, BucketUtils.getUniqueSignature(path1, Optional.empty()));		
 		
 		// Set up some DBs:
 		
@@ -61,10 +62,10 @@ public class TestMongoDbCollectionUtils {
 		IntStream.range(1, 5).boxed().forEach(i -> mock_crud_service_factory.getMongoDb("test_findDatabase_" + i).dropDatabase());
 		IntStream.range(1, 5).boxed().forEach(i -> assertEquals(0, mock_crud_service_factory.getMongoDb("test_findDatabase_" + i).getCollectionNames().size()));
 		// (Now fill some in)
-		mock_crud_service_factory.getMongoDb("test_findDatabase_1").getCollection("test_ext_more_componen_xx__e1f3feb12442").save(new BasicDBObject());
+		mock_crud_service_factory.getMongoDb("test_findDatabase_1").getCollection("test_ext_more_componen_xx__ec9cbb79741c").save(new BasicDBObject());
 		IntStream.range(1, 210).boxed().forEach(i -> mock_crud_service_factory.getMongoDb("test_findDatabase_1").getCollection("whatever" + i).save(new BasicDBObject()));
 		mock_crud_service_factory.getMongoDb("test_findDatabase_2").getCollection("whatever").save(new BasicDBObject());
-		mock_crud_service_factory.getMongoDb("test_findDatabase_3").getCollection("test_ext_4354_t_3b7ae2550a2e").save(new BasicDBObject());
+		mock_crud_service_factory.getMongoDb("test_findDatabase_3").getCollection("test_ext_4354_t__bb8a6a382d7b").save(new BasicDBObject());
 		//(test_findDatabase_4 is empty)
 		mock_crud_service_factory.getMongoDb("test_findDatabase_5").getCollection("test_ext_4354__bb8a6a382d7b").save(new BasicDBObject());
 		//^(wont' ever get here here because test_findDatabase_4 is empty)

@@ -635,7 +635,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getRawCrudService()
 	 */
-	public ICrudService<JsonNode> getRawCrudService() {
+	@Override
+	public ICrudService<JsonNode> getRawService() {
 		return new MongoDbCrudService<JsonNode, K>(JsonNode.class, _state.key_clazz, _state.orig_coll, _state.auth_fieldname, _state.auth, _state.project); 
 	}
 	
@@ -656,8 +657,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	public <T> Optional<T> getUnderlyingPlatformDriver(Class<T> driver_class, final Optional<String> driver_options) {
 		if (JacksonDBCollection.class == driver_class) return (Optional<T>) Optional.of(_state.coll);
 		else if (DBCollection.class == driver_class) return (Optional<T>) Optional.of(_state.orig_coll);
-		else if (IMetaModel.class == driver_class) return (Optional<T>) Optional.of(((null == _meta_model) 
-														? (_meta_model = new MongoDbMetaModel(_state.orig_coll)) : _meta_model));
+		else if (IMetaModel.class == driver_class) return (Optional<T>) getMetaModel();
 		else return Optional.empty();
 	}
 
@@ -689,4 +689,18 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}
 	}
 	protected MongoDbMetaModel _meta_model = null;
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getMetaModel()
+	 */
+	@Override 
+	public Optional<IMetaModel> getMetaModel() {
+		return Optional.of(((null == _meta_model) 
+				? (_meta_model = new MongoDbMetaModel(_state.orig_coll)) : _meta_model));
+	}
+	
+	@Override
+	public Optional<ICrudService<O>> getCrudService() {
+		return Optional.of(this);
+	}
 }

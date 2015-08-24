@@ -51,7 +51,7 @@
 			<excludes>
 				<!--  This actually removes code from coveralls.io -->
 				<!-- Trivial/untestable code -->
-				<exclude>**/com/ikanow/aleph2/search_service/elasticsearch/modules/*</exclude>
+				<exclude>**/com/ikanow/aleph2/search_service/elasticsearch/module/*</exclude>
 			</excludes>
 		</configuration>
 		<executions>

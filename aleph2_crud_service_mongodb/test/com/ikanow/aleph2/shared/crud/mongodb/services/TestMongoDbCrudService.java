@@ -979,7 +979,7 @@ public class TestMongoDbCrudService {
 
 		replenishDocsForDeletion(bean_service);
 		
-		testJsonRepositoryCalls_common(bean_service.getRawCrudService(), json_service);
+		testJsonRepositoryCalls_common(bean_service.getRawService(), json_service);
 	}
 	
 	public void testJsonRepositoryCalls_common(final ICrudService<JsonNode> service,  MongoDbCrudService<JsonNode, String> original) throws InterruptedException, ExecutionException {

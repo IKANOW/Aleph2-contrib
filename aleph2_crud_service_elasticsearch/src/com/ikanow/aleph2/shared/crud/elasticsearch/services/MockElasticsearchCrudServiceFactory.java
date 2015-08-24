@@ -15,13 +15,16 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared.crud.elasticsearch.services;
 
+import java.io.File;
 import java.util.Optional;
 
+import org.apache.commons.io.FileUtils;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.node.NodeBuilder;
 
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
@@ -39,6 +42,9 @@ public class MockElasticsearchCrudServiceFactory implements IElasticsearchCrudSe
 	public Client getClient() {
 		synchronized (MockElasticsearchCrudServiceFactory.class) {
 			if (!_root_node.isSet()) {
+				//(Clean up existing dir)
+				try { FileUtils.deleteDirectory(new File("data/aleph2")); } catch (Exception e) {}
+				
 				final ImmutableSettings.Builder test_settings = 
 						ImmutableSettings.settingsBuilder()
 					        .put("cluster.name", "aleph2")
@@ -63,8 +69,10 @@ public class MockElasticsearchCrudServiceFactory implements IElasticsearchCrudSe
 	public <O> ElasticsearchCrudService<O> getElasticsearchCrudService(final Class<O> bean_clazz,  
 			final ElasticsearchContext es_context, 
 			final Optional<Boolean> id_ranges_ok, final CreationPolicy creation_policy, 
-			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project) {
-		return new ElasticsearchCrudService<O>(bean_clazz, es_context, id_ranges_ok, creation_policy, auth_fieldname, auth, project);
+			final Optional<String> auth_fieldname, final Optional<AuthorizationBean> auth, final Optional<ProjectBean> project,
+			final Optional<DataSchemaBean.WriteSettings> batch_write_settings)
+	{
+		return new ElasticsearchCrudService<O>(bean_clazz, es_context, id_ranges_ok, creation_policy, auth_fieldname, auth, project, batch_write_settings);
 	}
 	
 	private final SetOnce<Client> _client = new SetOnce<>();
