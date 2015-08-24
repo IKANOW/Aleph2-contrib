@@ -105,6 +105,31 @@ public class TestElasticsearchContext {
 			// (see index_context_4 declaration, above)
 //			assertEquals("test3", index_context_4.getWritableIndex(Optional.of(obj)));
 		}
+		
+		// Test readable index differences depending on whether the max index size is set or not
+		
+		{
+			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext index_context_1 = 
+					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test1", Optional.empty());
+			
+			assertEquals(Arrays.asList("test1"), index_context_1.getReadableIndexList(Optional.empty()));
+			
+			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext index_context_2 = 
+					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test2", Optional.of(-1L));
+			
+			assertEquals(Arrays.asList("test2"), index_context_2.getReadableIndexList(Optional.empty()));
+			
+			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext index_context_3 = 
+					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test3", Optional.of(0L));
+			
+			assertEquals(Arrays.asList("test3_*"), index_context_3.getReadableIndexList(Optional.empty()));
+			
+			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext index_context_4 = 
+					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test4", Optional.of(10L));
+			
+			assertEquals(Arrays.asList("test4_*"), index_context_4.getReadableIndexList(Optional.empty()));
+		}
+		
 	}
 	
 	@Test
@@ -137,9 +162,8 @@ public class TestElasticsearchContext {
 	}
 	
 	// (Other code is covered by TestElasticsearchCrudService - we'll live with that for now)
-	
-	//TODO: test fixed write with max size on/off
-	//TODO: test unlimited if <0 (don't forget to put some sanity checks into the search index code)
+
+	// (In particular, the code for testing the max size is living in TestElasticsearchCrudService, since that's where all the code for inserting docs etc lives)
 	
 	//TODO: use size==0 to test
 	

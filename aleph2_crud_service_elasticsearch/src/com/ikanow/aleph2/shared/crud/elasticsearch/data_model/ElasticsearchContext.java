@@ -187,7 +187,7 @@ public abstract class ElasticsearchContext {
 		 */
 		public static abstract class ReadWriteIndexContext extends IndexContext {
 			private ReadWriteIndexContext(Optional<Long> target_max_index_size_mb, boolean create_aliases) {
-				_target_max_index_size_mb = target_max_index_size_mb.filter(i -> i > 0); // (negative means no limit)
+				_target_max_index_size_mb = target_max_index_size_mb.filter(i -> i >= 0); // (negative means no limit)
 				_create_aliases = create_aliases;
 			}			
 			public final Optional<Long> target_max_index_size_mb() { return _target_max_index_size_mb; }
@@ -216,7 +216,7 @@ public abstract class ElasticsearchContext {
 					
 					final Tuple3<Long, String, Integer> last_suffix = _mutable_state._base_index_states.computeIfAbsent(base_index, __ -> Tuples._3T(null, "", 0));
 					final Long last_checked = last_suffix._1();
-					
+
 					if (_create_aliases) {
 						//TODO: in 2 cases check for aliases:
 						// 1) if null == _mutable_state._last_checked
@@ -224,9 +224,15 @@ public abstract class ElasticsearchContext {
 						// check => just recreate with "*"?
 					}					
 					final long now = new Date().getTime();
+					/**/
+					System.out.println("?????????????? " + last_suffix + " vs " + now);
+										
 					return _target_max_index_size_mb
 							.filter(__ -> { // only check first time or every 10s
 								if ((null == last_checked) || ((now - last_checked) >= INDEX_SIZE_CHECK_MS)) {
+									/**/
+									System.out.println("?HERE... " + _mutable_state._is_working.get());
+									
 									_mutable_state._base_index_states.put(base_index, Tuples._3T(now, last_suffix._2(), last_suffix._3()));
 									return true;
 								}
@@ -238,18 +244,28 @@ public abstract class ElasticsearchContext {
 								final CompletableFuture<Tuple3<Long, String, Integer>> future = ElasticsearchFutureUtils.wrap(
 										this.client().admin().indices().prepareStats()
 						                    .clear()
-						                    .setIndices(base_index + BAR + "*")
+						                    .setIndices(base_index + "*")
 						                    .setStore(true)
 						                    .execute()								
 										,
 										stats -> {
 											final int suffix_index = Lambdas.get(() -> {
-												final IndexStats index_stats = stats.getIndex(base_index + last_suffix._2());
-												if (index_stats.getTotal().getStore().getSizeInBytes()*MB > m) {
+												/**/
+												System.out.println("???! " + getName(base_index, last_suffix));
+												
+												final IndexStats index_stats = stats.getIndex(getName(base_index, last_suffix));												
+												if ((null != index_stats) && (index_stats.getTotal().getStore().getSizeInBytes()*MB > m))
+												{
 													int max_index = 1;
 													// find a new index to use:									
 													for (; ; max_index++) {
 														final IndexStats candidate_index_stats = stats.getIndex(base_index + BAR + max_index);
+														
+														/**/
+														System.out.println("***?! " + max_index + ": " + ((null != candidate_index_stats)
+																? ("" + candidate_index_stats.getTotal().getStore().getSizeInBytes())
+																: "null"));
+														
 														if (null == candidate_index_stats) break;
 														else if (candidate_index_stats.getTotal().getStore().getSizeInBytes()*MB > m) break;
 													}
@@ -260,11 +276,24 @@ public abstract class ElasticsearchContext {
 												}
 											});
 											return _mutable_state._base_index_states.put(base_index, Tuples._3T(now, BAR + suffix_index, suffix_index));
+										})
+										// Just stick a future at the end of the chain to ensure the mutable state is always fixed
+										.thenApply(x -> {
+											_mutable_state._is_working.set(false);
+											return x;
+										})
+										.exceptionally(t -> {
+											/**/
+											t.printStackTrace();
+											
+											_mutable_state._is_working.set(false);
+											return last_suffix;
 										});
+										;
 								
 								if (null == last_checked) { // first time through, wait for the code to complete
 									try {
-										return base_index + future.join()._2();
+										return getName(base_index, future.join());
 									}
 									catch (Exception e) { // pass through to default on error
 										return null;
@@ -272,11 +301,19 @@ public abstract class ElasticsearchContext {
 								}
 								else return null; // pass through to default
 							})
-							.orElseGet(() -> base_index + last_suffix._2())
+							.orElseGet(() -> getName(base_index, last_suffix))
 							;
 					
 				} //(end sync/if checking index sizes)
 			}//(end getIndexSuffix)
+			
+			//(util function)
+			private static String getName(final String index, final Tuple3<Long, String, Integer> suffix_meta) {
+				return index + 
+						((0 != suffix_meta._3())
+								? suffix_meta._2()
+										: "");
+			}
 			
 			/** Gets the index to write to
 			 * @param writable_object - only used in time-based indexes, if optional then "now" is used
@@ -311,7 +348,7 @@ public abstract class ElasticsearchContext {
 				 */
 				@Override
 				public List<String> getReadableIndexList(Optional<Tuple2<Long, Long>> date_range) {
-					return Arrays.asList(_index + _target_max_index_size_mb.map(__ -> (BAR + "*")).orElse(""));
+					return Arrays.asList(_index + _target_max_index_size_mb.map(__ -> "*").orElse(""));
 				}
 
 				/* (non-Javadoc)
@@ -326,7 +363,7 @@ public abstract class ElasticsearchContext {
 			 * @author Alex
 			 */
 			public static class FixedRwIndexSecondaryContext extends FixedRwIndexContext {
-				FixedRwIndexSecondaryContext(final String index, Optional<Long> target_max_index_size_mb) {
+				public FixedRwIndexSecondaryContext(final String index, Optional<Long> target_max_index_size_mb) {
 					super(index, target_max_index_size_mb, false);
 				}
 			}
@@ -400,7 +437,7 @@ public abstract class ElasticsearchContext {
 		 * @author Alex
 		 */
 		public static class TimedRwIndexSecondaryContext extends TimedRwIndexContext {
-			TimedRwIndexSecondaryContext(final String index, final Optional<String> time_field, Optional<Long> target_max_index_size_mb) {
+			public TimedRwIndexSecondaryContext(final String index, final Optional<String> time_field, Optional<Long> target_max_index_size_mb) {
 				super(index, time_field, target_max_index_size_mb, false);
 			}
 		}

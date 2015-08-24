@@ -41,6 +41,7 @@ import org.apache.metamodel.schema.Table;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequestBuilder;
+import org.elasticsearch.action.admin.indices.stats.IndicesStatsRequestBuilder;
 import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.elasticsearch.action.bulk.BulkProcessor;
 import org.elasticsearch.action.bulk.BulkRequest;
@@ -77,6 +78,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
@@ -708,20 +710,45 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		try {
 			final ReadWriteContext rw_context = getRwContextOrThrow(_state.es_context, "deleteDatastore");
 			
-			DeleteIndexRequestBuilder dir = _state.client.admin().indices().prepareDelete(rw_context.indexContext().getReadableIndexArray(Optional.empty()));
-			
-			return ElasticsearchFutureUtils.wrap(dir.execute(), dr -> {
-				return dr.isAcknowledged();
-			},
-			(err, future) -> {
-				if (err instanceof IndexMissingException) {
-					future.complete(false);
+			final String[] index_list = rw_context.indexContext().getReadableIndexArray(Optional.empty());
+			final boolean involves_wildcards = Arrays.stream(index_list).anyMatch(s -> s.contains("*"));
+			DeleteIndexRequestBuilder dir = _state.client.admin().indices().prepareDelete(index_list);
+
+			// First check if the indexes even exist, so can return false if they don't
+			// (can bypass this if there are no wildcards, will get an exception instead)
+			final CompletableFuture<Boolean> intermed = Lambdas.get(() -> {
+				if (involves_wildcards) {
+					final IndicesStatsRequestBuilder irb = _state.client.admin().indices().prepareStats(index_list);
+					final CompletableFuture<Boolean> check_indexes =
+						ElasticsearchFutureUtils.wrap(irb.execute(), 
+						ir -> {
+							return !ir.getIndices().isEmpty();
+						},
+						(err, future) -> {
+							future.completeExceptionally(err);
+						});
+					return check_indexes;
 				}
-				else {
-					future.completeExceptionally(err);
+				else return CompletableFuture.completedFuture(true);
+			});
+			// Now try deleting the indexes
+			return intermed.thenCompose(b -> {
+				if (b) {
+					return ElasticsearchFutureUtils.wrap(dir.execute(), dr -> {
+						return true;
+					},
+					(err, future) -> {
+						if (err instanceof IndexMissingException) {
+							future.complete(false);
+						}
+						else {
+							future.completeExceptionally(err);
+						}
+					}
+					);					
 				}
-			}
-			);
+				else return CompletableFuture.completedFuture(false);
+			});
 		}
 		catch (Exception e) {
 			return FutureUtils.returnError(e);
