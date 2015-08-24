@@ -25,6 +25,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.ColumnarSchemaDefaultBean;
@@ -95,6 +96,8 @@ public class ElasticsearchIndexConfigUtils {
 		// The _actual_ settings technology override object is taken from either the bucket or the backup on a top-level-field by top-leve-field basis
 		final SearchIndexSchemaDefaultBean search_index_bits =
 				BeanTemplateUtils.clone(search_index_bits_tmp)
+					//(target index size is a special case)
+					.with(SearchIndexSchemaDefaultBean::target_index_size_mb, Optionals.of(() -> bucket.data_schema().search_index_schema().target_index_size_mb()).orElse(backup.search_technology_override().target_index_size_mb()))
 					.with(SearchIndexSchemaDefaultBean::collide_policy, Optional.ofNullable(search_index_bits_tmp.collide_policy()).orElse(backup.search_technology_override().collide_policy()))
 					.with(SearchIndexSchemaDefaultBean::type_name_or_prefix, Optional.ofNullable(search_index_bits_tmp.type_name_or_prefix()).orElse(backup.search_technology_override().type_name_or_prefix()))
 					.with(SearchIndexSchemaDefaultBean::verbose, Optional.ofNullable(search_index_bits_tmp.verbose()).orElse(backup.search_technology_override().verbose()))

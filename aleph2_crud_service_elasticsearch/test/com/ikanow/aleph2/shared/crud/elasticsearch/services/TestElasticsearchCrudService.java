@@ -152,7 +152,10 @@ public class TestElasticsearchCrudService {
 		}		
 		// Create an empty index
 		if (create_index) {
-			_factory.getClient().admin().indices().prepareCreate(test_name).execute().actionGet();
+			_factory.getClient().admin().indices().prepareCreate(test_name)
+				// (leave this at its default of 1 - that's what happens if the index gets auto-created unless there's a template mapping which is beyond the scope of this)
+				//.setSettings(ImmutableSettings.builder().put("index.number_of_shards", 2).build())
+			.execute().actionGet();
 			//(Wait for above operation to be completed)
 			_factory.getClient().admin().cluster().health(new ClusterHealthRequest(test_name).waitForYellowStatus()).actionGet();
 		}				
@@ -1510,11 +1513,10 @@ public class TestElasticsearchCrudService {
 	
 	@Test
 	public void test_checkMaxIndexSize_createAliases() throws InterruptedException, ExecutionException {
-		final ElasticsearchCrudService<TestBean> service = getTestService("test_checkMaxIndexSize", TestBean.class, true, true, Optional.empty(), Optional.of(0L), true);
+		final ElasticsearchCrudService<TestBean> service = getTestService("test_checkMaxIndexSize", TestBean.class, false, true, Optional.empty(), Optional.of(0L), true);
 	
-		// 1) Write a doc and check that it is written to the base index
+		// 1) Write a doc and check that it is written to the base index (delete first to check that case)
 
-		service.deleteDatastore().get();
 		assertEquals(0, service.countObjects().get().intValue());		
 		
 		// 1) Add a new object to an empty DB
@@ -1662,11 +1664,10 @@ public class TestElasticsearchCrudService {
 	
 	@Test
 	public void test_checkAliases_unlimitedIndex() throws InterruptedException, ExecutionException {
-		final ElasticsearchCrudService<TestBean> service = getTestService("test_checkmaxindexsize_unlimitedindex", TestBean.class, true, true, Optional.empty(), Optional.of(-1L), true);
+		final ElasticsearchCrudService<TestBean> service = getTestService("test_checkmaxindexsize_unlimitedindex", TestBean.class, false, true, Optional.empty(), Optional.of(-1L), true);
 		
 		// 1) Write a doc and check that it is written to the base index
 
-		service.deleteDatastore().get();
 		assertEquals(0, service.countObjects().get().intValue());		
 		
 		// 1) Add a new object to an empty DB

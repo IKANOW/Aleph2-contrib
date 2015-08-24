@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -70,6 +71,7 @@ import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIn
 import com.ikanow.aleph2.search_service.elasticsearch.module.ElasticsearchIndexServiceModule;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexUtils;
+import com.ikanow.aleph2.search_service.elasticsearch.utils.SearchIndexErrorUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.CreationPolicy;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory;
@@ -245,13 +247,15 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			final Validation<String, ChronoUnit> time_period = TimeUtils.getTimePeriod(Optional.ofNullable(schema_config.temporal_technology_override())
 																	.map(t -> t.grouping_time_period()).orElse(""));
 
+			final Optional<Long> target_max_index_size_mb = Optionals.of(() -> schema_config.search_technology_override().target_index_size_mb());
+			
 			// Index
 			final String index_base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext index_context = time_period.validation(
-					fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name, Optional.empty())
+					fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name, target_max_index_size_mb)
 					, 
 					success -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext(index_base_name + ElasticsearchContextUtils.getIndexSuffix(success), 
-										Optional.ofNullable(schema_config.temporal_technology_override().time_field()), Optional.empty())
+										Optional.ofNullable(schema_config.temporal_technology_override().time_field()), target_max_index_size_mb)
 					);
 			
 			// Type
@@ -399,36 +403,51 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	@Override
 	public Tuple2<String, List<BasicMessageBean>> validateSchema(final SearchIndexSchemaBean schema, final DataBucketBean bucket) {
 		try {
+			final String index_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+			final LinkedList<BasicMessageBean> errors = new LinkedList<BasicMessageBean>(); // (Warning mutable code)
+			boolean error = false; // (Warning mutable code)
+			final boolean is_verbose = is_verbose(schema);
 			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);
 			
-			final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
-			final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
-										.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
-											? "_default_"
-											: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
+			// 1) Check the schema:
 			
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, Optional.empty(), schema_config, _mapper, index_type);
-			final String index_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
-			if (is_verbose(schema)) {
-				final BasicMessageBean success = new BasicMessageBean(
-						new Date(), true, bucket.full_name(), "validateSchema", null, 
-						mapping.bytes().toUtf8(), null);
-						
-				return Tuples._2T(index_name, Arrays.asList(success));
+			try {				
+				final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
+				final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+											.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
+												? "_default_"
+												: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 				
+				final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, Optional.empty(), schema_config, _mapper, index_type);
+				if (is_verbose) {
+					errors.add(ErrorUtils.buildSuccessMessage(bucket.full_name(), "validateSchema", mapping.bytes().toUtf8()));
+				}
 			}
-			else {
-				return Tuples._2T(index_name, Collections.emptyList());
+			catch (Throwable e) {
+				errors.add(ErrorUtils.buildErrorMessage(bucket.full_name(), "validateSchema", ErrorUtils.getLongForm("{0}", e)));
+				error = true;
 			}
+			
+			// 2) Sanity check the max size
+	
+			final Optional<Long> index_max_size = Optional.ofNullable(schema_config.search_technology_override().target_index_size_mb());
+			if (index_max_size.isPresent()) {
+				final long max = index_max_size.get();
+				if ((max > 0) && (max < 25)) {
+					errors.add(ErrorUtils.buildErrorMessage(bucket.full_name(), "validateSchema", SearchIndexErrorUtils.INVALID_MAX_INDEX_SIZE, max));
+					error = true;
+				}
+				else if (is_verbose) {
+					errors.add(ErrorUtils.buildSuccessMessage(bucket.full_name(), "validateSchema", "Max index size = {0} MB", max));				
+				}
+			}		
+			return Tuples._2T(error ? "" : index_name, errors);
 		}
-		catch (Throwable e) {
-			final BasicMessageBean err = new BasicMessageBean(
-					new Date(), false, bucket.full_name(), "validateSchema", null, 
-					ErrorUtils.getLongForm("{0}", e), null);
-					
-			return Tuples._2T("", Arrays.asList(err));
+		catch (Exception e) { // Very early error has occurred, just report that:
+			return Tuples._2T("", Arrays.asList(ErrorUtils.buildErrorMessage(bucket.full_name(), "validateSchema", ErrorUtils.getLongForm("{0}", e))));
 		}
 	}
+	
 	/** Utility function - returns verboseness of schema being validated
 	 * @param schema
 	 * @return

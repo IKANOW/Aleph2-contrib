@@ -40,6 +40,7 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUti
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchFutureUtils;
 
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 
 import scala.Tuple2;
 import scala.Tuple3;
@@ -272,8 +273,12 @@ public abstract class ElasticsearchContext {
 										,
 										stats -> {
 											final int suffix_index = Lambdas.get(() -> {
-												final IndexStats index_stats = stats.getIndex(getName(base_index, last_suffix));												
-												if ((null != index_stats) && (index_stats.getTotal().getStore().getSizeInBytes() >= (m*MB)))
+												final IndexStats index_stats = stats.getIndex(getName(base_index, last_suffix));
+												
+												final Predicate<IndexStats> shard_too_big = i_stats -> 
+													Arrays.stream(i_stats.getShards()).map(shard -> shard.getStats().getStore()).anyMatch(x -> x.getSizeInBytes() >= (m*MB));
+												
+												if ((null != index_stats) && shard_too_big.test(index_stats))
 												{
 													int max_index = 1;
 													// find a new index to use:									
@@ -281,7 +286,7 @@ public abstract class ElasticsearchContext {
 														final IndexStats candidate_index_stats = stats.getIndex(base_index + BAR + max_index);
 														
 														if (null == candidate_index_stats) break;
-														else if (candidate_index_stats.getTotal().getStore().getSizeInBytes() < (m*MB)) break;
+														else if (!shard_too_big.test(candidate_index_stats)) break; // (found one we can use!)
 													}
 													return max_index;
 												}

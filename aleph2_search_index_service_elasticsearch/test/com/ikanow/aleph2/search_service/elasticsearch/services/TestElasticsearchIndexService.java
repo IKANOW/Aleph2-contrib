@@ -23,6 +23,7 @@ import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
 import java.util.GregorianCalendar;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.Optional;
@@ -174,14 +175,14 @@ public class TestElasticsearchIndexService {
 			
 			assertEquals(0, res_col.size());
 			assertEquals(0, res_time.size());
-			assertEquals(1, res_search.size());
-			final BasicMessageBean res_search_message = res_search.iterator().next();
-			assertEquals(true, res_search_message.success());
+			assertEquals(2, res_search.size());
+			assertEquals(true, res_search.stream().allMatch(BasicMessageBean::success));
+			Iterator<BasicMessageBean> res_search_message = res_search.iterator();
 			
 			final String mapping_str = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_verbose_mapping_validate_results.json"), Charsets.UTF_8);
 			final JsonNode mapping_json = _mapper.readTree(mapping_str.getBytes());
-
-			assertEquals(mapping_json.toString(), _mapper.readTree(res_search_message.message()).toString());
+			assertEquals(mapping_json.toString(), _mapper.readTree(res_search_message.next().message()).toString());
+			assertTrue("Sets the max index override: " + res_search.stream().skip(1).map(m->m.message()).collect(Collectors.joining()), res_search_message.next().message().contains("1,000 MB"));
 		}
 		
 		// 3) Temporal
@@ -231,6 +232,30 @@ public class TestElasticsearchIndexService {
 			final BasicMessageBean res_search_message = res_search.iterator().next();
 			assertEquals(false, res_search_message.success());
 		}
+		
+		// 2) Check setting an invalid max index size
+		{
+			final String bucket_str_2 = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_bucket_validate_success.json"), Charsets.UTF_8);
+			final DataBucketBean bucket2 = BeanTemplateUtils.build(bucket_str_2, DataBucketBean.class).done().get();
+			final DataBucketBean bucket_too_small = BeanTemplateUtils.clone(bucket2)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.clone(bucket2.data_schema())
+								.with(
+									DataSchemaBean::search_index_schema,
+									BeanTemplateUtils.clone(bucket2.data_schema().search_index_schema())
+										.with(DataSchemaBean.SearchIndexSchemaBean::target_index_size_mb, 10L)
+										.done()
+								)
+								.done()
+					)
+					.done();
+			final Collection<BasicMessageBean> res_search = _index_service.validateSchema(bucket.data_schema().search_index_schema(), bucket_too_small)._2();
+			assertEquals(1, res_search.size());
+			assertEquals(false, res_search.stream().allMatch(BasicMessageBean::success));
+			BasicMessageBean res_search_message = res_search.iterator().next();
+			assertTrue("Right message: " + res_search_message.message(), res_search_message.message().contains("10 MB"));			
+		}
+		
 	}
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
