@@ -122,12 +122,12 @@ public class TestElasticsearchContext {
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext index_context_3 = 
 					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test3", Optional.of(0L));
 			
-			assertEquals(Arrays.asList("test3_*"), index_context_3.getReadableIndexList(Optional.empty()));
+			assertEquals(Arrays.asList("test3*"), index_context_3.getReadableIndexList(Optional.empty()));
 			
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext index_context_4 = 
 					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test4", Optional.of(10L));
 			
-			assertEquals(Arrays.asList("test4_*"), index_context_4.getReadableIndexList(Optional.empty()));
+			assertEquals(Arrays.asList("test4*"), index_context_4.getReadableIndexList(Optional.empty()));
 		}
 		
 	}
