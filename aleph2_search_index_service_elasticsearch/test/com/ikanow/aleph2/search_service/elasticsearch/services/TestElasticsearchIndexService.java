@@ -289,7 +289,7 @@ public class TestElasticsearchIndexService {
 			final GetIndexTemplatesResponse gtr = _crud_factory.getClient().admin().indices().getTemplates(gt).actionGet();
 			assertTrue("No templates to start with", gtr.getIndexTemplates().isEmpty());
 			
-			_index_service.handlePotentiallyNewIndex(bucket, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
+			_index_service.handlePotentiallyNewIndex(bucket, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
 			
 			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
@@ -302,7 +302,7 @@ public class TestElasticsearchIndexService {
 		// Check is ignored subsequently (same date, same content; same date, different content)
 		{
 			
-			_index_service.handlePotentiallyNewIndex(bucket, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
+			_index_service.handlePotentiallyNewIndex(bucket, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
 			
 			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
@@ -316,8 +316,8 @@ public class TestElasticsearchIndexService {
 			final Date next_time = time_setter.getTime();
 			final DataBucketBean bucket2 = BeanTemplateUtils.clone(bucket).with("modified", next_time).done();
 			
-			_index_service.handlePotentiallyNewIndex(bucket2, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
-			
+			_index_service.handlePotentiallyNewIndex(bucket2, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
+
 			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
 			assertEquals(1, _index_service._bucket_template_cache.size());
@@ -331,7 +331,7 @@ public class TestElasticsearchIndexService {
 			final String bucket_str2 = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_bucket2_validate_success.json"), Charsets.UTF_8);
 			final DataBucketBean bucket2 = BeanTemplateUtils.build(bucket_str2, DataBucketBean.class).with("modified", time_setter.getTime()).done().get();
 			
-			_index_service.handlePotentiallyNewIndex(bucket2, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
+			_index_service.handlePotentiallyNewIndex(bucket2, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
 			
 			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
@@ -354,7 +354,7 @@ public class TestElasticsearchIndexService {
 			assertTrue("No templates to start with", gtr.getIndexTemplates().isEmpty());
 			
 			{
-				_index_service.handlePotentiallyNewIndex(bucket, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
+				_index_service.handlePotentiallyNewIndex(bucket, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config_bean, _mapper), "_default_");
 				
 				final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 				final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
@@ -368,7 +368,7 @@ public class TestElasticsearchIndexService {
 				final Date next_time = time_setter.getTime();
 				final DataBucketBean bucket2 = BeanTemplateUtils.clone(bucket).with("modified", next_time).done();				
 				
-				_index_service.handlePotentiallyNewIndex(bucket2, ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
+				_index_service.handlePotentiallyNewIndex(bucket2, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket2, _config_bean, _mapper), "_default_");
 				
 				final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 				final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();

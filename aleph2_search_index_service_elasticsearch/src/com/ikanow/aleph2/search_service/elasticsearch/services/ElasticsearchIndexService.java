@@ -107,13 +107,13 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	/** Checks if an index/set-of-indexes spawned from a bucket
 	 * @param bucket
 	 */
-	protected void handlePotentiallyNewIndex(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean schema_config, final String index_type) {
+	protected void handlePotentiallyNewIndex(final DataBucketBean bucket, final Optional<String> secondary_buffer, final ElasticsearchIndexServiceConfigBean schema_config, final String index_type) {
 		final Date current_template_time = _bucket_template_cache.get(bucket._id());		
 		if ((null == current_template_time) || current_template_time.before(Optional.ofNullable(bucket.modified()).orElse(new Date()))) {			
 			try {
-				final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, schema_config, _mapper, index_type);
+				final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, secondary_buffer, schema_config, _mapper, index_type);
 				
-				final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(ElasticsearchIndexUtils.getBaseIndexName(bucket));
+				final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(ElasticsearchIndexUtils.getBaseIndexName(bucket, secondary_buffer));
 				final GetIndexTemplatesResponse gtr = _crud_factory.getClient().admin().indices().getTemplates(gt).actionGet();
 				
 				if (gtr.getIndexTemplates().isEmpty() 
@@ -237,7 +237,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 											? "_default_"
 											: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
-			handlePotentiallyNewIndex(bucket, schema_config, index_type);
+			handlePotentiallyNewIndex(bucket, secondary_buffer, schema_config, index_type);
 			
 			// Need to decide a) if it's a time based index b) an auto type index
 			// And then build the context from there
@@ -407,7 +407,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 											? "_default_"
 											: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, schema_config, _mapper, index_type);
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, Optional.empty(), schema_config, _mapper, index_type);
 			final String index_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
 			if (is_verbose(schema)) {
 				final BasicMessageBean success = new BasicMessageBean(

@@ -71,15 +71,15 @@ public class TestElasticsearchIndexUtils {
 		{
 			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1").done().get());
 			
-			assertEquals("test_1-1__514e7056b0d8", base_index);
+			assertEquals("test_1_1__514e7056b0d8", base_index);
 			
 			final String base_index2 = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1/another__test").done().get());
 			
-			assertEquals("test_1-1_another_test__f73d191c0424", base_index2);
+			assertEquals("test_1_1_another__f73d191c0424", base_index2);
 			
 			final String base_index3 = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1/another__test/VERY/long/string").done().get());
 			
-			assertEquals("test_1-1_long_string__2711e659d5a6", base_index3);
+			assertEquals("test_1_1_long_string__2711e659d5a6", base_index3);
 		}
 		
 		// More complex index case: override set:
@@ -96,7 +96,7 @@ public class TestElasticsearchIndexUtils {
 							.done().get())
 					.done().get();
 
-			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(test_index_override);
+			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(test_index_override, Optional.empty());
 			
 			assertEquals("test_index_override", base_index);
 		}
@@ -692,7 +692,7 @@ public class TestElasticsearchIndexUtils {
 
 		final String expected = "{\"template\":\"test_template_mapping__3f584adbcb13*\"}";
 		
-		assertEquals(expected, ElasticsearchIndexUtils.getTemplateMapping(b).bytes().toUtf8());
+		assertEquals(expected, ElasticsearchIndexUtils.getTemplateMapping(b, Optional.empty()).bytes().toUtf8());
 	}
 	
 	@Test
@@ -745,7 +745,7 @@ public class TestElasticsearchIndexUtils {
 			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty());
 			
 			final XContentBuilder test_result = ElasticsearchIndexUtils.getFullMapping(
-					test_bucket, schema_config, field_lookups, 
+					test_bucket, Optional.empty(), schema_config, field_lookups, 
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
@@ -757,7 +757,7 @@ public class TestElasticsearchIndexUtils {
 		
 		// Final method
 		{ 
-			final XContentBuilder test_result = ElasticsearchIndexUtils.createIndexMapping(test_bucket, schema_config, _mapper, "_default_");			
+			final XContentBuilder test_result = ElasticsearchIndexUtils.createIndexMapping(test_bucket, Optional.empty(), schema_config, _mapper, "_default_");			
 			assertEquals(expected_json.toString(), test_result.bytes().toUtf8());
 		}
 	}
@@ -790,7 +790,7 @@ public class TestElasticsearchIndexUtils {
 						? "_default_"
 						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(search_index_test, schema_config, _mapper, index_type);
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(search_index_test, Optional.empty(), schema_config, _mapper, index_type);
 	
 			assertEquals("Get expected search_index_test schema", expected, mapping.bytes().toUtf8());
 		}
@@ -814,7 +814,7 @@ public class TestElasticsearchIndexUtils {
 						? "_default_"
 						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_test, schema_config, _mapper, index_type);
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_test, Optional.empty(), schema_config, _mapper, index_type);
 	
 			assertEquals("Get expected search_index_test schema", expected, mapping.bytes().toUtf8());
 		}
@@ -845,7 +845,7 @@ public class TestElasticsearchIndexUtils {
 						? "_default_"
 						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_test, schema_config, _mapper, index_type);
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_test, Optional.empty(), schema_config, _mapper, index_type);
 	
 			assertEquals("Get expected search_index_test schema", expected2, mapping.bytes().toUtf8());
 		}
@@ -869,7 +869,7 @@ public class TestElasticsearchIndexUtils {
 						? "_default_"
 						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(columnar_test, schema_config, _mapper, index_type);
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(columnar_test, Optional.empty(), schema_config, _mapper, index_type);
 	
 			assertEquals("Get expected search_index_test schema", expected, mapping.bytes().toUtf8());
 		}
@@ -896,7 +896,7 @@ public class TestElasticsearchIndexUtils {
 						? "_default_"
 						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_columnar_test, schema_config, _mapper, index_type);
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_columnar_test, Optional.empty(), schema_config, _mapper, index_type);
 	
 			assertEquals("Get expected search_index_test schema", expected, mapping.bytes().toUtf8());
 		}
