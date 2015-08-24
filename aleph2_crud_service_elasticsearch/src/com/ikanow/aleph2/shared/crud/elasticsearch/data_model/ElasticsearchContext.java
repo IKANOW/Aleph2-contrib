@@ -224,15 +224,9 @@ public abstract class ElasticsearchContext {
 						// check => just recreate with "*"?
 					}					
 					final long now = new Date().getTime();
-					/**/
-					System.out.println("?????????????? " + last_suffix + " vs " + now);
-										
 					return _target_max_index_size_mb
 							.filter(__ -> { // only check first time or every 10s
 								if ((null == last_checked) || ((now - last_checked) >= INDEX_SIZE_CHECK_MS)) {
-									/**/
-									System.out.println("?HERE... " + _mutable_state._is_working.get());
-									
 									_mutable_state._base_index_states.put(base_index, Tuples._3T(now, last_suffix._2(), last_suffix._3()));
 									return true;
 								}
@@ -250,32 +244,26 @@ public abstract class ElasticsearchContext {
 										,
 										stats -> {
 											final int suffix_index = Lambdas.get(() -> {
-												/**/
-												System.out.println("???! " + getName(base_index, last_suffix));
-												
 												final IndexStats index_stats = stats.getIndex(getName(base_index, last_suffix));												
-												if ((null != index_stats) && (index_stats.getTotal().getStore().getSizeInBytes()*MB > m))
+												if ((null != index_stats) && (index_stats.getTotal().getStore().getSizeInBytes() >= (m*MB)))
 												{
 													int max_index = 1;
 													// find a new index to use:									
 													for (; ; max_index++) {
 														final IndexStats candidate_index_stats = stats.getIndex(base_index + BAR + max_index);
 														
-														/**/
-														System.out.println("***?! " + max_index + ": " + ((null != candidate_index_stats)
-																? ("" + candidate_index_stats.getTotal().getStore().getSizeInBytes())
-																: "null"));
-														
 														if (null == candidate_index_stats) break;
-														else if (candidate_index_stats.getTotal().getStore().getSizeInBytes()*MB > m) break;
+														else if (candidate_index_stats.getTotal().getStore().getSizeInBytes() < (m*MB)) break;
 													}
 													return max_index;
 												}
 												else {
 													return last_suffix._3();
 												}
-											});
-											return _mutable_state._base_index_states.put(base_index, Tuples._3T(now, BAR + suffix_index, suffix_index));
+											});											
+											final Tuple3<Long, String, Integer> new_suffix = Tuples._3T(now, BAR + suffix_index, suffix_index);
+											_mutable_state._base_index_states.put(base_index, new_suffix);
+											return new_suffix;
 										})
 										// Just stick a future at the end of the chain to ensure the mutable state is always fixed
 										.thenApply(x -> {
@@ -283,9 +271,6 @@ public abstract class ElasticsearchContext {
 											return x;
 										})
 										.exceptionally(t -> {
-											/**/
-											t.printStackTrace();
-											
 											_mutable_state._is_working.set(false);
 											return last_suffix;
 										});
@@ -293,7 +278,8 @@ public abstract class ElasticsearchContext {
 								
 								if (null == last_checked) { // first time through, wait for the code to complete
 									try {
-										return getName(base_index, future.join());
+										final Tuple3<Long, String, Integer> new_suffix = future.join();
+										return getName(base_index, new_suffix);
 									}
 									catch (Exception e) { // pass through to default on error
 										return null;
