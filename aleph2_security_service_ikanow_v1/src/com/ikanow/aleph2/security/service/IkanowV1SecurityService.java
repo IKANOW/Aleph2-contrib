@@ -159,7 +159,5 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 		boolean ret = ((Subject)getSubject().getSubject()).isPermitted(permission);
 		return ret;
 	}
-	
-	
-	
+			
 }
