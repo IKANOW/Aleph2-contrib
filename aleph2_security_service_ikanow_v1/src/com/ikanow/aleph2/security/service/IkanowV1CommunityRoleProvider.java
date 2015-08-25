@@ -1,0 +1,80 @@
+package com.ikanow.aleph2.security.service;
+
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import scala.Tuple2;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.google.inject.Inject;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.aleph2.data_model.utils.CrudUtils;
+
+public class IkanowV1CommunityRoleProvider implements IRoleProvider {
+	private ICrudService<JsonNode> personDb = null;
+	protected final IServiceContext _context;
+	protected IManagementDbService _core_management_db = null;
+	protected IManagementDbService _underlying_management_db = null;
+	private static final Logger logger = LogManager.getLogger(IkanowV1CommunityRoleProvider.class);
+
+	@SuppressWarnings("unchecked")
+	protected void initDb(){
+		if(_core_management_db == null){
+			_core_management_db = _context.getCoreManagementDbService();
+		}
+		if(_underlying_management_db == null) {
+		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
+		}
+		String personOptions = "social.person";
+		personDb = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of(personOptions)).get();
+		logger.debug("PersonDB:"+personDb);
+	}
+
+	@Inject
+	public IkanowV1CommunityRoleProvider(final IServiceContext service_context){
+		_context = service_context;
+
+	}
+	
+	protected ICrudService<JsonNode> getPersonStore(){
+		if(personDb == null){
+			initDb();
+		}
+	      return personDb;		
+	}
+
+	@Override
+	public Tuple2<Set<String>, Set<String>> getRolesAndPermissions(String principalName) {
+		
+        Set<String> roleNames = new HashSet<String>();
+        Set<String> permissions = new HashSet<String>();
+		Optional<JsonNode> result;
+		try {
+			
+			result = getPersonStore().getObjectBySpec(CrudUtils.anyOf().when("email", principalName)).get();
+	        if(result.isPresent()){
+	        	JsonNode communities = result.get().get("communities");
+	        	if (communities.isArray()) {
+					if(communities.size()>0){
+						roleNames.add(principalName+"_communities");						
+					}
+	        	    for (final JsonNode community : communities) {
+	        	    	String communityId = community.get("_id").asText();
+	        	    	permissions.add(communityId);
+	        	    }
+	        	}
+	        }
+		} catch (Exception e) {
+			logger.error("Caught Exception",e);
+		}
+		return Tuple2.apply(roleNames, permissions);
+	}
+
+	
+}

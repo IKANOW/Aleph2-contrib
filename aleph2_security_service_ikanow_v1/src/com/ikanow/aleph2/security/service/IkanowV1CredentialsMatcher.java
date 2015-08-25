@@ -3,7 +3,6 @@ package com.ikanow.aleph2.security.service;
 
 
 import java.io.UnsupportedEncodingException;
-import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
@@ -11,14 +10,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.shiro.authc.AuthenticationInfo;
 import org.apache.shiro.authc.AuthenticationToken;
-import org.apache.shiro.authc.SaltedAuthenticationInfo;
 import org.apache.shiro.authc.UsernamePasswordToken;
 import org.apache.shiro.authc.credential.SimpleCredentialsMatcher;
 import org.apache.shiro.codec.Base64;
-import org.apache.shiro.codec.Hex;
-import org.apache.shiro.crypto.hash.Hash;
-import org.apache.shiro.crypto.hash.SimpleHash;
-import org.apache.shiro.util.StringUtils;
 
 public class IkanowV1CredentialsMatcher extends SimpleCredentialsMatcher {
 	private static final Logger logger = LogManager.getLogger(IkanowV1CredentialsMatcher.class);
@@ -39,17 +33,26 @@ public class IkanowV1CredentialsMatcher extends SimpleCredentialsMatcher {
      * @since 1.1
      */
     @Override
-    public boolean doCredentialsMatch(AuthenticationToken token, AuthenticationInfo info) { 
+    public boolean doCredentialsMatch(AuthenticationToken token, AuthenticationInfo info) {
         String plainPassword = new String(((UsernamePasswordToken)token).getPassword());
-        String accountCredentials = (String)getCredentials(info);
-        try {
-			return checkPassword(plainPassword, accountCredentials);
-		} catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+    	String accountCredentials = (String)getCredentials(info);
+    	 try {
+    	    
+        	AuthenticationBean ab = ((IkanowV1AuthenticationInfo)info).getAuthenticationBean();        	 
+        	if(checkStatus(ab)){
+        		return checkPassword(plainPassword, accountCredentials);
+        	}
+		} catch (Exception e) {
+			logger.error("Caught error encoding:"+e.getMessage(),e);
+		
+    	}
         return false;
     }
+	
+    protected static boolean checkStatus(AuthenticationBean ab) {
+		// TODO taken from V1 logic, why does null count as active?
+		return ( (ab.getAccountStatus() == null) || ( AuthenticationBean.ACCOUNT_STATUS_ACTIVE.equals(ab.getAccountStatus()) ) );
+	}
 	/**
 	 *  Encrypt the password
 	 * @throws NoSuchAlgorithmException 
@@ -61,12 +64,13 @@ public class IkanowV1CredentialsMatcher extends SimpleCredentialsMatcher {
 		md.update(password.getBytes("UTF-8"));		
 		return Base64.encodeToString(md.digest());		
 	}
+
 	/**
 	 *  Check the password
 	 * @throws UnsupportedEncodingException 
 	 * @throws NoSuchAlgorithmException 
 	 */
-	public static boolean checkPassword(String plainPassword, String encryptedPassword) throws NoSuchAlgorithmException, UnsupportedEncodingException {
+	protected static boolean checkPassword(String plainPassword, String encryptedPassword) throws NoSuchAlgorithmException, UnsupportedEncodingException {
 		return encryptedPassword.equals(encrypt(plainPassword));
 		//return encryptor.checkpw(plainPassword, encryptedPassword);
 	}	

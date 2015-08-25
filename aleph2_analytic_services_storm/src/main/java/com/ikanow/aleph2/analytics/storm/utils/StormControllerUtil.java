@@ -27,15 +27,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.yaml.snakeyaml.Yaml;
 
+import backtype.storm.generated.AlreadyAliveException;
 import backtype.storm.generated.StormTopology;
 import backtype.storm.generated.TopologyInfo;
 
@@ -45,6 +44,7 @@ import com.ikanow.aleph2.analytics.storm.services.LocalStormController;
 import com.ikanow.aleph2.analytics.storm.services.RemoteStormController;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 
 /**
  * Factory for returning a local or remote storm controller.
@@ -58,6 +58,7 @@ public class StormControllerUtil {
 	private static final Logger logger = LogManager.getLogger();
 	private final static Set<String> dirs_to_ignore = Sets.newHashSet("org/slf4j", "org/apache/log4j");
 	protected final static ConcurrentHashMap<String, Date> storm_topology_jars_cache = new ConcurrentHashMap<>();
+	protected final static long MAX_RETRIES = 60; //60 retries at 1s == 1m max retry time
 	
 	/**
 	 * Returns an instance of a local storm controller.
@@ -201,7 +202,7 @@ public class StormControllerUtil {
 														final Map<String, String> config, 
 														final String cached_jar_dir)
 	{
-		final CompletableFuture<BasicMessageBean> start_future = new CompletableFuture<BasicMessageBean>();
+		//final CompletableFuture<BasicMessageBean> start_future = new CompletableFuture<BasicMessageBean>();
 
 		//Get topology from user
 		//TODO (ALEPH-12): find somewhere to put this code:
@@ -239,22 +240,75 @@ public class StormControllerUtil {
 		
 		//create jar
 		final CompletableFuture<String> jar_future = buildOrReturnCachedStormTopologyJar(jars_to_merge, cached_jar_dir);
-		try {
-			final String jar_file_location = jar_future.get();
-			//submit to storm		
-			final CompletableFuture<BasicMessageBean> submit_future = storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
-			if ( submit_future.get().success() ) {
-				ErrorUtils.buildSuccessMessage(StormControllerUtil.class, "startJob", "Started storm job succesfully");
-			} else {
-				start_future.complete(submit_future.get());				
-			}						
-		} catch ( Exception ex ) {
-			start_future.complete(
-					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "startJob", ErrorUtils.getLongForm("Error starting storm job: {0}", ex))
-			 );
-		}
 		
-		return start_future;
+		
+		//submit to storm
+		final CompletableFuture<BasicMessageBean> submit_future = Lambdas.get(() -> {
+			long retries = 0;			
+			while ( retries < MAX_RETRIES ) {				
+				try {
+					logger.debug("Trying to submit job, try: " + retries + " of " + MAX_RETRIES);
+					final String jar_file_location = jar_future.get();
+					return storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
+					//return storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
+				} catch ( Exception ex) {
+					if ( ex instanceof AlreadyAliveException ) {
+						retries++;
+						//sleep 1s, was seeing about 2s of sleep required before job successfully submitted on restart
+						try {
+							Thread.sleep(1000);
+						} catch (Exception e) {
+							final CompletableFuture<BasicMessageBean> error_future = new CompletableFuture<BasicMessageBean>();
+							error_future.completeExceptionally(e);
+							return error_future;
+						} 
+					} else {
+						retries = MAX_RETRIES; //we threw some other exception, bail out
+						final CompletableFuture<BasicMessageBean> error_future = new CompletableFuture<BasicMessageBean>();
+						error_future.completeExceptionally(ex);
+						return error_future;
+					}
+				}
+			}
+			//we maxed out our retries, throw failure
+			final CompletableFuture<BasicMessageBean> error_future = new CompletableFuture<BasicMessageBean>();
+			error_future.completeExceptionally(new Exception("Error submitting job, ran out of retries (previous (same name) job is probably still alive)"));
+			return error_future;
+		});
+		return submit_future;
+		
+//		try {
+//			long retries = 0;
+//			final String jar_file_location = jar_future.get();
+//			//submit to storm
+//			CompletableFuture<BasicMessageBean> submit_future = null;
+//			while ( retries < MAX_RETRIES ) {				
+//				try {
+//					logger.debug("Trying to submit job, try: " + retries + " of " + MAX_RETRIES);
+//					submit_future = storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
+//					retries = MAX_RETRIES; //if we got here, we didn't throw an exception, so we completed successfully
+//				} catch ( Exception ex) {
+//					if ( ex instanceof AlreadyAliveException ) {
+//						retries++;
+//						Thread.sleep(1000); //sleep 1s, was seeing about 2s of sleep required before job successfully submitted on restart
+//					} else {
+//						retries = MAX_RETRIES; //we threw some other exception, bail out
+//						submit_future.completeExceptionally(ex);
+//					}
+//				}
+//			}			
+//			if ( submit_future.get().success() ) {
+//				ErrorUtils.buildSuccessMessage(StormControllerUtil.class, "startJob", "Started storm job succesfully");
+//			} else {
+//				start_future.complete(submit_future.get());				
+//			}						
+//		} catch ( Exception ex ) {
+//			start_future.complete(
+//					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "startJob", ErrorUtils.getLongForm("Error starting storm job: {0}", ex))
+//			 );
+//		}
+//		
+//		return start_future;
 	}
 	
 	/**
@@ -358,13 +412,45 @@ public class StormControllerUtil {
 		CompletableFuture<BasicMessageBean> stop_future = stopJob(storm_controller, bucket);
 		try {
 			stop_future.get(5, TimeUnit.SECONDS);
-		} catch (InterruptedException | ExecutionException | TimeoutException e) {
+			waitForJobToDie(storm_controller, bucket, 15L);
+		} catch (Exception e) {
 			CompletableFuture<BasicMessageBean> error_future = new CompletableFuture<BasicMessageBean>();
 			error_future.complete(
 					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "restartJob", ErrorUtils.getLongForm("Error stopping storm job: {0}", e))
 					);
+			return error_future;
 		}
 		return startJob(storm_controller, bucket, underlying_artefacts, user_lib_paths, topology, config, cached_jar_dir);
+	}
+	
+	/**
+	 * Continually checks if job has died, returns true if it has, or throws an exception if
+	 * timeout occurs (seconds_to_wait elaspses).
+	 * 
+	 * @param storm_controller
+	 * @param bucket
+	 * @param l
+	 * @return
+	 * @throws Exception 
+	 */
+	private static void waitForJobToDie(
+			IStormController storm_controller, DataBucketBean bucket, long seconds_to_wait) throws Exception {
+		long start_time = System.currentTimeMillis();
+		long num_tries = 0;
+		long expire_time = System.currentTimeMillis() + (seconds_to_wait*1000);
+		while ( System.currentTimeMillis() < expire_time ) {
+			TopologyInfo info = null;
+			try {
+				info = getJobStats(storm_controller, bucketPathToTopologyName(bucket.full_name()));
+			} catch (Exception ex) {}
+			if ( null == info ) {				
+				logger.debug("JOB_STATUS: no longer exists, assuming that job is dead and gone, spent: " + (System.currentTimeMillis()-start_time) + "ms waiting");				
+				return;
+			}
+			num_tries++;
+			logger.debug("Waiting for job status to go away, try number: " + num_tries);
+			Thread.sleep(2000); //wait 2s between checks, in tests it was taking 8s to clear
+		}		
 	}
 	
 	/**
