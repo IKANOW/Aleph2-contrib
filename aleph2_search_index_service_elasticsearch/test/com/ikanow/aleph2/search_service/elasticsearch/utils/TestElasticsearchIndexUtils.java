@@ -18,10 +18,13 @@ package com.ikanow.aleph2.search_service.elasticsearch.utils;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -261,6 +264,14 @@ public class TestElasticsearchIndexUtils {
 					Tuples._2T("*", "number")
 				), 
 				templates_test2.keySet().stream().map(e -> e.right().value()).collect(Collectors.toList()));
+		
+		// Some more properties test
+		
+		final List<String> nested_properties = ElasticsearchIndexUtils.getAllFixedFields_internal(properties_json).collect(Collectors.toList());
+		assertEquals(Arrays.asList("@version", "@timestamp", "sourceKey", "geoip", "geoip.location"), nested_properties);
+
+		final Set<String> nested_properties_2 = ElasticsearchIndexUtils.getAllFixedFields(both_json);
+		assertEquals(Arrays.asList("sourceKey", "@timestamp", "geoip", "geoip.location", "@version"), new ArrayList<String>(nested_properties_2));		
 		
 		// Putting it all together...
 		

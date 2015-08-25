@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.function.Function;
@@ -137,6 +138,46 @@ public class ElasticsearchIndexUtils {
 					.orElse(new LinkedHashMap<>());
 		
 		return ret;
+	}
+	
+	/**  Recursive function that will return all fields in an insert (eg "geoip", "geoip.location")
+	 * @param index
+	 * @return
+	 */
+	protected static Stream<String> getAllFixedFields_internal(final JsonNode index) {
+		return Optional.ofNullable(index.get("properties"))
+				.filter(p -> !p.isNull())
+				.map(p -> {
+					if (!p.isObject()) throw new RuntimeException("properties must be object");
+					return p;
+				})
+				.map(p -> {
+					return StreamSupport.stream(Spliterators.spliteratorUnknownSize(p.fields(), Spliterator.ORDERED), false)
+						.map(kv -> {
+							return kv;
+						})
+						.<String>flatMap(kv -> {
+							final Stream<String> parent_element = Stream.of(kv.getKey());
+							return Stream.concat(parent_element, getAllFixedFields_internal(kv.getValue()).map(s -> kv.getKey() + "." + s));
+						});
+				})
+				.orElse(Stream.<String>empty())
+				;
+	}
+	
+	/** Top level function to return the fixed fields that we need to exclude from auto type generation
+	 * @param mapping - the top level mapping
+	 * @return
+	 */
+	public static Set<String> getAllFixedFields(final JsonNode mapping) {
+		return Optional.ofNullable(mapping.get("mappings"))
+					.filter(p -> !p.isNull())
+					.filter(p -> p.isObject())
+					.flatMap(p -> Optional.ofNullable(p.get("_default_")))
+					.filter(p -> !p.isNull())
+					.filter(p -> p.isObject())
+					.map(p -> getAllFixedFields_internal(p).collect(Collectors.toSet()))
+				.orElse(Collections.emptySet());		
 	}
 	
 	/** Get a set of field mappings from the "properties" section of a mapping

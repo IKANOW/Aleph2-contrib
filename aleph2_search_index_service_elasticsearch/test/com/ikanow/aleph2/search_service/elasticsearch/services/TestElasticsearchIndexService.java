@@ -491,6 +491,12 @@ public class TestElasticsearchIndexService {
 			assertTrue("Read write index", es_context instanceof ElasticsearchContext.ReadWriteContext);
 			assertTrue("Temporal index", es_context.indexContext() instanceof ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext);
 			assertTrue("Auto type", es_context.typeContext() instanceof ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext);
+			
+			// Check the the context contains the invalid 
+			
+			final ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext context = (ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext) es_context.typeContext();
+			
+			assertEquals(Arrays.asList("@timestamp"), context.fixed_type_fields().stream().collect(Collectors.toList()));
 		}
 		
 		// Write some docs out

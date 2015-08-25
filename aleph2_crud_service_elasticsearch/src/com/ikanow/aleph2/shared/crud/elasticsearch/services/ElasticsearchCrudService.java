@@ -180,14 +180,19 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	
 	private static final String PARSE_ERROR_FRAGMENT = "failed to parse [";
 	private static final int PARSE_ERROR_FRAGMENT_LEN = PARSE_ERROR_FRAGMENT.length();
+	private static final String PARSE_ERROR_FRAGMENT_2 = "tried to parse field [";
+	private static final int PARSE_ERROR_FRAGMENT_LEN_2 = PARSE_ERROR_FRAGMENT_2.length();
 	
 	/** Utility function to extra the field from a parsing exception
 	 * @param error_message
 	 * @return
 	 */
 	private String getFieldFromParsingException(final String error_message) {
-		final int index1 = error_message.lastIndexOf(PARSE_ERROR_FRAGMENT) + PARSE_ERROR_FRAGMENT_LEN;
-		if (index1 < PARSE_ERROR_FRAGMENT_LEN) return null; // (=> lastIndexOf returned -1)
+		int index1 = error_message.lastIndexOf(PARSE_ERROR_FRAGMENT) + PARSE_ERROR_FRAGMENT_LEN; // (Get 2 chances at this)		
+		if (index1 < PARSE_ERROR_FRAGMENT_LEN) { // (=> lastIndexOf returned -1)
+			index1 = error_message.lastIndexOf(PARSE_ERROR_FRAGMENT_2) + PARSE_ERROR_FRAGMENT_LEN_2; 
+			if (index1 < PARSE_ERROR_FRAGMENT_LEN_2) return null; // (=> lastIndexOf returned -1)
+		}
 		final int index2 = index1 + error_message.substring(index1).indexOf(']');
 		if (index2 < index1) return null; // (=> lastIndexOf returned -1)
 		if (index2 - index1 < 1) return null; //(must not be empty)
@@ -908,6 +913,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 											final BulkItemResponse bir = it.next();
 											if (bir.isFailed()) {								
 												final String error_message = bir.getFailure().getMessage();
+												
 												if (error_message.startsWith("MapperParsingException")
 														||
 													error_message.startsWith("WriteFailureException; nested: MapperParsingException"))
