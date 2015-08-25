@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -506,6 +507,7 @@ public abstract class ElasticsearchContext {
 				
 				/** Construct an auto read-only type context
 				 * @param known_types - to restrict the set of indexes passed to a query it is necessary to get the current set of types (via the mapping), otherwise leave blank and don't apply to the query
+				 * @param fixed_type fields - 
 				 */
 				public AutoRoTypeContext(final Optional<List<String>> known_types) {
 					_known_types = known_types.orElse(Collections.emptyList()); 
@@ -526,6 +528,13 @@ public abstract class ElasticsearchContext {
 			 * @return
 			 */
 			public abstract String getWriteType();
+			
+			/** Returns a set of fields that can incur "auto type generation" (because their type is fixed). Parsing errors on these types will always result in the record being dropped  
+			 * @return a set of fields that can incur "auto type generation" (because their type is fixed). Parsing errors on these types will always result in the record being dropped
+			 */
+			public Set<String> fixed_type_fields() {
+				return Collections.emptySet();
+			}
 			
 			/** Simple case - a single type into which to write 
 			 * @author Alex
@@ -554,12 +563,23 @@ public abstract class ElasticsearchContext {
 				/** Construct an auto read-write type context
 				 * @param known_types - to restrict the set of indexes passed to a query it is necessary to get the current set of types (via the mapping), otherwise leave blank and don't apply to the query
 				 */
-				public AutoRwTypeContext(final Optional<List<String>> known_types, final Optional<String> prefix) {
+				public AutoRwTypeContext(final Optional<List<String>> known_types, final Optional<String> prefix, final Set<String> fixed_type_fields) {
 					_known_types = known_types.orElse(Collections.emptyList()); 
 					_prefix = prefix.orElse(DEFAULT_PREFIX);
+					_fixed_type_fields = Collections.unmodifiableSet(fixed_type_fields);
 				}
 				private List<String> _known_types;
 				private String _prefix;
+				private Set<String> _fixed_type_fields;
+
+				/* (non-Javadoc)
+				 * @see com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext.TypeContext.ReadWriteTypeContext#fixed_type_fields()
+				 */
+				@Override
+				public Set<String> fixed_type_fields() {
+					return _fixed_type_fields;
+				}				
+				
 				@Override
 				public List<String> getReadableTypeList() {
 					return Collections.unmodifiableList(_known_types);

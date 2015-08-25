@@ -24,6 +24,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -177,6 +178,22 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				.get();		
 	}
 	
+	private static final String PARSE_ERROR_FRAGMENT = "failed to parse [";
+	private static final int PARSE_ERROR_FRAGMENT_LEN = PARSE_ERROR_FRAGMENT.length();
+	
+	/** Utility function to extra the field from a parsing exception
+	 * @param error_message
+	 * @return
+	 */
+	private String getFieldFromParsingException(final String error_message) {
+		final int index1 = error_message.lastIndexOf(PARSE_ERROR_FRAGMENT) + PARSE_ERROR_FRAGMENT_LEN;
+		if (index1 < PARSE_ERROR_FRAGMENT_LEN) return null; // (=> lastIndexOf returned -1)
+		final int index2 = index1 + error_message.substring(index1).indexOf(']');
+		if (index2 < index1) return null; // (=> lastIndexOf returned -1)
+		if (index2 - index1 < 1) return null; //(must not be empty)
+		return error_message.substring(index1, index2);
+	}
+	
 	/////////////////////////////////////////////////////
 	
 	/* (non-Javadoc)
@@ -225,6 +242,15 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				public void accept(final Throwable error, final CompletableFuture<Supplier<Object>> future) {
 					Patterns.match(error).andAct()						
 						.when(org.elasticsearch.index.mapper.MapperParsingException.class, mpe -> {
+							final Set<String> fixed_type_fields = rw_context.typeContext().fixed_type_fields();
+							if (!fixed_type_fields.isEmpty()) {
+								// Obtain the field name from the exception (if we fail then drop the record) 
+								final String field = getFieldFromParsingException(mpe.getMessage());
+								if ((null == field) || fixed_type_fields.contains(field)) {
+									future.completeExceptionally(error);
+									return;
+								}
+							}//(else roll on to...)							
 							Patterns.match(rw_context.typeContext())
 								.andAct()
 								.when(ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext.class, auto_context -> {
@@ -303,6 +329,15 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 							final BulkItemResponse bir = it.next();
 							if (bir.isFailed()) {								
 								if (bir.getFailure().getMessage().startsWith("MapperParsingException")) {
+									final Set<String> fixed_type_fields = rw_context.typeContext().fixed_type_fields();
+									if (!fixed_type_fields.isEmpty()) {
+										// Obtain the field name from the exception (if we fail then drop the record) 
+										final String field = getFieldFromParsingException(bir.getFailure().getMessage());
+										if ((null == field) || fixed_type_fields.contains(field)) {
+											continue;
+										}
+									}//(else roll on to...)																
+									
 									// OK this is the case where I might be able to apply auto types:
 									if (null == brb2) { 
 										brb2 = _state.client.prepareBulk()
@@ -877,6 +912,15 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 														||
 													error_message.startsWith("WriteFailureException; nested: MapperParsingException"))
 												{
+													final Set<String> fixed_type_fields = auto_context.fixed_type_fields();
+													if (!fixed_type_fields.isEmpty()) {
+														// Obtain the field name from the exception (if we fail then drop the record) 
+														final String field = getFieldFromParsingException(error_message);
+														if ((null == field) || fixed_type_fields.contains(field)) {
+															continue;
+														}
+													}//(else roll on to...)																												
+													
 													String failed_json = null;
 													final ActionRequest<?> ar = in.requests().get(bir.getItemId());
 													if (ar instanceof IndexRequest) {											

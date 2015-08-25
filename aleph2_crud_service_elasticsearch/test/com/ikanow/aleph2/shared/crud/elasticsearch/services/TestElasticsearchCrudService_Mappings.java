@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -36,6 +37,7 @@ import org.junit.Test;
 
 import scala.Tuple2;
 
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.IBatchSubservice;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils.BeanTemplate;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
@@ -149,7 +151,7 @@ public class TestElasticsearchCrudService_Mappings {
 			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_2", TestBean.class,				
 					new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
 							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_2".toLowerCase(), Optional.empty()),
-							new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), Optional.empty())));
+							new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), Optional.empty(), new HashSet<String>(Arrays.asList("fixed_field_ignore")))));
 	
 			TestBean test_long = new TestBean();
 			test_long.test_string1 = "test1a.1";
@@ -196,6 +198,43 @@ public class TestElasticsearchCrudService_Mappings {
 			
 			assertEquals(5L, service.countObjects().get().longValue());
 		}
+		
+		//////////////////////
+		
+		// FINALLY: handle the case where the field is a designated "fixed field"
+		
+		{
+			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_3", TestBean.class,				
+					new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
+							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_3".toLowerCase(), Optional.empty()),
+							new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), Optional.empty(), new HashSet<String>(Arrays.asList("test_map.test_map")))));
+	
+			TestBean test_long = new TestBean();
+			test_long.test_string1 = "test1a.1";
+			test_long.test_map.put("test_map", 1L);
+			
+			
+			TestBean test_string = new TestBean();
+			test_string.test_string1 = "test1a.2";
+			test_string.test_map.put("test_map", "test1b");
+	
+			assertEquals(0L, service.countObjects().get().longValue());
+			
+			service.storeObject(test_long).get();
+			
+			assertEquals(1L, service.countObjects().get().longValue());
+			
+			CompletableFuture<Supplier<Object>> ret_val = service.storeObject(test_string);
+			
+			try {
+				ret_val.get();
+				fail("Should have errored since the failing field is fixed");
+			}
+			catch (Exception e) {}
+			
+			assertEquals(1L, service.countObjects().get().longValue());
+		}
+		
 	}
 	
 	@Test
@@ -251,8 +290,7 @@ public class TestElasticsearchCrudService_Mappings {
 		ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_multi2", TestBean.class,				
 				new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
 						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi2".toLowerCase(), Optional.empty()),
-						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.of(Arrays.asList("type_1", "type_2", "type_3")), Optional.of("type_"))));
-		
+						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.of(Arrays.asList("type_1", "type_2", "type_3")), Optional.of("type_"), new HashSet<String>(Arrays.asList("test_random_field")))));		
 		{
 	
 			// Set up the mapping
@@ -319,6 +357,50 @@ public class TestElasticsearchCrudService_Mappings {
 			assertEquals(2L, service.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type_2")).get().intValue());
 			assertEquals(2L, service.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type_3")).get().intValue());
 		}
+		
+		// 4) Check reverts to failing if the failing type is designated fix
+		
+		{
+			ElasticsearchCrudService<TestBean> service_2 = getTestService("testMultipleMappingsPerIndex_multi3", TestBean.class,				
+				new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
+						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi3".toLowerCase(), Optional.empty()),
+						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.of(Arrays.asList("type_1", "type_2", "type_3")), Optional.of("type_"), new HashSet<>(Arrays.asList("test_map.test_map")))));		
+	
+			// Set up the mapping
+			
+			final TestBean test_long1 = new TestBean();
+			test_long1.test_string1 = "test1a.1";
+			test_long1.test_map.put("test_map", 1L);
+			
+			final TestBean test_long2 = new TestBean();
+			test_long2.test_string1 = "test1a.2";
+			test_long2.test_map.put("test_map", 2L);
+
+			service_2.storeObjects(Arrays.asList(test_long1, test_long2)).get();
+			
+			assertEquals(2L, service_2.countObjects().get().longValue());
+			
+			// Submit 2 docs, one that will work with "type1", one that won't work
+			
+			final TestBean test_long3 = new TestBean();
+			test_long3.test_string1 = "test1a.3";
+			test_long3.test_map.put("test_map", 1L);
+			
+			
+			final TestBean test_string1 = new TestBean();
+			test_string1.test_string1 = "test1a.4";
+			test_string1.test_map.put("test_map", "test1b");
+
+			final CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> cf = service_2.storeObjects(Arrays.asList(test_long3, test_string1));
+			cf.get();
+			
+			assertEquals(3L, service_2.countObjects().get().longValue());
+			assertEquals(1, cf.get()._2().get().intValue());
+
+			final BeanTemplate<TestBean> for_queries = BeanTemplateUtils.build(TestBean.class).with("test_map", null).done();
+			assertEquals(3L, service_2.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type_1")).get().intValue());
+			assertEquals(0L, service_2.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type_2")).get().intValue());
+		}
 	}
 	
 	/////////////////////////////////////////////////////
@@ -381,7 +463,8 @@ public class TestElasticsearchCrudService_Mappings {
 		ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_multi2", TestBean.class,				
 				new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
 						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi2".toLowerCase(), Optional.empty()),
-						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.of(Arrays.asList("type_1", "type_2", "type_3")), Optional.of("type_"))));
+						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.of(Arrays.asList("type_1", "type_2", "type_3")), Optional.of("type_"), new HashSet<String>(Arrays.asList("test_map")))));
+		//(not test_map.test_map)
 		
 		@SuppressWarnings("unchecked")
 		final ElasticsearchCrudService<TestBean>.ElasticsearchBatchSubsystem batch_service = service.getUnderlyingPlatformDriver(ElasticsearchBatchSubsystem.class, Optional.empty()).get();
@@ -453,8 +536,53 @@ public class TestElasticsearchCrudService_Mappings {
 			assertEquals(2L, service.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type_2")).get().intValue());
 			assertEquals(2L, service.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type_3")).get().intValue());
 		}
-	}
+		
+		// 4) Check reverts to failing if the failing type is designated fix
+		
+		{
+			ElasticsearchCrudService<TestBean> service_2 = getTestService("testMultipleMappingsPerIndex_multi3", TestBean.class,				
+				new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
+						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi3".toLowerCase(), Optional.empty()),
+						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.of(Arrays.asList("type_1", "type_2", "type_3")), Optional.of("type_"), new HashSet<>(Arrays.asList("test_map.test_map")))));		
 	
-	/////////////////////////////////////////////////////
+			final IBatchSubservice<TestBean> batch_service_2 = service_2.getBatchCrudSubservice().get();			
+			
+			// Set up the mapping
+			
+			final TestBean test_long1 = new TestBean();
+			test_long1.test_string1 = "test1a.1";
+			test_long1.test_map.put("test_map", 1L);
+			
+			final TestBean test_long2 = new TestBean();
+			test_long2.test_string1 = "test1a.2";
+			test_long2.test_map.put("test_map", 2L);
+
+			batch_service_2.storeObjects(Arrays.asList(test_long1, test_long2));
+			try { Thread.sleep(4250L); } catch (Exception e) {}
+			
+			assertEquals(2L, service_2.countObjects().get().longValue());
+			
+			// Submit 2 docs, one that will work with "type1", one that won't work
+			
+			final TestBean test_long3 = new TestBean();
+			test_long3.test_string1 = "test1a.3";
+			test_long3.test_map.put("test_map", 1L);
+			
+			
+			final TestBean test_string1 = new TestBean();
+			test_string1.test_string1 = "test1a.4";
+			test_string1.test_map.put("test_map", "test1b");
+
+			batch_service_2.storeObjects(Arrays.asList(test_long3, test_string1));
+			try { Thread.sleep(5250L); } catch (Exception e) {}			
+			
+			assertEquals(3L, service_2.countObjects().get().longValue());
+
+			final BeanTemplate<TestBean> for_queries = BeanTemplateUtils.build(TestBean.class).with("test_map", null).done();
+			assertEquals(3L, service_2.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type_1")).get().intValue());
+			assertEquals(0L, service_2.countObjectsBySpec(CrudUtils.allOf(for_queries).when("_type", "type_2")).get().intValue());
+		}
+		
+	}
 	
 }
