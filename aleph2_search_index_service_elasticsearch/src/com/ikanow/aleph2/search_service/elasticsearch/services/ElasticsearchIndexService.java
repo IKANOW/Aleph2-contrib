@@ -24,6 +24,7 @@ import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.StreamSupport;
@@ -258,11 +259,15 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 										Optional.ofNullable(schema_config.temporal_technology_override().time_field()), target_max_index_size_mb)
 					);
 			
+			/**/
+			//TODO
+			final Set<String> fixed_type_fields = Collections.emptySet(); //TODO: obtain from the properties...
+			
 			// Type
 			final ElasticsearchContext.TypeContext.ReadWriteTypeContext type_context =
 					CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
 							.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
-						? new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), type)
+						? new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), type, fixed_type_fields)
 						: new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext(type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME));
 			
 			final Optional<DataSchemaBean.WriteSettings> write_settings = Optionals.of(() -> bucket.data_schema().search_index_schema().target_write_settings());
