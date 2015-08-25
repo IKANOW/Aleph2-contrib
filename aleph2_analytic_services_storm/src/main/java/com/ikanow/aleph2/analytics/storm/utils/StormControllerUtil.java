@@ -44,6 +44,7 @@ import com.ikanow.aleph2.analytics.storm.services.LocalStormController;
 import com.ikanow.aleph2.analytics.storm.services.RemoteStormController;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 
 /**
  * Factory for returning a local or remote storm controller.
@@ -201,7 +202,7 @@ public class StormControllerUtil {
 														final Map<String, String> config, 
 														final String cached_jar_dir)
 	{
-		final CompletableFuture<BasicMessageBean> start_future = new CompletableFuture<BasicMessageBean>();
+		//final CompletableFuture<BasicMessageBean> start_future = new CompletableFuture<BasicMessageBean>();
 
 		//Get topology from user
 		//TODO (ALEPH-12): find somewhere to put this code:
@@ -239,38 +240,75 @@ public class StormControllerUtil {
 		
 		//create jar
 		final CompletableFuture<String> jar_future = buildOrReturnCachedStormTopologyJar(jars_to_merge, cached_jar_dir);
-		try {
-			long retries = 0;
-			final String jar_file_location = jar_future.get();
-			//submit to storm
-			CompletableFuture<BasicMessageBean> submit_future = null;
+		
+		
+		//submit to storm
+		final CompletableFuture<BasicMessageBean> submit_future = Lambdas.get(() -> {
+			long retries = 0;			
 			while ( retries < MAX_RETRIES ) {				
 				try {
 					logger.debug("Trying to submit job, try: " + retries + " of " + MAX_RETRIES);
-					submit_future = storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
-					retries = MAX_RETRIES; //if we got here, we didn't throw an exception, so we completed successfully
+					final String jar_file_location = jar_future.get();
+					return storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
+					//return storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
 				} catch ( Exception ex) {
 					if ( ex instanceof AlreadyAliveException ) {
 						retries++;
-						Thread.sleep(1000); //sleep 1s, was seeing about 2s of sleep required before job successfully submitted on restart
+						//sleep 1s, was seeing about 2s of sleep required before job successfully submitted on restart
+						try {
+							Thread.sleep(1000);
+						} catch (Exception e) {
+							final CompletableFuture<BasicMessageBean> error_future = new CompletableFuture<BasicMessageBean>();
+							error_future.completeExceptionally(e);
+							return error_future;
+						} 
 					} else {
 						retries = MAX_RETRIES; //we threw some other exception, bail out
-						submit_future.completeExceptionally(ex);
+						final CompletableFuture<BasicMessageBean> error_future = new CompletableFuture<BasicMessageBean>();
+						error_future.completeExceptionally(ex);
+						return error_future;
 					}
 				}
-			}			
-			if ( submit_future.get().success() ) {
-				ErrorUtils.buildSuccessMessage(StormControllerUtil.class, "startJob", "Started storm job succesfully");
-			} else {
-				start_future.complete(submit_future.get());				
-			}						
-		} catch ( Exception ex ) {
-			start_future.complete(
-					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "startJob", ErrorUtils.getLongForm("Error starting storm job: {0}", ex))
-			 );
-		}
+			}
+			//we maxed out our retries, throw failure
+			final CompletableFuture<BasicMessageBean> error_future = new CompletableFuture<BasicMessageBean>();
+			error_future.completeExceptionally(new Exception("Error submitting job, ran out of retries (previous (same name) job is probably still alive)"));
+			return error_future;
+		});
+		return submit_future;
 		
-		return start_future;
+//		try {
+//			long retries = 0;
+//			final String jar_file_location = jar_future.get();
+//			//submit to storm
+//			CompletableFuture<BasicMessageBean> submit_future = null;
+//			while ( retries < MAX_RETRIES ) {				
+//				try {
+//					logger.debug("Trying to submit job, try: " + retries + " of " + MAX_RETRIES);
+//					submit_future = storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
+//					retries = MAX_RETRIES; //if we got here, we didn't throw an exception, so we completed successfully
+//				} catch ( Exception ex) {
+//					if ( ex instanceof AlreadyAliveException ) {
+//						retries++;
+//						Thread.sleep(1000); //sleep 1s, was seeing about 2s of sleep required before job successfully submitted on restart
+//					} else {
+//						retries = MAX_RETRIES; //we threw some other exception, bail out
+//						submit_future.completeExceptionally(ex);
+//					}
+//				}
+//			}			
+//			if ( submit_future.get().success() ) {
+//				ErrorUtils.buildSuccessMessage(StormControllerUtil.class, "startJob", "Started storm job succesfully");
+//			} else {
+//				start_future.complete(submit_future.get());				
+//			}						
+//		} catch ( Exception ex ) {
+//			start_future.complete(
+//					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "startJob", ErrorUtils.getLongForm("Error starting storm job: {0}", ex))
+//			 );
+//		}
+//		
+//		return start_future;
 	}
 	
 	/**
