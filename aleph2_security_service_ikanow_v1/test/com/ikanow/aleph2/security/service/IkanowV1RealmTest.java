@@ -12,7 +12,6 @@ import org.apache.logging.log4j.Logger;
 import org.apache.shiro.authc.AuthenticationException;
 import org.apache.shiro.authc.UsernamePasswordToken;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.inject.Inject;
@@ -74,25 +73,26 @@ public class IkanowV1RealmTest {
 			logger.info("Caught (expected) Authentication exception:"+e.getMessage());
 			
 		}
-		assertEquals(true, subject.isAuthenticated());		
+		assertEquals(System.getProperty("IKANOW_SECURITY_PWD")!=null, subject.isAuthenticated());		
 	}
 
 	protected ISubject login() throws AuthenticationException{
 		ISubject subject = securityService.getSubject();
 		assertNotNull(subject);
-        UsernamePasswordToken token = new UsernamePasswordToken("jfreydank@ikanow.com", "does not work!");
-		//TODO remove
+        UsernamePasswordToken token = new UsernamePasswordToken(System.getProperty("IKANOW_SECURITY_LOGIN","noone@ikanow.com"), System.getProperty("IKANOW_SECURITY_PWD", "not allowed!"));
 		securityService.login(subject,token);			
 		return subject;
 	}
 	@Test
-	@Ignore
 	public void testRolePermission(){
 		ISubject subject = login();
 		// system community
 		String permission = "4c927585d591d31d7b37097a";
-		String role = "jfreydank@ikanow.com"+"_communities";
+		String role = System.getProperty("IKANOW_SECURITY_LOGIN","noone@ikanow.com")+"_communities";
 		assertEquals(true,securityService.hasRole(subject,role));
+        //test a typed permission (not instance-level)
+		assertEquals(true,securityService.isPermitted(subject,permission));
+
 	}
 
 

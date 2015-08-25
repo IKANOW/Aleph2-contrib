@@ -152,6 +152,13 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 		// TODO Auto-generated method stub
 		
 	}
+
+
+	@Override
+	public Object isPermitted(ISubject subject, String permission) {
+		boolean ret = ((Subject)getSubject().getSubject()).isPermitted(permission);
+		return ret;
+	}
 	
 	
 	
