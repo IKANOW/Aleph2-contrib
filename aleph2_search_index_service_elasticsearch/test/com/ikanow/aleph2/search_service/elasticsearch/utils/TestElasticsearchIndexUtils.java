@@ -75,7 +75,7 @@ public class TestElasticsearchIndexUtils {
 			
 			final String base_index2 = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1/another__test").done().get());
 			
-			assertEquals("test_1_1_another__f73d191c0424", base_index2);
+			assertEquals("test_1_1_another_test__f73d191c0424", base_index2);
 			
 			final String base_index3 = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1/another__test/VERY/long/string").done().get());
 			

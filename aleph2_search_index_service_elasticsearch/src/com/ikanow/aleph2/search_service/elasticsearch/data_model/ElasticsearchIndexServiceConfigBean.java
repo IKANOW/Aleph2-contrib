@@ -53,6 +53,7 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		public Map<String, Object> mappings() { return mappings; }
 		public Map<String, Map<String, Object>> mapping_overrides() { return mapping_overrides; }
 		public String index_name_override() { return index_name_override; }
+		public Long target_index_size_mb() { return target_index_size_mb; }
 		
 		public enum CollidePolicy { error, new_type };
 		private CollidePolicy collide_policy;
@@ -63,6 +64,7 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		private Map<String, Object> aliases;
 		private Map<String, Map<String, Object>> mapping_overrides;
 		private String index_name_override;
+		private Long target_index_size_mb;
 	}
 	public static class ColumnarSchemaDefaultBean {
 		// the contents of the "fielddata" sub-object of a property for which an include has been specifed, takes from "_default", or field_type if the field_type can be inferred

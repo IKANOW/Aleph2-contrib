@@ -38,6 +38,8 @@ import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ListenableActionFuture;
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
+import org.elasticsearch.action.admin.cluster.state.ClusterStateResponse;
+import org.elasticsearch.action.admin.indices.alias.get.GetAliasesResponse;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
@@ -124,9 +126,9 @@ public class TestElasticsearchCrudService {
 		return getTestService(test_name_case, bean_clazz, true, Optional.empty());
 	}
 	public <O> ElasticsearchCrudService<O> getTestService(String test_name_case, Class<O> bean_clazz, boolean create_index, Optional<DataSchemaBean.WriteSettings> write_settings) throws InterruptedException, ExecutionException {
-		return getTestService(test_name_case, bean_clazz, true, write_settings, Optional.empty(), true);		
+		return getTestService(test_name_case, bean_clazz, true, true, write_settings, Optional.empty(), true);		
 	}
-	public <O> ElasticsearchCrudService<O> getTestService(String test_name_case, Class<O> bean_clazz, boolean create_index, Optional<DataSchemaBean.WriteSettings> write_settings, Optional<Long> max_index_size, boolean create_aliases) throws InterruptedException, ExecutionException {
+	public <O> ElasticsearchCrudService<O> getTestService(String test_name_case, Class<O> bean_clazz, boolean create_index, boolean delete_index, Optional<DataSchemaBean.WriteSettings> write_settings, Optional<Long> max_index_size, boolean create_aliases) throws InterruptedException, ExecutionException {
 		
 		final String test_name = test_name_case.toLowerCase();
 		
@@ -141,15 +143,19 @@ public class TestElasticsearchCrudService {
 				Optional.empty(), Optional.empty(), Optional.empty(), write_settings);
 
 		Thread.sleep(2000L);
-		if (service.deleteDatastore().get()) {			
-			//(check that deleteDatastore works)
-			Thread.sleep(2000L);
-			assertEquals(false, service.deleteDatastore().get());
+		if (delete_index) {
+			if (service.deleteDatastore().get()) {			
+				//(check that deleteDatastore works)
+				Thread.sleep(2000L);
+				assertEquals(false, service.deleteDatastore().get());
+			}		
 		}		
-		
 		// Create an empty index
 		if (create_index) {
-			_factory.getClient().admin().indices().prepareCreate(test_name).execute().actionGet();
+			_factory.getClient().admin().indices().prepareCreate(test_name)
+				// (leave this at its default of 1 - that's what happens if the index gets auto-created unless there's a template mapping which is beyond the scope of this)
+				//.setSettings(ImmutableSettings.builder().put("index.number_of_shards", 2).build())
+			.execute().actionGet();
 			//(Wait for above operation to be completed)
 			_factory.getClient().admin().cluster().health(new ClusterHealthRequest(test_name).waitForYellowStatus()).actionGet();
 		}				
@@ -1505,14 +1511,12 @@ public class TestElasticsearchCrudService {
 	
 	// CHECK MAX INDEX SIZE 
 	
-	@org.junit.Ignore
 	@Test
 	public void test_checkMaxIndexSize_createAliases() throws InterruptedException, ExecutionException {
-		final ElasticsearchCrudService<TestBean> service = getTestService("test_checkMaxIndexSize", TestBean.class, true, Optional.empty(), Optional.of(0L), true);
+		final ElasticsearchCrudService<TestBean> service = getTestService("test_checkMaxIndexSize", TestBean.class, false, true, Optional.empty(), Optional.of(0L), true);
 	
-		// 1) Write a doc and check that it is written to the base index
+		// 1) Write a doc and check that it is written to the base index (delete first to check that case)
 
-		service.deleteDatastore().get();
 		assertEquals(0, service.countObjects().get().intValue());		
 		
 		// 1) Add a new object to an empty DB
@@ -1553,11 +1557,21 @@ public class TestElasticsearchCrudService {
 			assertEquals(2L, stats.getIndex("test_checkmaxindexsize").getTotal().getDocs().getCount());
 		}
 		
-		// 3) Now wait 10s to be up, add more objects, check that they gets added to another index
+		// 3+4) Now wait 10s to be up, add more objects, check that they gets added to another index
 		// (add 2, the first one should go on the old one, the second after a wait should go on the new one)
 		
 		Thread.sleep(11000L);
 		{
+			//(First off, back from 2) .. check that we now have an alias for test_checkmaxindexsize)
+			//(for some reason prepareGetAliases didn't work, but this does)
+			ClusterStateResponse csr = service._state.client.admin().cluster().prepareState()
+			.setIndices("test_checkmaxindexsize*")
+			.setRoutingTable(false).setNodes(false).setListenerThreaded(false).get();
+			assertEquals(1, csr.getState().getMetaData().aliases().size());
+			assertTrue("Found an alias for test_checkmaxindexsize", null != csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize"));
+			assertEquals(1, csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize").size());
+			assertEquals("test_checkmaxindexsize", csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize").keysIt().next());
+			
 			final TestBean test = new TestBean();
 			test._id = "_id_3";
 			test.test_string = "test_string_3";
@@ -1583,13 +1597,128 @@ public class TestElasticsearchCrudService {
 			assertEquals(1L, stats.getIndex("test_checkmaxindexsize_1").getTotal().getDocs().getCount());
 		}
 		
-		// N) Get a new context for the same service, check that the first doc is written to a new index
+		// 5) Get a new context for the same service with a larger size, check that it writes to an existing one
+		{
+			final ElasticsearchCrudService<TestBean> service2 = getTestService("test_checkMaxIndexSize", TestBean.class, false, false, Optional.empty(), Optional.of(100L), true);
+			final TestBean test = new TestBean();
+			test._id = "_id_5";
+			test.test_string = "test_string_5";
+
+			final Future<Supplier<Object>> result = service2.storeObject(test);			
+			result.get();
+			Thread.sleep(1000L);
+			
+			IndicesStatsResponse stats = service._state.client.admin().indices()
+					.prepareStats("test_checkmaxindexsize*").setStore(true).setDocs(true).execute().actionGet();
+
+			assertEquals(2, stats.getIndices().size());
+			assertTrue("Base index: " + stats.getIndices().keySet(), null != stats.getIndex("test_checkmaxindexsize"));
+			assertEquals(4L, stats.getIndex("test_checkmaxindexsize").getTotal().getDocs().getCount());
+			assertTrue("Second index: " + stats.getIndices().keySet(), null != stats.getIndex("test_checkmaxindexsize_1"));
+			assertEquals(1L, stats.getIndex("test_checkmaxindexsize_1").getTotal().getDocs().getCount());
+		}
 		
-		//TODO
+		// 6) Get a new context for the same service with the same zero size, check that it writes to a new one (immediately)
+		// (also don't create alias for this one)
+		{
+			final ElasticsearchCrudService<TestBean> service2 = getTestService("test_checkMaxIndexSize", TestBean.class, false, false, Optional.empty(), Optional.of(0L), false);
+			final TestBean test = new TestBean();
+			test._id = "_id_6";
+			test.test_string = "test_string_6";
+
+			final Future<Supplier<Object>> result = service2.storeObject(test);			
+			result.get();
+			Thread.sleep(1000L);
+			
+			IndicesStatsResponse stats = service._state.client.admin().indices()
+					.prepareStats("test_checkmaxindexsize*").setStore(true).setDocs(true).execute().actionGet();
+
+			assertEquals(3, stats.getIndices().size());
+			assertTrue("Base index: " + stats.getIndices().keySet(), null != stats.getIndex("test_checkmaxindexsize"));
+			assertEquals(4L, stats.getIndex("test_checkmaxindexsize").getTotal().getDocs().getCount());
+			assertTrue("Second index: " + stats.getIndices().keySet(), null != stats.getIndex("test_checkmaxindexsize_1"));
+			assertEquals(1L, stats.getIndex("test_checkmaxindexsize_1").getTotal().getDocs().getCount());
+			assertTrue("Third index: " + stats.getIndices().keySet(), null != stats.getIndex("test_checkmaxindexsize_2"));
+			assertEquals(1L, stats.getIndex("test_checkmaxindexsize_2").getTotal().getDocs().getCount());
+		}
 		
-		// N+1) Check that delete datastore removes all the indexes in the context
+		// (4/5/6) - Check aliases:
+		Thread.sleep(3000L);
+		ClusterStateResponse csr = service._state.client.admin().cluster().prepareState()
+		.setIndices("test_checkmaxindexsize*")
+		.setRoutingTable(false).setNodes(false).setListenerThreaded(false).get();
+		assertEquals(1, csr.getState().getMetaData().aliases().size());
+		assertTrue("Found an alias for test_checkmaxindexsize", null != csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize"));
+		assertEquals(2, csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize").size());
+		assertEquals("test_checkmaxindexsize:test_checkmaxindexsize_1", StreamSupport.stream(csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize").keys().spliterator(), false).map(x -> x.value).sorted().collect(Collectors.joining(":")));
 		
-		//TODO		
+		// 7) Check that delete datastore removes all the indexes in the context
+		
+		service.deleteDatastore().get();
+		
+		IndicesStatsResponse stats = service._state.client.admin().indices()
+				.prepareStats("test_checkmaxindexsize*").setStore(true).setDocs(true).execute().actionGet();
+		
+		assertEquals(0, stats.getIndices().size());		
 	}
-	//TODO: similar tests but not creating aliases
+	
+	@Test
+	public void test_checkAliases_unlimitedIndex() throws InterruptedException, ExecutionException {
+		final ElasticsearchCrudService<TestBean> service = getTestService("test_checkmaxindexsize_unlimitedindex", TestBean.class, false, true, Optional.empty(), Optional.of(-1L), true);
+		
+		// 1) Write a doc and check that it is written to the base index
+
+		assertEquals(0, service.countObjects().get().intValue());		
+		
+		// 1) Add a new object to an empty DB
+		{
+			final TestBean test = new TestBean();
+			test._id = "_id_1";
+			test.test_string = "test_string_1";
+			
+			final Future<Supplier<Object>> result = service.storeObject(test);			
+			result.get();
+			
+			// Should have been added to the base index
+			
+			IndicesStatsResponse stats = service._state.client.admin().indices()
+							.prepareStats("test_checkmaxindexsize_unlimitedindex*").setStore(true).setDocs(true).execute().actionGet();
+		
+			assertEquals(1, stats.getIndices().size());
+			assertTrue("Base index: " + stats.getIndices().keySet(), null != stats.getIndex("test_checkmaxindexsize_unlimitedindex"));
+			assertEquals(1L, stats.getIndex("test_checkmaxindexsize_unlimitedindex").getTotal().getDocs().getCount());
+		}
+
+		Thread.sleep(2000L);
+		
+		//(First off, back from 2) .. check that we now have an alias for test_checkmaxindexsize)
+		//(for some reason prepareGetAliases didn't work, but this does)
+		ClusterStateResponse csr = service._state.client.admin().cluster().prepareState()
+		.setIndices("test_checkmaxindexsize_unlimitedindex*")
+		.setRoutingTable(false).setNodes(false).setListenerThreaded(false).get();
+		assertEquals(1, csr.getState().getMetaData().aliases().size());
+		assertTrue("Found an alias for test_checkmaxindexsize_unlimitedindex", null != csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize_unlimitedindex"));
+		assertEquals(1, csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize_unlimitedindex").size());
+		assertEquals("test_checkmaxindexsize_unlimitedindex", csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize_unlimitedindex").keysIt().next());
+		
+		// 2) Add another object, check that it adds it to the same index
+		{
+			final TestBean test = new TestBean();
+			test._id = "_id_2";
+			test.test_string = "test_string_2";
+			
+			final Future<Supplier<Object>> result = service.storeObject(test);			
+			result.get();
+			
+			// Should have been added to the base index
+			
+			IndicesStatsResponse stats = service._state.client.admin().indices()
+							.prepareStats("test_checkmaxindexsize_unlimitedindex*").setStore(true).setDocs(true).execute().actionGet();
+		
+			assertEquals(1, stats.getIndices().size());
+			assertTrue("Base index: " + stats.getIndices().keySet(), null != stats.getIndex("test_checkmaxindexsize_unlimitedindex"));
+			assertEquals(2L, stats.getIndex("test_checkmaxindexsize_unlimitedindex").getTotal().getDocs().getCount());
+		}
+		
+	}
 }

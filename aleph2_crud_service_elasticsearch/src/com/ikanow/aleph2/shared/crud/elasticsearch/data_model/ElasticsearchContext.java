@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -36,6 +38,9 @@ import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchFutureUtils;
+
+import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 
 import scala.Tuple2;
 import scala.Tuple3;
@@ -194,6 +199,24 @@ public abstract class ElasticsearchContext {
 			protected final Optional<Long> _target_max_index_size_mb;
 			protected final boolean _create_aliases;
 			
+			// READ-ONLY ALIAS CREATION:
+			
+			private static String READ_PREFIX = "r__";
+			private final ScheduledExecutorService _scheduler = Executors.newScheduledThreadPool(1);			
+			
+			/** Checks to see if the read only version of this alias has been assigned, and assigns it if not
+			 *  (At some point, ES should allow this function to be built into the mapping, or discovered in the callback to the store function)
+			 * @param index_name
+			 */
+			protected void checkForAliases(final String index_name) {
+				_scheduler.schedule(() -> {
+					this.client().admin().indices().prepareAliases().addAlias(index_name + "*", READ_PREFIX + index_name).execute();
+				}
+				,
+				2, TimeUnit.SECONDS // need to give the index time to write or the alias won't exist...
+				);
+			}
+			
 			// INDEX SIZING UTILITY:
 			
 			private static long MB = 1024L*1024L;
@@ -208,31 +231,31 @@ public abstract class ElasticsearchContext {
 			/** Every 10s check the index size and increment the index suffix if too large
 			 * @return
 			 */
-			protected String getIndexSuffix(String base_index) {
-				if (!_target_max_index_size_mb.isPresent()) {
+			protected String getIndexSuffix(final String base_index) {
+				// Common:
+				final long now = new Date().getTime();
+				final Tuple3<Long, String, Integer> last_suffix = _mutable_state._base_index_states.computeIfAbsent(base_index, __ -> Tuples._3T(null, "", 0));
+				final Long last_checked = last_suffix._1();
+				final boolean checked_for_aliases = Lambdas.get(() -> {
+					if (_create_aliases) { // alias checking logic, first time through only... (And then for index splitting, whenever an index is split)
+						if (null == last_checked) {
+							checkForAliases(base_index);
+							if (!_target_max_index_size_mb.isPresent()) { // (update the concurrent hash map here since not going any further)
+								_mutable_state._base_index_states.put(base_index, Tuples._3T(now, "", 0)); // (current time + defaults - 2/3 not used)
+							}
+							return true;
+						}
+					}				
+					return false;
+				});
+				
+				if (!_target_max_index_size_mb.isPresent()) { // if not splitting contexts into multiple indexes
 					return base_index;
 				}
-				else synchronized (this) { // (just need this sync point so that multiple threads first time through don't fall through to default)
-					
-					final Tuple3<Long, String, Integer> last_suffix = _mutable_state._base_index_states.computeIfAbsent(base_index, __ -> Tuples._3T(null, "", 0));
-					final Long last_checked = last_suffix._1();
-
-					if (_create_aliases) {
-						//TODO: in 2 cases check for aliases:
-						// 1) if null == _mutable_state._last_checked
-						// 2) whenever we are creating a new index
-						// check => just recreate with "*"?
-					}					
-					final long now = new Date().getTime();
-					/**/
-					System.out.println("?????????????? " + last_suffix + " vs " + now);
-										
+				else synchronized (this) { // (just need this sync point so that multiple threads first time through don't fall through to default)					
 					return _target_max_index_size_mb
 							.filter(__ -> { // only check first time or every 10s
 								if ((null == last_checked) || ((now - last_checked) >= INDEX_SIZE_CHECK_MS)) {
-									/**/
-									System.out.println("?HERE... " + _mutable_state._is_working.get());
-									
 									_mutable_state._base_index_states.put(base_index, Tuples._3T(now, last_suffix._2(), last_suffix._3()));
 									return true;
 								}
@@ -250,32 +273,33 @@ public abstract class ElasticsearchContext {
 										,
 										stats -> {
 											final int suffix_index = Lambdas.get(() -> {
-												/**/
-												System.out.println("???! " + getName(base_index, last_suffix));
+												final IndexStats index_stats = stats.getIndex(getName(base_index, last_suffix));
 												
-												final IndexStats index_stats = stats.getIndex(getName(base_index, last_suffix));												
-												if ((null != index_stats) && (index_stats.getTotal().getStore().getSizeInBytes()*MB > m))
+												final Predicate<IndexStats> shard_too_big = i_stats -> 
+													Arrays.stream(i_stats.getShards()).map(shard -> shard.getStats().getStore()).anyMatch(x -> x.getSizeInBytes() >= (m*MB));
+												
+												if ((null != index_stats) && shard_too_big.test(index_stats))
 												{
 													int max_index = 1;
 													// find a new index to use:									
 													for (; ; max_index++) {
 														final IndexStats candidate_index_stats = stats.getIndex(base_index + BAR + max_index);
 														
-														/**/
-														System.out.println("***?! " + max_index + ": " + ((null != candidate_index_stats)
-																? ("" + candidate_index_stats.getTotal().getStore().getSizeInBytes())
-																: "null"));
-														
 														if (null == candidate_index_stats) break;
-														else if (candidate_index_stats.getTotal().getStore().getSizeInBytes()*MB > m) break;
+														else if (!shard_too_big.test(candidate_index_stats)) break; // (found one we can use!)
 													}
 													return max_index;
 												}
 												else {
 													return last_suffix._3();
 												}
-											});
-											return _mutable_state._base_index_states.put(base_index, Tuples._3T(now, BAR + suffix_index, suffix_index));
+											});			
+											if (_create_aliases && !checked_for_aliases && (suffix_index != last_suffix._3())) {
+												checkForAliases(base_index);
+											}
+											final Tuple3<Long, String, Integer> new_suffix = Tuples._3T(now, BAR + suffix_index, suffix_index);
+											_mutable_state._base_index_states.put(base_index, new_suffix);
+											return new_suffix;
 										})
 										// Just stick a future at the end of the chain to ensure the mutable state is always fixed
 										.thenApply(x -> {
@@ -283,9 +307,6 @@ public abstract class ElasticsearchContext {
 											return x;
 										})
 										.exceptionally(t -> {
-											/**/
-											t.printStackTrace();
-											
 											_mutable_state._is_working.set(false);
 											return last_suffix;
 										});
@@ -293,7 +314,8 @@ public abstract class ElasticsearchContext {
 								
 								if (null == last_checked) { // first time through, wait for the code to complete
 									try {
-										return getName(base_index, future.join());
+										final Tuple3<Long, String, Integer> new_suffix = future.join();
+										return getName(base_index, new_suffix);
 									}
 									catch (Exception e) { // pass through to default on error
 										return null;
