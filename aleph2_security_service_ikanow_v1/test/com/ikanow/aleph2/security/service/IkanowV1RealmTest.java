@@ -12,6 +12,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.shiro.authc.AuthenticationException;
 import org.apache.shiro.authc.UsernamePasswordToken;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.inject.Inject;
@@ -64,19 +65,35 @@ public class IkanowV1RealmTest {
 	}
 
 	
-	@Test	
-	public void testNotAuthenticated() {
-		ISubject subject = securityService.getSubject();
-		assertNotNull(subject);
-        UsernamePasswordToken token = new UsernamePasswordToken("jfreydank@ikanow.com", "Dont_even_think_I_hardcoded_my_password_here!");
-        token.setRememberMe(true);
+	@Test		
+	public void testAuthenticated() {
+        //token.setRememberMe(true);
+		ISubject subject = login();
         try {
-    		securityService.login(subject,token);			
 		} catch (AuthenticationException e) {
 			logger.info("Caught (expected) Authentication exception:"+e.getMessage());
 			
 		}
-		assertEquals(false, subject.isAuthenticated());		
+		assertEquals(true, subject.isAuthenticated());		
 	}
+
+	protected ISubject login() throws AuthenticationException{
+		ISubject subject = securityService.getSubject();
+		assertNotNull(subject);
+        UsernamePasswordToken token = new UsernamePasswordToken("jfreydank@ikanow.com", "does not work!");
+		//TODO remove
+		securityService.login(subject,token);			
+		return subject;
+	}
+	@Test
+	@Ignore
+	public void testRolePermission(){
+		ISubject subject = login();
+		// system community
+		String permission = "4c927585d591d31d7b37097a";
+		String role = "jfreydank@ikanow.com"+"_communities";
+		assertEquals(true,securityService.hasRole(subject,role));
+	}
+
 
 }

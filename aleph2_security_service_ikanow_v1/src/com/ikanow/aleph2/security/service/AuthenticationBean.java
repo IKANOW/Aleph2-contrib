@@ -29,6 +29,8 @@ public class AuthenticationBean implements Serializable{
 	 */
 	private static final long serialVersionUID = 5696569054090880387L;
 
+	public static final String ACCOUNT_STATUS_ACTIVE = "ACTIVE";
+
 	private String _id; // ObJId?
 	private String WPUserID;
 	private String accountStatus;
