@@ -32,6 +32,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bson.types.ObjectId;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -243,7 +244,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 	////////////////////////////////////////////////////
 
 	// DB INTEGRATION - READ
-	
+	@Ignore
 	@SuppressWarnings("unchecked")
 	@Test
 	public void test_HitNumResultsSynchronizeSources() throws JsonProcessingException, IOException, ParseException, InterruptedException, ExecutionException {
@@ -299,6 +300,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		v2_test_q.deleteDatastore().get();										
 	}
 	
+	@Ignore
 	@SuppressWarnings("unchecked")
 	@Test
 	public void test_TimeoutSynchronizeSources() throws JsonProcessingException, IOException, ParseException, InterruptedException, ExecutionException {
@@ -346,6 +348,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		v2_test_q.deleteDatastore().get();										
 	}
 	
+	@Ignore
 	@SuppressWarnings("unchecked")
 	@Test
 	public void test_FailsynchronizeSources() throws JsonProcessingException, IOException, ParseException, InterruptedException, ExecutionException {
@@ -387,6 +390,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		v2_test_q.deleteDatastore().get();										
 	}
 	
+	@Ignore
 	@SuppressWarnings("unchecked")
 	@Test
 	public void test_ErrorsynchronizeSources() throws JsonProcessingException, IOException, ParseException, InterruptedException, ExecutionException {
