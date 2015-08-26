@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
-package com.ikanow.aleph2.analytics.storm.utils;
+package com.ikanow.aleph2.analytics.hadoop.utils;
 
 import java.util.Collection;
 import java.util.List;
@@ -24,10 +24,10 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 
-/** Contains some utility logic for the Storm Analytic Technology Service
+/** A collection of utilities for Hadoop related validation etc
  * @author Alex
  */
-public class StormAnalyticTechnologyUtils {
+public class HadoopAnalyticTechnologyUtils {
 
 	/** Validate a single job for this analytic technology in the context of the bucket/other jobs
 	 * @param analytic_bucket - the bucket (just for context)
@@ -44,7 +44,7 @@ public class StormAnalyticTechnologyUtils {
 
 		final String message = res.stream().map(msg -> msg.message()).collect(Collectors.joining("\n"));
 		
-		return ErrorUtils.buildMessage(success, StormAnalyticTechnologyUtils.class, "validateJobs", message);
+		return ErrorUtils.buildMessage(success, HadoopAnalyticTechnologyUtils.class, "validateJobs", message);
 	}
 	
 	/** Validate a single job for this analytic technology in the context of the bucket/other jobs
@@ -56,7 +56,7 @@ public class StormAnalyticTechnologyUtils {
 	public static BasicMessageBean validateJob(final DataBucketBean analytic_bucket, final Collection<AnalyticThreadJobBean> jobs, final AnalyticThreadJobBean job) {
 		//TODO bucket validation - check "names" for simpleness (alphanum + _ only)
 		//TODO here - check for unimplemented functions
-		//TOOD here - check for non streaming operations
+		//TOOD here - check for non batch operations
 		return null;
 	}
 }
