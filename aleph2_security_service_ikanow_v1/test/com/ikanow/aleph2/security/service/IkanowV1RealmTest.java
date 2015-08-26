@@ -92,6 +92,7 @@ public class IkanowV1RealmTest {
 		return subject;
 	}
 	@Test
+	@Ignore
 	public void testRolePermission(){
 		ISubject subject = login();
 		// system community
