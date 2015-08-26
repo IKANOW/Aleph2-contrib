@@ -18,10 +18,14 @@ package com.ikanow.aleph2.management_db.mongodb.module;
 import com.google.inject.AbstractModule;
 import com.google.inject.Inject;
 import com.google.inject.Scopes;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
+import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
 import com.ikanow.aleph2.management_db.mongodb.services.IkanowV1SyncService_Buckets;
 import com.ikanow.aleph2.management_db.mongodb.services.IkanowV1SyncService_LibraryJars;
@@ -76,6 +80,14 @@ public class MongoDbManagementDbModule extends AbstractModule {
 		this.bind(IkanowV1SyncService_Buckets.class).in(Scopes.SINGLETON);
 		this.bind(IkanowV1SyncService_LibraryJars.class).in(Scopes.SINGLETON);
 		this.bind(IMongoDbCrudServiceFactory.class).to(MongoDbCrudServiceFactory.class).in(Scopes.SINGLETON);
+		this.bind(BucketTestService.class).to(BucketTestService.class).in(Scopes.SINGLETON);
+	}
+
+	
+	public static class BucketTestService {
+		public ManagementFuture<Boolean> test_bucket(final IManagementDbService core_management_db, final DataBucketBean to_test, final ProcessingTestSpecBean test_spec) {
+			return core_management_db.testBucket(to_test, test_spec);
+		}
 	}
 	
 }
