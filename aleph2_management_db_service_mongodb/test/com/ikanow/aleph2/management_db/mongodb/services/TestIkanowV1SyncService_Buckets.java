@@ -101,7 +101,7 @@ public class TestIkanowV1SyncService_Buckets {
 								.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 								.withValue("globals.local_yarn_config_dir", ConfigValueFactory.fromAnyRef(temp_dir));
 			
-			Injector app_injector = ModuleUtils.createInjector(Arrays.asList(new MockMongoDbManagementDbModule()), Optional.of(config));	
+			Injector app_injector = ModuleUtils.createTestInjector(Arrays.asList(new MockMongoDbManagementDbModule()), Optional.of(config));	
 			app_injector.injectMembers(this);
 		}
 		catch (Throwable t) {

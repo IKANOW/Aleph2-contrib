@@ -61,7 +61,7 @@ public class IkanowV1RealmTest {
 				.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 				.withValue("globals.local_yarn_config_dir", ConfigValueFactory.fromAnyRef(temp_dir));
 
-		Injector app_injector = ModuleUtils.createInjector(Arrays.asList(), Optional.of(config));	
+		Injector app_injector = ModuleUtils.createTestInjector(Arrays.asList(), Optional.of(config));	
 		app_injector.injectMembers(this);
 		this._management_db = _service_context.getCoreManagementDbService();
 		this.securityService =  _service_context.getSecurityService();
