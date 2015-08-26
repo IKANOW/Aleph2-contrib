@@ -80,7 +80,7 @@ public class MongoDbManagementDbModule extends AbstractModule {
 		this.bind(IkanowV1SyncService_Buckets.class).in(Scopes.SINGLETON);
 		this.bind(IkanowV1SyncService_LibraryJars.class).in(Scopes.SINGLETON);
 		this.bind(IMongoDbCrudServiceFactory.class).to(MongoDbCrudServiceFactory.class).in(Scopes.SINGLETON);
-		this.bind(BucketTestService.class).to(BucketTestService.class).in(Scopes.SINGLETON);
+		this.bind(BucketTestService.class).in(Scopes.SINGLETON);
 	}
 
 	
