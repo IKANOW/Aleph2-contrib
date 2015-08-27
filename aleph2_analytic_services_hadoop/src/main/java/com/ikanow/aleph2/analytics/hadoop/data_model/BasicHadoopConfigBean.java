@@ -37,6 +37,9 @@ public class BasicHadoopConfigBean {
 	 * @author alex
 	 */
 	public class Step {
+		//TODO: allow mappers to be tied to a particular job (only at the start though?) or maybe have a different object for doing that, ie 
+		// wrap up input_key_type_override/etc in a separate object
+		
 		/** Whether this step is enabled (defaults to true) - note disabling a step might cause the pipeline to fail
 		 *  if the types then don't match)
 		 * @return
