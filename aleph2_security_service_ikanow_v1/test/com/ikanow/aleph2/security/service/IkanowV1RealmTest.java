@@ -92,15 +92,14 @@ public class IkanowV1RealmTest {
 		return subject;
 	}
 	@Test
-	@Ignore
 	public void testRolePermission(){
 		ISubject subject = login();
 		// system community
 		String permission = "4c927585d591d31d7b37097a";
 		String role = System.getProperty("IKANOW_SECURITY_LOGIN","noone@ikanow.com")+"_communities";
-		assertEquals(true,securityService.hasRole(subject,role));
+		assertEquals(System.getProperty("IKANOW_SECURITY_LOGIN")!=null,securityService.hasRole(subject,role));
         //test a typed permission (not instance-level)
-		assertEquals(true,securityService.isPermitted(subject,permission));
+		assertEquals(System.getProperty("IKANOW_SECURITY_LOGIN")!=null,securityService.isPermitted(subject,permission));
 	}
 
 	@Test

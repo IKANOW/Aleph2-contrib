@@ -6,12 +6,14 @@ import java.util.Set;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.bson.types.ObjectId;
 
 import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
+import com.ikanow.aleph2.data_model.interfaces.security.IRoleProvider;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
@@ -57,7 +59,8 @@ public class IkanowV1CommunityRoleProvider implements IRoleProvider {
 		Optional<JsonNode> result;
 		try {
 			
-			result = getPersonStore().getObjectBySpec(CrudUtils.anyOf().when("email", principalName)).get();
+			ObjectId objecId = new ObjectId(principalName); 
+			result = getPersonStore().getObjectBySpec(CrudUtils.anyOf().when("_id", objecId)).get();
 	        if(result.isPresent()){
 	        	JsonNode communities = result.get().get("communities");
 	        	if (communities.isArray()) {

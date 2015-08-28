@@ -1,5 +1,6 @@
 package com.ikanow.aleph2.security.service;
 
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
@@ -16,12 +17,14 @@ import org.apache.shiro.authz.AuthorizationInfo;
 import org.apache.shiro.authz.SimpleAuthorizationInfo;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
+import org.bson.types.ObjectId;
 
 import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
+import com.ikanow.aleph2.data_model.interfaces.security.IRoleProvider;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
@@ -40,13 +43,16 @@ public class IkanowV1Realm extends AuthorizingRealm {
 	private ICrudService<JsonNode> personDb = null;
 
 
-	protected IRoleProvider roleProvider;
+//	protected IRoleProvider roleProvider;
+
+
+	private Set<IRoleProvider> roleProviders;
 	
 	@Inject
-	public IkanowV1Realm(final IServiceContext service_context,CredentialsMatcher matcher, IRoleProvider roleProvider) {		
+	public IkanowV1Realm(final IServiceContext service_context,CredentialsMatcher matcher, Set<IRoleProvider> roleProviders) {		
 		super(matcher);
 		_context = service_context;
-		this.roleProvider = roleProvider;
+		this.roleProviders = roleProviders;
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -94,9 +100,17 @@ public class IkanowV1Realm extends AuthorizingRealm {
         }
 
         String username = (String) getAvailablePrincipal(principals);
-        Tuple2<Set<String>, Set<String>> t2 = roleProvider.getRolesAndPermissions(username);
-        SimpleAuthorizationInfo info = new SimpleAuthorizationInfo(t2._1());
-        info.addStringPermissions(t2._2());
+        Set<String> roles = new HashSet<String>();
+        Set<String> permissions = new HashSet<String>();
+        
+        for (IRoleProvider roleProvider : roleProviders) {
+        	Tuple2<Set<String>, Set<String>> t2 = roleProvider.getRolesAndPermissions(username);
+        	roles.addAll(t2._1());
+            permissions.addAll(t2._2());        
+        }  // for      
+
+        SimpleAuthorizationInfo info = new SimpleAuthorizationInfo(roles);
+        info.addStringPermissions(permissions);        
         return info;
 
     }
@@ -117,7 +131,7 @@ public class IkanowV1Realm extends AuthorizingRealm {
         
 
         
-		SingleQueryComponent<AuthenticationBean> queryUsername = CrudUtils.anyOf(AuthenticationBean.class).when("username",username);		
+		SingleQueryComponent<AuthenticationBean> queryUsername = CrudUtils.anyOf(AuthenticationBean.class).when("_id",new ObjectId(username)).when("username",username);		
         Optional<AuthenticationBean> result = getAuthenticationStore().getObjectBySpec(queryUsername).get();
         if(result.isPresent()){
         	AuthenticationBean b = result.get();
