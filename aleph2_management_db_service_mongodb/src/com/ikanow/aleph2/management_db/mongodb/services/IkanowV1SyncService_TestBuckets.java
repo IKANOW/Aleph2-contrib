@@ -35,10 +35,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-
-
-
-import org.apache.commons.collections.IteratorUtils;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.leader.LeaderLatch;
 import org.apache.logging.log4j.LogManager;
@@ -67,9 +63,9 @@ import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.BeanUpdateComponent;
-import com.ikanow.aleph2.data_model.utils.CrudUtils.CommonUpdateComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
@@ -236,7 +232,7 @@ public class IkanowV1SyncService_TestBuckets {
 		final List<CompletableFuture<Boolean>> existing_results = new ArrayList<CompletableFuture<Boolean>>();		
 		
 		//check for entries in test db
-		return getAllTestSources(source_test_db).thenCompose( test_sources -> {
+		return getAllTestSources(source_test_db).thenApply( test_sources -> {
 			_logger.debug("Got test sources successfully, looping over any results");
 			test_sources.forEach(Lambdas.wrap_consumer_u(test_source -> {		
 				final DataBucketBean to_test = Lambdas.wrap_u(() -> getBucketFromV1Source(test_source.source())).get();
@@ -250,151 +246,153 @@ public class IkanowV1SyncService_TestBuckets {
 				}
 			}));
 			_logger.debug("done looping over test sources");
+			//combine response of new and old entries, return
 			List<CompletableFuture<?>> retval = 
 					Arrays.asList(new_results, existing_results).stream()
 					.flatMap(l -> l.stream())
-					.collect(Collectors.toList());
-			
+					.collect(Collectors.toList());			
 			return CompletableFuture.allOf(retval.toArray(new CompletableFuture[0]));
-		});
-				
-//				.thenApply( 
-//				test_sources -> {
-//			_logger.debug("Got test sources successfully, looping over any results");
-//			//loop over all the sources
-//			//TODO if one source bombs, i think it bombs for all sources, need to double check
-//			test_sources.forEach(Lambdas.wrap_consumer_u(test_source -> {
-//				
-//				if ( test_source.status() != null &&
-//						test_source.status().equals("in_progress") ) {
-//					_logger.debug("Found an old entry, checking if test is done");
-//					existing_results.add(handleExistingTestSource(test_source));					
-//				} else {
-//					_logger.debug("Found a new entry, setting up test");
-//					new_results.add(handleNewTestSource(test_source, bucket_test_service, source_test_db));								
-//				}
-//			}));
-//			_logger.debug("done looping over test sources");
-//		}).exceptionally(t->{ 
-//			_logger.error("Error retrieving test sources", t);
-//			//TODO return some type of failure (we failed to get the sources);
-////			final CompletableFuture<Boolean> error_future = new CompletableFuture<Boolean>();
-////			error_future.completeExceptionally(t);
-////			return error_future;
-//			
-//		});
-		
-		
-		
-		
-		
-		
-		//return back all the futures
-//		List<CompletableFuture<?>> retval = 
-//				Arrays.asList(new_results, existing_results).stream()
-//				.flatMap(l -> l.stream())
-//				.collect(Collectors.toList());
-//		
-//		return CompletableFuture.allOf(retval.toArray(new CompletableFuture[0]));
+		});				
 	}
 	
+	/**
+	 * Logic that runs when we come across an old test object
+	 * Check if source is done:
+	 * A. Has timed out
+	 * B. Has created enough results
+	 * If either are true, copy over what test results there are (if any), mark as done
+	 * 
+	 * @param data_bucket
+	 * @param old_test_source
+	 * @param source_test_db
+	 * @return
+	 */
 	private CompletableFuture<Boolean> handleExistingTestSource(
 			final DataBucketBean data_bucket,
 			final TestQueueBean old_test_source,
-			final ICrudService<TestQueueBean> source_test_db) {		
-		//ENTRY: is old
-		//get v1 bucket
-		//final DataBucketBean to_test = Lambdas.wrap_u(() -> getBucketFromV1Source(old_test_source.source())).get();
+			final ICrudService<TestQueueBean> source_test_db) {			
+		//ENTRY: is old		
 		final ProcessingTestSpecBean test_spec = old_test_source.test_params();
-		final Optional<ICrudService<JsonNode>> v2_output_db = getTestOutputCrudService(data_bucket);
-		
-		//check for 
-		//1: time is up by checking started_on+test_spec vs now
-		final long time_expires_on = old_test_source.started_processing_on().getTime()+(test_spec.max_run_time_secs()*1000);
-		if ( new Date().getTime() > time_expires_on ) {
-			_logger.debug("Test job: " + data_bucket.full_name() + " expired, need to retire");
-			//TODO
-			retireTestJob(data_bucket, old_test_source, source_test_db, v2_output_db);
-		}
-		
-		//2: test results, if we've hit the requested num results	
-		v2_output_db.ifPresent( db -> {
-			db.countObjects().thenApply( num_results -> {
-				if ( num_results >= test_spec.requested_num_objects()) {
-					_logger.debug("Test job: " + data_bucket.full_name() + " reached requested num results, need to retire");
-					retireTestJob(data_bucket, old_test_source, source_test_db, v2_output_db);					
-				} else {
-					_logger.debug("Test job: " + data_bucket.full_name() + " haven't reached requested num results yet, let it continue");
-				}
-				return null;
-			});
+		//get v1 bucket
+		return getTestOutputCrudService(data_bucket).map(v2_output_db -> {
+			//got the output crud, check if time is up or we have enough test results
+			//1: time is up by checking started_on+test_spec vs now
+			final long time_expires_on = old_test_source.started_processing_on().getTime()+(test_spec.max_run_time_secs()*1000);
+			if ( new Date().getTime() > time_expires_on ) {
+				_logger.debug("Test job: " + data_bucket.full_name() + " expired, need to retire");
+				return retireTestJob(data_bucket, old_test_source, source_test_db, v2_output_db);
+			}
+			//2: test results, if we've hit the requested num results
+			return checkTestHitRequestedNumResults(v2_output_db, data_bucket, test_spec, old_test_source, source_test_db);
+		}).orElseGet(()->{			
+			//we couldn't get the output crud, need to exit out
+			//complete exceptionally so sync will throw an error
+			_logger.error("Error getting test output crud");
+			CompletableFuture<Boolean> db_error_future = new CompletableFuture<Boolean>();
+			db_error_future.completeExceptionally(new Exception("Error retrieving output db for test job: " + data_bucket._id()));
+			return db_error_future;
 		});
-		//_context.getSearchIndexService().get().getDataService().ifPresent(ds -> { ds.getReadableCrudService(clazz, buckets, options)});
-		//service_context.getSearchIndexService().get().getCrudService(test_bucket).countObjects()
-		//if either: write results out to v1 collection, delete entry
-		//service_context.getSearchIndexService().get().getCrudService(test_bucket).getObjectsBySpec(crud_all_with_limit)
-		
-				
-		//TODO update bucket status
-		CompletableFuture<Boolean> future = new CompletableFuture<Boolean>();
-		future.complete(false);
-		return future;
 	}
 	
+	/**
+	 * Checks if the number of objects in v2_output_db is at least
+	 * as many as we are looking for in test_spec.requested_num_objects
+	 * 
+	 * if so: retire job
+	 * else: return back CF that we haven't reached our limit yet
+	 * 
+	 * @param v2_output_db
+	 * @param data_bucket
+	 * @param test_spec
+	 * @param old_test_source
+	 * @param source_test_db
+	 * @return
+	 */
+	private CompletableFuture<Boolean> checkTestHitRequestedNumResults(final ICrudService<JsonNode> v2_output_db,
+			final DataBucketBean data_bucket,
+			final ProcessingTestSpecBean test_spec,
+			final TestQueueBean old_test_source,
+			final ICrudService<TestQueueBean> source_test_db) {
+		return v2_output_db.countObjects().thenCompose( num_results -> {
+			_logger.debug("Found: " + num_results + "("+test_spec.requested_num_objects()+") for this test.");
+			if ( num_results >= test_spec.requested_num_objects()) {
+				_logger.debug("Test job: " + data_bucket.full_name() + " reached requested num results, need to retire");
+				return retireTestJob(data_bucket, old_test_source, source_test_db, v2_output_db);								
+			} else {
+				_logger.debug("Test job: " + data_bucket.full_name() + " haven't reached requested num results yet, let it continue");
+				return CompletableFuture.completedFuture(true);
+			}
+		});
+	}
+	/**
+	 * Returns an ICrudService for this buckets output.
+	 * Currently only returns the searchIndexService, need to add in checks for other services.
+	 * @param data_bucket
+	 * @return
+	 */
 	private Optional<ICrudService<JsonNode>> getTestOutputCrudService(final DataBucketBean data_bucket) {
+		//first need to change bucket to test bucket, otherwise we will overwrite any actual data
+		final DataBucketBean test_data_bucket = BucketUtils.convertDataBucketBeanToTest(data_bucket, data_bucket.owner_id());	
+		//store it in the correct location, depending on what is spec'd in the data_bucket
 		//the results are being stored where the bucket output location is
 		//if (test_config.service == "search_index_schema") service_context.getSearchIndexService().get().getCrudService(test_bucket).blah()
 		//if (test_config.service == "storage_service") { /* TODO read the file or something */ }
 		//longer term if (test_config_service == "graph_service") service_context.getGraphService().get().getTinkerpopService().blah
 		return _context.getSearchIndexService().flatMap(IDataServiceProvider::getDataService)
-				.flatMap(s -> s.getWritableDataService(JsonNode.class, data_bucket, Optional.empty(), Optional.empty()))
+				.flatMap(s -> s.getWritableDataService(JsonNode.class, test_data_bucket, Optional.empty(), Optional.empty()))
 				.flatMap(IDataWriteService::getCrudService);
 	}
 	
+	/**
+	 * Moves up to test_spec.requested_num_objects into v2_output_db
+	 * Then marks the TestQueueBean as completed.
+	 * 
+	 * @param data_bucket
+	 * @param test_source
+	 * @param source_test_db
+	 * @param v2_output_db
+	 * @return
+	 */
 	@SuppressWarnings("unchecked")
 	private CompletableFuture<Boolean> retireTestJob(
 			final DataBucketBean data_bucket,
 			final TestQueueBean test_source,
 			final ICrudService<TestQueueBean> source_test_db,
-			final Optional<ICrudService<JsonNode>> v2_output_db) {
-		//check if there was a db created for results
-		v2_output_db.ifPresent(db -> {
-			//if so, copy over up to test_spec.num_results into v1 collection
-			db.getObjectsBySpec(CrudUtils.allOf().limit(test_source.test_params().requested_num_objects())).thenCompose( results -> {
-				_logger.debug("returned: " + results.count() + " items in output collection (after limit, there could be more)");
-				_logger.debug("moving data to mongo collection: ingest." + data_bucket._id());
-				//TODO should I be using id as the output collection
-				final ICrudService<JsonNode> v1_output_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + data_bucket._id())).get();
-				List<JsonNode> objects_to_store = new ArrayList<JsonNode>();
-				results.forEach(objects_to_store::add);
-				v1_output_db.storeObjects(objects_to_store);
-				return null; //TODO change this
-			});
+			final ICrudService<JsonNode> v2_output_db) {
+		_logger.debug("retiring job");
+		return v2_output_db.getObjectsBySpec(CrudUtils.allOf().limit(test_source.test_params().requested_num_objects())).thenCompose( results -> {
+			_logger.debug("returned: " + results.count() + " items in output collection (with limit, there could be more)");
+			_logger.debug("moving data to mongo collection: ingest." + data_bucket._id());
+			final ICrudService<JsonNode> v1_output_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + data_bucket._id())).get();		
+			List<JsonNode> objects_to_store = new ArrayList<JsonNode>();
+			results.forEach(objects_to_store::add);
+			return v1_output_db.storeObjects(objects_to_store).thenCompose(x->CompletableFuture.completedFuture(true));
+		}).thenCompose(x -> {
+			_logger.debug("Marking job completed");
+			//do final step for exists/not exists 
+			final String output_collection = data_bucket._id(); //TODO is this okay? what should I be using? should I make sure its mongo-safe?		
+			//mark job as complete, point to v1 collection				
+			return updateTestSourceStatus(test_source._id(), "completed", source_test_db, Optional.of(new Date()), Optional.ofNullable(output_collection));
 		});
-		
-		final String output_collection = data_bucket._id(); //TODO is this okay? what should I be using? should I make sure its mongo-safe?		
-		//mark job as complete, point to v1 collection		
-		updateTestSourceStatus(test_source._id(), "completed", source_test_db, Optional.of(new Date()), Optional.ofNullable(output_collection));		
-		
-		final CompletableFuture<Boolean> future = new CompletableFuture<Boolean>();
-		future.complete(true);
-		return future;
 	}
 	
+	/**
+	 * Logic that runs when we come across a new test object.
+	 * Kicks off a test by calling BucketTestService.test_bucket -> this typically calls CoreManagementService.test_bucket
+	 * Updates the status based on if the test_bucket started successfully
+	 * 
+	 * @param data_bucket
+	 * @param new_test_source
+	 * @param bucket_test_service
+	 * @param source_test_db
+	 * @return
+	 */
 	private CompletableFuture<Boolean> handleNewTestSource(
 			final DataBucketBean data_bucket,
 			final TestQueueBean new_test_source, 
 			final BucketTestService bucket_test_service,
 			final ICrudService<TestQueueBean> source_test_db) {
 		//ENTRY: is new
-		//get v1 bucket
-		//final DataBucketBean to_test = Lambdas.wrap_u(() -> getBucketFromV1Source(new_test_source.source())).get();
-		if ( data_bucket == null ) {
-			//bucket had some error, fail out
-			CompletableFuture<Boolean> future = new CompletableFuture<Boolean>();
-			future.completeExceptionally(new Exception("Error getting bucket from v1 Source"));
-			return future;
-		}
 		//get the test params
 		final ProcessingTestSpecBean test_spec = new_test_source.test_params();
 		
@@ -417,6 +415,17 @@ public class IkanowV1SyncService_TestBuckets {
 			.thenCompose(x->x); //let an exception in updateTestSourceStatus throw
 	}
 	
+	/**
+	 * Updates a test object with the given status and updates the last_processed_on date, 
+	 * optionally also updates it's started_on date and/or the output_collection
+	 * 
+	 * @param id
+	 * @param status
+	 * @param source_test_db
+	 * @param started_on
+	 * @param output_collection
+	 * @return
+	 */
 	private CompletableFuture<Boolean> updateTestSourceStatus(
 			final String id, 
 			final String status, 
@@ -434,20 +443,20 @@ public class IkanowV1SyncService_TestBuckets {
 			update_component.set(TestQueueBean::result, output_collection.get());						
 										
 		final SingleQueryComponent<TestQueueBean> v1_query = CrudUtils.allOf(TestQueueBean.class).when("_id", id);
-		final CompletableFuture<Boolean> update_res = source_test_db.updateObjectBySpec(v1_query, Optional.empty(), update_component);
-		_logger.debug("done updating status");
-		return update_res;
+		return source_test_db.updateObjectBySpec(v1_query, Optional.empty(), update_component);		
 	}
 	
-//	private ProcessingTestSpecBean getTestSpec(final JsonNode jsonNode) {		
-//		final long requested_num_objects = safeJsonGet("requested_num_objects", jsonNode).asLong();
-//		final long max_run_time_secs = safeJsonGet("max_run_time_secs", jsonNode).asLong();
-//		return new ProcessingTestSpecBean(requested_num_objects, max_run_time_secs);
-//	}
+	/**
+	 * Returns back all test sources that aren't marked as complete or errored
+	 * 
+	 * @param source_test_db
+	 * @return
+	 */
 	protected CompletableFuture<Cursor<TestQueueBean>> getAllTestSources(final ICrudService<TestQueueBean> source_test_db) {
 		return source_test_db.getObjectsBySpec(
 						CrudUtils.allOf(TestQueueBean.class)
-						.whenNot("status", "complete")); //can be complete | in_progress | {unset/anything else}
+						.whenNot("status", "complete")
+						.whenNot("status", "error")); //can be complete | error | in_progress | {unset/anything else}
 	}
 	
 	////////////////////////////////////////////////////
