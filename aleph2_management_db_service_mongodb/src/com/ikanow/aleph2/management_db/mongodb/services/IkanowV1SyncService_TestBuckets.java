@@ -21,6 +21,8 @@ import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 
+
+
 import org.apache.commons.collections.IteratorUtils;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.leader.LeaderLatch;
@@ -49,6 +51,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.BeanUpdateComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.CommonUpdateComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -214,8 +217,8 @@ public class IkanowV1SyncService_TestBuckets {
 			)
 	{
 		_logger.debug("Starting a sync test sources cycle");
-		final List<CompletableFuture<?>> new_results = new ArrayList<CompletableFuture<?>>();
-		final List<CompletableFuture<?>> existing_results = new ArrayList<CompletableFuture<?>>();		
+		final List<CompletableFuture<Boolean>> new_results = new ArrayList<CompletableFuture<Boolean>>();
+		final List<CompletableFuture<Boolean>> existing_results = new ArrayList<CompletableFuture<Boolean>>();		
 		
 		//check for entries in test db
 		return getAllTestSources(source_test_db).thenCompose( test_sources -> {
@@ -298,6 +301,7 @@ public class IkanowV1SyncService_TestBuckets {
 			//TODO
 			retireTestJob(data_bucket, old_test_source, source_test_db, v2_output_db);
 		}
+		
 		//2: test results, if we've hit the requested num results	
 		v2_output_db.ifPresent( db -> {
 			db.countObjects().thenApply( num_results -> {
@@ -331,7 +335,9 @@ public class IkanowV1SyncService_TestBuckets {
 				.flatMap(s -> s.getWritableDataService(JsonNode.class, data_bucket, Optional.empty(), Optional.empty()))
 				.flatMap(IDataWriteService::getCrudService);
 	}
-	private void retireTestJob(
+	
+	@SuppressWarnings("unchecked")
+	private CompletableFuture<Boolean> retireTestJob(
 			final DataBucketBean data_bucket,
 			final TestQueueBean test_source,
 			final ICrudService<TestQueueBean> source_test_db,
@@ -339,22 +345,28 @@ public class IkanowV1SyncService_TestBuckets {
 		//check if there was a db created for results
 		v2_output_db.ifPresent(db -> {
 			//if so, copy over up to test_spec.num_results into v1 collection
-			db.getObjectsBySpec(CrudUtils.allOf().limit(test_source.test_params().requested_num_objects())).thenApply( results -> {
+			db.getObjectsBySpec(CrudUtils.allOf().limit(test_source.test_params().requested_num_objects())).thenCompose( results -> {
+				_logger.debug("returned: " + results.count() + " items in output collection (after limit, there could be more)");
+				_logger.debug("moving data to mongo collection: ingest." + data_bucket._id());
 				//TODO should I be using id as the output collection
 				final ICrudService<JsonNode> v1_output_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + data_bucket._id())).get();
 				List<JsonNode> objects_to_store = new ArrayList<JsonNode>();
 				results.forEach(objects_to_store::add);
 				v1_output_db.storeObjects(objects_to_store);
-				return null;
+				return null; //TODO change this
 			});
 		});
 		
 		final String output_collection = data_bucket._id(); //TODO is this okay? what should I be using? should I make sure its mongo-safe?		
 		//mark job as complete, point to v1 collection		
 		updateTestSourceStatus(test_source._id(), "completed", source_test_db, Optional.of(new Date()), Optional.ofNullable(output_collection));		
+		
+		final CompletableFuture<Boolean> future = new CompletableFuture<Boolean>();
+		future.complete(true);
+		return future;
 	}
 	
-	private CompletableFuture<?> handleNewTestSource(
+	private CompletableFuture<Boolean> handleNewTestSource(
 			final DataBucketBean data_bucket,
 			final TestQueueBean new_test_source, 
 			final BucketTestService bucket_test_service,
@@ -386,7 +398,8 @@ public class IkanowV1SyncService_TestBuckets {
 			//threw an exception when trying to run test_bucket, return exception
 			//had an error running test, update status and return
 			return updateTestSourceStatus(new_test_source._id(), "error", source_test_db, Optional.of(new Date()), Optional.empty());			
-			});
+			})
+			.thenCompose(x->x); //let an exception in updateTestSourceStatus throw
 	}
 	
 	private CompletableFuture<Boolean> updateTestSourceStatus(
@@ -397,15 +410,17 @@ public class IkanowV1SyncService_TestBuckets {
 			Optional<String> output_collection) {		
 		_logger.debug("Setting test q: " + id + " status to: " + status);
 		//create update with status, add started date if it was passed in
-		final CommonUpdateComponent<TestQueueBean> update = CrudUtils.update(TestQueueBean.class)
-						.set(TestQueueBean::status, status)
-						.set(TestQueueBean::started_processing_on, started_on.orElse(null))
-						.set(TestQueueBean::last_processed_on, new Date())
-						.set(TestQueueBean::result, output_collection.orElse(null));							
+		BeanUpdateComponent<TestQueueBean> update_component = CrudUtils.update(TestQueueBean.class)
+				.set(TestQueueBean::status, status)
+				.set(TestQueueBean::last_processed_on, new Date());
+		if ( started_on.isPresent() )
+			update_component.set(TestQueueBean::started_processing_on, started_on.get());
+		if ( output_collection.isPresent() )
+			update_component.set(TestQueueBean::result, output_collection.get());						
 										
 		final SingleQueryComponent<TestQueueBean> v1_query = CrudUtils.allOf(TestQueueBean.class).when("_id", id);
-		final CompletableFuture<Boolean> update_res = source_test_db.updateObjectBySpec(v1_query, Optional.empty(), update);
-		
+		final CompletableFuture<Boolean> update_res = source_test_db.updateObjectBySpec(v1_query, Optional.empty(), update_component);
+		_logger.debug("done updating status");
 		return update_res;
 	}
 	
@@ -440,7 +455,7 @@ public class IkanowV1SyncService_TestBuckets {
 	 * @throws IOException
 	 * @throws ParseException
 	 */
-	protected static DataBucketBean getBucketFromV1Source(final JsonNode src_json) throws JsonParseException, JsonMappingException, IOException, ParseException {
+	public static DataBucketBean getBucketFromV1Source(final JsonNode src_json) throws JsonParseException, JsonMappingException, IOException, ParseException {
 		// (think we'll use key instead of _id):
 		//final String _id = safeJsonGet("_id", src_json).asText(); 
 		final String key = safeJsonGet("key", src_json).asText();

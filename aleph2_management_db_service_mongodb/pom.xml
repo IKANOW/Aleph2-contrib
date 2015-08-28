@@ -113,5 +113,11 @@
   		<version>${aleph2.version}</version>
 		<scope>${aleph2.scope}</scope>  		
   	</dependency>
+  	<dependency>
+  		<groupId>com.ikanow.aleph2</groupId>
+  		<artifactId>aleph2_search_index_service_elasticsearch</artifactId>
+  		<version>${aleph2.version}</version>
+  		<scope>test</scope>
+  	</dependency>
   </dependencies>
 </project>
