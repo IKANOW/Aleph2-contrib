@@ -18,15 +18,17 @@ package com.ikanow.aleph2.analytics.hadoop.services;
 import java.io.File;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Reducer;
-import org.apache.hadoop.mapreduce.lib.chain.ChainMapper;
+//import org.apache.hadoop.mapreduce.lib.chain.ChainMapper;
 import org.apache.hadoop.mapreduce.InputFormat;
 
 import scala.Tuple2;
@@ -35,14 +37,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikanow.aleph2.analytics.hadoop.assets.Aleph2MultipleInputFormatBuilder;
 import com.ikanow.aleph2.analytics.hadoop.data_model.BasicHadoopConfigBean;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopErrorUtils;
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
-import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
+//import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils.BasicMessageException;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
@@ -51,7 +55,6 @@ import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 
 import fj.Unit;
-import fj.data.Either;
 import fj.data.Validation;
 
 /** Starts and stops hadoop jobs
@@ -107,6 +110,8 @@ public class HadoopControllerService {
 	
 	// JOB BUILDING UTILITIES
 	
+	public interface IHadoopInputContext extends IAnalyticsAccessContext<InputFormat<?, ?>> {}	
+	
 	//TODO split out into build input/processing/output
 	
 	/** Launches the specified Hadoop job
@@ -131,7 +136,8 @@ public class HadoopControllerService {
 	{
 		try {
 			final GlobalPropertiesBean globals = context.getServiceContext().getGlobalProperties();
-			final IStorageService storage_service = context.getServiceContext().getStorageService();
+			// (don't think we need this ironically, always get from the context)
+			//final IStorageService storage_service = context.getServiceContext().getStorageService();
 			
 			final Aleph2MultipleInputFormatBuilder input_format_builder = new Aleph2MultipleInputFormatBuilder();
 			
@@ -140,7 +146,7 @@ public class HadoopControllerService {
 			final String context_signature = context.getAnalyticsContextSignature(Optional.of(bucket), services);
 			final Configuration base_config = getConfig(globals, context_signature);
 
-			//TODO: distributed cache for required JAR files (use context)
+			//TODO: distributed cache for required JAR files (use context) .. don't actually do if evaluate_only
 			
 			Job task = Job.getInstance(base_config, job_name);
 
@@ -149,6 +155,7 @@ public class HadoopControllerService {
 			Optionals.ofNullable(job.inputs()).stream()
 				.filter(input -> Optional.ofNullable(input.enabled()).orElse(true))
 				.forEach(input -> {
+					//TODO (ALEPH-12): need to look out for self-join cases since that means the output format is more complex (can't delete self..)
 					
 					// Basically: is it an external input or an internal one
 					// TODO (ALEPH-12) later on support other data services
@@ -161,45 +168,60 @@ public class HadoopControllerService {
 						//TODO (ALEPH-12) could also be a local file system, worry about security etc etc
 						
 						// OK then we're going to point at a data service so check that exists ... if it's not specified it will be treated as the HDFS
-						final String[] dataservice_name = Optional.ofNullable(input.data_service()).orElse("storage_service").split(":");
-						final String data_service = dataservice_name[0];
-						final Optional<String> name = Optional.of(dataservice_name.length).filter(len -> len > 1).map(__ -> dataservice_name[1]);
+						final String dataservice_name = Optional.ofNullable(input.data_service()).orElse("storage_service");
+						final String[] dataservice_name_array = dataservice_name.split(":");
+						final String data_service = dataservice_name_array[0];
+						final Optional<String> name = Optional.of(dataservice_name_array.length).filter(len -> len > 1).map(__ -> dataservice_name_array[1]);
+						final String key = BucketUtils.getUniqueSignature(input.resource_name_or_id(), Optional.of(dataservice_name));
 						
 						if (name.isPresent()) {
 							throw new BasicMessageException(ErrorUtils.buildErrorMessage(HadoopControllerService.class.getName(), "startJob", 
 									ErrorUtils.NOT_YET_IMPLEMENTED, ErrorUtils.get("non-default service: {0}:{1}", data_service, name.get())));							
 						}
 						
-						if (data_service.equals("storage_service")) {
-							final Class<? extends InputFormat> input_format_clazz = null; //TODO
-							final String base_path = storage_service.getRootPath() + input.resource_name_or_id() + IStorageService.STORED_DATA_SUFFIX;
-							input_format_builder.addInput(base_path, task, input_format_clazz, Collections.emptyMap(), Optional.of(new Path(base_path)));
+						if (data_service.equals("storage_service")) { // (special case since we know we're using HDFS for the storage service...)
+							final Optional<List<Path>> base_paths = context.getInputPaths(Optional.of(bucket), job, input)
+																			.map(x -> x.stream().map(s -> new Path(s)).collect(Collectors.toList()));
+							base_paths.orElseThrow(() -> 
+									new BasicMessageException(ErrorUtils.buildErrorMessage(HadoopControllerService.class.getName(), "startJob", 
+											ErrorUtils.NOT_YET_IMPLEMENTED, ErrorUtils.get("No base paths: bucket = {0} input = {1}", bucket.full_name(), BeanTemplateUtils.toJson(input).toString()))));
+							
+							final Class<? extends InputFormat> input_format_clazz = null; //TODO (ALEPH-12): get from context or exception out?
+							input_format_builder.addInput(key, task, input_format_clazz, Collections.emptyMap(), base_paths);
 						}
-						else if (data_service.equals("search_index_service")) {
-							context.getServiceContext().getSearchIndexService().map(search_index_service -> {
-								
-								//TODO (ALEPH-12): ugh I remember now ... the input format call gets its config from configuration (/arguably from path?!)
-								// so really what I need is an object that can set stuff up for me
-								// hmmm if I'm using multiple paths here then I'm in a bit of trouble because eg EsInputFormat gets its info from 
-								final Tuple2<InputFormat, Map<String, Object>> input_format = 
-										context.getServiceInput(InputFormat.class, Optional.of(bucket), job, input)
-											.orElseGet(() -> { return Tuples._2T(null, Collections.emptyMap()); }) 
-											//TODO (ALEPH-12): some generic InputFormat that is probably just going to use the CRUD service and generate a single InputFormat
+						else {		
+							context.getServiceInput(IHadoopInputContext.class, Optional.of(bucket), job, input)
+								.map(input_format -> { // See if the service has an actual implementation they want to give me
+									final Class<InputFormat<?, ?>> input_format_clazz = input_format.getAccessService().right().value();										
+									final Map<String, Object> input_format_config = input_format.getAccessConfig().orElse(Collections.emptyMap());
+									
+									return Tuples._2T(input_format_clazz, input_format_config);
+								})
+								.map(Optional::of)
+								.orElseGet(() -> { // They don't, so go to the backstop generic CRUD access
+									final Optional<IAnalyticsAccessContext.GenericCrudAccessContext> input_format_backup = 
+											context.getServiceInput(IAnalyticsAccessContext.GenericCrudAccessContext.class, Optional.of(bucket), job, input);
 											;
-								
-								final String base_path = storage_service.getRootPath() + input.resource_name_or_id() + IStorageService.STORED_DATA_SUFFIX;
-								input_format_builder.addInput(base_path, task, input_format._1().getClass(), input_format._2(), Optional.of(new Path(base_path)));
-								
-								return Unit.unit(); // (don't actually care about the result as long as it's non null)
-							})
-							.orElseThrow(() -> {
-								throw new BasicMessageException(ErrorUtils.buildErrorMessage(HadoopControllerService.class.getName(), "startJob", 
-									ErrorUtils.NOT_YET_IMPLEMENTED, ErrorUtils.get("missing data service: {0}", data_service)));
-							});
-						}
-						else {
-							throw new BasicMessageException(ErrorUtils.buildErrorMessage(HadoopControllerService.class.getName(), "startJob", 
-									ErrorUtils.NOT_YET_IMPLEMENTED, ErrorUtils.get("default data service: {0}", data_service)));														
+									
+									return input_format_backup
+												.map(input_format -> {
+													
+													final Class<InputFormat<?, ?>> input_format_clazz = null; //TODO (ALEPH-12): build class using this" input_format.getAccessService().left().value();
+													final Map<String, Object> input_format_config = input_format.getAccessConfig().orElse(Collections.emptyMap());
+													return Tuples._2T(input_format_clazz, input_format_config);
+												})
+												.map(Optional::of)
+											.orElseGet(Optional::empty); // drops down to the throw)
+								})
+								.map(t2 -> { // We've gotten an input format here
+									input_format_builder.addInput(key, task, t2._1(), t2._2(), Optional.empty());
+									return Unit.unit(); // (don't actually care about the result as long as it's non null)		
+								})
+								.orElseThrow(() -> 
+									new BasicMessageException(ErrorUtils.buildErrorMessage(HadoopControllerService.class.getName(), "startJob", 
+											ErrorUtils.NOT_YET_IMPLEMENTED, ErrorUtils.get("missing data service: {0}", data_service)))
+								)
+								;
 						}
 					}
 					else { // it's an internal dependency
@@ -207,9 +229,11 @@ public class HadoopControllerService {
 						
 						// So assuming it's a batch dependency, we'll grab the directory as a FileInputFormat 
 					
-						final String base_path = storage_service.getRootPath() + bucket.full_name() + IStorageService.ANALYTICS_TEMP_DATA_SUFFIX + input.resource_name_or_id();
+						final String key = BucketUtils.getUniqueSignature(bucket.full_name(), Optional.of(input.resource_name_or_id()));
+						final Optional<List<Path>> base_paths = context.getInputPaths(Optional.of(bucket), job, input)
+																	.map(x -> x.stream().map(s -> new Path(s)).collect(Collectors.toList()));
 						final Class<? extends InputFormat> input_format_clazz = null; //TODO
-						input_format_builder.addInput(base_path, task, input_format_clazz, Collections.emptyMap(), Optional.of(new Path(base_path)));
+						input_format_builder.addInput(key, task, input_format_clazz, Collections.emptyMap(), base_paths);
 					}
 					
 					//For reference, the various things to use
@@ -226,15 +250,6 @@ public class HadoopControllerService {
 //					input.resource_name_or_id();					
 				});
 			;
-			
-			// Self join:			
-			if (Optionals.of(() -> job.global_input_config().self_join()).orElse(false)) {
-
-				//TODO (ALEPH-12): what if we don't have a name (BucketUtils.getUniqueSignature)
-				final String base_path = storage_service.getRootPath() + bucket.full_name() + IStorageService.ANALYTICS_TEMP_DATA_SUFFIX + job.name();
-				final Class<? extends InputFormat> input_format_clazz = null; //TODO
-				input_format_builder.addInput(base_path, task, input_format_clazz, Collections.emptyMap(), Optional.of(new Path(base_path)));
-			}			
 			
 			//TODO: need to keep track of input classes 
 			

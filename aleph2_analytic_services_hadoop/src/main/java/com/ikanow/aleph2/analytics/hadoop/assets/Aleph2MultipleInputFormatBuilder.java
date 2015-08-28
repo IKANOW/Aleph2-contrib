@@ -52,7 +52,7 @@ public class Aleph2MultipleInputFormatBuilder {
 			final Job job,
 			final Class<? extends InputFormat> input_format_clazz, 
 			final Map<String, Object> extra_config, 
-			final Optional<Path> path)
+			final Optional<List<Path>> paths)
 	{
 		//TODO (ALEPH-12)
 		job.setInputFormatClass(Aleph2MultipleInputFormat.class);
