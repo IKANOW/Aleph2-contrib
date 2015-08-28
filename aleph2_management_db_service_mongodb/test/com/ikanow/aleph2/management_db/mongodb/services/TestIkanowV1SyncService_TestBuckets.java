@@ -21,7 +21,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.text.ParseException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -29,12 +28,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bson.types.ObjectId;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -52,6 +52,7 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
@@ -247,7 +248,6 @@ public class TestIkanowV1SyncService_TestBuckets {
 	////////////////////////////////////////////////////
 
 	// DB INTEGRATION - READ	
-	@Ignore
 	@SuppressWarnings("unchecked")
 	@Test
 	public void test_HitNumResultsSynchronizeSources() throws JsonProcessingException, IOException, ParseException, InterruptedException, ExecutionException {
@@ -281,7 +281,12 @@ public class TestIkanowV1SyncService_TestBuckets {
 		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), "in_progress"); //status should no longer be submitted		
 
 		//lets throw some fake output in the db (more than the requested 10 items)
-		insertFakeOutputData(IkanowV1SyncService_TestBuckets.getBucketFromV1Source(test_entry_1.source()), 15);
+		final DataBucketBean data_bucket = IkanowV1SyncService_TestBuckets.getBucketFromV1Source(test_entry_1.source());
+		final ICrudService<JsonNode> v2_output_index = getTestOutputCrudService(data_bucket).get();
+		insertFakeOutputData(v2_output_index, data_bucket, 15);
+		Thread.sleep(10000);
+		assertEquals(v2_output_index.countObjects().get().longValue(), 15);
+		
 		
 		//run a second time, it should:
 		//1. find the in_progress source and check its status
@@ -292,9 +297,11 @@ public class TestIkanowV1SyncService_TestBuckets {
 		sync_service.synchronizeTestSources(sync_service._core_management_db.getDataBucketStore(), 
 				sync_service._underlying_management_db.getDataBucketStatusStore(), 
 				v2_test_q, new SuccessBucketTestService()).get();	
+		Thread.sleep(10000); //sleep a few seconds to make sure all the ops finish
 		
 		//should have maxed out it's results, check it copied them into output dir
 		final TestQueueBean test_bean = v2_test_q.getObjectById(test_entry_1._id()).get().get();
+		_logger.info("TestBean: status:" + test_bean.status() + " result: " + test_bean.result());
 		assertEquals(test_bean.status(), "completed"); //status should no longer be submitted
 		final String output_collection = test_bean.result();
 		//check the output db
@@ -303,26 +310,20 @@ public class TestIkanowV1SyncService_TestBuckets {
 		
 		//cleanup
 		v2_output_db.deleteDatastore().get();
+		v2_output_index.deleteDatastore().get();
 		v2_test_q.deleteDatastore().get();										
 	}
 	
-	private void insertFakeOutputData(final DataBucketBean data_bucket, long num_objects_to_insert) {
-		final Optional<ICrudService<JsonNode>> v2_output_db = getTestOutputCrudService(data_bucket);
-		List<JsonNode> test_objects = new ArrayList<JsonNode>();
-		for (int i = 0; i < num_objects_to_insert; i++ ) {
-			test_objects.add(_mapper.createObjectNode().put("test", "test" + i));
-		}
-		v2_output_db.get().storeObjects(test_objects);
+	private void insertFakeOutputData(ICrudService<JsonNode> v2_output_index, final DataBucketBean data_bucket, int num_objects_to_insert) throws InterruptedException, ExecutionException {		
+		List<JsonNode> test_objects = IntStream.range(0, num_objects_to_insert).boxed().map(i -> _mapper.createObjectNode().put("test", "test" + i).put("_id", "a"+i)).collect(Collectors.toList());
+		v2_output_index.storeObjects(test_objects).get();
 		_logger.debug("Inserted: " + num_objects_to_insert + " into test output db");
 	}
 	
 	private Optional<ICrudService<JsonNode>> getTestOutputCrudService(final DataBucketBean data_bucket) {
-		//the results are being stored where the bucket output location is
-		//if (test_config.service == "search_index_schema") service_context.getSearchIndexService().get().getCrudService(test_bucket).blah()
-		//if (test_config.service == "storage_service") { /* TODO read the file or something */ }
-		//longer term if (test_config_service == "graph_service") service_context.getGraphService().get().getTinkerpopService().blah
+		final DataBucketBean test_data_bucket = BucketUtils.convertDataBucketBeanToTest(data_bucket, data_bucket.owner_id());
 		return _service_context.getSearchIndexService().flatMap(IDataServiceProvider::getDataService)
-				.flatMap(s -> s.getWritableDataService(JsonNode.class, data_bucket, Optional.empty(), Optional.empty()))
+				.flatMap(s -> s.getWritableDataService(JsonNode.class, test_data_bucket, Optional.empty(), Optional.empty()))
 				.flatMap(IDataWriteService::getCrudService);
 	}
 
@@ -404,10 +405,8 @@ public class TestIkanowV1SyncService_TestBuckets {
 				sync_service._underlying_management_db.getDataBucketStatusStore(), 
 				v2_test_q, new FailBucketTestService()).get();				
 		
-		//ensure its status gets updated to in_progress
-		//TODO
-		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), "error"); //status should no longer be submitted
-		//TODO test things actually happen
+		//ensure its status gets updated to in_progress		
+		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), "error"); //status should no longer be submitted			
 		
 		//cleanup
 		v2_test_q.deleteDatastore().get();										
@@ -445,12 +444,65 @@ public class TestIkanowV1SyncService_TestBuckets {
 				sync_service._underlying_management_db.getDataBucketStatusStore(), 
 				v2_test_q, new ErrorBucketTestService()).get();				
 		
-		//ensure its status gets updated to in_progress
-		//TODO
+		//ensure its status gets updated to in_progress		
 		TestQueueBean t = v2_test_q.getObjectById(test_entry_1._id()).get().get();
 		_logger.info("Got item: " + t._id());
 		assertEquals(t.status(), "error"); //status should no longer be submitted		
-		//TODO test things actually happen
+		
+		//as a bonus, run again, make sure this error source isn't attempted again?
+		sync_service.synchronizeTestSources(sync_service._core_management_db.getDataBucketStore(), 
+				sync_service._underlying_management_db.getDataBucketStatusStore(), 
+				v2_test_q, new ErrorBucketTestService()).get();
+		
+		//cleanup
+		v2_test_q.deleteDatastore().get();										
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Test
+	public void test_ErrorThenPassSynchronizeSources() throws JsonProcessingException, IOException, ParseException, InterruptedException, ExecutionException {
+		_logger.info("Starting test_synchronizeSources");
+		final ICrudService<TestQueueBean> v2_test_q = this._service_context.getCoreManagementDbService().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.v2_test_q/" + TestQueueBean.class.getName())).get();
+		
+		//clear test_q
+		v2_test_q.deleteDatastore().get();
+		
+		//put an entry in the test_q
+		final TestQueueBean test_entry_1 = createTestQEntry(10L);
+		_logger.info("ENTRY: " + test_entry_1.toString());
+		assertEquals(v2_test_q.countObjects().get().longValue(), 0);
+		v2_test_q.storeObject(test_entry_1).get();
+		assertEquals(v2_test_q.countObjects().get().longValue(), 1);
+		
+		//ensure that object is in the db
+		Cursor<TestQueueBean> test_objects = v2_test_q.getObjectsBySpec(
+				CrudUtils.allOf(TestQueueBean.class)
+				.whenNot("status", "complete")).get(); //can be complete | in_progress | {unset/anything else}
+		test_objects.forEach( test_object -> {
+			System.out.println(test_object.toString());
+			assertTrue(test_object._id().equals(test_entry_1._id()));
+		} );
+		
+		//run test cycle
+		sync_service.synchronizeTestSources(sync_service._core_management_db.getDataBucketStore(), 
+				sync_service._underlying_management_db.getDataBucketStatusStore(), 
+				v2_test_q, new ErrorBucketTestService()).get();				
+		
+		//ensure its status gets updated to in_progress		
+		TestQueueBean t = v2_test_q.getObjectById(test_entry_1._id()).get().get();
+		_logger.info("Got item: " + t._id());
+		assertEquals(t.status(), "error"); //status should no longer be submitted		
+		
+		//as a bonus, run again, make sure this error source isn't attempted again?
+		//NOTE: changed the BucketTestService to a passing one, so if it does get picked up it will run
+		sync_service.synchronizeTestSources(sync_service._core_management_db.getDataBucketStore(), 
+				sync_service._underlying_management_db.getDataBucketStatusStore(), 
+				v2_test_q, new SuccessBucketTestService()).get();
+		
+		//make sure its still set to error
+		TestQueueBean t1 = v2_test_q.getObjectById(test_entry_1._id()).get().get();
+		_logger.info("Got item: " + t1._id());
+		assertEquals(t1.status(), "error"); //status should no longer be submitted	
 		
 		//cleanup
 		v2_test_q.deleteDatastore().get();										
