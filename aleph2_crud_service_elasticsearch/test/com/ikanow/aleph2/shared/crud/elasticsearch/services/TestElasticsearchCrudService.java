@@ -126,7 +126,7 @@ public class TestElasticsearchCrudService {
 		return getTestService(test_name_case, bean_clazz, true, Optional.empty());
 	}
 	public <O> ElasticsearchCrudService<O> getTestService(String test_name_case, Class<O> bean_clazz, boolean create_index, Optional<DataSchemaBean.WriteSettings> write_settings) throws InterruptedException, ExecutionException {
-		return getTestService(test_name_case, bean_clazz, true, true, write_settings, Optional.empty(), true);		
+		return getTestService(test_name_case, bean_clazz, create_index, true, write_settings, Optional.empty(), true);		
 	}
 	public <O> ElasticsearchCrudService<O> getTestService(String test_name_case, Class<O> bean_clazz, boolean create_index, boolean delete_index, Optional<DataSchemaBean.WriteSettings> write_settings, Optional<Long> max_index_size, boolean create_aliases) throws InterruptedException, ExecutionException {
 		
@@ -736,7 +736,7 @@ public class TestElasticsearchCrudService {
 		
 		// Multiple Objects
 		
-		//TODO (ALEPH-14): TO BE IMPLEMENTED
+		//(tested under test_multiObjectRetrieve)
 	}
 		
 
@@ -847,94 +847,110 @@ public class TestElasticsearchCrudService {
 		assertEquals(false, obj6.get().isPresent());
 	}
 
-	//TODO
-//	@Test
-//	public void multiObjectRetrieve() throws InterruptedException, ExecutionException {
-//		
-//		final MongoDbCrudService<TestBean, String> service = getTestService("multiObjectRetrieve", TestBean.class, String.class);
-//		
-//		final List<TestBean> l = IntStream.rangeClosed(0, 9).boxed()
-//				.map(i -> BeanTemplateUtils.build(TestBean.class)
-//								.with("_id", "id" + i)
-//								.with("test_string", "test_string" + i)
-//								.with("test_long", (Long)(long)i)
-//								.done().get())
-//				.collect(Collectors.toList());
-//
-//		service.storeObjects(l);
-//		
-//		assertEquals(10, service._state.orig_coll.count());
-//		
-//		service.optimizeQuery(Arrays.asList("test_string")).get(); // (The get() waits for completion)
-//		
-//		// For asserting vs strings where possible:
-//		final JacksonDBCollection<TestBean, String> mapper = service._state.coll;
-//
-//		// 1) Simple retrieve, no fields specified - sort
-//
-//		final QueryComponent<TestBean> query = CrudUtils.allOf(TestBean.class)
-//				.rangeAbove("_id", "id4", true)
-//				.withPresent("test_long")
-//				.orderBy(Tuples._2T("test_string", -1));
-//		
-//		try (Cursor<TestBean> cursor = service.getObjectsBySpec(query).get()) {
-//		
-//			assertEquals(5, cursor.count());
-//			
-//			final List<TestBean> objs = StreamSupport.stream(Optionals.ofNullable(cursor).spliterator(), false).collect(Collectors.toList());
-//			
-//			assertEquals(5, objs.size());
-//			
-//			final DBObject first_obj = mapper.convertToDbObject(objs.get(0));
-//			
-//			assertEquals("{ \"_id\" : \"id9\" , \"test_string\" : \"test_string9\" , \"test_long\" : 9}", first_obj.toString());			
-//		} 
-//		catch (Exception e) {
-//			//(fail on close, normally carry on - but here error out)
-//			fail("getObjectsBySpec errored on close"); 
-//		}
-//		
-//		// 2) Simple retrieve, field specified (exclusive) - sort and limit
-//
-//		final QueryComponent<TestBean> query_2 = CrudUtils.allOf(TestBean.class)
-//				.rangeAbove("_id", "id4", false)
-//				.withPresent("test_long")
-//				.orderBy(Tuples._2T("test_long", 1)).limit(4);
-//		
-//		try (Cursor<TestBean> cursor = service.getObjectsBySpec(query_2, Arrays.asList("test_string"), false).get()) {
-//		
-//			assertEquals(6, cursor.count()); // (count ignores limit)
-//			
-//			final List<TestBean> objs = StreamSupport.stream(Optionals.ofNullable(cursor).spliterator(), false).collect(Collectors.toList());
-//			
-//			assertEquals(4, objs.size());
-//			
-//			final DBObject first_obj = mapper.convertToDbObject(objs.get(0));
-//			
-//			assertEquals("{ \"_id\" : \"id4\" , \"test_long\" : 4}", first_obj.toString());			
-//		} 
-//		catch (Exception e) {
-//			//(fail on close, normally carry on - but here error out)
-//			fail("getObjectsBySpec errored on close"); 
-//		}
-//		
-//		// 3) Simple retrieve, no docs returned
-//		
-//		final QueryComponent<TestBean> query_3 = CrudUtils.allOf(TestBean.class)
-//				.rangeAbove("_id", "id9", true)
-//				.withPresent("test_long")
-//				.limit(4);
-//		
-//		try (Cursor<TestBean> cursor = service.getObjectsBySpec(query_3, Arrays.asList("test_string"), false).get()) {
-//			final List<TestBean> objs = StreamSupport.stream(Optionals.ofNullable(cursor).spliterator(), false).collect(Collectors.toList());
-//			
-//			assertEquals(0, objs.size());
-//		}
-//		catch (Exception e) {
-//			//(fail on close, normally carry on - but here error out)
-//			fail("getObjectsBySpec errored on close"); 
-//		}
-//	}
+	@Test
+	public void multiObjectRetrieve() throws InterruptedException, ExecutionException {
+		
+		final ElasticsearchCrudService<TestBean> service = getTestService("multiObjectRetrieve", TestBean.class);
+		
+		final List<TestBean> l = IntStream.rangeClosed(0, 9).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class)
+								.with("_id", "id" + i)
+								.with("test_string", "test_string" + i)
+								.with("test_long", (Long)(long)i)
+								.done().get())
+				.collect(Collectors.toList());
+
+		service.storeObjects(l).get();
+		
+		assertEquals(10, service.countObjects().get().intValue());
+		
+		service.optimizeQuery(Arrays.asList("test_string")).get(); // (The get() waits for completion)
+		
+		// 1) Simple retrieve, no fields specified - sort
+
+		final QueryComponent<TestBean> query = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("test_string", "test_string4", true)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_string", -1));
+		
+		try (Cursor<TestBean> cursor = service.getObjectsBySpec(query).get()) {
+		
+			assertEquals(5, cursor.count());
+			
+			final List<TestBean> objs = StreamSupport.stream(Optionals.ofNullable(cursor).spliterator(), false).collect(Collectors.toList());
+			
+			assertEquals(5, objs.size());
+			
+			final JsonNode first_obj = BeanTemplateUtils.toJson(objs.get(0));
+			
+			assertEquals("{\"_id\":\"id9\",\"test_string\":\"test_string9\",\"test_long\":9}", first_obj.toString());			
+		} 
+		catch (Exception e) {
+			//(fail on close, normally carry on - but here error out)
+			fail("getObjectsBySpec errored on close"); 
+		}
+		
+		// 2) Simple retrieve, field specified (exclusive) - sort and limit
+
+		final QueryComponent<TestBean> query_2 = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("test_string", "test_string4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", 1)).limit(4);
+		
+		try (Cursor<TestBean> cursor = service.getObjectsBySpec(query_2, Arrays.asList("test_string"), false).get()) {
+		
+			assertEquals(6, cursor.count()); // (count ignores limit)
+			
+			final List<TestBean> objs = StreamSupport.stream(Optionals.ofNullable(cursor).spliterator(), false).collect(Collectors.toList());
+			
+			assertEquals(4, objs.size());
+			
+			final JsonNode first_obj = BeanTemplateUtils.toJson(objs.get(0));
+			
+			assertEquals("{\"_id\":\"id4\",\"test_long\":4}", first_obj.toString());			
+		} 
+		catch (Exception e) {
+			//(fail on close, normally carry on - but here error out)
+			fail("getObjectsBySpec errored on close"); 
+		}
+		
+		// 3) Simple retrieve, no docs returned
+		
+		final QueryComponent<TestBean> query_3 = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("test_string", "test_string9", true)
+				.withPresent("test_long")
+				.limit(4);
+		
+		try (Cursor<TestBean> cursor = service.getObjectsBySpec(query_3, Arrays.asList("test_string"), false).get()) {
+			final List<TestBean> objs = StreamSupport.stream(Optionals.ofNullable(cursor).spliterator(), false).collect(Collectors.toList());
+			
+			assertEquals(0, objs.size());
+		}
+		catch (Exception e) {
+			//(fail on close, normally carry on - but here error out)
+			fail("getObjectsBySpec errored on close"); 
+		}
+		
+		// 4) Test on an index that doens't exists, check the same
+		
+		final ElasticsearchCrudService<TestBean> service2 = getTestService("multiObjectRetrieve_missing", TestBean.class, false, Optional.empty());
+
+		final QueryComponent<TestBean> query_4 = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("test_string", "test_string9", true)
+				.withPresent("test_long")
+				.limit(4)
+				;
+		
+			try (Cursor<TestBean> cursor = service2.getObjectsBySpec(query_4, Arrays.asList("test_string"), false).get()) {
+			final List<TestBean> objs = StreamSupport.stream(Optionals.ofNullable(cursor).spliterator(), false).collect(Collectors.toList());
+			
+			assertEquals(0, objs.size());
+		}
+		catch (Exception e) {
+			//(fail on close, normally carry on - but here error out)
+			fail("getObjectsBySpec errored on close"); 
+		}
+	}
 	
 	@Test
 	public void test_Counting() throws InterruptedException, ExecutionException {

@@ -18,6 +18,7 @@ package com.ikanow.aleph2.shared.crud.elasticsearch.services;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -55,6 +56,7 @@ import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.index.IndexRequest.OpType;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchRequestBuilder;
+import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
@@ -63,6 +65,8 @@ import org.elasticsearch.index.query.FilterBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.indices.IndexMissingException;
 import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.SearchHits;
+import org.elasticsearch.search.sort.SortOrder;
 
 import scala.Tuple2;
 
@@ -138,6 +142,41 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	protected final State _state;
 	protected final ObjectMapper _object_mapper;
 	protected final Optional<DataSchemaBean.WriteSettings> _batch_write_settings;
+	
+	/** A wrapper for an ES return value that is auto-closeable
+	 * @author acp
+	 *
+	 * @param <O>
+	 */
+	public class ElasticsearchCursor extends Cursor<O> {
+				
+		protected ElasticsearchCursor(final SearchResponse sr) {
+			_hits = sr == null ? null : sr.getHits();
+		}
+		protected final SearchHits _hits;
+		
+		@Override
+		public void close() throws Exception {
+		}
+
+		@Override
+		public Iterator<O> iterator() {
+			return null == _hits
+					? Collections.emptyIterator()
+					: Arrays.stream(_hits.hits())
+						.<O>map(hit -> {
+							final Map<String, Object> src_fields = hit.getSource();
+							src_fields.computeIfAbsent("_id", __ -> hit.getId());
+							return _object_mapper.convertValue(src_fields, _state.clazz);
+						})
+						.iterator();
+		}
+
+		@Override
+		public long count() {
+			return Optional.ofNullable(_hits).map(SearchHits::totalHits).orElse(0L);
+		}		
+	}
 	
 	/////////////////////////////////////////////////////
 	
@@ -581,24 +620,56 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getObjectsBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent)
 	 */
 	@Override
-	public CompletableFuture<com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor<O>> getObjectsBySpec(final QueryComponent<O> spec) {
-		//TODO (ALEPH-14): TO BE IMPLEMENTED
-		try {
-			throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "getObjectsBySpec"));
-		}
-		catch (Exception e) {
-			return FutureUtils.returnError(e);
-		}
+	public CompletableFuture<ICrudService.Cursor<O>> getObjectsBySpec(final QueryComponent<O> spec) {
+		return getObjectsBySpec(spec, Collections.emptyList(), false);
 	}
 
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#getObjectsBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent, java.util.List, boolean)
 	 */
 	@Override
-	public CompletableFuture<com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor<O>> getObjectsBySpec(QueryComponent<O> spec, List<String> field_list, boolean include) {
-		//TODO (ALEPH-14): TO BE IMPLEMENTED
+	public CompletableFuture<ICrudService.Cursor<O>> getObjectsBySpec(QueryComponent<O> spec, List<String> field_list, boolean include) {
 		try {
-			throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "getObjectsBySpec"));
+			//TODO (ALEPH-14): Handle case where no source is present but fields are
+			
+			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(spec, _state.id_ranges_ok);
+			
+			final SearchRequestBuilder srb = Optional
+						.of(
+							_state.client.prepareSearch()
+							.setIndices(_state.es_context.indexContext().getReadableIndexArray(Optional.empty()))
+							.setTypes(_state.es_context.typeContext().getReadableTypeArray())
+							.setQuery(QueryBuilders.constantScoreQuery(query._1()))							
+							)
+						.map(s -> (null != spec.getLimit())
+									? s.setSize(spec.getLimit().intValue())
+									: s)
+						.map(s -> (null != spec.getOrderBy())
+									? spec.getOrderBy().stream()
+											.reduce(s, 
+													(ss, sort) -> ss.addSort(sort._1(), sort._2() > 0 ? SortOrder.ASC : SortOrder.DESC), 
+													(s1, s2) -> s1)
+									: s)
+						.map(s -> field_list.isEmpty() 
+								? s 
+								: include
+									? s.setFetchSource(field_list.toArray(new String[0]), new String[0])
+									: s.setFetchSource(new String[0], field_list.toArray(new String[0]))
+							)
+						.get();
+			
+			return ElasticsearchFutureUtils.wrap(srb.execute(), sr -> {				
+				return new ElasticsearchCursor(sr);
+			},
+			(err, future) -> {
+				if (err instanceof IndexMissingException) { // just treat this like an "object not found"
+					future.complete(new ElasticsearchCursor(null));
+				}
+				else {
+					future.completeExceptionally(err);
+				}
+			}
+			);
 		}
 		catch (Exception e) {
 			return FutureUtils.returnError(e);
