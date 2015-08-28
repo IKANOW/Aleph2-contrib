@@ -20,7 +20,9 @@ import org.apache.shiro.authc.credential.CredentialsMatcher;
 import com.google.inject.multibindings.Multibinder;
 import com.ikanow.aleph2.data_model.interfaces.security.IRoleProvider;
 import com.ikanow.aleph2.security.service.IkanowV1CommunityRoleProvider;
+import com.ikanow.aleph2.security.service.IkanowV1DataGroupRoleProvider;
 import com.ikanow.aleph2.security.service.IkanowV1Realm;
+import com.ikanow.aleph2.security.service.IkanowV1UserGroupRoleProvider;
 import com.ikanow.aleph2.security.service.NoCredentialsMatcher;
 
 public class IkanowV1SecurityModule extends CoreSecurityModule{
@@ -41,7 +43,8 @@ public class IkanowV1SecurityModule extends CoreSecurityModule{
 			bindRealm().to(IkanowV1Realm.class);
 			
 			Multibinder<IRoleProvider> uriBinder = Multibinder.newSetBinder(binder(), IRoleProvider.class);
-		    uriBinder.addBinding().to(IkanowV1CommunityRoleProvider.class);
+		    uriBinder.addBinding().to(IkanowV1UserGroupRoleProvider.class);
+		    uriBinder.addBinding().to(IkanowV1DataGroupRoleProvider.class);
 		/*} catch (NoSuchMethodException | SecurityException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
