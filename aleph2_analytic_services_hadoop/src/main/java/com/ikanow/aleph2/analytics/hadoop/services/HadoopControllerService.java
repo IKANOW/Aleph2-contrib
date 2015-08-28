@@ -58,7 +58,10 @@ import fj.data.Validation;
  * @author alex
  */
 public class HadoopControllerService {
-
+	//TODO: logger
+	private static final ObjectMapper _json_mapper = BeanTemplateUtils.configureMapper(Optional.empty());
+	
+	
 	/** Launches the specified Hadoop job
 	 * @param job_name - the job name (in practice derived from the bucketigur
 	 * @param bucket - bucket, for context
@@ -88,6 +91,24 @@ public class HadoopControllerService {
 							}
 							);
 	}
+	public BasicMessageBean stopJob(final String job_name) {
+		return null;
+	}
+	
+	public Tuple2<Integer, BasicMessageBean> checkJob(final String job_name) {
+		return null;
+	}
+
+	//////////////////////////////////////////////////////////////////
+
+	// TODO have a validate in here that just calls the buildJob but without actually doing anything
+	
+	//////////////////////////////////////////////////////////////////
+	
+	// JOB BUILDING UTILITIES
+	
+	//TODO split out into build input/processing/output
+	
 	/** Launches the specified Hadoop job
 	 * @param job_name - the job name (in practice derived from the bucketigur
 	 * @param bucket - bucket, for context
@@ -109,7 +130,6 @@ public class HadoopControllerService {
 			)
 	{
 		try {
-			final ObjectMapper json_mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 			final GlobalPropertiesBean globals = context.getServiceContext().getGlobalProperties();
 			final IStorageService storage_service = context.getServiceContext().getStorageService();
 			
@@ -227,12 +247,7 @@ public class HadoopControllerService {
 				.forEach(mapper -> {
 					mappers_present.set(null);
 					final Configuration mapper_config = getConfig(globals, context_signature);
-					if (null != mapper.config_json()) {
-						mapper_config.set(BasicHadoopConfigBean.CONFIG_JSON_MAPPER, json_mapper.convertValue(mapper.config_json(), String.class));
-					}
-					if (null != mapper.config_string()) {
-						mapper_config.set(BasicHadoopConfigBean.CONFIG_STRING_MAPPER, mapper.config_string());
-					}
+					fillInConfiguration(mapper_config, mapper, Tuples._2T(BasicHadoopConfigBean.CONFIG_JSON_MAPPER, BasicHadoopConfigBean.CONFIG_STRING_MAPPER));
 					//<KEYIN, VALUEIN, KEYOUT, VALUEOUT>
 					//TODO: what should the input class type be (Object.class currently)...
 					// ... if we want to handle video then might need to be tuple2 of JsonNode and stream
@@ -258,14 +273,8 @@ public class HadoopControllerService {
 				.filter(combiner -> Optional.ofNullable(combiner.enabled()).orElse(true))
 				.ifPresent(Lambdas.wrap_consumer_u(combiner -> {
 					combiner_present.set(null);
-					//TODO: handle the "use as reducer" case based on 
-					if (null != combiner.config_json()) {
-						base_config.set(BasicHadoopConfigBean.CONFIG_JSON_COMBINER, json_mapper.convertValue(combiner.config_json(), String.class));
-					}
-					if (null != combiner.config_string()) {
-						base_config.set(BasicHadoopConfigBean.CONFIG_STRING_COMBINER, combiner.config_string());
-					}
-					
+					//TODO: handle the "use as reducer" case based on entry point
+					fillInConfiguration(base_config, combiner, Tuples._2T(BasicHadoopConfigBean.CONFIG_JSON_COMBINER, BasicHadoopConfigBean.CONFIG_STRING_COMBINER));
 					task.setCombinerClass((Class<? extends Reducer>)(Class<?>)Class.forName(combiner.entry_point()));
 				}));
 
@@ -274,7 +283,7 @@ public class HadoopControllerService {
 			
 			//TODO: reducer (hmm can't have a different config for the reducer .. will have to use the param for that)
 			
-			//TODO: set up OutputFormat
+			//TODO: set up OutputFormat ... note delete the data if the "do something" flag is set
 			
 			return null;
 		}
@@ -286,21 +295,21 @@ public class HadoopControllerService {
 		}
 	}
 	
-	public BasicMessageBean stopJob(final String job_name) {
-		return null;
-	}
-	
-	public Tuple2<Integer, BasicMessageBean> checkJob(final String job_name) {
-		return null;
-	}
-
-	//////////////////////////////////////////////////////////////////
-
-	// TODO have a validate in here that just calls the above function but without actually doing anything
-	
 	//////////////////////////////////////////////////////////////////
 	
-	// UTILITIES
+	// LOW LEVEL UTILITIES
+	
+	protected static void fillInConfiguration(final Configuration config, final BasicHadoopConfigBean.Step step, final Tuple2<String, String> jsonfield_stringfield) {
+		if (null != step.config_json()) {
+			config.set(jsonfield_stringfield._1(), _json_mapper.convertValue(step.config_json(), String.class));
+		}
+		if (null != step.config_string()) {
+			config.set(jsonfield_stringfield._2(), step.config_string());
+		}
+		if (null != step.internal_config()) {
+			step.internal_config().entrySet().forEach(kv -> config.set(kv.getKey(), kv.getValue()));
+		}		
+	}
 	
 	/** Get the general configuration object before job specific variables
 	 * @param context

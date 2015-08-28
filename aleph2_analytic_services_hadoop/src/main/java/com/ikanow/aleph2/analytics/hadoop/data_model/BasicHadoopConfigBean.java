@@ -37,9 +37,6 @@ public class BasicHadoopConfigBean {
 	 * @author alex
 	 */
 	public class Step {
-		//TODO: allow mappers to be tied to a particular job (only at the start though?) or maybe have a different object for doing that, ie 
-		// wrap up input_key_type_override/etc in a separate object
-		
 		/** Whether this step is enabled (defaults to true) - note disabling a step might cause the pipeline to fail
 		 *  if the types then don't match)
 		 * @return
@@ -60,6 +57,11 @@ public class BasicHadoopConfigBean {
 		 */
 		public Map<String, Object> config_json() { return config_json == null ? config_json : Collections.unmodifiableMap(config_json); }
 
+		/** A map of strings that is copied directly into the Hadoop configuration object propery by property (unlike the others which are each one field)
+		 * @return
+		 */
+		public Map<String, String> internal_config() { return internal_config == null ? internal_config : Collections.unmodifiableMap(internal_config); }
+		
 		/** Ignored except for reducers, sets a target number of reducers to use (Default: 1)
 		 * @return
 		 */
@@ -88,6 +90,7 @@ public class BasicHadoopConfigBean {
 		private Boolean enabled;
 		private String config_string;
 		private Map<String, Object> config_json;
+		private Map<String, String> internal_config;
 		private String entry_point;		
 		private Long num_tasks;
 		private String output_key_type;
@@ -117,25 +120,10 @@ public class BasicHadoopConfigBean {
 	 */
 	public List<Step> finalizers() { return finalizers; }
 	
-	/** For cases where it is known that an input format is available for the given input key/value types, these can be set
-	 *  Otherwise will generate an error when the job is run (some attempt will be made to convert between formats)
-	 *  For example, where it is known that the input is an Elasticsearch query then XXX can be used
-	 *  (If the key type is overriden then the value must also be and vice versa)
-	 * @return 
-	 */
-	public String input_key_type_override() { return input_key_type_override; }
-	/** For cases where it is known that an input format is available for the given input key/value types, these can be set
-	 *  Otherwise will generate an error when the job is run (some attempt will be made to convert between formats)
-	 *  For example, where it is known that the input is an Elasticsearch query then XXX can be used
-	 *  (If the key type is overriden then the value must also be and vice versa)
-	 * @return
-	 */
-	public String input_value_type_override() { return input_value_type_override; }
-	
 	private List<Step> mappers;
 	private Step combiner;
 	private Step reducer;
 	private List<Step> finalizers;	
-	private String input_key_type_override;
-	private String input_value_type_override;
+	
+	//TODO (ALEPH-12): Also have a map of data service -> type conversion mapper
 }
