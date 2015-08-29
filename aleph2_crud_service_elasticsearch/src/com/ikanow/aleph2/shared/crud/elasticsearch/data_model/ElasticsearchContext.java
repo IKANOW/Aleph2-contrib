@@ -46,6 +46,8 @@ import java.util.function.Predicate;
 import scala.Tuple2;
 import scala.Tuple3;
 
+//TODO: ALEPH-14: Ignore requests for new indexes that are too old? (So we don't bother creating indexes that we'll delete an hour later)
+
 /** Algebraic data type (ADT) encapsulating the state of an elasticsearch crud "service" (which could point at multiple/auto indexes and types)
  * ElasticsearchContext = ReadOnlyContext(ReadOnlyTypeContext, ReadOnlyIndexContext) 
  * 						| ReadWriteContext(ReadWriteTypeContext, ReadWriteIndexContext)

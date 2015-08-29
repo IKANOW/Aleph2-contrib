@@ -79,6 +79,7 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudSe
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchFutureUtils;
 
+import fj.data.Java8;
 import fj.data.Validation;
 
 /** Elasticsearch implementation of the SearchIndexService/TemporalService/ColumnarService
@@ -209,6 +210,9 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	 */
 	public class ElasticsearchDataService implements IDataServiceProvider.IGenericDataService {
 
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getWritableDataService(java.lang.Class, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Optional, java.util.Optional)
+		 */
 		@Override
 		public <O> Optional<IDataWriteService<O>> getWritableDataService(
 				Class<O> clazz, DataBucketBean bucket,
@@ -297,6 +301,9 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "ElasticsearchDataService.getReadableCrudService"));
 		}
 
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getSecondaryBufferList(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
+		 */
 		@Override
 		public Collection<String> getSecondaryBufferList(DataBucketBean bucket) {
 			// TODO (#28): support secondary buffers
@@ -314,17 +321,83 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", ErrorUtils.NOT_YET_IMPLEMENTED, "switchCrudServiceToPrimaryBuffer"));
 		}
 
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#handleAgeOutRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
+		 */
 		@Override
-		public CompletableFuture<BasicMessageBean> handleAgeOutRequest(
-				DataBucketBean bucket) {
-			// TODO (ALEPH-XXX)
-			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("ElasticsearchDataService", "handleAgeOutRequest", ErrorUtils.NOT_YET_IMPLEMENTED, "handleAgeOutRequest"));
+		public CompletableFuture<BasicMessageBean> handleAgeOutRequest(final DataBucketBean bucket) {
+
+			// Step 0: get the deletion time
+			
+			final Optional<String> deletion_bound_str =
+					Optionals.of(() -> bucket.data_schema().temporal_schema().exist_age_max());
+			
+			final Optional<Long> deletion_bound = deletion_bound_str
+						.map(s -> TimeUtils.getDuration(s, Optional.of(new Date())))
+						.filter(Validation::isSuccess)
+						.map(v -> v.success())
+						.map(duration -> 1000L*duration.getSeconds())
+					;
+			
+			if (!deletion_bound.isPresent()) {
+				return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("ElasticsearchDataService", "handleAgeOutRequest", "No age out period specified: {0}", deletion_bound_str.toString()));
+			}
+			
+			// Step 1: grab all the indexes
+			
+			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+			final long lower_bound = new Date().getTime() - deletion_bound.get();
+			
+			//(we'll use the stats since a) the alias code didn't seem to work for some reason b) i'm calling that from other places so might be more likely to be cached somewhere?!)
+			return ElasticsearchFutureUtils.wrap(
+					_crud_factory.getClient().admin().indices().prepareStats()
+	                    .clear()
+	                    .setIndices(base_index + "*")
+	                    .setStore(true)
+	                    .execute()								
+					,
+					stats -> {						
+						// Step 2: delete any indexes that are two far off:
+						
+						// (format is <base-index-signature>_<date>[_<fragment>])						
+						final long num_deleted = stats.getIndices().keySet().stream()
+								.map(s -> s.substring(1 + base_index.length())) //(+1 for _)
+								.map(s -> {
+									final int index = s.lastIndexOf('_');
+									return (index < 0)
+											? s
+											: s.substring(0, index);
+								})
+								.flatMap(s -> {
+									final Validation<String, Date> v = TimeUtils.getDateFromSuffix(s);
+									return Java8.Stream_JavaStream(v.toStream())
+												.filter(d -> d.getTime() <= lower_bound)
+												.map(__ -> s) //(get back to the index)
+												;
+								}) 
+								.map(date_str -> {
+									_crud_factory.getClient().admin().indices()
+													.prepareDelete(base_index + "_" + date_str +"*").execute();
+									return 1;
+								})
+								.count()
+								;
+						
+						return ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "handleAgeOutRequest", "Deleted {0} indexes", num_deleted);						
+					})
+					.exceptionally(t -> {
+						return ErrorUtils.buildErrorMessage("ElasticsearchDataService", "handleAgeOutRequest", ErrorUtils.getLongForm("handleAgeOutRequest error = {0}", t));												
+					})
+					;			
 		}
 
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#handleBucketDeletionRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Optional, boolean)
+		 */
 		@Override
 		public CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(
-				DataBucketBean bucket, Optional<String> secondary_buffer,
-				boolean bucket_getting_deleted) {
+				final DataBucketBean bucket, final Optional<String> secondary_buffer,
+				final boolean bucket_getting_deleted) {
 			if (secondary_buffer.isPresent()) {
 				return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("ElasticsearchDataService", "handleBucketDeletionRequest", ErrorUtils.NOT_YET_IMPLEMENTED, "secondary_buffer != Optional.empty()"));				
 			}
