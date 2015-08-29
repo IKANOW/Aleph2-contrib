@@ -27,6 +27,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -51,9 +52,12 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.IBatchSubservice;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexUtils;
@@ -430,6 +434,9 @@ public class TestElasticsearchIndexService {
 	
 	@Test
 	public void test_endToEnd_autoTime() throws IOException, InterruptedException, ExecutionException {
+		test_endToEnd_autoTime(true);
+	}
+	public void test_endToEnd_autoTime(boolean test_not_create_mode) throws IOException, InterruptedException, ExecutionException {
 		final Calendar time_setter = GregorianCalendar.getInstance();
 		time_setter.set(2015, 1, 1, 13, 0, 0);
 		final String bucket_str = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_end_2_end_bucket.json"), Charsets.UTF_8);
@@ -513,8 +520,13 @@ public class TestElasticsearchIndexService {
 							batch_service.get().storeObject(o2, false);
 						});
 
-		//(give it a chance to run)
-		Thread.sleep(5000L);
+		for (int i = 0; i < 30; ++i) {
+			Thread.sleep(1000L);
+			if (index_service_crud.countObjects().get() >= 10) {
+				System.out.println("Test end 2 end: (Got all the records)");
+				break;
+			}
+		}
 		
 		final GetMappingsResponse gmr = es_context.client().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
 		
@@ -524,7 +536,7 @@ public class TestElasticsearchIndexService {
 		final Set<String> expected_keys =  Arrays.asList(1, 2, 3, 4, 5).stream().map(i -> template_name + "_2015-0" + (i+1) + "-01").collect(Collectors.toSet());
 		final Set<String> expected_types =  Arrays.asList("_default_", "type_1", "type_2").stream().collect(Collectors.toSet());
 		
-		StreamSupport.stream(gmr.getMappings().spliterator(), false)
+		if (test_not_create_mode) StreamSupport.stream(gmr.getMappings().spliterator(), false)
 			.forEach(x -> {
 				assertTrue("Is one of the expected keys: " + x.key + " vs  " + expected_keys.stream().collect(Collectors.joining(":")), expected_keys.contains(x.key));
 				//DEBUG
@@ -540,7 +552,7 @@ public class TestElasticsearchIndexService {
 			});
 		
 		//TEST DELETION:
-		test_handleDeleteOrPurge(bucket, true);
+		if (test_not_create_mode) test_handleDeleteOrPurge(bucket, true);
 	}
 	
 	@Test
@@ -649,6 +661,71 @@ public class TestElasticsearchIndexService {
 		
 		//TEST DELETION:
 		test_handleDeleteOrPurge(bucket, false);
+	}
+	
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	// TEST AGE OUT
+	
+	@Test
+	public void test_ageOut() throws IOException, InterruptedException, ExecutionException {
+		
+		// Call test_endToEnd_autoTime to create 5 time based indexes
+		// 2015-01-01 -> 2015-05-01
+		// How far is now from 2015-05-03
+		final Date d = TimeUtils.getDateFromSuffix("2015-03-02").success();
+		final long total_time_ms = new Date().getTime() - d.getTime();
+		final long total_days = total_time_ms/(1000L*3600L*24L);
+		final String age_out = ErrorUtils.get("{0} days", total_days);
+		
+		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class)
+										.with("full_name", "/test/end-end/auto-time")
+										.with(DataBucketBean::data_schema,
+												BeanTemplateUtils.build(DataSchemaBean.class)
+													.with(DataSchemaBean::temporal_schema,
+														BeanTemplateUtils.build(TemporalSchemaBean.class)
+															.with(TemporalSchemaBean::exist_age_max, age_out)
+														.done().get()
+													)
+												.done().get()
+												)
+										.done().get();
+	
+		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+		
+		test_endToEnd_autoTime(false);
+
+		_index_service._crud_factory.getClient().admin().indices().prepareCreate(template_name + "_2015-03-01_1").execute().actionGet();
+		
+		final GetMappingsResponse gmr = _index_service._crud_factory.getClient().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
+		assertEquals(6, gmr.getMappings().keys().size());
+		
+		CompletableFuture<BasicMessageBean> cf = _index_service.getDataService().get().handleAgeOutRequest(bucket);
+		
+		BasicMessageBean res = cf.get();
+		
+		assertEquals(true, res.success());
+		assertTrue("sensible message: " + res.message(), res.message().contains(" " + 2 + " "));
+
+		System.out.println("Return from to delete: " + res.message());
+		
+		Thread.sleep(5000L); // give the indexes time to delete
+		
+		final GetMappingsResponse gmr2 = _index_service._crud_factory.getClient().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
+		assertEquals(3, gmr2.getMappings().keys().size());
+		
+		final DataBucketBean bucket2 = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("full_name", "/test/handle/age/out/delete/not/temporal")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class).done().get())
+				.done().get();
+		
+		CompletableFuture<BasicMessageBean> cf2 = _index_service.getDataService().get().handleAgeOutRequest(bucket2);		
+		BasicMessageBean res2 = cf2.get();
+		// no temporal settings => returns error
+		assertEquals(false, res2.success());
+		
+		//TODO: need to demonstrate age out of fragments...
 	}
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////

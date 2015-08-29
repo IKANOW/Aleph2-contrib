@@ -27,6 +27,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import org.apache.logging.log4j.LogManager;
@@ -375,6 +376,8 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 												.map(__ -> s) //(get back to the index)
 												;
 								}) 
+								.collect(Collectors.toSet()) // (collapse fragments)
+								.stream()
 								.map(date_str -> {
 									_crud_factory.getClient().admin().indices()
 													.prepareDelete(base_index + "_" + date_str +"*").execute();
