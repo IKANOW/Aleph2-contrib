@@ -705,8 +705,10 @@ public class TestElasticsearchIndexService {
 		BasicMessageBean res = cf.get();
 		
 		assertEquals(true, res.success());
-		assertTrue("sensible message: " + res.message(), res.message().contains(" " + 2 + " "));
+		assertTrue("sensible message: " + res.message(), res.message().contains(" 2 "));
 
+		assertTrue("Message marked as loggable: " + res.details(), Optional.ofNullable(res.details()).filter(m -> m.containsKey("loggable")).isPresent());
+		
 		System.out.println("Return from to delete: " + res.message());
 		
 		Thread.sleep(5000L); // give the indexes time to delete
@@ -714,18 +716,50 @@ public class TestElasticsearchIndexService {
 		final GetMappingsResponse gmr2 = _index_service._crud_factory.getClient().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
 		assertEquals(3, gmr2.getMappings().keys().size());
 		
-		final DataBucketBean bucket2 = BeanTemplateUtils.build(DataBucketBean.class)
+		// Check some edge cases:
+
+		// 1) Run it again, returns success but not loggable:
+		
+		CompletableFuture<BasicMessageBean> cf2 = _index_service.getDataService().get().handleAgeOutRequest(bucket);
+		
+		BasicMessageBean res2 = cf2.get();
+		
+		assertEquals(true, res2.success());
+		assertTrue("sensible message: " + res2.message(), res2.message().contains(" 0 "));
+		assertTrue("Message _not_ marked as loggable: " + res2.details(), !Optional.ofNullable(res2.details()).map(m -> m.get("loggable")).isPresent());
+				
+		// 2) No temporal settings
+		
+		final DataBucketBean bucket3 = BeanTemplateUtils.build(DataBucketBean.class)
 				.with("full_name", "/test/handle/age/out/delete/not/temporal")
 				.with(DataBucketBean::data_schema,
-						BeanTemplateUtils.build(DataSchemaBean.class).done().get())
+						BeanTemplateUtils.build(DataSchemaBean.class)
+						.done().get())
 				.done().get();
 		
-		CompletableFuture<BasicMessageBean> cf2 = _index_service.getDataService().get().handleAgeOutRequest(bucket2);		
-		BasicMessageBean res2 = cf2.get();
-		// no temporal settings => returns error
-		assertEquals(false, res2.success());
+		CompletableFuture<BasicMessageBean> cf3 = _index_service.getDataService().get().handleAgeOutRequest(bucket3);		
+		BasicMessageBean res3 = cf3.get();
+		// no temporal settings => returns success
+		assertEquals(true, res3.success());
 		
-		//TODO: need to demonstrate age out of fragments...
+		// 3) Unparseable temporal settings (in theory won't validate but we can test here)
+
+		final DataBucketBean bucket4 = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("full_name", "/test/handle/age/out/delete/temporal/malformed")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::temporal_schema,
+								BeanTemplateUtils.build(TemporalSchemaBean.class)
+									.with(TemporalSchemaBean::exist_age_max, "bananas")
+								.done().get()
+							)
+						.done().get())
+				.done().get();
+		
+		CompletableFuture<BasicMessageBean> cf4 = _index_service.getDataService().get().handleAgeOutRequest(bucket4);		
+		BasicMessageBean res4 = cf4.get();
+		// no temporal settings => returns success
+		assertEquals(false, res4.success());
 	}
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////

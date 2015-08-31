@@ -14,6 +14,7 @@
 * limitations under the License.
 ******************************************************************************/
 package com.ikanow.aleph2.storage_service_hdfs.services;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.net.URI;
@@ -57,6 +58,7 @@ import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import com.google.common.collect.ImmutableMap;
 
 import scala.Tuple2;
 
@@ -274,6 +276,11 @@ public class HDFSStorageService implements IStorageService {
 												.with(BasicMessageBean::success, accv.success() && v.success())
 												.with(BasicMessageBean::message,
 														accv.message() + "\n" + v.message())
+												.with(BasicMessageBean::details,
+														null == accv.details()
+														? v.details()
+														: accv.details() // (slightly hacky but only create details if we're adding loggable)
+														)												
 											.done();
 								})
 								.map(Optional::of)
@@ -283,7 +290,7 @@ public class HDFSStorageService implements IStorageService {
 					)
 					.map(CompletableFuture::completedFuture)
 					.orElseGet(() -> {
-						return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(
+						return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(
 								HDFSStorageService.class.getSimpleName(), 
 								"handleAgeOutRequest", HdfsErrorUtils.NO_AGE_OUT_SETTINGS));									
 					})
@@ -332,9 +339,16 @@ public class HDFSStorageService implements IStorageService {
 							dfs.delete(p, true);
 						}));					
 				}
-				return ErrorUtils.buildSuccessMessage(HDFSStorageService.class.getSimpleName(), 
+				final BasicMessageBean message = ErrorUtils.buildSuccessMessage(HDFSStorageService.class.getSimpleName(), 
 						"handleAgeOutRequest",
 						"{0}: deleted {1} directories", name, n_deleted.get());
+				
+				return (n_deleted.get() > 0)
+						? BeanTemplateUtils.clone(message).with(BasicMessageBean::details, 
+								ImmutableMap.builder().put("loggable", true).build()
+								).done()
+						: message
+						;
 			}
 			catch (Exception e) {
 				return ErrorUtils.buildErrorMessage(HDFSStorageService.class.getSimpleName(), 

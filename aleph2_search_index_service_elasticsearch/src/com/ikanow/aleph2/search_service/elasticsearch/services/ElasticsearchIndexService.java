@@ -29,6 +29,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import com.google.common.collect.ImmutableMap;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -336,6 +337,10 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			final Optional<String> deletion_bound_str =
 					Optionals.of(() -> bucket.data_schema().temporal_schema().exist_age_max());
 			
+			if (!deletion_bound_str.isPresent()) {
+				return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "handleAgeOutRequest", "No age out period specified: {0}", deletion_bound_str.toString()));
+			}
+			
 			final Optional<Long> deletion_bound = deletion_bound_str
 						.map(s -> TimeUtils.getDuration(s, Optional.of(new Date())))
 						.filter(Validation::isSuccess)
@@ -389,7 +394,15 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 								.count()
 								;
 						
-						return ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "handleAgeOutRequest", "Deleted {0} indexes", num_deleted);						
+						final BasicMessageBean message = ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "handleAgeOutRequest", "Deleted {0} indexes", num_deleted);
+						
+						return (num_deleted > 0)
+								? BeanTemplateUtils.clone(message).with(BasicMessageBean::details, 
+										ImmutableMap.builder().put("loggable", true).build()
+										).done()
+								: message
+								;
+						
 					})
 					.exceptionally(t -> {
 						return ErrorUtils.buildErrorMessage("ElasticsearchDataService", "handleAgeOutRequest", ErrorUtils.getLongForm("handleAgeOutRequest error = {0}", t));												
