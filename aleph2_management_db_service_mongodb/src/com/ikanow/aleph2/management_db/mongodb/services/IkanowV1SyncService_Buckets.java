@@ -224,7 +224,7 @@ public class IkanowV1SyncService_Buckets {
 	 * @param bucket_mgmt
 	 * @param source_db
 	 */
-	protected CompletableFuture<?> synchronizeSources(
+	protected CompletableFuture<Void> synchronizeSources(
 			final IManagementCrudService<DataBucketBean> bucket_mgmt, 
 			final IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
 			final ICrudService<JsonNode> source_db

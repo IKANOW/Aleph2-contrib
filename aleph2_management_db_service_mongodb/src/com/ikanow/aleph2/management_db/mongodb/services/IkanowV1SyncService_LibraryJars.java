@@ -235,7 +235,7 @@ public class IkanowV1SyncService_LibraryJars {
 	 * @param library_mgmt
 	 * @param share_db
 	 */
-	protected CompletableFuture<?> synchronizeLibraryJars(
+	protected CompletableFuture<Void> synchronizeLibraryJars(
 			final IManagementCrudService<SharedLibraryBean> library_mgmt,
 			final IStorageService aleph2_fs,
 			final ICrudService<JsonNode> share_db,
