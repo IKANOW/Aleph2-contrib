@@ -220,7 +220,7 @@ public class IkanowV1SyncService_TestBuckets {
 	 * @param bucket_mgmt
 	 * @param source_db
 	 */
-	protected CompletableFuture<?> synchronizeTestSources(
+	protected CompletableFuture<Void> synchronizeTestSources(
 			final IManagementCrudService<DataBucketBean> bucket_mgmt, 
 			final IManagementCrudService<DataBucketStatusBean> underlying_bucket_status_mgmt, 
 			final ICrudService<TestQueueBean> source_test_db,
@@ -232,7 +232,7 @@ public class IkanowV1SyncService_TestBuckets {
 		final List<CompletableFuture<Boolean>> existing_results = new ArrayList<CompletableFuture<Boolean>>();		
 		
 		//check for entries in test db
-		return getAllTestSources(source_test_db).thenApply( test_sources -> {
+		return getAllTestSources(source_test_db).thenCompose( test_sources -> {
 			_logger.debug("Got test sources successfully, looping over any results");
 			test_sources.forEach(Lambdas.wrap_consumer_u(test_source -> {		
 				final DataBucketBean to_test = Lambdas.wrap_u(() -> getBucketFromV1Source(test_source.source())).get();

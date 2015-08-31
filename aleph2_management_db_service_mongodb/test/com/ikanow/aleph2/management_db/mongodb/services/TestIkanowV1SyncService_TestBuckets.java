@@ -284,7 +284,6 @@ public class TestIkanowV1SyncService_TestBuckets {
 		final DataBucketBean data_bucket = IkanowV1SyncService_TestBuckets.getBucketFromV1Source(test_entry_1.source());
 		final ICrudService<JsonNode> v2_output_index = getTestOutputCrudService(data_bucket).get();
 		insertFakeOutputData(v2_output_index, data_bucket, 15);
-		Thread.sleep(10000);
 		assertEquals(v2_output_index.countObjects().get().longValue(), 15);
 		
 		
@@ -294,12 +293,9 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//3. copy the requested number of results into our test db
 		//4. set the team beans results field to the collection we moved the data to
 		//5. mark the test bean as completed
-		CompletableFuture<?> cf = sync_service.synchronizeTestSources(sync_service._core_management_db.getDataBucketStore(), 
+		sync_service.synchronizeTestSources(sync_service._core_management_db.getDataBucketStore(), 
 				sync_service._underlying_management_db.getDataBucketStatusStore(), 
-				v2_test_q, new SuccessBucketTestService());
-		((CompletableFuture)cf.get()).get(); //TODO fix this hot mess
-		//TODO not sure why we need this, it seems the retireJob function isn't finishing before this returns?
-		//Thread.sleep(10000); //sleep a few seconds to make sure all the ops finish
+				v2_test_q, new SuccessBucketTestService()).get();		
 		
 		//should have maxed out it's results, check it copied them into output dir
 		final TestQueueBean test_bean = v2_test_q.getObjectById(test_entry_1._id()).get().get();
@@ -351,8 +347,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//lets throw some fake output in the db (less than the requested 10 items)
 		final DataBucketBean data_bucket = IkanowV1SyncService_TestBuckets.getBucketFromV1Source(test_entry_1.source());
 		final ICrudService<JsonNode> v2_output_index = getTestOutputCrudService(data_bucket).get();
-		insertFakeOutputData(v2_output_index, data_bucket, 5);
-		Thread.sleep(10000);
+		insertFakeOutputData(v2_output_index, data_bucket, 5);		
 		assertEquals(v2_output_index.countObjects().get().longValue(), 5);
 		
 		
@@ -365,8 +360,6 @@ public class TestIkanowV1SyncService_TestBuckets {
 		sync_service.synchronizeTestSources(sync_service._core_management_db.getDataBucketStore(), 
 				sync_service._underlying_management_db.getDataBucketStatusStore(), 
 				v2_test_q, new SuccessBucketTestService()).get();	
-		//TODO not sure why we need this, it seems the retireJob function isn't finishing before this returns?
-		Thread.sleep(10000); //sleep a few seconds to make sure all the ops finish
 		
 		//should have maxed out it's results, check it copied them into output dir
 		final TestQueueBean test_bean = v2_test_q.getObjectById(test_entry_1._id()).get().get();
@@ -386,7 +379,8 @@ public class TestIkanowV1SyncService_TestBuckets {
 	private void insertFakeOutputData(ICrudService<JsonNode> v2_output_index, final DataBucketBean data_bucket, int num_objects_to_insert) throws InterruptedException, ExecutionException {		
 		List<JsonNode> test_objects = IntStream.range(0, num_objects_to_insert).boxed().map(i -> _mapper.createObjectNode().put("test", "test" + i).put("_id", "a"+i)).collect(Collectors.toList());
 		v2_output_index.storeObjects(test_objects).get();
-		_logger.debug("Inserted: " + num_objects_to_insert + " into test output db");
+		Thread.sleep(10000);
+		_logger.debug("Inserted: " + num_objects_to_insert + " into test output db");		
 	}
 	
 	private Optional<ICrudService<JsonNode>> getTestOutputCrudService(final DataBucketBean data_bucket) {
