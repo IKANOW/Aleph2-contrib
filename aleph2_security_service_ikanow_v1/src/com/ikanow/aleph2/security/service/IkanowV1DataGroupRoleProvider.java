@@ -16,8 +16,10 @@
 package com.ikanow.aleph2.security.service;
 
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -30,11 +32,16 @@ import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.security.IRoleProvider;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 
 public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 	private ICrudService<JsonNode> personDb = null;
+	private ICrudService<JsonNode> sourceDb = null;
+	private IManagementCrudService<DataBucketBean> bucketDb = null;
 	protected final IServiceContext _context;
 	protected IManagementDbService _core_management_db = null;
 	protected IManagementDbService _underlying_management_db = null;
@@ -48,9 +55,18 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 		if(_underlying_management_db == null) {
 		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
 		}
+		if(personDb ==null){
 		String personOptions = "social.person";
 		personDb = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of(personOptions)).get();
-		logger.debug("PersonDB:"+personDb);
+		}
+		if(sourceDb==null){
+			String ingestOptions = "ingest.source";		
+			sourceDb = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of(ingestOptions)).get();
+			logger.debug("SourceDB:"+sourceDb);
+		}
+		if(bucketDb==null){
+			bucketDb = _core_management_db.getDataBucketStore();
+		}
 	}
 
 	@Inject
@@ -59,11 +75,24 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 
 	}
 	
-	protected ICrudService<JsonNode> getPersonStore(){
-		if(personDb == null){
+	protected ICrudService<JsonNode> getPersonDb(){
+		if(personDb == null) {
 			initDb();
 		}
 	      return personDb;		
+	}
+	protected ICrudService<JsonNode> getSourceDb(){
+		if(sourceDb == null){
+			initDb();
+		}
+	      return sourceDb;		
+	}
+
+	protected ICrudService<DataBucketBean> getBucketDb(){
+		if(bucketDb == null){
+			initDb();
+		}
+	      return bucketDb;		
 	}
 
 	@Override
@@ -75,7 +104,7 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 		try {
 			
 			ObjectId objecId = new ObjectId(principalName); 
-			result = getPersonStore().getObjectBySpec(CrudUtils.anyOf().when("_id", objecId)).get();
+			result = getPersonDb().getObjectBySpec(CrudUtils.anyOf().when("_id", objecId)).get();
 	        if(result.isPresent()){
 	        	JsonNode communities = result.get().get("communities");
 	        	if (communities.isArray()) {
@@ -87,6 +116,17 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 	        	    	if(type==null || "data".equalsIgnoreCase(type.asText())){
 		        	    	String communityId = community.get("_id").asText();
 		        	    	permissions.add(communityId);
+		        	    	Tuple2<Set<String>,Set<String>> sourceAndBucketIds = loadSourcesAndBucketIdsByCommunityId(communityId);
+		        	    	// add all sources to permissions
+		        	    	permissions.addAll(sourceAndBucketIds._1());
+		        	    	// add all bucketids to permissions
+		        	    	permissions.addAll(sourceAndBucketIds._2());
+		        	    	Set<String> bucketIds = sourceAndBucketIds._2();
+		        	    	if(!bucketIds.isEmpty()){
+		        	    		Set<String> bucketPaths  = loadBucketPathsbyIds(bucketIds);
+		        	    		Set<String> bucketPathPermissions = convertPathtoPermissions(bucketPaths);
+		        	    		permissions.addAll(bucketPathPermissions);
+		        	    	}
 	        	    	}
 	        	    }
 	        	}
@@ -95,6 +135,66 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 			logger.error("Caught Exception",e);
 		}
 		return Tuple2.apply(roleNames, permissions);
+	}
+
+	/** 
+	 * Converts the Path into a wildcard format used by Shiro.
+	 * @param bucketPaths
+	 * @return
+	 */
+	private Set<String> convertPathtoPermissions(Set<String> bucketPaths) {
+		Set<String> bucketPathPermissions = new HashSet<String>();
+		for (String bucketPath : bucketPaths) {
+			String bucketPermission = bucketPath.replaceAll("/", ":");
+			if(bucketPermission.startsWith(":")){
+				bucketPermission = bucketPermission.substring(1);
+			}
+			bucketPathPermissions.add(bucketPermission);
+		}
+		return bucketPathPermissions;
+	}
+
+	/**
+	 * Returns the sourceIds and the bucket IDs associated with the community.
+	 * @param communityId
+	 * @return
+	 * @throws ExecutionException 
+	 * @throws InterruptedException 
+	 */
+	protected Tuple2<Set<String>, Set<String>> loadSourcesAndBucketIdsByCommunityId(String communityId) throws InterruptedException, ExecutionException {
+		Set<String> sourceIds = new HashSet<String>();
+		Set<String> bucketIds = new HashSet<String>();		
+		ObjectId objecId = new ObjectId(communityId); 
+		Cursor<JsonNode> cursor = getSourceDb().getObjectsBySpec(CrudUtils.anyOf().when("communityIds", objecId)).get();
+
+	        		for (Iterator<JsonNode> it = cursor.iterator(); it.hasNext();) {
+	        			JsonNode source = it.next();
+	        			String sourceId = source.get("_id").asText();	
+	        			sourceIds.add(sourceId);
+	        			JsonNode extracType = source.get("extractType");
+	        			if(extracType!=null && "V2DataBucket".equalsIgnoreCase(extracType.asText())){
+	        				JsonNode bucketId = source.get("key");
+	        				if(bucketId !=null){
+	        					// TODO HACK , according to Alex, buckets have a semicolon as last id character to facilitate some string conversion 
+	        					bucketIds.add(bucketId.asText()+";");
+	        				}
+	        			}
+	        			// bucket id
+	        		}
+					
+		return new Tuple2<Set<String>, Set<String>>(sourceIds,bucketIds);
+	}
+
+	protected Set<String> loadBucketPathsbyIds(Set<String> bucketIds) throws InterruptedException, ExecutionException {
+		Set<String> bucketPaths = new HashSet<String>();
+		Cursor<DataBucketBean> cursor = getBucketDb().getObjectsBySpec(CrudUtils.anyOf(DataBucketBean.class).withAny("_id", bucketIds)).get();
+
+	        		for (Iterator<DataBucketBean> it = cursor.iterator(); it.hasNext();) {
+	        			DataBucketBean bucket = it.next();
+	        			bucketPaths.add(bucket.full_name());
+	        		}
+	        			// bucket id					
+		return bucketPaths;
 	}
 
 	
