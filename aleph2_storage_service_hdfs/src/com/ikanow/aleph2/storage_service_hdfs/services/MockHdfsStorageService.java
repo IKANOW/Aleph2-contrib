@@ -37,6 +37,9 @@ import org.apache.hadoop.conf.Configuration;
 
 import scala.Tuple2;
 
+/** The local file system version of the HDFS service
+ * @author alex
+ */
 public class MockHdfsStorageService extends HDFSStorageService {
 
 	private static final Logger logger = LogManager.getLogger(MockHdfsStorageService.class);

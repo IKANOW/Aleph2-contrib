@@ -295,6 +295,9 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 									Optional.empty(), Optional.empty(), Optional.empty(), write_settings));
 		}
 
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getReadableCrudService(java.lang.Class, java.util.Collection, java.util.Optional)
+		 */
 		@Override
 		public <O> Optional<ICrudService<O>> getReadableCrudService(
 				Class<O> clazz, Collection<DataBucketBean> buckets,

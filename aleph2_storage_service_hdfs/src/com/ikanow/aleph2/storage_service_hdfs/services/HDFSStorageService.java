@@ -21,10 +21,12 @@ import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
@@ -35,20 +37,32 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSc
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.storage_service_hdfs.utils.HdfsErrorUtils;
+
+import fj.data.Validation;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.FileContext;
+import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RawLocalFileSystem;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import scala.Tuple2;
 
+/** The storage service implementation backed by HDFS (not actually clear if another implementation is possible)
+ * @author alex
+ */
 public class HDFSStorageService implements IStorageService {
 	private static final Logger _logger = LogManager.getLogger();	
 	
@@ -184,6 +198,9 @@ public class HDFSStorageService implements IStorageService {
 	 */
 	public class HdfsDataService implements IDataServiceProvider.IGenericDataService {
 
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getWritableDataService(java.lang.Class, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Optional, java.util.Optional)
+		 */
 		@Override
 		public <O> Optional<IDataWriteService<O>> getWritableDataService(
 				Class<O> clazz, DataBucketBean bucket,
@@ -191,9 +208,12 @@ public class HDFSStorageService implements IStorageService {
 			// TODO (ALEPH-??): Support this, the basic idea is - create a uuid based on process + thread id
 			// (in a path possibly based on the timestamp)
 			// append all data into that (add write settings to generic settings and implement - batch size would be the max file size before segmenting etc)
-			return null;
+			return Optional.empty();
 		}
 
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getReadableCrudService(java.lang.Class, java.util.Collection, java.util.Optional)
+		 */
 		@Override
 		public <O> Optional<ICrudService<O>> getReadableCrudService(
 				Class<O> clazz, Collection<DataBucketBean> buckets,
@@ -202,11 +222,18 @@ public class HDFSStorageService implements IStorageService {
 			return Optional.empty();
 		}
 
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getSecondaryBufferList(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
+		 */
 		@Override
 		public Collection<String> getSecondaryBufferList(DataBucketBean bucket) {
+			// TODO (#28): support secondary buffers
 			return Collections.emptyList();
 		}
 
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#switchCrudServiceToPrimaryBuffer(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Optional)
+		 */
 		@Override
 		public CompletableFuture<BasicMessageBean> switchCrudServiceToPrimaryBuffer(
 				DataBucketBean bucket, Optional<String> secondary_buffer) {
@@ -214,13 +241,110 @@ public class HDFSStorageService implements IStorageService {
 			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("HdfsDataService", "switchCrudServiceToPrimaryBuffer", ErrorUtils.NOT_YET_IMPLEMENTED, "switchCrudServiceToPrimaryBuffer"));
 		}
 
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#handleAgeOutRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
+		 */
 		@Override
-		public CompletableFuture<BasicMessageBean> handleAgeOutRequest(
-				DataBucketBean bucket) {
-			// TODO (ALEPH-??): support age out request
-			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("HdfsDataService", "handleAgeOutRequest", ErrorUtils.NOT_YET_IMPLEMENTED, "handleAgeOutRequest"));
+		public CompletableFuture<BasicMessageBean> handleAgeOutRequest(final DataBucketBean bucket) {
+			
+			//TODO (ALEPH-40) make these 3 calls async
+			
+			final Optional<BasicMessageBean> raw_result =
+					Optionals.of(() -> bucket.data_schema().storage_schema().raw_exist_age_max())
+					.map(bound -> handleAgeOutRequest_Worker("Raw", bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW, bound));
+			
+			final Optional<BasicMessageBean> json_result =
+					Optionals.of(() -> bucket.data_schema().storage_schema().json_exist_age_max())
+					.map(bound -> handleAgeOutRequest_Worker("Json", bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON, bound));
+			
+			final Optional<BasicMessageBean> processed_result =
+					Optionals.of(() -> bucket.data_schema().storage_schema().processed_exist_age_max())
+					.map(bound -> handleAgeOutRequest_Worker("Processed", bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED, bound));
+			
+			return Arrays.asList(raw_result, json_result, processed_result)
+					.stream()
+					.filter(o -> o.isPresent())
+					.map(o -> o.get())
+					.reduce(Optional.<BasicMessageBean>empty()
+						,
+						(acc, v) -> {
+							return acc
+								.map(accv -> {
+									return BeanTemplateUtils.clone(accv)
+												.with(BasicMessageBean::success, accv.success() && v.success())
+												.with(BasicMessageBean::message,
+														accv.message() + "\n" + v.message())
+											.done();
+								})
+								.map(Optional::of)
+								.orElse(Optional.of(v));
+						},
+						(acc1, acc2) -> acc1 // (can't happen since not parallel)
+					)
+					.map(CompletableFuture::completedFuture)
+					.orElseGet(() -> {
+						return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(
+								HDFSStorageService.class.getSimpleName(), 
+								"handleAgeOutRequest", HdfsErrorUtils.NO_AGE_OUT_SETTINGS));									
+					})
+					;
 		}
 
+		/** Actual processing to perform to age out check
+		 * @param path - the path (including raw/json/processed)
+		 * @param lower_bound - the user specified maximum age
+		 * @return if age out specified then the status of the age out
+		 */
+		protected BasicMessageBean handleAgeOutRequest_Worker(final String name, final String path, final String lower_bound) {
+			
+			// 0) Convert the bound into a time
+
+			final Optional<Long> deletion_bound = Optional.of(lower_bound)
+					.map(s -> TimeUtils.getDuration(s, Optional.of(new Date())))
+					.filter(Validation::isSuccess)
+					.map(v -> v.success())
+					.map(duration -> 1000L*duration.getSeconds())
+				;
+		
+			if (!deletion_bound.isPresent()) {
+				return ErrorUtils.buildErrorMessage(HDFSStorageService.class.getSimpleName(), 
+						"handleAgeOutRequest", HdfsErrorUtils.AGE_OUT_SETTING_NOT_PARSED, name, lower_bound.toString());
+			}
+						
+			// 1) Get all the sub-directories of Path
+
+			final FileContext dfs = getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
+			final String bucket_root = getRootPath() + "/" + path;
+			try {			
+				final Path p = new Path(bucket_root);
+				final RemoteIterator<LocatedFileStatus> it = dfs.util().listFiles(p, false);
+				final AtomicInteger n_deleted = new AtomicInteger(0);
+				while (it.hasNext()) {
+					final LocatedFileStatus file = it.next();
+					final String dir = file.getPath().getName();
+					
+					// 2) Any of them that are "date-like" get checked
+					
+					final Validation<String, Date> v = TimeUtils.getDateFromSuffix(dir);
+					v.filter(d -> d.getTime() <= deletion_bound.get())
+						.forEach(Lambdas.wrap_consumer_u(s -> {
+							n_deleted.incrementAndGet();
+							dfs.delete(p, true);
+						}));					
+				}
+				return ErrorUtils.buildSuccessMessage(HDFSStorageService.class.getSimpleName(), 
+						"handleAgeOutRequest",
+						"{0}: deleted {1} directories", name, n_deleted.get());
+			}
+			catch (Exception e) {
+				return ErrorUtils.buildErrorMessage(HDFSStorageService.class.getSimpleName(), 
+						"handleAgeOutRequest", ErrorUtils.getLongForm("{1} error = {0}", e, name));
+			}			
+		}
+		
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#handleBucketDeletionRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Optional, boolean)
+		 */
 		@Override
 		public CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(
 				DataBucketBean bucket, Optional<String> secondary_buffer,

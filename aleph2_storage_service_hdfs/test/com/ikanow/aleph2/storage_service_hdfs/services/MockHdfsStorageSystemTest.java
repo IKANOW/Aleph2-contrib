@@ -139,4 +139,9 @@ public class MockHdfsStorageSystemTest {
 				.forEach(Lambdas.wrap_consumer_u(p -> dfs.mkdir(p, FsPermission.getDefault(), true)));
 		
 	}
+	
+	@Test
+	public void test_ageOut() {
+		//TODO:
+	}
 }
