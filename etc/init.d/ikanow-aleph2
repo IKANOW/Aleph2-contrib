@@ -21,7 +21,7 @@
 prog=ikanow-aleph2
 lock_file=/var/lock/subsys/$prog
 pid_file=/var/run/ikanow/$prog.pid
-exec="java -classpath '/opt/aleph2-home/etc/:/opt/aleph2-home/lib/*' com.ikanow.aleph2.data_import_manager.modules.IkanowV1SynchronizationModule /opt/aleph2-home/etc/v1_sync_service.properties > /dev/null 2>&1 &"
+exec="java -classpath '/opt/aleph2-home/etc/:/opt/aleph2-home/lib/*' com.ikanow.aleph2.data_import_manager.modules.DataImportManagerModule /opt/aleph2-home/etc/v1_sync_service.properties > /dev/null 2>&1 &"
 
 start() {
         echo -n $"Starting $prog: "
