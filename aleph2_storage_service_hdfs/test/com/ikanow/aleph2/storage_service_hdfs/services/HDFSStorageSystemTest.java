@@ -62,7 +62,6 @@ public class HDFSStorageSystemTest {
 			catch (Exception e) {} // don't care what
 			assertFalse("Not found", storageService.getUnderlyingPlatformDriver(String.class, Optional.empty()).isPresent());			
 	}
-
 	
-	//TODO (ALEPH-23): handleBucketDeletionRequest
+	//(All the functional tests are over in MockHdfsStorageSystemTest)
 }
