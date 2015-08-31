@@ -83,7 +83,7 @@ public class TestMongoDbCrudService {
 	
 	// Set this string to connect vs a real D
 	private String _real_mongodb_connection = null;
-	//private String _real_mongodb_connection = "localhost:4017";
+	//private String _real_mongodb_connection = "db001.dev.ikanow.com:27017";
 	
 	@Before
 	public void setupCrudServiceFactory() throws UnknownHostException {

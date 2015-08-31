@@ -140,8 +140,10 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			}
 			
 			orig_coll = Patterns.match(coll_).<DBCollection>andReturn()
-							.when(FongoDBCollection.class, c -> c) // (only override native DBCollections)
-							.otherwise(c -> DBCollectionProxyFactory.get(c));
+					//TODO (ALEPH-22): I get one obscure fail in the unit tests when I use the proxied version with Fongo, v unclear why)
+					.when(FongoDBCollection.class, c -> c)
+					//.when(FongoDBCollection.class, c -> DBCollectionProxyFactory.get(c, true))
+					.otherwise(c -> DBCollectionProxyFactory.get(c, false));
 
 			coll = JacksonDBCollection.wrap(orig_coll, bean_clazz, key_clazz, my_mapper);
 			auth_fieldname = auth_fieldname_;

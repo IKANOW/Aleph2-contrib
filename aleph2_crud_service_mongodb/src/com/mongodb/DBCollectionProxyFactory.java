@@ -32,8 +32,8 @@ public class DBCollectionProxyFactory {
 	 * @param dbc - the collection to enhance
 	 * @return - the enhanced collection
 	 */
-	public static DBCollection get(final DBCollection dbc) {
-		return get(dbc.getDB(), dbc.getName());
+	public static DBCollection get(final DBCollection dbc, final boolean is_mock) {
+		return get(dbc.getDB(), dbc.getName(), is_mock);
 	}
 	/** Get the enhanced DB collection from the provided one 
 	 * @param db db name
@@ -41,10 +41,13 @@ public class DBCollectionProxyFactory {
 	 * @return the enhanced collection
 	 */
 	@SuppressWarnings("deprecation")
-	public static DBCollection get(final DB db, final String name) {
+	public static DBCollection get(final DB db, final String name, final boolean is_mock) {
 		
 		Enhancer collectionEnhancer = new Enhancer();
-		collectionEnhancer.setSuperclass(com.mongodb.DBCollectionImpl.class);
+		collectionEnhancer.setSuperclass(is_mock
+				? com.mongodb.FongoDBCollection.class
+				: com.mongodb.DBCollectionImpl.class
+				);
 		MethodInterceptor collectionMi = new MethodInterceptor()
 		{
 			boolean _top_level = true;
@@ -63,10 +66,10 @@ public class DBCollectionProxyFactory {
 							
 							try {
 								Object o = methodProxy.invokeSuper(object, args);
-								//THIS CODE DOESN'T APPPEAR TO BE NEEDED, BUT LEAVE HERE IN CASE IT PROVES TO
-								//if (o instanceof DBCursor) {
-								//	o =  getCursor((DBCursor) o);
-								//}							
+								
+								if (o instanceof DBCursor) {
+									o =  getCursor((DBCursor) o);
+								}							
 								return o;
 							}
 							catch (com.mongodb.MongoException e) {
@@ -89,17 +92,21 @@ public class DBCollectionProxyFactory {
 		};
 		collectionEnhancer.setCallback(collectionMi);
 		return (DBCollection) collectionEnhancer.create(
-				new Class[]{com.mongodb.DBApiLayer.class, String.class}, 
+				is_mock
+				? new Class[]{com.mongodb.FongoDB.class, String.class}
+				: new Class[]{com.mongodb.DBApiLayer.class, String.class}
+				, 
 				new Object[]{db, name});
 	}
 
 	///////////////////////////////////////////////////////////////////////////
 	
-	//DO THE SAME FOR DBCURSOR (BASICALLY ONLY CARE ABOUT next()/hasNext())
-	//(ACTUALLY DOESN'T SEEM TO BE NEEDED)
+	//DO THE SAME FOR DBCURSOR
+
 	protected static DBCursor getCursor(final DBCursor from) {
 		Enhancer dbcursorEnhancer = new Enhancer();
 		dbcursorEnhancer.setSuperclass(com.mongodb.DBCursor.class);
+		
 		MethodInterceptor collectionMi = new MethodInterceptor() {
 			boolean _top_level = true;
 			
@@ -116,7 +123,7 @@ public class DBCollectionProxyFactory {
 							//System.out.println("intercepted method: " + method.toString() + ", loop=" + count + ");
 							
 							try {
-								Object o = methodProxy.invokeSuper(object, args);
+								Object o = methodProxy.invokeSuper(object, args);								
 								return o;
 							}
 							catch (com.mongodb.MongoException e) {
