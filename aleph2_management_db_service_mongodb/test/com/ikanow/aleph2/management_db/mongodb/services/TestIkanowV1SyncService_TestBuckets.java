@@ -294,10 +294,12 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//3. copy the requested number of results into our test db
 		//4. set the team beans results field to the collection we moved the data to
 		//5. mark the test bean as completed
-		sync_service.synchronizeTestSources(sync_service._core_management_db.getDataBucketStore(), 
+		CompletableFuture<?> cf = sync_service.synchronizeTestSources(sync_service._core_management_db.getDataBucketStore(), 
 				sync_service._underlying_management_db.getDataBucketStatusStore(), 
-				v2_test_q, new SuccessBucketTestService()).get();	
-		Thread.sleep(10000); //sleep a few seconds to make sure all the ops finish
+				v2_test_q, new SuccessBucketTestService());
+		((CompletableFuture)cf.get()).get(); //TODO fix this hot mess
+		//TODO not sure why we need this, it seems the retireJob function isn't finishing before this returns?
+		//Thread.sleep(10000); //sleep a few seconds to make sure all the ops finish
 		
 		//should have maxed out it's results, check it copied them into output dir
 		final TestQueueBean test_bean = v2_test_q.getObjectById(test_entry_1._id()).get().get();
@@ -307,6 +309,73 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//check the output db
 		final ICrudService<TestQueueBean> v2_output_db = this._service_context.getCoreManagementDbService().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + output_collection)).get();
 		assertEquals(10, v2_output_db.countObjects().get().longValue());
+		
+		//cleanup
+		v2_output_db.deleteDatastore().get();
+		v2_output_index.deleteDatastore().get();
+		v2_test_q.deleteDatastore().get();										
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Test
+	public void test_TimeoutSomeResultsSynchronizeSources() throws JsonProcessingException, IOException, ParseException, InterruptedException, ExecutionException {
+		_logger.info("Starting test_synchronizeSources");
+		final ICrudService<TestQueueBean> v2_test_q = this._service_context.getCoreManagementDbService().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.v2_test_q/" + TestQueueBean.class.getName())).get();
+		
+		//clear test_q
+		v2_test_q.deleteDatastore().get();
+		
+		//put an entry in the test_q
+		final TestQueueBean test_entry_1 = createTestQEntry(0L);
+		assertEquals(v2_test_q.countObjects().get().longValue(), 0);
+		v2_test_q.storeObject(test_entry_1).get();
+		assertEquals(v2_test_q.countObjects().get().longValue(), 1);
+		
+		//ensure that object is in the db
+		Cursor<TestQueueBean> test_objects = v2_test_q.getObjectsBySpec(
+				CrudUtils.allOf(TestQueueBean.class)
+				.whenNot("status", "complete")).get(); //can be complete | in_progress | {unset/anything else}
+		test_objects.forEach( test_object -> assertTrue(test_object._id().equals(test_entry_1._id())));
+		
+		//run test cycle, this should have:
+		//1. picked up the test queue bean
+		//2. sent it through our fake test success service
+		//3. marked it as in progress
+		sync_service.synchronizeTestSources(sync_service._core_management_db.getDataBucketStore(), 
+				sync_service._underlying_management_db.getDataBucketStatusStore(), 
+				v2_test_q, new SuccessBucketTestService()).get();				
+		
+		//ensure its status gets updated to in_progress
+		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), "in_progress"); //status should no longer be submitted		
+
+		//lets throw some fake output in the db (less than the requested 10 items)
+		final DataBucketBean data_bucket = IkanowV1SyncService_TestBuckets.getBucketFromV1Source(test_entry_1.source());
+		final ICrudService<JsonNode> v2_output_index = getTestOutputCrudService(data_bucket).get();
+		insertFakeOutputData(v2_output_index, data_bucket, 5);
+		Thread.sleep(10000);
+		assertEquals(v2_output_index.countObjects().get().longValue(), 5);
+		
+		
+		//run a second time, it should:
+		//1. find the in_progress source and check its status
+		//2. find we have more than enough results
+		//3. copy the requested number of results into our test db
+		//4. set the team beans results field to the collection we moved the data to
+		//5. mark the test bean as completed
+		sync_service.synchronizeTestSources(sync_service._core_management_db.getDataBucketStore(), 
+				sync_service._underlying_management_db.getDataBucketStatusStore(), 
+				v2_test_q, new SuccessBucketTestService()).get();	
+		//TODO not sure why we need this, it seems the retireJob function isn't finishing before this returns?
+		Thread.sleep(10000); //sleep a few seconds to make sure all the ops finish
+		
+		//should have maxed out it's results, check it copied them into output dir
+		final TestQueueBean test_bean = v2_test_q.getObjectById(test_entry_1._id()).get().get();
+		_logger.info("TestBean: status:" + test_bean.status() + " result: " + test_bean.result());
+		assertEquals(test_bean.status(), "completed"); //status should no longer be submitted
+		final String output_collection = test_bean.result();
+		//check the output db
+		final ICrudService<TestQueueBean> v2_output_db = this._service_context.getCoreManagementDbService().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + output_collection)).get();
+		assertEquals(5, v2_output_db.countObjects().get().longValue());
 		
 		//cleanup
 		v2_output_db.deleteDatastore().get();

@@ -370,7 +370,7 @@ public class IkanowV1SyncService_TestBuckets {
 		}).thenCompose(x -> {
 			_logger.debug("Marking job completed");
 			//do final step for exists/not exists 
-			final String output_collection = data_bucket._id(); //TODO is this okay? what should I be using? should I make sure its mongo-safe?		
+			final String output_collection = data_bucket._id();		
 			//mark job as complete, point to v1 collection				
 			return updateTestSourceStatus(test_source._id(), "completed", source_test_db, Optional.of(new Date()), Optional.ofNullable(output_collection));
 		});
