@@ -288,6 +288,14 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	@Override
 	public CompletableFuture<Boolean> optimizeQuery(final List<String> ordered_field_list) {
 		
+		// Mongo appears to have an ~100 char list on the query, Fongo does not, so add a mannual check
+		// so we don't get the situation where the tests work but it fails operationally
+		
+		String approx_index_name = ordered_field_list.stream().collect(Collectors.joining("."));
+		if (approx_index_name.length() > 100) {
+			throw new MongoException(ErrorUtils.get(ErrorUtils.MONGODB_INDEX_TOO_LONG, approx_index_name));	
+		}
+		
 		return CompletableFuture.supplyAsync(() -> {
 			final BasicDBObject index_keys = new BasicDBObject(
 					ordered_field_list.stream().collect(
