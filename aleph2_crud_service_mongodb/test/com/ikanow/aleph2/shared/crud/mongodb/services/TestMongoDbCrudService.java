@@ -365,6 +365,22 @@ public class TestMongoDbCrudService {
 		final List<DBObject> final_indexes = service._state.orig_coll.getIndexInfo();		
 		
 		assertEquals(expected_new_indexes_4.toString(), final_indexes.toString());
+		
+		//Finally check that you get an error if the index is too long:
+		
+		try {
+			@SuppressWarnings("unused")
+			final Future<Boolean> error = service.optimizeQuery(Arrays.asList(
+					"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX01", "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX02",
+					"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX03", "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX04",
+					"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX05"
+					));
+			
+			fail("Should have errored");
+		}
+		catch (Exception e) {
+			System.out.println("Correctly got error: " + e.getMessage());
+		}
 	}
 	
 	protected String copyableOutput(Object o) {
