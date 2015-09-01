@@ -133,9 +133,12 @@ public class IkanowV1RealmTest {
 		assertEquals(true,securityService.hasRole(subject,caseysRole));
         //test a typed permission (not instance-level)
 		assertEquals(true,securityService.isPermitted(subject,caseysPersonalPermission));
-		((Subject)subject.getSubject()).releaseRunAs();
-		
+		((Subject)subject.getSubject()).releaseRunAs();		
 	}
 
-
+	@Test
+	@Ignore
+	public void testAuthorizedService(){
+		ISubject subject = login();
+	}
 }
