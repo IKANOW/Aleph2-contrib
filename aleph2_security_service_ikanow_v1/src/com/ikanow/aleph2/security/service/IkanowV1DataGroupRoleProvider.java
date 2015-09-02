@@ -41,6 +41,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils;
 public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 	private ICrudService<JsonNode> personDb = null;
 	private ICrudService<JsonNode> sourceDb = null;
+	private ICrudService<JsonNode> shareDb = null;
 	private IManagementCrudService<DataBucketBean> bucketDb = null;
 	protected final IServiceContext _context;
 	protected IManagementDbService _core_management_db = null;
@@ -67,6 +68,10 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 		if(bucketDb==null){
 			bucketDb = _core_management_db.getDataBucketStore();
 		}
+		if(shareDb==null){
+			String shareOptions = "social.share";
+			shareDb = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of(shareOptions)).get();
+		}
 	}
 
 	@Inject
@@ -81,6 +86,13 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 		}
 	      return personDb;		
 	}
+	protected ICrudService<JsonNode> getShareDb(){
+		if(shareDb == null){
+			initDb();
+		}
+	      return shareDb;		
+	}
+
 	protected ICrudService<JsonNode> getSourceDb(){
 		if(sourceDb == null){
 			initDb();
@@ -127,6 +139,8 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 		        	    		Set<String> bucketPathPermissions = convertPathtoPermissions(bucketPaths);
 		        	    		permissions.addAll(bucketPathPermissions);
 		        	    	}
+		        	    	Set<String> shareIds = loadShareIdsByCommunityId(communityId);
+		        	    	permissions.addAll(shareIds);
 	        	    	}
 	        	    }
 	        	}
@@ -197,5 +211,25 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 		return bucketPaths;
 	}
 
+	/**
+	 * Returns the sourceIds and the bucket IDs associated with the community.
+	 * @param communityId
+	 * @return
+	 * @throws ExecutionException 
+	 * @throws InterruptedException 
+	 */
+	protected Set<String> loadShareIdsByCommunityId(String communityId) throws InterruptedException, ExecutionException {
+		Set<String> shareIds = new HashSet<String>();
+		ObjectId objecId = new ObjectId(communityId); 
+		Cursor<JsonNode> cursor = getShareDb().getObjectsBySpec(CrudUtils.anyOf().when("communities._id", objecId)).get();
+
+	        		for (Iterator<JsonNode> it = cursor.iterator(); it.hasNext();) {
+	        			JsonNode share = it.next();
+	        			String shareId = share.get("_id").asText();	
+	        			shareIds.add(shareId);	        			
+	        		}
+					
+		return shareIds;
+	}
 	
 }

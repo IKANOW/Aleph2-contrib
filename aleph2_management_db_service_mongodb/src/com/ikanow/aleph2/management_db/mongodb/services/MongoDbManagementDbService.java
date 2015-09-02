@@ -503,4 +503,10 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 		throw new RuntimeException("This is implemented in the CoreManagementDbService not here");
 	}
 
+	@Override
+	public IManagementDbService getSecuredDb(AuthorizationBean client_auth, Optional<ProjectBean> project_auth) {
+		// TODO verify if we don't want secured Wrapper here.
+		return new MongoDbManagementDbService(_crud_factory, _auth, _project, _properties, true);
+	}
+
 }
