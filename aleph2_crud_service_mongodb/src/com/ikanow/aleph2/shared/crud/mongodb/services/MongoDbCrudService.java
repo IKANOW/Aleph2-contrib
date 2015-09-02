@@ -629,8 +629,15 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#deleteDatastore()
 	 */
 	public CompletableFuture<Boolean> deleteDatastore() {
-		try {			
-			_state.orig_coll.drop();
+		try { 
+			// Fongo has some issues with dropping and multiple instances
+			if (_state.orig_coll instanceof FongoDBCollection) {
+				_state.coll.remove(new BasicDBObject());
+				_state.coll.dropIndexes();
+			}
+			else {
+				_state.orig_coll.drop();
+			}
 			return CompletableFuture.completedFuture((Boolean)(true));
 		}
 		catch (Exception e) {			

@@ -51,13 +51,14 @@ import fj.data.Validation;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.FileContext;
-import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
 import com.google.common.collect.ImmutableMap;
 
 import scala.Tuple2;
@@ -275,7 +276,7 @@ public class HDFSStorageService implements IStorageService {
 									return BeanTemplateUtils.clone(accv)
 												.with(BasicMessageBean::success, accv.success() && v.success())
 												.with(BasicMessageBean::message,
-														accv.message() + "\n" + v.message())
+														accv.message() + "; " + v.message())
 												.with(BasicMessageBean::details,
 														null == accv.details()
 														? v.details()
@@ -306,11 +307,13 @@ public class HDFSStorageService implements IStorageService {
 			
 			// 0) Convert the bound into a time
 
+			final Date now = new Date();
 			final Optional<Long> deletion_bound = Optional.of(lower_bound)
-					.map(s -> TimeUtils.getDuration(s, Optional.of(new Date())))
+					.map(s -> TimeUtils.getDuration(s, Optional.of(now)))
 					.filter(Validation::isSuccess)
 					.map(v -> v.success())
 					.map(duration -> 1000L*duration.getSeconds())
+					.map(offset -> now.getTime() - offset)
 				;
 		
 			if (!deletion_bound.isPresent()) {
@@ -324,19 +327,20 @@ public class HDFSStorageService implements IStorageService {
 			final String bucket_root = getRootPath() + "/" + path;
 			try {			
 				final Path p = new Path(bucket_root);
-				final RemoteIterator<LocatedFileStatus> it = dfs.util().listFiles(p, false);
+				final RemoteIterator<FileStatus> it = dfs.listStatus(p);
+				
 				final AtomicInteger n_deleted = new AtomicInteger(0);
 				while (it.hasNext()) {
-					final LocatedFileStatus file = it.next();
+					final FileStatus file = it.next();					
 					final String dir = file.getPath().getName();
 					
 					// 2) Any of them that are "date-like" get checked
-					
+										
 					final Validation<String, Date> v = TimeUtils.getDateFromSuffix(dir);
 					v.filter(d -> d.getTime() <= deletion_bound.get())
 						.forEach(Lambdas.wrap_consumer_u(s -> {
 							n_deleted.incrementAndGet();
-							dfs.delete(p, true);
+							dfs.delete(file.getPath(), true);
 						}));					
 				}
 				final BasicMessageBean message = ErrorUtils.buildSuccessMessage(HDFSStorageService.class.getSimpleName(), 
