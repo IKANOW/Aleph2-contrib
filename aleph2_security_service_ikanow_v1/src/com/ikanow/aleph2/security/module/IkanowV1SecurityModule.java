@@ -18,7 +18,7 @@ package com.ikanow.aleph2.security.module;
 import org.apache.shiro.authc.credential.CredentialsMatcher;
 
 import com.google.inject.multibindings.Multibinder;
-import com.ikanow.aleph2.data_model.interfaces.security.IRoleProvider;
+import com.ikanow.aleph2.data_model.security.IRoleProvider;
 import com.ikanow.aleph2.security.service.IkanowV1CommunityRoleProvider;
 import com.ikanow.aleph2.security.service.IkanowV1DataGroupRoleProvider;
 import com.ikanow.aleph2.security.service.IkanowV1Realm;
