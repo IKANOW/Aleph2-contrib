@@ -254,15 +254,15 @@ public class HDFSStorageService implements IStorageService {
 			
 			final Optional<BasicMessageBean> raw_result =
 					Optionals.of(() -> bucket.data_schema().storage_schema().raw_exist_age_max())
-					.map(bound -> handleAgeOutRequest_Worker("Raw", bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW, bound));
+					.map(bound -> handleAgeOutRequest_Worker(IStorageService.StorageStage.raw, bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW, bound));
 			
 			final Optional<BasicMessageBean> json_result =
 					Optionals.of(() -> bucket.data_schema().storage_schema().json_exist_age_max())
-					.map(bound -> handleAgeOutRequest_Worker("Json", bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON, bound));
+					.map(bound -> handleAgeOutRequest_Worker(IStorageService.StorageStage.json, bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON, bound));
 			
 			final Optional<BasicMessageBean> processed_result =
 					Optionals.of(() -> bucket.data_schema().storage_schema().processed_exist_age_max())
-					.map(bound -> handleAgeOutRequest_Worker("Processed", bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED, bound));
+					.map(bound -> handleAgeOutRequest_Worker(IStorageService.StorageStage.processed, bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED, bound));
 			
 			return Arrays.asList(raw_result, json_result, processed_result)
 					.stream()
@@ -303,7 +303,7 @@ public class HDFSStorageService implements IStorageService {
 		 * @param lower_bound - the user specified maximum age
 		 * @return if age out specified then the status of the age out
 		 */
-		protected BasicMessageBean handleAgeOutRequest_Worker(final String name, final String path, final String lower_bound) {
+		protected BasicMessageBean handleAgeOutRequest_Worker(final StorageStage stage, final String path, final String lower_bound) {
 			
 			// 0) Convert the bound into a time
 
@@ -318,7 +318,7 @@ public class HDFSStorageService implements IStorageService {
 		
 			if (!deletion_bound.isPresent()) {
 				return ErrorUtils.buildErrorMessage(HDFSStorageService.class.getSimpleName(), 
-						"handleAgeOutRequest", HdfsErrorUtils.AGE_OUT_SETTING_NOT_PARSED, name, lower_bound.toString());
+						"handleAgeOutRequest", HdfsErrorUtils.AGE_OUT_SETTING_NOT_PARSED, stage.toString(), lower_bound.toString());
 			}
 						
 			// 1) Get all the sub-directories of Path
@@ -345,7 +345,7 @@ public class HDFSStorageService implements IStorageService {
 				}
 				final BasicMessageBean message = ErrorUtils.buildSuccessMessage(HDFSStorageService.class.getSimpleName(), 
 						"handleAgeOutRequest",
-						"{0}: deleted {1} directories", name, n_deleted.get());
+						"{0}: deleted {1} directories", stage.toString(), n_deleted.get());
 				
 				return (n_deleted.get() > 0)
 						? BeanTemplateUtils.clone(message).with(BasicMessageBean::details, 
@@ -356,7 +356,7 @@ public class HDFSStorageService implements IStorageService {
 			}
 			catch (Exception e) {
 				return ErrorUtils.buildErrorMessage(HDFSStorageService.class.getSimpleName(), 
-						"handleAgeOutRequest", ErrorUtils.getLongForm("{1} error = {0}", e, name));
+						"handleAgeOutRequest", ErrorUtils.getLongForm("{1} error = {0}", e, stage.toString()));
 			}			
 		}
 		

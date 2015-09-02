@@ -181,9 +181,9 @@ public class MockHdfsStorageSystemTest {
 		BasicMessageBean res = cf.get();
 		
 		assertEquals(true, res.success());
-		assertTrue("sensible message: " + res.message(), res.message().contains("Raw: deleted 1 "));
-		assertTrue("sensible message: " + res.message(), res.message().contains("Json: deleted 4 "));
-		assertTrue("sensible message: " + res.message(), res.message().contains("Processed: deleted 3 "));
+		assertTrue("sensible message: " + res.message(), res.message().contains("raw: deleted 1 "));
+		assertTrue("sensible message: " + res.message(), res.message().contains("json: deleted 4 "));
+		assertTrue("sensible message: " + res.message(), res.message().contains("processed: deleted 3 "));
 
 		assertTrue("Message marked as loggable: " + res.details(), Optional.ofNullable(res.details()).filter(m -> m.containsKey("loggable")).isPresent());
 		
@@ -201,9 +201,9 @@ public class MockHdfsStorageSystemTest {
 		BasicMessageBean res2 = cf2.get();
 		
 		assertEquals(true, res2.success());
-		assertTrue("sensible message: " + res2.message(), res2.message().contains("Raw: deleted 0 "));
-		assertTrue("sensible message: " + res2.message(), res2.message().contains("Json: deleted 0 "));
-		assertTrue("sensible message: " + res2.message(), res2.message().contains("Processed: deleted 0 "));
+		assertTrue("sensible message: " + res2.message(), res2.message().contains("raw: deleted 0 "));
+		assertTrue("sensible message: " + res2.message(), res2.message().contains("json: deleted 0 "));
+		assertTrue("sensible message: " + res2.message(), res2.message().contains("processed: deleted 0 "));
 		assertTrue("Message _not_ marked as loggable: " + res2.details(), !Optional.ofNullable(res2.details()).map(m -> m.get("loggable")).isPresent());
 				
 		// 3) No temporal settings
