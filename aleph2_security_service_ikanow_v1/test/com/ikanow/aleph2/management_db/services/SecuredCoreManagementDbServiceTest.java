@@ -88,7 +88,7 @@ public class SecuredCoreManagementDbServiceTest {
 
 
 	@Test
-//	@Ignore	
+	@Ignore	
 	public void testSharedLibraryAccess(){
 			String bucketId = "aleph...bucket.demo_bucket_1.;";
 			String ownerID = "54f86d8de4b03d27d1ea0d7b";
