@@ -21,28 +21,34 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.filefilter.DirectoryFileFilter;
+import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.http.impl.cookie.DateUtils;
 import org.junit.Test;
 
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
-import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.TimeUtils;
 
 public class MockHdfsStorageSystemTest {
 	
@@ -118,7 +124,6 @@ public class MockHdfsStorageSystemTest {
 		assertFalse("No bucket2 paths were created", new File(System.getProperty("java.io.tmpdir") + File.separator + bucket2.full_name()).exists());		
 	}
 	
-	@org.junit.Ignore
 	@Test
 	public void test_ageOut() throws IOException, InterruptedException, ExecutionException {
 		// 0) Setup
@@ -134,33 +139,78 @@ public class MockHdfsStorageSystemTest {
 		final MockHdfsStorageService storage_service = new MockHdfsStorageService(globals);
 		
 		// 1) Set up bucket (code taken from management_db_service)
-		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test/age/out/bucket").done().get();
+		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class)
+											.with(DataBucketBean::full_name, "/test/age/out/bucket")
+											.with(DataBucketBean::data_schema,
+													BeanTemplateUtils.build(DataSchemaBean.class)
+														.with(DataSchemaBean::storage_schema,
+															BeanTemplateUtils.build(StorageSchemaBean.class)
+																.with(StorageSchemaBean::raw_exist_age_max, "9 days")
+																.with(StorageSchemaBean::json_exist_age_max, "6 days")
+																.with(StorageSchemaBean::processed_exist_age_max, "1 week")
+															.done().get()
+														)
+													.done().get())
+										.done().get();
+		
 		FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + File.separator + bucket.full_name()));		
 		setup_bucket(storage_service, bucket, Collections.emptyList());
 		final String bucket_path = System.getProperty("java.io.tmpdir") + File.separator + bucket.full_name();
 		assertTrue("The file path has been created", new File(bucket_path + "/managed_bucket").exists());
 
-		//TODO: setup some dir buckets based on now-1d, check they exist
-		//TODO: make sure we have the temporal buckets set up
+		final long now = new Date().getTime();
+		IntStream.range(4, 10).boxed().map(i -> now - (i*1000L*3600L*24L))
+			.forEach(Lambdas.wrap_consumer_u(n -> {
+				final String pattern = TimeUtils.getTimeBasedSuffix(TimeUtils.getTimePeriod("1 day").success(), Optional.empty());
+				final String dir = DateUtils.formatDate(new Date(n), pattern);
+				
+				FileUtils.forceMkdir(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_RAW + "/" + dir));
+				FileUtils.forceMkdir(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_JSON + "/" + dir));
+				FileUtils.forceMkdir(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_PROCESSED + "/" + dir));
+			}));
 		
-		//TODO like the ES test, normal case and then some edge cases:
+		// (7 cos includes root)
+		assertEquals(7, FileUtils.listFilesAndDirs(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_RAW), DirectoryFileFilter.DIRECTORY, TrueFileFilter.INSTANCE).size());
+		assertEquals(7, FileUtils.listFilesAndDirs(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_JSON), DirectoryFileFilter.DIRECTORY, TrueFileFilter.INSTANCE).size());
+		assertEquals(7, FileUtils.listFilesAndDirs(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_PROCESSED), DirectoryFileFilter.DIRECTORY, TrueFileFilter.INSTANCE).size());
 		
-		// 1) Run it again, returns success but not loggable:
+		// 1) Normal run:
+		
+		CompletableFuture<BasicMessageBean> cf = storage_service.getDataService().get().handleAgeOutRequest(bucket);
+		
+		BasicMessageBean res = cf.get();
+		
+		assertEquals(true, res.success());
+		assertTrue("sensible message: " + res.message(), res.message().contains("Raw: deleted 1 "));
+		assertTrue("sensible message: " + res.message(), res.message().contains("Json: deleted 4 "));
+		assertTrue("sensible message: " + res.message(), res.message().contains("Processed: deleted 3 "));
+
+		assertTrue("Message marked as loggable: " + res.details(), Optional.ofNullable(res.details()).filter(m -> m.containsKey("loggable")).isPresent());
+		
+		System.out.println("Return from to delete: " + res.message());		
+		
+		//(+1 including root)
+		assertEquals(6, FileUtils.listFilesAndDirs(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_RAW), DirectoryFileFilter.DIRECTORY, TrueFileFilter.INSTANCE).size());
+		assertEquals(3, FileUtils.listFilesAndDirs(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_JSON), DirectoryFileFilter.DIRECTORY, TrueFileFilter.INSTANCE).size());
+		assertEquals(4, FileUtils.listFilesAndDirs(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_PROCESSED), DirectoryFileFilter.DIRECTORY, TrueFileFilter.INSTANCE).size());
+		
+		// 2) Run it again, returns success but not loggable:
 		
 		CompletableFuture<BasicMessageBean> cf2 = storage_service.getDataService().get().handleAgeOutRequest(bucket);
 		
 		BasicMessageBean res2 = cf2.get();
 		
 		assertEquals(true, res2.success());
-		assertTrue("sensible message: " + res2.message(), res2.message().contains(" 0 "));
+		assertTrue("sensible message: " + res2.message(), res2.message().contains("Raw: deleted 0 "));
+		assertTrue("sensible message: " + res2.message(), res2.message().contains("Json: deleted 0 "));
+		assertTrue("sensible message: " + res2.message(), res2.message().contains("Processed: deleted 0 "));
 		assertTrue("Message _not_ marked as loggable: " + res2.details(), !Optional.ofNullable(res2.details()).map(m -> m.get("loggable")).isPresent());
 				
-		// 2) No temporal settings
+		// 3) No temporal settings
 		
 		final DataBucketBean bucket3 = BeanTemplateUtils.build(DataBucketBean.class)
 				.with("full_name", "/test/handle/age/out/delete/not/temporal")
 				.with(DataBucketBean::data_schema,
-						//TODO change schema
 						BeanTemplateUtils.build(DataSchemaBean.class)
 						.done().get())
 				.done().get();
@@ -170,16 +220,15 @@ public class MockHdfsStorageSystemTest {
 		// no temporal settings => returns success
 		assertEquals(true, res3.success());
 		
-		// 3) Unparseable temporal settings (in theory won't validate but we can test here)
+		// 4) Unparseable temporal settings (in theory won't validate but we can test here)
 
 		final DataBucketBean bucket4 = BeanTemplateUtils.build(DataBucketBean.class)
 				.with("full_name", "/test/handle/age/out/delete/temporal/malformed")
 				.with(DataBucketBean::data_schema,
-						//TODO change schema
 						BeanTemplateUtils.build(DataSchemaBean.class)
-							.with(DataSchemaBean::temporal_schema,
-								BeanTemplateUtils.build(TemporalSchemaBean.class)
-									.with(TemporalSchemaBean::exist_age_max, "bananas")
+							.with(DataSchemaBean::storage_schema,
+								BeanTemplateUtils.build(StorageSchemaBean.class)
+									.with(StorageSchemaBean::json_exist_age_max, "bananas")
 								.done().get()
 							)
 						.done().get())
