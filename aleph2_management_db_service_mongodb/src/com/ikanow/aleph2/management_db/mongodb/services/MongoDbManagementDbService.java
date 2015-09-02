@@ -504,7 +504,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	}
 
 	@Override
-	public IManagementDbService getSecuredDb(Optional<AuthorizationBean> client_auth, Optional<ProjectBean> project_auth) {
+	public IManagementDbService getSecuredDb(AuthorizationBean client_auth) {
 		// TODO verify if we don't want secured Wrapper here.
 		return new MongoDbManagementDbService(_crud_factory, _auth, _project, _properties, true);
 	}

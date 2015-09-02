@@ -37,6 +37,7 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
+import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.MultiQueryComponent;
@@ -87,7 +88,7 @@ public class SecuredCoreManagementDbServiceTest {
 
 
 	@Test
-	@Ignore	
+//	@Ignore	
 	public void testSharedLibraryAccess(){
 			String bucketId = "aleph...bucket.demo_bucket_1.;";
 			String ownerID = "54f86d8de4b03d27d1ea0d7b";
@@ -115,8 +116,8 @@ public class SecuredCoreManagementDbServiceTest {
 								}).collect(Collectors.toList());
 
 						MultiQueryComponent<SharedLibraryBean> spec = CrudUtils.<SharedLibraryBean> anyOf(sharedLibsQuery);
-						
-						IManagementCrudService<SharedLibraryBean> shareLibraryStore = managementDbService.getSecuredDb(Optional.empty(), Optional.empty()).getSharedLibraryStore();
+						AuthorizationBean authorizationBean  = null;
+						IManagementCrudService<SharedLibraryBean> shareLibraryStore = managementDbService.getSecuredDb(authorizationBean).getSharedLibraryStore();
 						List<SharedLibraryBean> sharedLibraries = StreamSupport.stream(	shareLibraryStore.getObjectsBySpec(spec).get().spliterator(), false).collect(Collectors.toList());
 						Assert.assertNotNull(sharedLibraries);
 						Assert.assertTrue(sharedLibraries.size()>0);
