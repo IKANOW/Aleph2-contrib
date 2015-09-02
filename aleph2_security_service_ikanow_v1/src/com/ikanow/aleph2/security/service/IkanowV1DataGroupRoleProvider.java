@@ -30,12 +30,12 @@ import scala.Tuple2;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
-import com.ikanow.aleph2.data_model.interfaces.security.IRoleProvider;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.security.IRoleProvider;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 
 public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
