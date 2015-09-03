@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -40,6 +41,8 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.http.impl.cookie.DateUtils;
 import org.junit.Test;
 
+import scala.Tuple2;
+
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
@@ -50,32 +53,98 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
 
-public class MockHdfsStorageSystemTest {
+public class TestMockHdfsStorageSystem {
 	
 	@Test
 	public void test(){
-			GlobalPropertiesBean globals = BeanTemplateUtils.build(GlobalPropertiesBean.class)
-												.with(GlobalPropertiesBean::local_yarn_config_dir, System.getenv("HADOOP_CONF_DIR")).done().get();
+		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 		
-			MockHdfsStorageService storageService = new MockHdfsStorageService(globals);
+		GlobalPropertiesBean globals = BeanTemplateUtils.build(GlobalPropertiesBean.class)
+											.with(GlobalPropertiesBean::distributed_root_dir, temp_dir)
+											.with(GlobalPropertiesBean::local_yarn_config_dir, System.getenv("HADOOP_CONF_DIR")).done().get();
+	
+		MockHdfsStorageService storageService = new MockHdfsStorageService(globals);
+	
+		assertEquals(globals.distributed_root_dir(), storageService.getRootPath());
+		assertEquals(1, storageService.getUnderlyingArtefacts().size());
 		
-			assertEquals(globals.distributed_root_dir(), storageService.getRootPath());
-			assertEquals(1, storageService.getUnderlyingArtefacts().size());
-			assertEquals(0, storageService.validateSchema(null, null)._2().size());
-			
-			FileContext fs1 = storageService.getUnderlyingPlatformDriver(FileContext.class, Optional.<String>empty()).get();
-			assertNotNull(fs1);
+		FileContext fs1 = storageService.getUnderlyingPlatformDriver(FileContext.class, Optional.<String>empty()).get();
+		assertNotNull(fs1);
 
-			RawLocalFileSystem fs2 = storageService.getUnderlyingPlatformDriver(org.apache.hadoop.fs.RawLocalFileSystem.class,Optional.<String>empty()).get();
-			assertNotNull(fs2); 
+		RawLocalFileSystem fs2 = storageService.getUnderlyingPlatformDriver(org.apache.hadoop.fs.RawLocalFileSystem.class,Optional.<String>empty()).get();
+		assertNotNull(fs2); 
 
-			AbstractFileSystem fs3 = storageService.getUnderlyingPlatformDriver(AbstractFileSystem.class,Optional.<String>empty()).get();
-			assertNotNull(fs3); 			
-			
-			assertFalse("Not found", storageService.getUnderlyingPlatformDriver(null, Optional.empty()).isPresent());
-			assertFalse("Not found", storageService.getUnderlyingPlatformDriver(String.class, Optional.empty()).isPresent());			
+		AbstractFileSystem fs3 = storageService.getUnderlyingPlatformDriver(AbstractFileSystem.class,Optional.<String>empty()).get();
+		assertNotNull(fs3); 			
+		
+		assertFalse("Not found", storageService.getUnderlyingPlatformDriver(null, Optional.empty()).isPresent());
+		assertFalse("Not found", storageService.getUnderlyingPlatformDriver(String.class, Optional.empty()).isPresent());			
 	}
 
+	@Test
+	public void test_validate(){
+		
+		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
+		
+		GlobalPropertiesBean globals = BeanTemplateUtils.build(GlobalPropertiesBean.class)
+											.with(GlobalPropertiesBean::distributed_root_dir, temp_dir)
+											.with(GlobalPropertiesBean::local_yarn_config_dir, System.getenv("HADOOP_CONF_DIR")).done().get();
+	
+		MockHdfsStorageService storageService = new MockHdfsStorageService(globals);
+	
+		// Works
+		{
+			final DataBucketBean bucket = 
+					BeanTemplateUtils.build(DataBucketBean.class)
+						.with(DataBucketBean::full_name, "/test/validate/bucket")
+					.done().get();
+			
+			Tuple2<String, List<BasicMessageBean>> res = storageService.validateSchema(null, bucket);
+			assertEquals("Validation: " + res._2().stream().map(BasicMessageBean::message).collect(Collectors.joining("\n")), 0, res._2().size());
+			assertEquals((temp_dir.replace(File.separator,  "/") + "/test/validate/bucket/managed_bucket/").replaceAll("//", "/"), 
+							res._1().replace(File.separator, "/").replaceAll("//", "/"));
+		}
+		// Works some more
+		
+		Arrays.asList("gz", "gzip", "sz", "snappy", "fr.sz", "snappy_framed")
+				.stream()
+				.map(s -> buildBucketWithCodec(s))
+				.forEach(bucket -> {
+					Tuple2<String, List<BasicMessageBean>> res = storageService.validateSchema(bucket.data_schema().storage_schema(), bucket);
+					assertEquals("Validation: " + res._2().stream().map(BasicMessageBean::message).collect(Collectors.joining("\n")), 0, res._2().size());
+					assertEquals((temp_dir.replace(File.separator,  "/") + bucket.full_name() + IStorageService.BUCKET_SUFFIX).replaceAll("//", "/"), 
+							res._1().replace(File.separator, "/").replaceAll("//", "/"));
+				});
+		
+		// Fails
+		
+		Arrays.asList("banana")
+				.stream()
+				.map(s -> buildBucketWithCodec(s))
+				.forEach(bucket -> {
+					Tuple2<String, List<BasicMessageBean>> res = storageService.validateSchema(bucket.data_schema().storage_schema(), bucket);
+					assertEquals("Validation: " + res._2().stream().map(BasicMessageBean::message).collect(Collectors.joining("\n")), 1, res._2().size());
+					assertEquals("", res._1());
+				});
+	}
+
+	private DataBucketBean buildBucketWithCodec(String codec) {
+		return BeanTemplateUtils.build(DataBucketBean.class)
+				.with(DataBucketBean::full_name, "/test/bucket/codec/" + codec)
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::storage_schema,
+								BeanTemplateUtils.build(StorageSchemaBean.class)
+									.with(StorageSchemaBean::json, 
+											BeanTemplateUtils.build(StorageSchemaBean.StorageSubSchemaBean.class)
+												.with(StorageSchemaBean.StorageSubSchemaBean::codec, codec)
+											.done().get())
+								.done().get()
+							)
+						.done().get())
+				.done().get();
+	}	
+	
 	@Test
 	public void test_handleBucketDeletionRequest() throws InterruptedException, ExecutionException, IOException {
 		// 0) Setup
@@ -85,7 +154,7 @@ public class MockHdfsStorageSystemTest {
 				.with(GlobalPropertiesBean::local_yarn_config_dir, temp_dir)
 				.with(GlobalPropertiesBean::distributed_root_dir, temp_dir)
 				.with(GlobalPropertiesBean::local_root_dir, temp_dir)
-				.with(GlobalPropertiesBean::distributed_root_dir, temp_dir)
+				.with(GlobalPropertiesBean::local_cached_jar_dir, temp_dir)
 				.done().get();
 		
 		final MockHdfsStorageService storage_service = new MockHdfsStorageService(globals);

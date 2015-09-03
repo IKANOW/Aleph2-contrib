@@ -16,26 +16,18 @@
 package com.ikanow.aleph2.storage_service_hdfs.services;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
 import java.util.Optional;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.google.inject.Inject;
-import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
-import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean;
-import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
-import com.ikanow.aleph2.data_model.utils.Tuples;
 
 import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.apache.hadoop.conf.Configuration;
-
-import scala.Tuple2;
 
 /** The local file system version of the HDFS service
  * @author alex
@@ -78,14 +70,6 @@ public class MockHdfsStorageService extends HDFSStorageService {
 			logger.error("Caught Exception:",e);
 		}
 		return Optional.ofNullable(driver);
-	}
-
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean)
-	 */
-	@Override
-	public Tuple2<String, List<BasicMessageBean>> validateSchema(final StorageSchemaBean schema, final DataBucketBean bucket) {
-		return Tuples._2T("",  Collections.emptyList());
 	}
 
 	/* (non-Javadoc)

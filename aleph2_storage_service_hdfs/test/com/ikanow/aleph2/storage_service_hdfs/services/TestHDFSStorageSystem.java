@@ -27,7 +27,7 @@ import org.junit.Test;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 
-public class HDFSStorageSystemTest {
+public class TestHDFSStorageSystem {
 	
 	@Test
 	public void test(){
@@ -38,7 +38,6 @@ public class HDFSStorageSystemTest {
 			
 			assertEquals(globals.distributed_root_dir(), storageService.getRootPath());
 			assertEquals(1, storageService.getUnderlyingArtefacts().size());
-			assertEquals(0, storageService.validateSchema(null, null)._2().size());
 						
 			FileContext fs1 = storageService.getUnderlyingPlatformDriver(FileContext.class, Optional.<String>empty()).get();
 			assertNotNull(fs1);

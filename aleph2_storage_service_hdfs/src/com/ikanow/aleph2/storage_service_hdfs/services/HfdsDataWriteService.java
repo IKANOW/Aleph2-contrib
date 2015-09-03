@@ -46,11 +46,14 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.Patterns;
+import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
@@ -69,27 +72,38 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	protected final DataBucketBean _bucket;
 	protected final IStorageService.StorageStage _stage;
 	protected final FileContext _dfs;
+	protected final IStorageService _storage_service;
 	
 	// (currently just share on of these across all users of this service, basically across the process/classloader)
-	protected final BatchHdfsWriteService _writer = new BatchHdfsWriteService();
+	protected final SetOnce<BatchHdfsWriteService> _writer = new SetOnce<>();
 	
 	protected final static String _process_id = UuidUtils.get().getRandomUuid();
 	
 	/** User constructor
 	 * @param bucket
 	 */
-	public HfdsDataWriteService(final DataBucketBean bucket, final IStorageService.StorageStage stage, final FileContext dfs) {
+	public HfdsDataWriteService(final DataBucketBean bucket, final IStorageService.StorageStage stage, final IStorageService storage_service) {
 		_bucket = bucket;
 		_stage = stage;
-		_dfs = dfs;  
+		_storage_service = storage_service;
+		_dfs = storage_service.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 	}
+	
+	/** Lazy initialization for batch writer
+	 */
+	public void setup() {
+		if (!_writer.isSet()) {
+			_writer.trySet(new BatchHdfsWriteService());
+		}		
+	}	
 	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#storeObject(java.lang.Object)
 	 */
 	@Override
 	public CompletableFuture<Supplier<Object>> storeObject(T new_object) {
-		_writer.storeObject(new_object);
+		setup();
+		_writer.get().storeObject(new_object);
 		return CompletableFuture.completedFuture(() -> { return null; });
 	}
 
@@ -99,7 +113,8 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	@Override
 	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(
 			List<T> new_objects) {
-		_writer.storeObjects(new_objects);
+		setup();
+		_writer.get().storeObjects(new_objects);
 		return CompletableFuture.completedFuture(Tuples._2T(() -> Collections.emptyList(), () -> (long)new_objects.size()));
 	}
 
@@ -133,7 +148,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 */
 	@Override
 	public IDataWriteService<JsonNode> getRawService() {
-		return new HfdsDataWriteService<JsonNode>(_bucket, _stage, _dfs);
+		return new HfdsDataWriteService<JsonNode>(_bucket, _stage, _storage_service);
 	}
 
 	/* (non-Javadoc)
@@ -150,7 +165,8 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 */
 	@Override
 	public Optional<IBatchSubservice<T>> getBatchWriteSubservice() {
-		return Optional.of(_writer);
+		setup();
+		return Optional.of(_writer.get());
 	}
 
 	/////////////////////////////////////////////////////////////
@@ -279,13 +295,13 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				for (; !_state.terminate && !Thread.interrupted();) {
 					if (!more_objects) {
 						synchronized (_writer) {
-							max_objects = _writer._state.max_objects;
-							size_kb = _writer._state.size_kb;
-							flush_interval = _writer._state.flush_interval;
+							max_objects = _writer.get()._state.max_objects;
+							size_kb = _writer.get()._state.size_kb;
+							flush_interval = _writer.get()._state.flush_interval;
 							timeout = flush_interval.get(ChronoUnit.NANOS);
 						}
 					}
-					Object o = _writer._shared_queue.poll(timeout, TimeUnit.NANOSECONDS);
+					Object o = _writer.get()._shared_queue.poll(timeout, TimeUnit.NANOSECONDS);
 					if (null == o) {
 						complete_segment();
 						more_objects = false;
@@ -303,7 +319,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 						more_objects = false;
 					}
 					else {
-						more_objects = null != _writer._shared_queue.peek();
+						more_objects = null != _writer.get()._shared_queue.peek();
 					}
 				}
 			}
@@ -347,7 +363,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		private void new_segment() throws Exception {
 			_state.codec = getCanonicalCodec(_bucket.data_schema().storage_schema(), _stage); // (recheck the codec)			
 			
-			_state.curr_path = new Path(getBasePath(_bucket, _stage) + "/" + SPOOL_DIR + "/" + getFilename());
+			_state.curr_path = new Path(getBasePath(_storage_service.getRootPath(), _bucket, _stage) + "/" + SPOOL_DIR + "/" + getFilename());
 			try { _dfs.mkdir(_state.curr_path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {}
 			
 			_state.out = wrapOutputInCodec(_state.codec, _dfs.create(_state.curr_path, EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE)));	
@@ -363,7 +379,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				_state.segment++;
 				
 				final Date now = new Date();
-				final Path path =  new Path(getBasePath(_bucket, _stage) + "/" + getSuffix(now, _bucket, _stage) + "/" + getFilename());
+				final Path path =  new Path(getBasePath(_storage_service.getRootPath(), _bucket, _stage) + "/" + getSuffix(now, _bucket, _stage) + "/" + getFilename());
 				try { _dfs.mkdir(path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {} // (fails if already exists?)
 				_dfs.rename(_state.curr_path, path);
 				
@@ -389,33 +405,22 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 * @return
 	 */
 	public static Optional<String> getCanonicalCodec(final DataSchemaBean.StorageSchemaBean storage_schema, final IStorageService.StorageStage stage) {
-		return Optional.ofNullable(Lambdas.get(() -> {
-			if (IStorageService.StorageStage.raw == stage) {
-				return storage_schema.raw();
-			}
-			else if (IStorageService.StorageStage.json == stage) {
-				return storage_schema.json();
-			}
-			else if (IStorageService.StorageStage.processed == stage) {
-				return storage_schema.processed();
-			}
-			else return null; // (not reachable)		
-		}))
-		.map(ss -> ss.grouping_time_period())
-		.map(codec -> {
-			if (codec.equalsIgnoreCase("gzip")) {
-				return "gz";
-			}
-			if (codec.equalsIgnoreCase("snappy")) {
-				return "sz";
-			}
-			if (codec.equalsIgnoreCase("snappy_framed")) {
-				return "fr.sz";
-			}
-			else return codec;
-		})
-		.map(String::toLowerCase)
-		;
+		return Optional.ofNullable(getStorageSubSchema(storage_schema, stage))
+						.map(ss -> ss.codec())
+						.map(codec -> {
+							if (codec.equalsIgnoreCase("gzip")) {
+								return "gz";
+							}
+							if (codec.equalsIgnoreCase("snappy")) {
+								return "sz";
+							}
+							if (codec.equalsIgnoreCase("snappy_framed")) {
+								return "fr.sz";
+							}
+							else return codec;
+						})
+						.map(String::toLowerCase)
+						;
 	}
 	
 	/** Wraps an output stream in one of the supported codecs
@@ -458,16 +463,15 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 * @param stage
 	 * @return
 	 */
-	public static String getBasePath(final DataBucketBean bucket, final IStorageService.StorageStage stage) {
-		if (IStorageService.StorageStage.raw == stage) {
-			return bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW;
-		}
-		else if (IStorageService.StorageStage.json == stage) {
-			return bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON;				
-		}
-		else { // processing
-			return bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED;								
-		}
+	public static String getBasePath(final String root_path, final DataBucketBean bucket, final IStorageService.StorageStage stage) {
+		return Optional.of(Patterns.match().<String>andReturn()
+								.when(__ -> stage == IStorageService.StorageStage.raw, __ -> IStorageService.STORED_DATA_SUFFIX_RAW)
+								.when(__ -> stage == IStorageService.StorageStage.json, __ -> IStorageService.STORED_DATA_SUFFIX_JSON)
+								.when(__ -> stage == IStorageService.StorageStage.processed, __ -> IStorageService.STORED_DATA_SUFFIX_PROCESSED)
+								.otherwiseAssert()
+							)
+						.map(s -> root_path + bucket.full_name() + s)
+						.get();
 	}
 	
 	/** Gets the time based suffix, or "" if it's not temporal
@@ -476,26 +480,28 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 * @return
 	 */
 	public static String getSuffix(final Date now, final DataBucketBean bucket, final IStorageService.StorageStage stage) {
-		return Optionals.of(() -> bucket.data_schema().storage_schema()).map(store -> {
-			if (IStorageService.StorageStage.raw == stage) {
-				return store.raw();
-			}
-			else if (IStorageService.StorageStage.json == stage) {
-				return store.json();
-			}
-			else if (IStorageService.StorageStage.processed == stage) {
-				return store.processed();
-			}
-			else 
-				return null; // (not reachable)
-		})
-		.map(ss -> ss.grouping_time_period())
-		.<String>map(period -> TimeUtils.getTimePeriod(period)
-						.map(d -> "")
-						.validation(fail -> "", success -> DateUtils.formatDate(now, success))
-				)
-		.orElse("")
-		;
+		return Optionals.of(() -> bucket.data_schema().storage_schema())
+				.map(store -> getStorageSubSchema(store, stage))
+				.map(ss -> ss.grouping_time_period())
+				.<String>map(period -> TimeUtils.getTimePeriod(period)
+								.map(d -> TimeUtils.getTimeBasedSuffix(d, Optional.empty()))
+								.validation(fail -> "", success -> DateUtils.formatDate(now, success))
+						)
+				.orElse("")
+				;
 	}
 	
+	/** Super low level utility to pick out the right storage sub-schema
+	 * @param store
+	 * @param stage
+	 * @return
+	 */
+	private static StorageSchemaBean.StorageSubSchemaBean getStorageSubSchema(final StorageSchemaBean store, final IStorageService.StorageStage stage) {
+		return Patterns.match().<StorageSchemaBean.StorageSubSchemaBean>andReturn()
+						.when(__ -> stage == IStorageService.StorageStage.raw, __ -> store.raw())
+						.when(__ -> stage == IStorageService.StorageStage.json, __ -> store.json())
+						.when(__ -> stage == IStorageService.StorageStage.processed, __ -> store.processed())
+						.otherwiseAssert();		
+	}
+
 }

@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -174,13 +175,39 @@ public class HDFSStorageService implements IStorageService {
 	@Override
 	public Tuple2<String, List<BasicMessageBean>> validateSchema(final StorageSchemaBean schema, final DataBucketBean bucket) {
 		
+		final LinkedList<BasicMessageBean> errors = new LinkedList<>();
+		
 		// Note don't currently need to check the temporal fields because that's handled in the core (not sure why, should get moved at some point?)
 
-		//TODO: check codec		
-		
-		return Tuples._2T("",  Collections.emptyList());
+		Arrays.asList(
+				Optionals.of(() -> schema.raw()),
+				Optionals.of(() -> schema.json()),
+				Optionals.of(() -> schema.processed())
+				)
+				.forEach(sub_schema -> validateCodec(sub_schema).ifPresent(error -> errors.add(error)));
+
+		return errors.isEmpty()
+				? Tuples._2T(this.getRootPath() + bucket.full_name() + IStorageService.BUCKET_SUFFIX,  Collections.emptyList())
+				: Tuples._2T("",  errors)
+				;
 	}
 
+	/** Check the codec against the list of supported codecs
+	 * @param to_validate
+	 * @return
+	 */
+	protected static Optional<BasicMessageBean> validateCodec(Optional<StorageSchemaBean.StorageSubSchemaBean> to_validate) {
+		return to_validate
+			.map(v -> v.codec())
+			.filter(codec -> !codec.equalsIgnoreCase("gz"))
+			.filter(codec -> !codec.equalsIgnoreCase("gzip"))
+			.filter(codec -> !codec.equalsIgnoreCase("snappy"))
+			.filter(codec -> !codec.equalsIgnoreCase("sz"))
+			.filter(codec -> !codec.equalsIgnoreCase("snappy_framed"))
+			.filter(codec -> !codec.equalsIgnoreCase("fr.sz"))
+			.map(codec -> ErrorUtils.buildErrorMessage("HDFSStorageService", "validateCodec", HdfsErrorUtils.CODEC_NOT_SUPPORTED, codec));
+	}
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingArtefacts()
 	 */
