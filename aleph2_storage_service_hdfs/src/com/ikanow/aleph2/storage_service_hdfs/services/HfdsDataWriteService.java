@@ -280,7 +280,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 			String s = null;
 			if (o instanceof List) {
 				List<?> l = (List<?>)o;
-				l.forEach(Lambdas.wrap_consumer_u(ol -> write(ol)));
+				l.stream().forEach(Lambdas.wrap_consumer_u(ol -> write(ol)));
 				return;
 			}
 			else if (o instanceof String) {
@@ -325,6 +325,8 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	//////////////////////////////////////////////////////////////////////
 	
 	// UTILITIES
+	
+	
 	
 	/** Utility function to map the storage type/bucket to a base directory 
 	 * @param bucket
