@@ -26,11 +26,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import org.apache.hadoop.fs.CreateFlag;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
@@ -55,8 +55,6 @@ import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
 import com.ikanow.aleph2.storage_service_hdfs.utils.HdfsErrorUtils;
-
-//TODO: probably do want a compression codec for all these things (support snappy/gzip to start with?)
 
 /** Generic service for writing data out to HDFS
  * @author Alex
@@ -110,7 +108,8 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 */
 	@Override
 	public CompletableFuture<Long> countObjects() {
-		throw new RuntimeException(ErrorUtils.get(HdfsErrorUtils.OPERATION_NOT_SUPPORTED, "countObjects"));
+		// (return a future exception)
+		return FutureUtils.returnError(new RuntimeException(ErrorUtils.get(HdfsErrorUtils.OPERATION_NOT_SUPPORTED, "countObjects")));
 	}
 
 	/* (non-Javadoc)
@@ -118,15 +117,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 */
 	@Override
 	public CompletableFuture<Boolean> deleteDatastore() {
-		try {
-			//TODO: shutdown all the threads for a moment
-			//TODO: delete the directory
-			//TODO: wake them up again
-			return null;
-		}
-		catch (Exception e) {
-			return FutureUtils.returnError(e);
-		}
+		throw new RuntimeException(ErrorUtils.get(HdfsErrorUtils.OPERATION_NOT_SUPPORTED, "deleteDatastore"));
 	}
 
 	/* (non-Javadoc)
@@ -167,30 +158,54 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	// BATCH SUB SERVICE
 	
 	public class BatchHdfsWriteService implements IBatchSubservice<T> {
+		final protected LinkedBlockingQueue<Runnable> _worker_queue = new LinkedBlockingQueue<>();
 		final protected LinkedBlockingQueue<Object> _shared_queue = new LinkedBlockingQueue<>();
 		public class MutableState {
 			int max_objects = 5000; // (5K objects)
 			long size_kb = 20L*1024L; // (20MB)
 			Duration flush_interval = Duration.ofMinutes(1L); // (1 minute)
-			int write_threads = 5;
+			int write_threads = 2;
+			ThreadPoolExecutor _workers = new ThreadPoolExecutor(write_threads, write_threads, 60L, TimeUnit.SECONDS, _worker_queue);
 		}
 		final protected MutableState _state = new MutableState();
 		
+		/** User constructor
+		 */
+		public BatchHdfsWriteService() {
+			// Launch the executor service
+			fillUpEmptyQueue();
+		}
 		
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService.IBatchSubservice#setBatchProperties(java.util.Optional, java.util.Optional, java.util.Optional, java.util.Optional)
+		 */
 		@Override
 		public void setBatchProperties(Optional<Integer> max_objects,
 				Optional<Long> size_kb, Optional<Duration> flush_interval,
 				Optional<Integer> write_threads) {
-			synchronized (_writer) {
+			synchronized (this) {
 				_state.max_objects = max_objects.orElse(_state.max_objects);
 				_state.size_kb = size_kb.orElse(_state.size_kb);
 				_state.flush_interval = flush_interval.orElse(_state.flush_interval);
-				_state.write_threads = max_objects.orElse(_state.write_threads);
+				// (write threads change ignore for now)
 				
-				//(TODO (ALEPH-41): what to do if write threads has changed?!)
+				int old_write_threads = _state.write_threads;
+				_state.write_threads = max_objects.orElse(_state.write_threads);
+				if (old_write_threads < _state.write_threads) { // easy case, just expand
+					_state._workers.setCorePoolSize(_state.write_threads);
+					_state._workers.setMaximumPoolSize(_state.write_threads);
+					for (int i = old_write_threads; i < _state.write_threads; ++i) {
+						_worker_queue.offer(new WriterWorker());
+					}								
+				}
+				else if (old_write_threads > _state.write_threads) { // this is a bit ugly, nuke the existing worker queue
+					_state._workers.shutdownNow();
+					fillUpEmptyQueue();
+				}
+
 			}
 		}
-
+		
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService.IBatchSubservice#storeObjects(java.util.List)
 		 */
@@ -206,6 +221,20 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		public void storeObject(T new_object) {
 			_shared_queue.add(new_object);
 		}
+
+		////////////////////////////////////////
+		
+		// UTILITY
+		
+		/** Fills up queue
+		 */
+		private void fillUpEmptyQueue() {
+			_state._workers = new ThreadPoolExecutor(_state.write_threads, _state.write_threads, 60L, TimeUnit.SECONDS, _worker_queue);
+			
+			for (int i = 0; i < _state.write_threads; ++i) {
+				_worker_queue.offer(new WriterWorker());
+			}			
+		}
 	}
 
 	/////////////////////////////////////////////////////////////
@@ -217,12 +246,13 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		protected static final String SPOOL_DIR = "/.spooldir/";
 		
 		public class MutableState {
+			boolean terminate = false;
+			Optional<String> codec = Optional.empty();
 			int segment = 1;
 			int curr_objects;
 			long curr_size_b;
-			Optional<String> codec; // (snappy/gz[ip])
 			Path curr_path;
-			FSDataOutputStream out;
+			OutputStream out;
 		}
 		final protected MutableState _state = new MutableState();
 		
@@ -233,8 +263,10 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		 */
 		@Override
 		public void run() {
-			
-			//TODO: add runtime shutdown hook
+			Runtime.getRuntime().addShutdownHook(new Thread(Lambdas.wrap_runnable_i(() -> {
+				_state.terminate = true;
+				complete_segment();
+			})));
 			
 			// (Some internal mutable state)
 			boolean more_objects = false;
@@ -244,7 +276,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 			long timeout = flush_interval.get(ChronoUnit.NANOS);
 			
 			try {
-				for (;;) {
+				for (; !_state.terminate && !Thread.interrupted();) {
 					if (!more_objects) {
 						synchronized (_writer) {
 							max_objects = _writer._state.max_objects;
@@ -275,12 +307,12 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 					}
 				}
 			}
-			catch (Exception e) { // assume this is an interrupted error
-				try {
-					complete_segment();
-				}
-				catch (Exception ee) {}
+			catch (Exception e) { // assume this is an interrupted error and fall through to....
 			}
+			try { // always try to complete current segment before exiting
+				complete_segment();
+			}
+			catch (Exception ee) {}
 		}
 		/** Write the object(s) out to the stream
 		 * @param o
@@ -309,27 +341,33 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 			_state.curr_size_b += s.getBytes().length;
 		}
 		
+		/** Create a new segment
+		 * @throws Exception
+		 */
 		private void new_segment() throws Exception {
+			_state.codec = getCanonicalCodec(_bucket.data_schema().storage_schema(), _stage); // (recheck the codec)			
+			
 			_state.curr_path = new Path(getBasePath(_bucket, _stage) + "/" + SPOOL_DIR + "/" + getFilename());
 			try { _dfs.mkdir(_state.curr_path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {}
 			
-			_state.out = _dfs.create(_state.curr_path, EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE));	
-			
-			//TODO: wrap out based on compression settings
+			_state.out = wrapOutputInCodec(_state.codec, _dfs.create(_state.curr_path, EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE)));	
 		}
 		
 		/** Completes an existing segment
 		 * @throws IOException 
 		 */
-		private void complete_segment() throws IOException {
+		private synchronized void complete_segment() throws IOException {
 			if (null != _state.out) {
 				_state.out.close();
+				_state.out = null;
 				_state.segment++;
+				
+				final Date now = new Date();
+				final Path path =  new Path(getBasePath(_bucket, _stage) + "/" + getSuffix(now, _bucket, _stage) + "/" + getFilename());
+				try { _dfs.mkdir(path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {} // (fails if already exists?)
+				_dfs.rename(_state.curr_path, path);
+				
 			}
-			final Date now = new Date();
-			final Path path =  new Path(getBasePath(_bucket, _stage) + "/" + getSuffix(now, _bucket, _stage) + "/" + getFilename());
-			try { _dfs.mkdir(path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {} // (fails if already exists?)
-			_dfs.rename(_state.curr_path, path);
 		}
 		/** Returns the filename corresponding to this object
 		 * @return
@@ -351,35 +389,55 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 * @return
 	 */
 	public static Optional<String> getCanonicalCodec(final DataSchemaBean.StorageSchemaBean storage_schema, final IStorageService.StorageStage stage) {
-		//TODO
-		/**/
-//		return Optional.ofNullable(Lambdas.get(() -> {
-//			if (IStorageService.StorageStage.raw == stage) {
-//				//TODO c/p all these
-//				return storage_schema.raw_grouping_time_period();
-//			}
-//			else if (IStorageService.StorageStage.json == stage) {
-//				return storage_schema.json_grouping_time_period();
-//			}
-//			else if (IStorageService.StorageStage.processed == stage) {
-//				return storage_schema.processed_grouping_time_period();
-//			}
-//			else return null; // (not reachable)		
-//		}))
-//		.map(codec -> {
-//			if (codec.equalsIgnoreCase("gzip")) {
-//				return "gz";
-//			}
-//			else return codec;
-//		})
-//		.map(String::toLowerCase)
-//		;
-		return null;
+		return Optional.ofNullable(Lambdas.get(() -> {
+			if (IStorageService.StorageStage.raw == stage) {
+				return storage_schema.raw();
+			}
+			else if (IStorageService.StorageStage.json == stage) {
+				return storage_schema.json();
+			}
+			else if (IStorageService.StorageStage.processed == stage) {
+				return storage_schema.processed();
+			}
+			else return null; // (not reachable)		
+		}))
+		.map(ss -> ss.grouping_time_period())
+		.map(codec -> {
+			if (codec.equalsIgnoreCase("gzip")) {
+				return "gz";
+			}
+			if (codec.equalsIgnoreCase("snappy")) {
+				return "sz";
+			}
+			if (codec.equalsIgnoreCase("snappy_framed")) {
+				return "fr.sz";
+			}
+			else return codec;
+		})
+		.map(String::toLowerCase)
+		;
 	}
 	
-	public static OutputStream wrapOutputInCodec(final String codec, final OutputStream original_output) {
-		//TODO
-		return null;
+	/** Wraps an output stream in one of the supported codecs
+	 * @param codec
+	 * @param original_output
+	 * @return
+	 */
+	public static OutputStream wrapOutputInCodec(final Optional<String> codec, final OutputStream original_output) {
+		return codec.map(Lambdas.wrap_u(c -> {
+					if (c.equals("gz")) {
+						return new java.util.zip.GZIPOutputStream(original_output);
+					}
+					else if (c.equals("sz")) {
+						return new org.xerial.snappy.SnappyOutputStream(original_output);
+					}
+					else if (c.equals("fr.sz")) {
+						return new org.xerial.snappy.SnappyFramedOutputStream(original_output);
+					}
+					else return null; // (fallback to no codec)
+					
+				}))
+				.orElse(original_output);
 	}
 	
 	/** V simple utility - if we know it's JSON then use that otherwise use nothing
@@ -418,28 +476,26 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 * @return
 	 */
 	public static String getSuffix(final Date now, final DataBucketBean bucket, final IStorageService.StorageStage stage) {
-		/**/
-		//TODO
-//		return Optionals.of(() -> bucket.data_schema().storage_schema()).map(store -> {
-//			if (IStorageService.StorageStage.raw == stage) {
-//				return store.raw_grouping_time_period();
-//			}
-//			else if (IStorageService.StorageStage.json == stage) {
-//				return store.json_grouping_time_period();
-//			}
-//			else if (IStorageService.StorageStage.processed == stage) {
-//				return store.processed_grouping_time_period();
-//			}
-//			else 
-//				return null; // (not reachable)
-//		})
-//		.<String>map(period -> TimeUtils.getTimePeriod(period)
-//						.map(d -> "")
-//						.validation(fail -> "", success -> DateUtils.formatDate(now, success))
-//				)
-//		.orElse("")
-//		;
-		return null;
+		return Optionals.of(() -> bucket.data_schema().storage_schema()).map(store -> {
+			if (IStorageService.StorageStage.raw == stage) {
+				return store.raw();
+			}
+			else if (IStorageService.StorageStage.json == stage) {
+				return store.json();
+			}
+			else if (IStorageService.StorageStage.processed == stage) {
+				return store.processed();
+			}
+			else 
+				return null; // (not reachable)
+		})
+		.map(ss -> ss.grouping_time_period())
+		.<String>map(period -> TimeUtils.getTimePeriod(period)
+						.map(d -> "")
+						.validation(fail -> "", success -> DateUtils.formatDate(now, success))
+				)
+		.orElse("")
+		;
 	}
 	
 }
