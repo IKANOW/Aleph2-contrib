@@ -97,8 +97,9 @@ public class IkanowV1RealmTest {
 	protected ISubject login() throws AuthenticationException{
 		ISubject subject = securityService.getSubject();
 		assertNotNull(subject);
-        UsernamePasswordToken token = new UsernamePasswordToken(System.getProperty("IKANOW_SECURITY_LOGIN","noone@ikanow.com"), System.getProperty("IKANOW_SECURITY_PWD", "not allowed!"));
-		securityService.login(subject,token);			
+		String userName = System.getProperty("IKANOW_SECURITY_LOGIN","noone@ikanow.com");
+		String password = System.getProperty("IKANOW_SECURITY_PWD", "not allowed!");
+		securityService.login(userName,password);			
 		return subject;
 	}
 

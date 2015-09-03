@@ -225,7 +225,7 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 
 	        		for (Iterator<JsonNode> it = cursor.iterator(); it.hasNext();) {
 	        			JsonNode share = it.next();
-	        			String shareId = share.get("_id").asText();	
+	        			String shareId = "v1_"+share.get("_id").asText();	
 	        			shareIds.add(shareId);	        			
 	        		}
 					

@@ -25,7 +25,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.AuthenticationToken;
+import org.apache.shiro.authc.UsernamePasswordToken;
 import org.apache.shiro.mgt.SecurityManager;
+import org.apache.shiro.subject.SimplePrincipalCollection;
 import org.apache.shiro.subject.Subject;
 
 import com.google.inject.Inject;
@@ -144,10 +146,15 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 	}
 
 	@Override
-	public void login(ISubject subject, Object token) {
+	public ISubject login(String principalName, Object credentials) {
 		
-		((Subject)getSubject().getSubject()).login((AuthenticationToken)token);
-		
+		String password = (String)credentials;
+        UsernamePasswordToken token = new UsernamePasswordToken(principalName,password);
+        token.setRememberMe(true);
+
+        ISubject subject = getSubject(); 
+		((Subject)subject.getSubject()).login((AuthenticationToken)token);
+		return subject;
 	}
 
 	@Override
@@ -170,9 +177,24 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 
 
 	@Override
-	public Object isPermitted(ISubject subject, String permission) {
+	public boolean isPermitted(ISubject subject, String permission) {
 		boolean ret = ((Subject)getSubject().getSubject()).isPermitted(permission);
 		return ret;
+	}
+
+
+	@Override
+	public void runAs(ISubject subject,Collection<String> principals) {
+		// TODO Auto-generated method stub
+		
+		((Subject)subject.getSubject()).runAs(new SimplePrincipalCollection(principals,IkanowV1Realm.class.getSimpleName()));
+	}
+
+
+	@Override
+	public Collection<String> releaseRunAs(ISubject subject) {
+		// TODO Auto-generated method stub
+		return null;
 	}
 			
 }

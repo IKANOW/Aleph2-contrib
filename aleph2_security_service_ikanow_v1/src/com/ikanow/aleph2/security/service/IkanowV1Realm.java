@@ -19,6 +19,8 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
+import javax.servlet.jsp.tagext.TryCatchFinally;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.shiro.authc.AccountException;
@@ -145,8 +147,16 @@ public class IkanowV1Realm extends AuthorizingRealm {
         try {
         
 
+    		SingleQueryComponent<AuthenticationBean> queryUsername = CrudUtils.anyOf(AuthenticationBean.class).when("username",username);		
+            ObjectId objectId = null;
+	        try {
+	            objectId = new ObjectId(username);
+	            // if we get here the username can be mapped to an id
+	           queryUsername = queryUsername.when("_id",new ObjectId(username));
+			} catch (Exception e) {
+				// TODO: handle exception
+			}
         
-		SingleQueryComponent<AuthenticationBean> queryUsername = CrudUtils.anyOf(AuthenticationBean.class).when("_id",new ObjectId(username)).when("username",username);		
         Optional<AuthenticationBean> result = getAuthenticationStore().getObjectBySpec(queryUsername).get();
         if(result.isPresent()){
         	AuthenticationBean b = result.get();

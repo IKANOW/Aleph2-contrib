@@ -15,6 +15,8 @@
  *******************************************************************************/
 package com.ikanow.aleph2.management_db.services;
 
+import static org.junit.Assert.*;
+
 import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.List;
@@ -24,7 +26,8 @@ import java.util.stream.StreamSupport;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.junit.Assert;
+import org.bson.types.ObjectId;
+import org.junit.Assert.*;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -88,41 +91,25 @@ public class SecuredCoreManagementDbServiceTest {
 
 
 	@Test
-	@Ignore	
 	public void testSharedLibraryAccess(){
 			String bucketId = "aleph...bucket.demo_bucket_1.;";
 			String ownerID = "54f86d8de4b03d27d1ea0d7b";
 			try {
 
-			IManagementCrudService<DataBucketBean> dataBucketStore = managementDbService.getDataBucketStore();
-			SingleQueryComponent<DataBucketBean> querydatBucketFullName = CrudUtils.anyOf(DataBucketBean.class).when("_id",	bucketId);
-			Optional<DataBucketBean> odb = dataBucketStore.getObjectBySpec(querydatBucketFullName).get();
-			if (odb.isPresent()) {
-				DataBucketBean dataBucketBean = odb.get();
-				// TODO hook in security check
-				String ownerId = dataBucketBean.owner_id();
-
-				List<EnrichmentControlMetadataBean> enrichmentConfigs = dataBucketBean.batch_enrichment_configs();
-				for (EnrichmentControlMetadataBean ec : enrichmentConfigs) {
-						logger.info("Loading libraries: " + bucketId);
-
-						List<QueryComponent<SharedLibraryBean>> sharedLibsQuery = ec
-								.library_ids_or_names()
-								.stream()
-								.map(name -> {
-									return CrudUtils.anyOf(SharedLibraryBean.class)
-											.when(SharedLibraryBean::_id, name)
-											.when(SharedLibraryBean::path_name, name);
-								}).collect(Collectors.toList());
-
-						MultiQueryComponent<SharedLibraryBean> spec = CrudUtils.<SharedLibraryBean> anyOf(sharedLibsQuery);
-						AuthorizationBean authorizationBean  = null;
+						AuthorizationBean authorizationBean  = new AuthorizationBean(ownerID);
 						IManagementCrudService<SharedLibraryBean> shareLibraryStore = managementDbService.getSecuredDb(authorizationBean).getSharedLibraryStore();
+//						IManagementCrudService<SharedLibraryBean> shareLibraryStore = managementDbService.getSharedLibraryStore();
+												
+						//test single read
+						String share_id="v1_55ad58f2e4b0293381b3beb4";
+						
+						Optional<SharedLibraryBean> osb = shareLibraryStore.getObjectBySpec(CrudUtils.anyOf(SharedLibraryBean.class).when("_id", share_id)).get();
+						assertTrue(osb.isPresent());
+					/*	MultiQueryComponent<SharedLibraryBean> spec = CrudUtils.<SharedLibraryBean> anyOf(sharedLibsQuery);
 						List<SharedLibraryBean> sharedLibraries = StreamSupport.stream(	shareLibraryStore.getObjectsBySpec(spec).get().spliterator(), false).collect(Collectors.toList());
-						Assert.assertNotNull(sharedLibraries);
-						Assert.assertTrue(sharedLibraries.size()>0);
-				} // for
-			} // odb present
+						assertNotNull(sharedLibraries);
+						assertTrue(sharedLibraries.size()>0); */
+			//} // odb present
 		} catch (Exception e) {
 			logger.error("Caught exception loading shared libraries for job:" + bucketId, e);
 
