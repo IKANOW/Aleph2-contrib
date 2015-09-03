@@ -154,7 +154,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		assertEquals(null,bucket.data_schema().geospatial_schema());
 		assertEquals(null,bucket.data_schema().graph_schema());
 		assertEquals(true,bucket.data_schema().search_index_schema().enabled());
-		assertEquals("week",bucket.data_schema().storage_schema().raw_grouping_time_period());
+		assertEquals("week",bucket.data_schema().storage_schema().raw().grouping_time_period());
 		assertEquals(true,bucket.data_schema().temporal_schema().enabled());
 		assertEquals("DESCRIPTION HERE.", bucket.description());
 		assertEquals("Template V2 data bucket", bucket.display_name());

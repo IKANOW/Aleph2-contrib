@@ -173,6 +173,11 @@ public class HDFSStorageService implements IStorageService {
 	 */
 	@Override
 	public Tuple2<String, List<BasicMessageBean>> validateSchema(final StorageSchemaBean schema, final DataBucketBean bucket) {
+		
+		// Note don't currently need to check the temporal fields because that's handled in the core (not sure why, should get moved at some point?)
+
+		//TODO: check codec		
+		
 		return Tuples._2T("",  Collections.emptyList());
 	}
 
@@ -253,15 +258,15 @@ public class HDFSStorageService implements IStorageService {
 			//TODO (ALEPH-40) make these 3 calls async
 			
 			final Optional<BasicMessageBean> raw_result =
-					Optionals.of(() -> bucket.data_schema().storage_schema().raw_exist_age_max())
+					Optionals.of(() -> bucket.data_schema().storage_schema().raw().exist_age_max())
 					.map(bound -> handleAgeOutRequest_Worker(IStorageService.StorageStage.raw, bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW, bound));
 			
 			final Optional<BasicMessageBean> json_result =
-					Optionals.of(() -> bucket.data_schema().storage_schema().json_exist_age_max())
+					Optionals.of(() -> bucket.data_schema().storage_schema().json().exist_age_max())
 					.map(bound -> handleAgeOutRequest_Worker(IStorageService.StorageStage.json, bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON, bound));
 			
 			final Optional<BasicMessageBean> processed_result =
-					Optionals.of(() -> bucket.data_schema().storage_schema().processed_exist_age_max())
+					Optionals.of(() -> bucket.data_schema().storage_schema().processed().exist_age_max())
 					.map(bound -> handleAgeOutRequest_Worker(IStorageService.StorageStage.processed, bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED, bound));
 			
 			return Arrays.asList(raw_result, json_result, processed_result)

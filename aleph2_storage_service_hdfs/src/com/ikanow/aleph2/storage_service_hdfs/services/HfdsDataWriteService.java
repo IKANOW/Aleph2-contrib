@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.storage_service_hdfs.services;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
@@ -32,7 +33,10 @@ import org.apache.hadoop.fs.CreateFlag;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.http.impl.cookie.DateUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import scala.Tuple2;
 
@@ -41,6 +45,7 @@ import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
@@ -57,6 +62,7 @@ import com.ikanow.aleph2.storage_service_hdfs.utils.HdfsErrorUtils;
  * @author Alex
  */
 public class HfdsDataWriteService<T> implements IDataWriteService<T> {
+	protected static final Logger _logger = LogManager.getLogger();	
 
 	/////////////////////////////////////////////////////////////
 	
@@ -207,10 +213,15 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	// BATCH SUB SERVICE - WORKER THREAD
 	
 	public class WriterWorker implements Runnable {
+		
+		protected static final String SPOOL_DIR = "/.spooldir/";
+		
 		public class MutableState {
 			int segment = 1;
 			int curr_objects;
 			long curr_size_b;
+			Optional<String> codec; // (snappy/gz[ip])
+			Path curr_path;
 			FSDataOutputStream out;
 		}
 		final protected MutableState _state = new MutableState();
@@ -299,9 +310,10 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		}
 		
 		private void new_segment() throws Exception {
-			final Date now = new Date();
-			final String path =  getBasePath(_bucket, _stage) + "/" + getSuffix(now, _bucket, _stage) + "/" + getFilename(); 
-			_state.out = _dfs.create(new Path(path), EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE));	
+			_state.curr_path = new Path(getBasePath(_bucket, _stage) + "/" + SPOOL_DIR + "/" + getFilename());
+			try { _dfs.mkdir(_state.curr_path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {}
+			
+			_state.out = _dfs.create(_state.curr_path, EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE));	
 			
 			//TODO: wrap out based on compression settings
 		}
@@ -312,13 +324,19 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		private void complete_segment() throws IOException {
 			if (null != _state.out) {
 				_state.out.close();
+				_state.segment++;
 			}
+			final Date now = new Date();
+			final Path path =  new Path(getBasePath(_bucket, _stage) + "/" + getSuffix(now, _bucket, _stage) + "/" + getFilename());
+			try { _dfs.mkdir(path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {} // (fails if already exists?)
+			_dfs.rename(_state.curr_path, path);
 		}
 		/** Returns the filename corresponding to this object
 		 * @return
 		 */
 		protected String getFilename() {
-			return _process_id + "_" + _thread_id + "_" + _state.segment;
+			final String suffix = getExtension(_stage) + _state.codec.map(s -> "." + s).orElse("");
+			return _process_id + "_" + _thread_id + "_" + _state.segment + suffix;
 		}
 		
 	}
@@ -327,7 +345,55 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	
 	// UTILITIES
 	
+	/** Returns the codec string (normalized, eg "gzip" -> "gz")
+	 * @param storage_schema
+	 * @param stage
+	 * @return
+	 */
+	public static Optional<String> getCanonicalCodec(final DataSchemaBean.StorageSchemaBean storage_schema, final IStorageService.StorageStage stage) {
+		//TODO
+		/**/
+//		return Optional.ofNullable(Lambdas.get(() -> {
+//			if (IStorageService.StorageStage.raw == stage) {
+//				//TODO c/p all these
+//				return storage_schema.raw_grouping_time_period();
+//			}
+//			else if (IStorageService.StorageStage.json == stage) {
+//				return storage_schema.json_grouping_time_period();
+//			}
+//			else if (IStorageService.StorageStage.processed == stage) {
+//				return storage_schema.processed_grouping_time_period();
+//			}
+//			else return null; // (not reachable)		
+//		}))
+//		.map(codec -> {
+//			if (codec.equalsIgnoreCase("gzip")) {
+//				return "gz";
+//			}
+//			else return codec;
+//		})
+//		.map(String::toLowerCase)
+//		;
+		return null;
+	}
 	
+	public static OutputStream wrapOutputInCodec(final String codec, final OutputStream original_output) {
+		//TODO
+		return null;
+	}
+	
+	/** V simple utility - if we know it's JSON then use that otherwise use nothing
+	 * @param stage
+	 * @return
+	 */
+	public static String getExtension(final IStorageService.StorageStage stage) {
+		if (IStorageService.StorageStage.raw == stage) {
+			return "";
+		}
+		else {
+			return ".json";				
+		}
+	}
 	
 	/** Utility function to map the storage type/bucket to a base directory 
 	 * @param bucket
@@ -352,24 +418,28 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 * @return
 	 */
 	public static String getSuffix(final Date now, final DataBucketBean bucket, final IStorageService.StorageStage stage) {
-		return Optionals.of(() -> bucket.data_schema().storage_schema()).map(store -> {
-			if (IStorageService.StorageStage.raw == stage) {
-				return store.raw_grouping_time_period();
-			}
-			else if (IStorageService.StorageStage.json == stage) {
-				return store.json_grouping_time_period();
-			}
-			else if (IStorageService.StorageStage.processed == stage) {
-				return store.processed_grouping_time_period();
-			}
-			else return null; // (not reachable)
-		})
-		.<String>map(period -> TimeUtils.getTimePeriod(period)
-						.map(d -> "")
-						.validation(fail -> "", success -> DateUtils.formatDate(now, success))
-				)
-		.orElse("")
-		;
+		/**/
+		//TODO
+//		return Optionals.of(() -> bucket.data_schema().storage_schema()).map(store -> {
+//			if (IStorageService.StorageStage.raw == stage) {
+//				return store.raw_grouping_time_period();
+//			}
+//			else if (IStorageService.StorageStage.json == stage) {
+//				return store.json_grouping_time_period();
+//			}
+//			else if (IStorageService.StorageStage.processed == stage) {
+//				return store.processed_grouping_time_period();
+//			}
+//			else 
+//				return null; // (not reachable)
+//		})
+//		.<String>map(period -> TimeUtils.getTimePeriod(period)
+//						.map(d -> "")
+//						.validation(fail -> "", success -> DateUtils.formatDate(now, success))
+//				)
+//		.orElse("")
+//		;
+		return null;
 	}
 	
 }
