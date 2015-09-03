@@ -44,7 +44,9 @@
                 },
                 "storage_schema": {
                     "enabled": true,
-                    "raw_grouping_time_period": "week"
+                    "raw": {
+                    	"grouping_time_period": "week"
+                   	}
                 },
                 "temporal_schema": {
                     "enabled": true,

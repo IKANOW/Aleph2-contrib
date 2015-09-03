@@ -65,7 +65,9 @@
                 },
                 "storage_schema": {
                     "enabled": true,
-                    "json_grouping_time_period": "week"
+                    "json": {
+                    	"grouping_time_period": "week"
+                     }
                 },
                 "temporal_schema": {
                     "enabled": true,

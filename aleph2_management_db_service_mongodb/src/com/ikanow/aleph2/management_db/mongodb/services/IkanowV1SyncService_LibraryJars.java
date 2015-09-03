@@ -590,7 +590,7 @@ public class IkanowV1SyncService_LibraryJars {
 		final String[] description_lines = Optional.ofNullable(safeJsonGet("description", src_json).asText())
 											.orElse("unknown").split("\r\n?|\n");
 		
-		final String _id = "v1_" + safeJsonGet("_id", src_json).asText(); // (think we'll use key instead of _id?)
+		final String _id = "v1_" + safeJsonGet("_id", src_json).asText();
 		final String created = safeJsonGet("created", src_json).asText();
 		final String modified = safeJsonGet("modified", src_json).asText();
 		final String display_name = safeJsonGet("title", src_json).asText();
