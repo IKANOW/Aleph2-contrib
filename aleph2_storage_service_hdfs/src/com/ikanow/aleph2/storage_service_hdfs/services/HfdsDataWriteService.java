@@ -276,10 +276,11 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		 * @return
 		 * @throws IOException 
 		 */
-		private void write(Object o) throws IOException {
+		private void write(final Object o) throws IOException {
 			String s = null;
 			if (o instanceof List) {
-				List<?> l = (List<?>)o;
+				@SuppressWarnings({ "rawtypes", "unchecked" })
+				List<Object> l = (List)o;
 				l.stream().forEach(Lambdas.wrap_consumer_u(ol -> write(ol)));
 				return;
 			}
