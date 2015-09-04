@@ -66,7 +66,7 @@ public class TestMockHdfsStorageSystem {
 	
 		MockHdfsStorageService storageService = new MockHdfsStorageService(globals);
 	
-		assertEquals(globals.distributed_root_dir(), storageService.getRootPath());
+		assertEquals(globals.distributed_root_dir(), storageService.getBucketRootPath());
 		assertEquals(1, storageService.getUnderlyingArtefacts().size());
 		
 		FileContext fs1 = storageService.getUnderlyingPlatformDriver(FileContext.class, Optional.<String>empty()).get();
@@ -432,7 +432,7 @@ public class TestMockHdfsStorageSystem {
 	protected void setup_bucket(MockHdfsStorageService storage_service, final DataBucketBean bucket, List<String> extra_suffixes) {
 		final FileContext dfs = storage_service.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 		
-		final String bucket_root = storage_service.getRootPath() + "/" + bucket.full_name();		
+		final String bucket_root = storage_service.getBucketRootPath() + "/" + bucket.full_name();		
 		
 		Stream.concat(
 			Arrays.asList(

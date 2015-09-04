@@ -78,9 +78,20 @@ public class HdfsStorageService implements IStorageService {
 		_globals = globals;	
 	}
 	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService#getRootPath()
+	 */
 	@Override
 	public String getRootPath() {		
 		return _globals.distributed_root_dir();
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService#getBucketRootPath()
+	 */
+	@Override
+	public String getBucketRootPath() {		
+		return getRootPath() + "/data/";
 	}
 
 	/* (non-Javadoc)
@@ -187,7 +198,7 @@ public class HdfsStorageService implements IStorageService {
 				.forEach(sub_schema -> validateCodec(sub_schema).ifPresent(error -> errors.add(error)));
 
 		return errors.isEmpty()
-				? Tuples._2T(this.getRootPath() + bucket.full_name() + IStorageService.BUCKET_SUFFIX,  Collections.emptyList())
+				? Tuples._2T(this.getBucketRootPath() + bucket.full_name() + IStorageService.BUCKET_SUFFIX,  Collections.emptyList())
 				: Tuples._2T("",  errors)
 				;
 	}
@@ -367,7 +378,7 @@ public class HdfsStorageService implements IStorageService {
 			// 1) Get all the sub-directories of Path
 
 			final FileContext dfs = getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
-			final String bucket_root = getRootPath() + "/" + path;
+			final String bucket_root = getBucketRootPath() + "/" + path;
 			try {			
 				final Path p = new Path(bucket_root);
 				final RemoteIterator<FileStatus> it = dfs.listStatus(p);
@@ -416,7 +427,7 @@ public class HdfsStorageService implements IStorageService {
 			}
 			
 			final FileContext dfs = getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
-			final String bucket_root = getRootPath() + "/" + bucket.full_name();
+			final String bucket_root = getBucketRootPath() + "/" + bucket.full_name();
 			try {			
 				final Path p = new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX);
 				

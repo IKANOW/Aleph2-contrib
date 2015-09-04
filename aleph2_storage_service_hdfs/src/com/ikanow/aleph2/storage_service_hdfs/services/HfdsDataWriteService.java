@@ -399,7 +399,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				_state.curr_objects = 0;
 				_state.codec = getCanonicalCodec(_bucket.data_schema().storage_schema(), _stage); // (recheck the codec)			
 				
-				_state.curr_path = new Path(getBasePath(_storage_service.getRootPath(), _bucket, _stage) + "/" + SPOOL_DIR + "/" + getFilename());
+				_state.curr_path = new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage) + "/" + SPOOL_DIR + "/" + getFilename());
 				try { _dfs.mkdir(_state.curr_path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {}
 				
 				_state.out = wrapOutputInCodec(_state.codec, _dfs.create(_state.curr_path, EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE)));
@@ -416,7 +416,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				_state.segment++;
 				
 				final Date now = new Date();
-				final Path path =  new Path(getBasePath(_storage_service.getRootPath(), _bucket, _stage) + "/" + getSuffix(now, _bucket, _stage) + "/" + _state.curr_path.getName());
+				final Path path =  new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage) + "/" + getSuffix(now, _bucket, _stage) + "/" + _state.curr_path.getName());
 				try { _dfs.mkdir(path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {} // (fails if already exists?)
 				_dfs.rename(_state.curr_path, path);
 				try { _dfs.rename(getCrc(_state.curr_path), getCrc(path)); } catch (Exception e) {} // (don't care what the error is)				

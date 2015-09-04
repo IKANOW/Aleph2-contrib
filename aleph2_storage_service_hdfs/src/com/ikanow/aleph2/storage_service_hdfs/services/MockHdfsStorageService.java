@@ -41,9 +41,20 @@ public class MockHdfsStorageService extends HdfsStorageService {
 		super(globals);
 	}
 	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.storage_service_hdfs.services.HdfsStorageService#getRootPath()
+	 */
 	@Override
 	public String getRootPath() {		
 		return _globals.distributed_root_dir();
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.storage_service_hdfs.services.HdfsStorageService#getBucketRootPath()
+	 */
+	@Override
+	public String getBucketRootPath() {		
+		return getRootPath() + "/data/";
 	}
 
 	@SuppressWarnings("unchecked")
