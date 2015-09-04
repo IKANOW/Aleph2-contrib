@@ -43,6 +43,7 @@ import org.junit.Test;
 
 import scala.Tuple2;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
@@ -320,6 +321,108 @@ public class TestMockHdfsStorageSystem {
 		// no temporal settings => returns success
 		assertEquals(false, res4.success());
 		
+	}
+	
+	@Test
+	public void test_getDataWriter() {
+		// 0) Setup
+		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
+		
+		final GlobalPropertiesBean globals = BeanTemplateUtils.build(GlobalPropertiesBean.class)
+				.with(GlobalPropertiesBean::local_yarn_config_dir, temp_dir)
+				.with(GlobalPropertiesBean::distributed_root_dir, temp_dir)
+				.with(GlobalPropertiesBean::local_root_dir, temp_dir)
+				.with(GlobalPropertiesBean::distributed_root_dir, temp_dir)
+				.done().get();
+		
+		final MockHdfsStorageService storage_service = new MockHdfsStorageService(globals);
+		
+		// 1) Set up buckets
+		
+		final DataBucketBean bucket_no_storage = BeanTemplateUtils.build(DataBucketBean.class)
+				.with(DataBucketBean::full_name, "/test/storage/bucket")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+					.done().get())
+				.done().get();
+		
+		
+		final DataBucketBean bucket_full = BeanTemplateUtils.build(DataBucketBean.class)
+											.with(DataBucketBean::full_name, "/test/storage/bucket")
+											.with(DataBucketBean::data_schema,
+													BeanTemplateUtils.build(DataSchemaBean.class)
+														.with(DataSchemaBean::storage_schema,
+															BeanTemplateUtils.build(StorageSchemaBean.class)
+																//(no enabled defaults to true)
+																.with(StorageSchemaBean::raw, 
+																		BeanTemplateUtils.build(StorageSchemaBean.StorageSubSchemaBean.class)
+																			.with(StorageSchemaBean.StorageSubSchemaBean::enabled, false)
+																		.done().get())
+																.with(StorageSchemaBean::json, 
+																		BeanTemplateUtils.build(StorageSchemaBean.StorageSubSchemaBean.class)
+																			.with(StorageSchemaBean.StorageSubSchemaBean::enabled, false)
+																		.done().get())
+																.with(StorageSchemaBean::processed, 
+																		BeanTemplateUtils.build(StorageSchemaBean.StorageSubSchemaBean.class)
+																			// (no enabled, defaults to true)
+																		.done().get())
+															.done().get()
+														)
+													.done().get())
+										.done().get();
+		
+		final DataBucketBean bucket_disabled = BeanTemplateUtils.build(DataBucketBean.class)
+				.with(DataBucketBean::full_name, "/test/storage/bucket")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::storage_schema,
+								BeanTemplateUtils.build(StorageSchemaBean.class)
+									.with(StorageSchemaBean::enabled, false)
+									.with(StorageSchemaBean::raw, 
+											BeanTemplateUtils.build(StorageSchemaBean.StorageSubSchemaBean.class)
+												.with(StorageSchemaBean.StorageSubSchemaBean::enabled, true)
+											.done().get())
+									.with(StorageSchemaBean::json, 
+											BeanTemplateUtils.build(StorageSchemaBean.StorageSubSchemaBean.class)
+												.with(StorageSchemaBean.StorageSubSchemaBean::enabled, true)
+											.done().get())
+									.with(StorageSchemaBean::processed, 
+											BeanTemplateUtils.build(StorageSchemaBean.StorageSubSchemaBean.class)
+												// (no enabled, defaults to true)
+											.done().get())
+								.done().get()
+							)
+						.done().get())
+			.done().get();
+		
+		// Try with invalid stage:
+
+		try {
+			storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, bucket_full, Optional.of("banana"), Optional.empty()));
+			fail("Should have thrown exception");
+		}
+		catch (Exception e) {}
+		
+		// Check some disabled cases:
+		
+		assertEquals(Optional.empty(), storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, bucket_no_storage, Optional.of("processed"), Optional.empty())));
+		assertEquals(Optional.empty(), storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, bucket_disabled, Optional.of("processed"), Optional.empty())));
+		assertEquals(Optional.empty(), storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, bucket_full, Optional.of("json"), Optional.empty())));
+		
+		// Check the default case:
+		
+		assertTrue("Returns processing",
+				storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, bucket_full, Optional.of("processed"), Optional.empty())).isPresent()
+				);
+		assertTrue("No JSON",
+				!storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, bucket_full, Optional.of("json"), Optional.empty())).isPresent()
+				);
+		assertTrue("No raw",
+				!storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, bucket_full, Optional.of("raw"), Optional.empty())).isPresent()
+				);
+		assertTrue("Default returns processing",
+				storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, bucket_full, Optional.empty(), Optional.empty())).isPresent()
+				);
 	}
 	
 	/////////////////////////////////////////////////////////////////

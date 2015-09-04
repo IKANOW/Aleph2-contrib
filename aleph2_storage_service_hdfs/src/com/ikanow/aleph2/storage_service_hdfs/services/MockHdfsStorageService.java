@@ -32,7 +32,7 @@ import org.apache.hadoop.conf.Configuration;
 /** The local file system version of the HDFS service
  * @author alex
  */
-public class MockHdfsStorageService extends HDFSStorageService {
+public class MockHdfsStorageService extends HdfsStorageService {
 
 	private static final Logger logger = LogManager.getLogger(MockHdfsStorageService.class);
 

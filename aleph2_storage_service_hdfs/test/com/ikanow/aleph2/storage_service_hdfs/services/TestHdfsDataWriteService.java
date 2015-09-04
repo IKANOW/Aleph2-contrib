@@ -20,10 +20,13 @@ import static org.junit.Assert.*;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.OutputStream;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import org.apache.commons.io.FileUtils;
 import org.junit.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -51,7 +54,7 @@ public class TestHdfsDataWriteService {
 					.with(DataBucketBean::full_name, "/test/static")
 				.done().get();
 
-			assertEquals("", HfdsDataWriteService.getSuffix(then, bucket, IStorageService.StorageStage.raw));			
+			assertEquals(IStorageService.NO_TIME_SUFFIX, HfdsDataWriteService.getSuffix(then, bucket, IStorageService.StorageStage.raw));			
 		}
 		// No grouping time
 		{
@@ -68,7 +71,7 @@ public class TestHdfsDataWriteService {
 								)
 							.done().get())
 					.done().get();
-			assertEquals("", HfdsDataWriteService.getSuffix(then, test_bucket, IStorageService.StorageStage.raw));			
+			assertEquals(IStorageService.NO_TIME_SUFFIX, HfdsDataWriteService.getSuffix(then, test_bucket, IStorageService.StorageStage.raw));			
 		}
 		// Malformed grouping time
 		{
@@ -87,7 +90,7 @@ public class TestHdfsDataWriteService {
 							.done().get())
 					.done().get();
 			
-			assertEquals("", HfdsDataWriteService.getSuffix(then, test_bucket, IStorageService.StorageStage.json));			
+			assertEquals(IStorageService.NO_TIME_SUFFIX, HfdsDataWriteService.getSuffix(then, test_bucket, IStorageService.StorageStage.json));			
 		}
 		// Valid grouping time
 		{
@@ -348,6 +351,7 @@ public class TestHdfsDataWriteService {
 	}	
 	
 	public static class TestBean {
+		public TestBean(String a, String b) { _id = a; value = b; }
 		public String _id;
 		public String value;
 	}
@@ -422,53 +426,138 @@ public class TestHdfsDataWriteService {
 	@Test
 	public void test_writerService_worker() throws Exception {
 		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;		
+		
 		HfdsDataWriteService<TestBean> write_service = getWriter("/test/writer/worker");
 
+		//(Tidy up)
+		try { FileUtils.deleteDirectory(new File(temp_dir + write_service._bucket.full_name())); } catch (Exception e) {}
+		
 		HfdsDataWriteService<TestBean>.WriterWorker worker = write_service.new WriterWorker();
 		
 		// (no codec because this is called first)
 		assertEquals(HfdsDataWriteService._process_id + "_" + worker._thread_id + "_1.json", worker.getFilename());
 		
-		worker.new_segment();
-		
-		File f = new File(
-				(temp_dir + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/.spooldir/" + worker.getFilename())
-				.replace("/", File.separator)
-				);
-		assertTrue("File should exist: " + f, f.exists());
-				
-		worker.complete_segment();
-		
-		assertTrue("File should have moved: " + f, !f.exists());
-
-		//TODO (Sort out dates... eg use year so it's easy...)
-		File f2 = new File(
-				(temp_dir + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/" + worker.getFilename())
-				.replace("/", File.separator)
-				);
-		assertTrue("File should exist: " + f2, f2.exists());
-		
-//		worker.new_segment();
-//		
-//		//TODO: test the writing logic
-//		
-//		worker.complete_segment();
-//		
-//		//TODO check non-empty file moved		
+		// Check complete segment does nothing if no data has been written
+		{
+			worker.new_segment();
+			
+			File f = new File(
+					(temp_dir + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/.spooldir/" + worker.getFilename())
+					.replace("/", File.separator)
+					);
+			assertTrue("File should exist: " + f, f.exists());
+			assertTrue("Expected segment: ", f.toString().endsWith("_1.json"));
+					
+			worker.complete_segment();
+			
+			assertTrue("File should not have moved: " + f, f.exists());
+	
+			File f2 = new File(
+					(temp_dir + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/all_time/" + worker.getFilename())
+					.replace("/", File.separator)
+					);
+			assertTrue("File should not exist: " + f2, !f2.exists());
+		}
+		// Check writes + non-empty segment
+		{
+			TestBean t1 = new TestBean("t1", "v1");
+			TestBean t2 = new TestBean("t2", "v2");
+			
+			worker.new_segment();
+			
+			File f = new File(
+					(temp_dir + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/.spooldir/" + worker.getFilename())
+					.replace("/", File.separator)
+					);
+			assertTrue("File should exist: " + f, f.exists());
+			assertTrue("Expected segment: ", f.toString().endsWith("_1.json"));
+					
+			// Write some objects out:
+			
+			worker.write("TEST1");
+			worker.write("TEST2\n");
+			worker.write(t1);
+			worker.write(BeanTemplateUtils.toJson(t2));
+			
+			worker.complete_segment();
+			
+			assertTrue("File should have moved: " + f, !f.exists());
+	
+			File f2 = new File(
+					(temp_dir + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/all_time/" + f.getName())
+					.replace("/", File.separator)
+					);
+			assertTrue("File should exist: " + f2, f2.exists());
+			assertTrue("Expected segment: ", f2.toString().endsWith("_1.json"));
+			
+			assertEquals("TEST1\nTEST2\n{\"_id\":\"t1\",\"value\":\"v1\"}\n{\"_id\":\"t2\",\"value\":\"v2\"}\n", FileUtils.readFileToString(f2));
+		}		
+		// Check basic write + second segment (list)
+		{
+			TestBean t1 = new TestBean("t1b", "v1b");
+			TestBean t2 = new TestBean("t2b", "v2b");			
+			
+			worker.new_segment();
+			
+			File f = new File(
+					(temp_dir + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/.spooldir/" + worker.getFilename())
+					.replace("/", File.separator)
+					);
+			assertTrue("File should exist: " + f, f.exists());
+			assertTrue("Expected segment: ", f.toString().endsWith("_2.json"));
+					
+			// Write some object out:
+			
+			worker.write(Arrays.asList("TEST1b", "TEST2b\n", t1, BeanTemplateUtils.toJson(t2)
+					));
+			
+			worker.complete_segment();
+			
+			assertTrue("File should have moved: " + f, !f.exists());
+	
+			File f2 = new File(
+					(temp_dir + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/all_time/" + f.getName())
+					.replace("/", File.separator)
+					);
+			assertTrue("File should exist: " + f2, f2.exists());
+			assertTrue("Expected segment: ", f2.toString().endsWith("_2.json"));
+						
+			assertEquals("TEST1b\nTEST2b\n{\"_id\":\"t1b\",\"value\":\"v1b\"}\n{\"_id\":\"t2b\",\"value\":\"v2b\"}\n", FileUtils.readFileToString(f2));
+		}
 	}		
 	
 	@Test
 	public void test_writerService_end2end() throws InterruptedException {
-		HfdsDataWriteService<TestBean> write_service = getWriter("/test/writer/worker");
+		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;		
+		HfdsDataWriteService<TestBean> write_service = getWriter("/test/writer/end2end");
+
+		//(Tidy up)
+		try { FileUtils.deleteDirectory(new File(temp_dir + write_service._bucket.full_name())); } catch (Exception e) {}
 		
+		// Check lazy initialization only kicks in once		
 		Optional<IBatchSubservice<TestBean>> x = write_service.getBatchWriteSubservice();
 		assertEquals(x.get(), write_service._writer.get());		
 		Optional<IBatchSubservice<TestBean>> y = write_service.getBatchWriteSubservice();
 		assertEquals(x.get(), y.get());		
 
+		IBatchSubservice<TestBean> batch = x.get();
+		
+		// Set up properties for testing:
+		batch.setBatchProperties(Optional.of(1000), Optional.of(1000L), Optional.of(Duration.ofSeconds(2L)), Optional.of(3));
+		
+		Thread.sleep(1000L);
+		// Check there are now 3 threads
+		assertEquals(3, write_service._writer.get()._state._workers.getActiveCount());
+	
+		//TODO: Write 20 objects out, check that it generates 3 sets of files
+		//TODO: Check that they time out
+		
+		//TODO: reduce number of threads to 1, increase time out, decrease content
+		//TODO: check segmentation
+		
 		Thread.sleep(5000L);
 	
 	}
 	
-	//TODO: test setting the number of threads
+	//TODO: test reducing the number of threads
 }

@@ -67,14 +67,14 @@ import scala.Tuple2;
 /** The storage service implementation backed by HDFS (not actually clear if another implementation is possible)
  * @author alex
  */
-public class HDFSStorageService implements IStorageService {
+public class HdfsStorageService implements IStorageService {
 	private static final Logger _logger = LogManager.getLogger();	
 	
 	final protected GlobalPropertiesBean _globals;
 	final protected ConcurrentHashMap<Tuple2<String, Optional<String>>, Optional<Object>> _obj_cache = new ConcurrentHashMap<>();
 	
 	@Inject 
-	HDFSStorageService(GlobalPropertiesBean globals) {
+	HdfsStorageService(GlobalPropertiesBean globals) {
 		_globals = globals;	
 	}
 	
@@ -240,10 +240,21 @@ public class HDFSStorageService implements IStorageService {
 		public <O> Optional<IDataWriteService<O>> getWritableDataService(
 				Class<O> clazz, DataBucketBean bucket,
 				Optional<String> options, Optional<String> secondary_buffer) {
-			// TODO (ALEPH-??): Support this, the basic idea is - create a uuid based on process + thread id
-			// (in a path possibly based on the timestamp)
-			// append all data into that (add write settings to generic settings and implement - batch size would be the max file size before segmenting etc)
-			return Optional.empty();
+			
+			final IStorageService.StorageStage stage = options.map(option -> IStorageService.StorageStage.valueOf(option)).orElse(StorageStage.processed);
+			
+			// Check if the stage is enabled:
+			
+			return Optionals.of(() -> bucket.data_schema().storage_schema())
+								.filter(storage -> 
+											Optional.ofNullable(storage.enabled()).orElse(true))
+								.map(storage -> 
+											HfdsDataWriteService.getStorageSubSchema(storage, stage))
+								.filter(substore -> 
+												Optional.ofNullable(substore.enabled()).orElse(true))
+								.map(__ -> 
+										new HfdsDataWriteService<O>(bucket, stage, HdfsStorageService.this))
+								;
 		}
 
 		/* (non-Javadoc)
@@ -324,7 +335,7 @@ public class HDFSStorageService implements IStorageService {
 					.map(CompletableFuture::completedFuture)
 					.orElseGet(() -> {
 						return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(
-								HDFSStorageService.class.getSimpleName(), 
+								HdfsStorageService.class.getSimpleName(), 
 								"handleAgeOutRequest", HdfsErrorUtils.NO_AGE_OUT_SETTINGS));									
 					})
 					;
@@ -349,7 +360,7 @@ public class HDFSStorageService implements IStorageService {
 				;
 		
 			if (!deletion_bound.isPresent()) {
-				return ErrorUtils.buildErrorMessage(HDFSStorageService.class.getSimpleName(), 
+				return ErrorUtils.buildErrorMessage(HdfsStorageService.class.getSimpleName(), 
 						"handleAgeOutRequest", HdfsErrorUtils.AGE_OUT_SETTING_NOT_PARSED, stage.toString(), lower_bound.toString());
 			}
 						
@@ -375,7 +386,7 @@ public class HDFSStorageService implements IStorageService {
 							dfs.delete(file.getPath(), true);
 						}));					
 				}
-				final BasicMessageBean message = ErrorUtils.buildSuccessMessage(HDFSStorageService.class.getSimpleName(), 
+				final BasicMessageBean message = ErrorUtils.buildSuccessMessage(HdfsStorageService.class.getSimpleName(), 
 						"handleAgeOutRequest",
 						"{0}: deleted {1} directories", stage.toString(), n_deleted.get());
 				
@@ -387,7 +398,7 @@ public class HDFSStorageService implements IStorageService {
 						;
 			}
 			catch (Exception e) {
-				return ErrorUtils.buildErrorMessage(HDFSStorageService.class.getSimpleName(), 
+				return ErrorUtils.buildErrorMessage(HdfsStorageService.class.getSimpleName(), 
 						"handleAgeOutRequest", ErrorUtils.getLongForm("{1} error = {0}", e, stage.toString()));
 			}			
 		}

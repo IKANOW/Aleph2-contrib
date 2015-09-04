@@ -206,7 +206,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				// (write threads change ignore for now)
 				
 				int old_write_threads = _state.write_threads;
-				_state.write_threads = max_objects.orElse(_state.write_threads);
+				_state.write_threads = write_threads.orElse(_state.write_threads);
 				if (old_write_threads < _state.write_threads) { // easy case, just expand
 					_state._workers.setCorePoolSize(_state.write_threads);
 					_state._workers.setMaximumPoolSize(_state.write_threads);
@@ -351,13 +351,14 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				return;
 			}
 			else if (o instanceof String) {
-				s = (String) o;
+				s = ((String) o);
+				if (!s.endsWith("\n")) s += "\n"; //(i think it will a fair bit)
 			}
 			else if (o instanceof JsonNode) {
-				s = ((JsonNode) o).toString();
+				s = ((JsonNode) o).toString() + "\n";
 			}
 			else {
-				s = BeanTemplateUtils.toJson(o).toString();
+				s = BeanTemplateUtils.toJson(o).toString() + "\n";
 			}
 			_state.out.write(s.getBytes());
 			_state.curr_objects++;
@@ -368,28 +369,29 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		 * @throws Exception
 		 */
 		protected void new_segment() throws Exception {
-			_state.codec = getCanonicalCodec(_bucket.data_schema().storage_schema(), _stage); // (recheck the codec)			
-			
-			_state.curr_path = new Path(getBasePath(_storage_service.getRootPath(), _bucket, _stage) + "/" + SPOOL_DIR + "/" + getFilename());
-			try { _dfs.mkdir(_state.curr_path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {}
-			
-			_state.out = wrapOutputInCodec(_state.codec, _dfs.create(_state.curr_path, EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE)));	
+			if (null == _state.out) { // (otherwise we already have a segment) 
+				_state.codec = getCanonicalCodec(_bucket.data_schema().storage_schema(), _stage); // (recheck the codec)			
+				
+				_state.curr_path = new Path(getBasePath(_storage_service.getRootPath(), _bucket, _stage) + "/" + SPOOL_DIR + "/" + getFilename());
+				try { _dfs.mkdir(_state.curr_path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {}
+				
+				_state.out = wrapOutputInCodec(_state.codec, _dfs.create(_state.curr_path, EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE)));
+			}
 		}
 		
 		/** Completes an existing segment
 		 * @throws IOException 
 		 */
 		protected synchronized void complete_segment() throws IOException {
-			if (null != _state.out) {
+			if ((null != _state.out) && (_state.curr_objects > 0)) {
 				_state.out.close();
 				_state.out = null;
 				_state.segment++;
 				
 				final Date now = new Date();
-				final Path path =  new Path(getBasePath(_storage_service.getRootPath(), _bucket, _stage) + "/" + getSuffix(now, _bucket, _stage) + "/" + getFilename());
+				final Path path =  new Path(getBasePath(_storage_service.getRootPath(), _bucket, _stage) + "/" + getSuffix(now, _bucket, _stage) + "/" + _state.curr_path.getName());
 				try { _dfs.mkdir(path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {} // (fails if already exists?)
-				_dfs.rename(_state.curr_path, path);
-				
+				_dfs.rename(_state.curr_path, path);				
 			}
 		}
 		/** Returns the filename corresponding to this object
@@ -481,7 +483,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 						.get();
 	}
 	
-	/** Gets the time based suffix, or "" if it's not temporal
+	/** Gets the time based suffix, or IStorageService.NO_TIME_SUFFIX if it's not temporal
 	 * @param bucket
 	 * @param stage
 	 * @return
@@ -492,9 +494,9 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				.map(ss -> ss.grouping_time_period())
 				.<String>map(period -> TimeUtils.getTimePeriod(period)
 								.map(d -> TimeUtils.getTimeBasedSuffix(d, Optional.empty()))
-								.validation(fail -> "", success -> DateUtils.formatDate(now, success))
+								.validation(fail -> null, success -> DateUtils.formatDate(now, success))
 						)
-				.orElse("")
+				.orElse(IStorageService.NO_TIME_SUFFIX)
 				;
 	}
 	
@@ -503,7 +505,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 * @param stage
 	 * @return
 	 */
-	private static StorageSchemaBean.StorageSubSchemaBean getStorageSubSchema(final StorageSchemaBean store, final IStorageService.StorageStage stage) {
+	public static StorageSchemaBean.StorageSubSchemaBean getStorageSubSchema(final StorageSchemaBean store, final IStorageService.StorageStage stage) {
 		return Patterns.match().<StorageSchemaBean.StorageSubSchemaBean>andReturn()
 						.when(__ -> stage == IStorageService.StorageStage.raw, __ -> store.raw())
 						.when(__ -> stage == IStorageService.StorageStage.json, __ -> store.json())

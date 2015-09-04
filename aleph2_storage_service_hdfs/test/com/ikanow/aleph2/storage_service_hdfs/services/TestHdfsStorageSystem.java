@@ -27,14 +27,14 @@ import org.junit.Test;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 
-public class TestHDFSStorageSystem {
+public class TestHdfsStorageSystem {
 	
 	@Test
 	public void test(){
 			GlobalPropertiesBean globals = BeanTemplateUtils.build(GlobalPropertiesBean.class)
 												.with(GlobalPropertiesBean::local_yarn_config_dir, System.getenv("HADOOP_CONF_DIR")).done().get();
 		
-			HDFSStorageService storageService = new HDFSStorageService(globals);
+			HdfsStorageService storageService = new HdfsStorageService(globals);
 			
 			assertEquals(globals.distributed_root_dir(), storageService.getRootPath());
 			assertEquals(1, storageService.getUnderlyingArtefacts().size());
