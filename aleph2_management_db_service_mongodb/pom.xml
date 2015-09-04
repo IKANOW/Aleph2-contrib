@@ -51,7 +51,7 @@
 			<excludes>
 				<!--  This actually removes code from coveralls.io -->
 				<!-- Trivial/untestable code -->
-				<exclude>**/com/ikanow/aleph2/management_db/mongodb/modules/*</exclude>
+				<exclude>**/com/ikanow/aleph2/management_db/mongodb/module/*</exclude>
 			</excludes>
 		</configuration>
 		<executions>
