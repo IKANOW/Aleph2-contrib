@@ -29,6 +29,7 @@ import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
 import com.ikanow.aleph2.management_db.mongodb.services.IkanowV1SyncService_Buckets;
 import com.ikanow.aleph2.management_db.mongodb.services.IkanowV1SyncService_LibraryJars;
+import com.ikanow.aleph2.management_db.mongodb.services.IkanowV1SyncService_TestBuckets;
 import com.ikanow.aleph2.shared.crud.mongodb.data_model.MongoDbConfigurationBean;
 import com.ikanow.aleph2.shared.crud.mongodb.services.IMongoDbCrudServiceFactory;
 import com.ikanow.aleph2.shared.crud.mongodb.services.MongoDbCrudServiceFactory;
@@ -79,6 +80,7 @@ public class MongoDbManagementDbModule extends AbstractModule {
 		this.bind(MongoDbManagementDbConfigBean.class).toInstance(bean); // (for mgmt db)
 		this.bind(IkanowV1SyncService_Buckets.class).in(Scopes.SINGLETON);
 		this.bind(IkanowV1SyncService_LibraryJars.class).in(Scopes.SINGLETON);
+		this.bind(IkanowV1SyncService_TestBuckets.class).in(Scopes.SINGLETON);
 		this.bind(IMongoDbCrudServiceFactory.class).to(MongoDbCrudServiceFactory.class).in(Scopes.SINGLETON);
 		this.bind(BucketTestService.class).in(Scopes.SINGLETON);
 	}
