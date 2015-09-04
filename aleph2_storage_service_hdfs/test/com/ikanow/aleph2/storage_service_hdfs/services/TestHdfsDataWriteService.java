@@ -28,6 +28,7 @@ import org.junit.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService.IBatchSubservice;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean;
@@ -351,8 +352,7 @@ public class TestHdfsDataWriteService {
 		public String value;
 	}
 	
-	@Test
-	public void test_workerUtilities() {
+	protected HfdsDataWriteService<TestBean> getWriter(String name) {
 		
 		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 		
@@ -363,14 +363,15 @@ public class TestHdfsDataWriteService {
 		MockHdfsStorageService storage_service = new MockHdfsStorageService(globals);
 
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
-				.with(DataBucketBean::full_name, "/test/static")
+				.with(DataBucketBean::full_name, name)
 				.with(DataBucketBean::data_schema,
 						BeanTemplateUtils.build(DataSchemaBean.class)
 							.with(DataSchemaBean::storage_schema,
 								BeanTemplateUtils.build(StorageSchemaBean.class)
 									.with(StorageSchemaBean::processed, 
 											BeanTemplateUtils.build(StorageSchemaBean.StorageSubSchemaBean.class)
-												.with(StorageSchemaBean.StorageSubSchemaBean::codec, "snappy")
+												//(no compression)
+												//.with(StorageSchemaBean.StorageSubSchemaBean::codec, "snappy")
 											.done().get())
 								.done().get()
 							)
@@ -378,6 +379,14 @@ public class TestHdfsDataWriteService {
 				.done().get();
 		
 		HfdsDataWriteService<TestBean> write_service = new HfdsDataWriteService<>(test_bucket, IStorageService.StorageStage.processed, storage_service);
+		
+		return write_service;
+	}
+	
+	@Test
+	public void test_writerService_basics() {
+		
+		HfdsDataWriteService<TestBean> write_service = getWriter("/test/writer/basics");
 		
 		// First off a bunch of top level trivial calls
 		{			
@@ -406,10 +415,60 @@ public class TestHdfsDataWriteService {
 			assertEquals(Optional.empty(), write_service.getUnderlyingPlatformDriver(String.class, Optional.empty()));
 		}
 
-		//TODO: now the worker stuff:
+		// Check the batch service isn't loaded
+		assertTrue("Writer not set", !write_service._writer.isSet());		
 	}
 	
-	//TODO: test the writing logic
+	@Test
+	public void test_writerService_worker() throws Exception {
+		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;		
+		HfdsDataWriteService<TestBean> write_service = getWriter("/test/writer/worker");
+
+		HfdsDataWriteService<TestBean>.WriterWorker worker = write_service.new WriterWorker();
+		
+		// (no codec because this is called first)
+		assertEquals(HfdsDataWriteService._process_id + "_" + worker._thread_id + "_1.json", worker.getFilename());
+		
+		worker.new_segment();
+		
+		File f = new File(
+				(temp_dir + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/.spooldir/" + worker.getFilename())
+				.replace("/", File.separator)
+				);
+		assertTrue("File should exist: " + f, f.exists());
+				
+		worker.complete_segment();
+		
+		assertTrue("File should have moved: " + f, !f.exists());
+
+		//TODO (Sort out dates... eg use year so it's easy...)
+		File f2 = new File(
+				(temp_dir + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/" + worker.getFilename())
+				.replace("/", File.separator)
+				);
+		assertTrue("File should exist: " + f2, f2.exists());
+		
+//		worker.new_segment();
+//		
+//		//TODO: test the writing logic
+//		
+//		worker.complete_segment();
+//		
+//		//TODO check non-empty file moved		
+	}		
+	
+	@Test
+	public void test_writerService_end2end() throws InterruptedException {
+		HfdsDataWriteService<TestBean> write_service = getWriter("/test/writer/worker");
+		
+		Optional<IBatchSubservice<TestBean>> x = write_service.getBatchWriteSubservice();
+		assertEquals(x.get(), write_service._writer.get());		
+		Optional<IBatchSubservice<TestBean>> y = write_service.getBatchWriteSubservice();
+		assertEquals(x.get(), y.get());		
+
+		Thread.sleep(5000L);
+	
+	}
 	
 	//TODO: test setting the number of threads
 }

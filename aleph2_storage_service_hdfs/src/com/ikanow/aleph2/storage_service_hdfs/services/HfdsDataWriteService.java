@@ -77,7 +77,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	// (currently just share on of these across all users of this service, basically across the process/classloader)
 	protected final SetOnce<BatchHdfsWriteService> _writer = new SetOnce<>();
 	
-	protected final static String _process_id = UuidUtils.get().getRandomUuid();
+	protected final static String _process_id = UuidUtils.get().getRandomUuid().substring(14);
 	
 	/** User constructor
 	 * @param bucket
@@ -171,17 +171,17 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 
 	/////////////////////////////////////////////////////////////
 	
-	// BATCH SUB SERVICE
-	
+	/** BATCH SUB SERVICE
+	 * @author alex
+	 */
 	public class BatchHdfsWriteService implements IBatchSubservice<T> {
-		final protected LinkedBlockingQueue<Runnable> _worker_queue = new LinkedBlockingQueue<>();
 		final protected LinkedBlockingQueue<Object> _shared_queue = new LinkedBlockingQueue<>();
 		public class MutableState {
 			int max_objects = 5000; // (5K objects)
 			long size_kb = 20L*1024L; // (20MB)
 			Duration flush_interval = Duration.ofMinutes(1L); // (1 minute)
 			int write_threads = 2;
-			ThreadPoolExecutor _workers = new ThreadPoolExecutor(write_threads, write_threads, 60L, TimeUnit.SECONDS, _worker_queue);
+			ThreadPoolExecutor _workers = null;
 		}
 		final protected MutableState _state = new MutableState();
 		
@@ -211,7 +211,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 					_state._workers.setCorePoolSize(_state.write_threads);
 					_state._workers.setMaximumPoolSize(_state.write_threads);
 					for (int i = old_write_threads; i < _state.write_threads; ++i) {
-						_worker_queue.offer(new WriterWorker());
+						_state._workers.execute(new WriterWorker());
 					}								
 				}
 				else if (old_write_threads > _state.write_threads) { // this is a bit ugly, nuke the existing worker queue
@@ -245,10 +245,10 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		/** Fills up queue
 		 */
 		private void fillUpEmptyQueue() {
-			_state._workers = new ThreadPoolExecutor(_state.write_threads, _state.write_threads, 60L, TimeUnit.SECONDS, _worker_queue);
+			_state._workers = new ThreadPoolExecutor(_state.write_threads, _state.write_threads, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>());
 			
 			for (int i = 0; i < _state.write_threads; ++i) {
-				_worker_queue.offer(new WriterWorker());
+				_state._workers.execute(new WriterWorker());
 			}			
 		}
 	}
@@ -257,6 +257,9 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	
 	// BATCH SUB SERVICE - WORKER THREAD
 	
+	/** A worker thread
+	 * @author alex
+	 */
 	public class WriterWorker implements Runnable {
 		
 		protected static final String SPOOL_DIR = "/.spooldir/";
@@ -272,13 +275,15 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		}
 		final protected MutableState _state = new MutableState();
 		
-		final protected String _thread_id = UuidUtils.get().getRandomUuid();
+		final protected String _thread_id = UuidUtils.get().getRandomUuid().substring(14);
 		
 		/* (non-Javadoc)
 		 * @see java.lang.Runnable#run()
 		 */
 		@Override
 		public void run() {
+			_logger.info("Starting HDFS worker thread: " + getFilename());
+			
 			Runtime.getRuntime().addShutdownHook(new Thread(Lambdas.wrap_runnable_i(() -> {
 				_state.terminate = true;
 				complete_segment();
@@ -329,13 +334,15 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				complete_segment();
 			}
 			catch (Exception ee) {}
+			
+			_logger.info("Terminating HDFS worker thread: " + getFilename());			
 		}
 		/** Write the object(s) out to the stream
 		 * @param o
 		 * @return
 		 * @throws IOException 
 		 */
-		private void write(final Object o) throws IOException {
+		protected void write(final Object o) throws IOException {
 			String s = null;
 			if (o instanceof List) {
 				@SuppressWarnings({ "rawtypes", "unchecked" })
@@ -360,7 +367,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		/** Create a new segment
 		 * @throws Exception
 		 */
-		private void new_segment() throws Exception {
+		protected void new_segment() throws Exception {
 			_state.codec = getCanonicalCodec(_bucket.data_schema().storage_schema(), _stage); // (recheck the codec)			
 			
 			_state.curr_path = new Path(getBasePath(_storage_service.getRootPath(), _bucket, _stage) + "/" + SPOOL_DIR + "/" + getFilename());
@@ -372,7 +379,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		/** Completes an existing segment
 		 * @throws IOException 
 		 */
-		private synchronized void complete_segment() throws IOException {
+		protected synchronized void complete_segment() throws IOException {
 			if (null != _state.out) {
 				_state.out.close();
 				_state.out = null;
