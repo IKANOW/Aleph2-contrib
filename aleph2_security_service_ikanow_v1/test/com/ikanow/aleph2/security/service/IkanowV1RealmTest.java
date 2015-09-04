@@ -26,6 +26,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.shiro.authc.AuthenticationException;
 import org.apache.shiro.authc.UsernamePasswordToken;
+import org.apache.shiro.subject.PrincipalCollection;
 import org.apache.shiro.subject.SimplePrincipalCollection;
 import org.apache.shiro.subject.Subject;
 import org.junit.Before;
@@ -120,16 +121,18 @@ public class IkanowV1RealmTest {
 		ISubject subject = login();
 		// system community
 		String permission = "4c927585d591d31d7b37097a";
-		String runAsPrincipal = "caseylp@gmail.com";
-		String caseysRole = "caseylp@gmail.com_communities";
-		String caseysPersonalPermission = "5571b37de4b0e7598c26337b";
+		String runAsPrincipal = "54f86d8de4b03d27d1ea0d7b";
+		String caseysRole = "54f86d8de4b03d27d1ea0d7b_data_group";
+		String caseysPersonalPermission = "v1_55a544bee4b056ae0f9bd92b";
 		
 //		String role = System.getProperty("IKANOW_SECURITY_LOGIN","noone@ikanow.com")+"_communities";
 		((Subject)subject.getSubject()).runAs(new SimplePrincipalCollection(runAsPrincipal,this.getClass().getSimpleName()));
 		assertEquals(true,securityService.hasRole(subject,caseysRole));
         //test a typed permission (not instance-level)
 		assertEquals(true,securityService.isPermitted(subject,caseysPersonalPermission));
-		((Subject)subject.getSubject()).releaseRunAs();		
+		PrincipalCollection p = ((Subject)subject.getSubject()).releaseRunAs();	
+		logger.debug("Released Principals:"+p);
+		assertEquals(false,securityService.isPermitted(subject,caseysPersonalPermission));
 	}
 
 	@Test

@@ -15,9 +15,11 @@
  *******************************************************************************/
 package com.ikanow.aleph2.management_db.services;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -26,8 +28,6 @@ import java.util.stream.StreamSupport;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.bson.types.ObjectId;
-import org.junit.Assert.*;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -38,14 +38,11 @@ import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbServic
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
-import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
-import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.MultiQueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
-import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
@@ -94,7 +91,10 @@ public class SecuredCoreManagementDbServiceTest {
 	@Ignore
 	public void testSharedLibraryAccess(){
 			String bucketId = "aleph...bucket.demo_bucket_1.;";
+			// calebs id
 			String ownerID = "54f86d8de4b03d27d1ea0d7b";
+			// joerns id
+			//String ownerID = "550b189ae4b0e58fb26f71eb";
 			try {
 
 						AuthorizationBean authorizationBean  = new AuthorizationBean(ownerID);
@@ -102,14 +102,23 @@ public class SecuredCoreManagementDbServiceTest {
 //						IManagementCrudService<SharedLibraryBean> shareLibraryStore = managementDbService.getSharedLibraryStore();
 												
 						//test single read
-						String share_id="v1_55ad58f2e4b0293381b3beb4";
+						String share_id1="v1_55a544bee4b056ae0f9bd92b";
 						
-						Optional<SharedLibraryBean> osb = shareLibraryStore.getObjectBySpec(CrudUtils.anyOf(SharedLibraryBean.class).when("_id", share_id)).get();
+						Optional<SharedLibraryBean> osb = shareLibraryStore.getObjectBySpec(CrudUtils.anyOf(SharedLibraryBean.class).when("_id", share_id1)).get();
 						assertTrue(osb.isPresent());
-					/*	MultiQueryComponent<SharedLibraryBean> spec = CrudUtils.<SharedLibraryBean> anyOf(sharedLibsQuery);
+						
+						List<QueryComponent<SharedLibraryBean>> sharedLibsQuery = new ArrayList<QueryComponent<SharedLibraryBean>>();
+						sharedLibsQuery.add(CrudUtils.anyOf(SharedLibraryBean.class).when("_id", share_id1));
+						String share_id2="v1_55a7dc56e4b056ae0f9bdb23";
+						sharedLibsQuery.add(CrudUtils.anyOf(SharedLibraryBean.class).when("_id", share_id2));
+						String share_id3="v1_55ae7348e4b0563b816e475f";
+						sharedLibsQuery.add(CrudUtils.anyOf(SharedLibraryBean.class).when("_id", share_id3));
+						
+						MultiQueryComponent<SharedLibraryBean> spec = CrudUtils.<SharedLibraryBean> anyOf(sharedLibsQuery);
 						List<SharedLibraryBean> sharedLibraries = StreamSupport.stream(	shareLibraryStore.getObjectsBySpec(spec).get().spliterator(), false).collect(Collectors.toList());
 						assertNotNull(sharedLibraries);
-						assertTrue(sharedLibraries.size()>0); */
+						assertTrue(sharedLibraries.size()==1);
+						 
 			//} // odb present
 		} catch (Exception e) {
 			logger.error("Caught exception loading shared libraries for job:" + bucketId, e);
