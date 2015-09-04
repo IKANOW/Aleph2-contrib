@@ -66,7 +66,7 @@ public class TestMockHdfsStorageSystem {
 	
 		MockHdfsStorageService storageService = new MockHdfsStorageService(globals);
 	
-		assertEquals(globals.distributed_root_dir(), storageService.getBucketRootPath());
+		assertEquals(globals.distributed_root_dir(), storageService.getRootPath());
 		assertEquals(1, storageService.getUnderlyingArtefacts().size());
 		
 		FileContext fs1 = storageService.getUnderlyingPlatformDriver(FileContext.class, Optional.<String>empty()).get();
@@ -102,7 +102,7 @@ public class TestMockHdfsStorageSystem {
 			
 			Tuple2<String, List<BasicMessageBean>> res = storageService.validateSchema(null, bucket);
 			assertEquals("Validation: " + res._2().stream().map(BasicMessageBean::message).collect(Collectors.joining("\n")), 0, res._2().size());
-			assertEquals((temp_dir.replace(File.separator,  "/") + "/test/validate/bucket/managed_bucket/").replaceAll("//", "/"), 
+			assertEquals((temp_dir.replace(File.separator,  "/") + "/data/test/validate/bucket/managed_bucket/").replaceAll("//", "/"), 
 							res._1().replace(File.separator, "/").replaceAll("//", "/"));
 		}
 		// Works some more
@@ -113,7 +113,7 @@ public class TestMockHdfsStorageSystem {
 				.forEach(bucket -> {
 					Tuple2<String, List<BasicMessageBean>> res = storageService.validateSchema(bucket.data_schema().storage_schema(), bucket);
 					assertEquals("Validation: " + res._2().stream().map(BasicMessageBean::message).collect(Collectors.joining("\n")), 0, res._2().size());
-					assertEquals((temp_dir.replace(File.separator,  "/") + bucket.full_name() + IStorageService.BUCKET_SUFFIX).replaceAll("//", "/"), 
+					assertEquals((temp_dir.replace(File.separator,  "/") + "/data/" + bucket.full_name() + IStorageService.BUCKET_SUFFIX).replaceAll("//", "/"), 
 							res._1().replace(File.separator, "/").replaceAll("//", "/"));
 				});
 		
@@ -162,9 +162,9 @@ public class TestMockHdfsStorageSystem {
 		
 		// 1) Set up bucket (code taken from management_db_service)
 		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test/delete/bucket").done().get();
-		FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + File.separator + bucket.full_name()));		
+		FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket.full_name()));		
 		setup_bucket(storage_service, bucket, Collections.emptyList());
-		final String bucket_path = System.getProperty("java.io.tmpdir") + File.separator + bucket.full_name();
+		final String bucket_path = System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket.full_name();
 		assertTrue("The file path has been created", new File(bucket_path + "/managed_bucket").exists());
 		FileUtils.writeStringToFile(new File(bucket_path + IStorageService.STORED_DATA_SUFFIX + "/test"), "");
 		assertTrue("The extra file path has been created", new File(bucket_path + IStorageService.STORED_DATA_SUFFIX + "/test").exists());		
@@ -175,15 +175,15 @@ public class TestMockHdfsStorageSystem {
 		// Test:
 		
 		// Full filesystem exists
-		assertTrue("The file path has *not* been deleted", new File(System.getProperty("java.io.tmpdir") + File.separator + bucket.full_name() + "/managed_bucket").exists());
+		assertTrue("The file path has *not* been deleted", new File(System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket.full_name() + "/managed_bucket").exists());
 		
 		// Data directories no longer exist
-		assertFalse("The data path has been deleted", new File(System.getProperty("java.io.tmpdir") + File.separator + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX + "/test").exists());
+		assertFalse("The data path has been deleted", new File(System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX + "/test").exists());
 				
 		// Check nothing goes wrong when bucket doesn't exist
 		final DataBucketBean bucket2 = BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test/delete/bucket_not_exist").done().get();
-		FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + File.separator + bucket2.full_name()));
-		assertFalse("The file path for bucket2 does not exist", new File(System.getProperty("java.io.tmpdir") + File.separator + bucket2.full_name()).exists());
+		FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket2.full_name()));
+		assertFalse("The file path for bucket2 does not exist", new File(System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket2.full_name()).exists());
 		
 		final CompletableFuture<BasicMessageBean> res2 = storage_service.getDataService().get().handleBucketDeletionRequest(bucket2, Optional.empty(), false);
 		assertEquals(true, res2.get().success());
@@ -191,7 +191,7 @@ public class TestMockHdfsStorageSystem {
 		//(check didn't create anything)
 		
 		// Full filesystem exists
-		assertFalse("No bucket2 paths were created", new File(System.getProperty("java.io.tmpdir") + File.separator + bucket2.full_name()).exists());		
+		assertFalse("No bucket2 paths were created", new File(System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket2.full_name()).exists());		
 	}
 	
 	@Test
@@ -232,9 +232,9 @@ public class TestMockHdfsStorageSystem {
 													.done().get())
 										.done().get();
 		
-		FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + File.separator + bucket.full_name()));		
+		FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket.full_name()));		
 		setup_bucket(storage_service, bucket, Collections.emptyList());
-		final String bucket_path = System.getProperty("java.io.tmpdir") + File.separator + bucket.full_name();
+		final String bucket_path = System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket.full_name();
 		assertTrue("The file path has been created", new File(bucket_path + "/managed_bucket").exists());
 
 		final long now = new Date().getTime();
