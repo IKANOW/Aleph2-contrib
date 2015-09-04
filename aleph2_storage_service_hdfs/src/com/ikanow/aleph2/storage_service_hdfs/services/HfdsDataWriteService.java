@@ -18,7 +18,6 @@ package com.ikanow.aleph2.storage_service_hdfs.services;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.time.Duration;
-import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.Date;
 import java.util.EnumSet;
@@ -171,6 +170,8 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 
 	/////////////////////////////////////////////////////////////
 	
+	//TODO: i think need to store times as well, since otherwise you could get like 1 record/s and never time out a per 5 mins/1M obj setting
+	
 	/** BATCH SUB SERVICE
 	 * @author alex
 	 */
@@ -270,6 +271,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 			int segment = 1;
 			int curr_objects;
 			long curr_size_b;
+			long last_segmented;
 			Path curr_path;
 			OutputStream out;
 		}
@@ -292,21 +294,23 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 			// (Some internal mutable state)
 			boolean more_objects = false;
 			int max_objects = 5000; // (5K objects)
-			long size_kb = 20L*1024L; // (20MB)
+			long size_b = 20L*1024L*1024L; // (20MB)
 			Duration flush_interval = Duration.ofMinutes(1L); // (1 minute)
-			long timeout = flush_interval.get(ChronoUnit.NANOS);
+			long timeout_ns = flush_interval.toNanos();
+			long timeout_ms = timeout_ns*1000L;
 			
 			try {
 				for (; !_state.terminate && !Thread.interrupted();) {
 					if (!more_objects) {
 						synchronized (_writer) {
 							max_objects = _writer.get()._state.max_objects;
-							size_kb = _writer.get()._state.size_kb;
+							size_b = _writer.get()._state.size_kb*1024L;
 							flush_interval = _writer.get()._state.flush_interval;
-							timeout = flush_interval.get(ChronoUnit.NANOS);
+							timeout_ns = flush_interval.toNanos();
+							timeout_ms = timeout_ns*1000L;
 						}
 					}
-					Object o = _writer.get()._shared_queue.poll(timeout, TimeUnit.NANOSECONDS);
+					Object o = _writer.get()._shared_queue.poll(timeout_ns, TimeUnit.NANOSECONDS);
 					if (null == o) {
 						complete_segment();
 						more_objects = false;
@@ -316,10 +320,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 						new_segment();
 					}
 					write(o);
-					if ((_state.curr_objects > max_objects)
-							||
-						((1024L*_state.curr_size_b) > size_kb))
-					{
+					if (check_segment(max_objects, size_b, timeout_ms)) {
 						complete_segment();
 						more_objects = false;
 					}
@@ -365,11 +366,37 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 			_state.curr_size_b += s.getBytes().length;
 		}
 		
+		/** Utility to check the file vs time and siz
+		 * @param max_objects
+		 * @param max_size
+		 * @return
+		 */
+		protected boolean check_segment(final int max_objects, final long max_size_b, final long max_duration_ms) {
+			final long now = System.currentTimeMillis();
+			boolean trigger = ((_state.curr_objects > max_objects)
+					||
+				(_state.curr_size_b > max_size_b)
+					||
+				((now - _state.last_segmented) > max_duration_ms)
+					||
+				(now < _state.last_segmented) // (clock has changed so trigger immediately)
+					);
+			
+			/**/
+			//DEBUG
+			//if (trigger) System.out.println("TRIGGER NOW: obj=" + (_state.curr_objects > max_objects) + " vs size=" + (_state.curr_size_b > max_size_b) + " vs time=" + ((now - _state.last_segmented) > max_duration_ms));
+			
+			return trigger;
+		}
+		
 		/** Create a new segment
 		 * @throws Exception
 		 */
 		protected void new_segment() throws Exception {
-			if (null == _state.out) { // (otherwise we already have a segment) 
+			if (null == _state.out) { // (otherwise we already have a segment)
+				_state.last_segmented = System.currentTimeMillis();
+				_state.curr_size_b = 0L;
+				_state.curr_objects = 0;
 				_state.codec = getCanonicalCodec(_bucket.data_schema().storage_schema(), _stage); // (recheck the codec)			
 				
 				_state.curr_path = new Path(getBasePath(_storage_service.getRootPath(), _bucket, _stage) + "/" + SPOOL_DIR + "/" + getFilename());
@@ -391,9 +418,19 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				final Date now = new Date();
 				final Path path =  new Path(getBasePath(_storage_service.getRootPath(), _bucket, _stage) + "/" + getSuffix(now, _bucket, _stage) + "/" + _state.curr_path.getName());
 				try { _dfs.mkdir(path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {} // (fails if already exists?)
-				_dfs.rename(_state.curr_path, path);				
+				_dfs.rename(_state.curr_path, path);
+				try { _dfs.rename(getCrc(_state.curr_path), getCrc(path)); } catch (Exception e) {} // (don't care what the error is)				
 			}
 		}
+		
+		/** Gets the CRC version of a file
+		 * @param p
+		 * @return
+		 */
+		private Path getCrc(final Path p) {
+			return new Path(p.getParent() + "/" + "." + p.getName() + ".crc");
+		}
+		
 		/** Returns the filename corresponding to this object
 		 * @return
 		 */

@@ -22,12 +22,20 @@ import java.io.File;
 import java.io.OutputStream;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.apache.commons.io.FileUtils;
 import org.junit.Test;
+
+import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
@@ -525,9 +533,39 @@ public class TestHdfsDataWriteService {
 			assertEquals("TEST1b\nTEST2b\n{\"_id\":\"t1b\",\"value\":\"v1b\"}\n{\"_id\":\"t2b\",\"value\":\"v2b\"}\n", FileUtils.readFileToString(f2));
 		}
 	}		
+
+	@Test
+	public void test_writerService_segmentationCriteria() throws Exception {
+		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;		
+		
+		HfdsDataWriteService<TestBean> write_service = getWriter("/test/writer/segmentation");
+		
+		//(Tidy up)
+		try { FileUtils.deleteDirectory(new File(temp_dir + write_service._bucket.full_name())); } catch (Exception e) {}
+		
+		HfdsDataWriteService<TestBean>.WriterWorker worker = write_service.new WriterWorker();
+		
+		worker.new_segment();
+		
+		assertTrue("No new segment", !worker.check_segment(100, 100, 1000));
+		
+		worker._state.curr_objects = 101;
+		assertTrue("New segment on num", worker.check_segment(100, 100, 1000));
+		assertTrue("New segment on num b", !worker.check_segment(102, 100, 1000));
+		
+		worker._state.curr_size_b = 101;
+		assertTrue("New segment on size", worker.check_segment(102, 100, 1000));
+		assertTrue("New segment on size b", !worker.check_segment(102, 102, 1000));
+		
+		Thread.sleep(100);
+		assertTrue("New segment on time", worker.check_segment(102, 102, 50));
+		
+		worker._state.last_segmented = System.currentTimeMillis() + 1000;
+		assertTrue("New segment on time b", worker.check_segment(102, 102, 100000L));
+	}	
 	
 	@Test
-	public void test_writerService_end2end() throws InterruptedException {
+	public void test_writerService_end2end() throws InterruptedException, ExecutionException {
 		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;		
 		HfdsDataWriteService<TestBean> write_service = getWriter("/test/writer/end2end");
 
@@ -549,15 +587,57 @@ public class TestHdfsDataWriteService {
 		// Check there are now 3 threads
 		assertEquals(3, write_service._writer.get()._state._workers.getActiveCount());
 	
-		//TODO: Write 20 objects out, check that it generates 3 sets of files
-		//TODO: Check that they time out
+		for (int i = 0; i < 20; ++i) {
+			TestBean emit = new TestBean("id" + i, "val" + i);
+			if (0 == (i % 2)) {
+				if (0 == ((i/2) % 2)) {
+					batch.storeObject(emit);
+				}
+				else {
+					CompletableFuture<Supplier<Object>> cf = write_service.storeObject(emit);
+					assertEquals(null, cf.get().get());
+				}
+			}
+			else {
+				if (0 == ((i/2) % 2)) {
+					batch.storeObjects(Arrays.asList(emit));
+				}
+				else {
+					CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> cf = write_service.storeObjects(Arrays.asList(emit));	
+					assertEquals(Collections.emptyList(), cf.get()._1().get());
+					assertEquals(1L, cf.get()._2().get().longValue());
+				}
+			}
+		}
+		Thread.sleep(250L);
+		// Check that initially the files are stored locally
+		File init_dir = new File(
+				(temp_dir + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/.spooldir/")
+				.replace("/", File.separator)
+				);
+		File final_dir = new File(
+				(temp_dir + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/all_time/")
+				.replace("/", File.separator)
+				);
+		assertEquals(6, init_dir.list().length); //*2 because CRC
+		assertTrue("Nothing in final dir", !final_dir.exists()|| final_dir.list().length == 0);
+
+		Thread.sleep(2500L);
+
+		assertEquals(0, init_dir.list().length); //*2 because CRC
+		assertEquals(6, final_dir.list().length); //*2 because CRC		
 		
-		//TODO: reduce number of threads to 1, increase time out, decrease content
-		//TODO: check segmentation
+		// Change batch properties so that will segment (also check number of threads reduces)
+		batch.setBatchProperties(Optional.of(10), Optional.of(1000L), Optional.of(Duration.ofSeconds(5L)), Optional.of(1));
+		List<TestBean> l1 = IntStream.range(0, 8).boxed().map(i -> new TestBean("id" + i, "val" + i)).collect(Collectors.toList());
+		List<TestBean> l2 = IntStream.range(8, 15).boxed().map(i -> new TestBean("id" + i, "val" + i)).collect(Collectors.toList());
 		
-		Thread.sleep(5000L);
-	
+		batch.storeObjects(l1);
+		Thread.sleep(250L);
+		assertEquals(6, final_dir.list().length); //*2 because CRC		
+				
+		batch.storeObjects(l2);
+		Thread.sleep(250L);
+		assertEquals(8, final_dir.list().length); //*2 because CRC		
 	}
-	
-	//TODO: test reducing the number of threads
 }
