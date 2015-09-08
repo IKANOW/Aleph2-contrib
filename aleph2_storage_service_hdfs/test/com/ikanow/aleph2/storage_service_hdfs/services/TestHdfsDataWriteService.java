@@ -609,7 +609,7 @@ public class TestHdfsDataWriteService {
 				}
 			}
 		}
-		Thread.sleep(250L);
+		Thread.sleep(500L);
 		// Check that initially the files are stored locally
 		File init_dir = new File(
 				(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/.spooldir/")
@@ -619,8 +619,8 @@ public class TestHdfsDataWriteService {
 				(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/all_time/")
 				.replace("/", File.separator)
 				);
-		assertEquals(6, init_dir.list().length); //*2 because CRC
-		assertTrue("Nothing in final dir", !final_dir.exists()|| final_dir.list().length == 0);
+		assertEquals("Needs to have 6 files, including 3x .crc: " + Arrays.toString(init_dir.list()), 6, init_dir.list().length); //*2 because CRC
+		assertTrue("Nothing in final dir: " + (final_dir.exists()?Arrays.toString(final_dir.list()):"(non-exist)"), !final_dir.exists()|| final_dir.list().length == 0);
 
 		Thread.sleep(2500L);
 
