@@ -52,10 +52,13 @@ import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean.State
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
 import com.ikanow.aleph2.distributed_services.utils.KafkaUtils;
+
+import fj.data.Either;
 
 /** An enrichment context service that just wraps the analytics service
  * @author Alex
@@ -140,18 +143,30 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 			return Optional.of(input)
 						.filter(i -> "stream".equalsIgnoreCase(i.data_service()))
 						.map(i -> {					
-							//TODO: Topic naming: 5 cases: 
+							//Topic naming: 5 cases: 
 							// 1) i.resource_name_or_id is a bucket path, ie starts with "/", and then:
 							// 1.1) if it ends ":name" then it points to a specific point in the bucket processing
-							// 1.2) if it ends ":" then it points to the start of that bucket's processing (ie the output of its harvester)
+							// 1.2) if it ends ":" then it points to the start of that bucket's processing (ie the output of its harvester) .. which will generate the auto type "$start"
 							// 1.3) otherwise it points to the end of the bucket's processing (ie immediately before it's output)
-							// 2) i.resource_name_or_id does not, in which case
-							// 2.1) if it's a non-empty string, then it's the name of  
+							// 2) i.resource_name_or_id does not (start with a /), in which case:
+							// 2.1) if it's a non-empty string, then it's the name of one the internal jobs (can interpret that as this.full_name + name)  
 							// 2.2) if it's "" or null then it's pointing to the output of its own bucket's harvester
 							
-							//TODO: add + ":" + blah if it's not the start of the queue
+							final String[] bucket_subchannel = Lambdas.<String, String[]> wrap_u(s -> {
+								if (s.startsWith("/")) { //1.*
+									if (s.endsWith(":")) {
+										return new String[] { s.substring(0, s.length() - 1), "$start" }; // (1.2)
+									}
+									return s.split(":"); //(1.1), (1.3)
+								}
+								else { //2.*
+									return new String[] { my_bucket.full_name(), s };
+								}
+							})
+							.apply(i.resource_name_or_id())
+							;
 							
-							final String topic_name = KafkaUtils.bucketPathToTopicName(my_bucket.full_name());
+							final String topic_name = KafkaUtils.bucketPathToTopicName(bucket_subchannel[0], Optional.ofNullable(bucket_subchannel[1]).filter(s -> !s.isEmpty()));
 							cds.createTopic(topic_name);
 							final SpoutConfig spout_config = new SpoutConfig(hosts, topic_name, full_path, my_bucket._id()); 
 							spout_config.scheme = new SchemeAsMultiScheme(new StringScheme());
@@ -163,6 +178,12 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 						;
 		})
 		.collect(Collectors.toList());
+
+		//TODO (ALEPH-12): More sophisticated spout building functionality (eg generic batch->storm checking via CRUD service)
+		
+		//TODO: if a legit data service is specified then see if that service contains a spout and if so use that, else throw error
+		//TODO: (if a legit data service is specified then need to ensure that the service is included in the underlying artefacts)
+		
 	}
 
 	/* (non-Javadoc)
@@ -173,16 +194,14 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	public <T> T getTopologyStorageEndpoint(final Class<T> clazz,
 											final Optional<DataBucketBean> bucket)
 	{
+		final DataBucketBean my_bucket = bucket.orElseGet(() -> _bucket.get());
 		if (!_job.get().output().is_transient()) { // Final output for this analytic
 			// Just return an aleph2 output bolt:
-			final DataBucketBean my_bucket = bucket.orElseGet(() -> _bucket.get());
 			return (T) new OutputBolt(my_bucket, _delegate.getAnalyticsContextSignature(bucket, Optional.empty()), _user_topology.get().getClass().getName());			
 		}
 		else {
 			final ICoreDistributedServices cds = _delegate.getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();			
-			
-			//TODO: if it's transient then return a kafka bolt using the name
-			final String topic_name = "todo";
+			final String topic_name = KafkaUtils.bucketPathToTopicName(my_bucket.full_name(), Optional.of(my_bucket.streaming_enrichment_topology().name()));
 			cds.createTopic(topic_name);
 			
 			return (T) new KafkaBolt<String, String>().withTopicSelector(__ -> topic_name).withTupleToKafkaMapper(new TupleToKafkaMapper<String, String>() {
@@ -225,13 +244,8 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitMutableObject(long, com.fasterxml.jackson.databind.node.ObjectNode, java.util.Optional)
 	 */
 	@Override
-	public void emitMutableObject(final long id, final ObjectNode mutated_json, final Optional<AnnotationBean> annotation) {
-		
-		//TODO: actually this does need to be supported (see OutputBolt)
-		// Also: 
-		//every "N" seconds check if anyone has registered interest in my data and stream to an output queue as well if so
-		// (this needs to get moved to somewhere more generic .. I think the idea was to use the core output library) 		
-		throw new RuntimeException(ErrorUtils.get(ErrorUtils.INVALID_CALL_FROM_WRAPPED_ANALYTICS_CONTEXT_ENRICH, "emitMutableObject"));
+	public void emitMutableObject(final long id, final ObjectNode mutated_json, final Optional<AnnotationBean> annotation) {		
+		_delegate.emitObject(_delegate.getBucket(), _job.get(), Either.left((JsonNode) mutated_json));
 	}
 
 	/* (non-Javadoc)

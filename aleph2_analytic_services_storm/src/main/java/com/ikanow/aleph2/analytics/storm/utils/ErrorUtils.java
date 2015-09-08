@@ -20,7 +20,7 @@ package com.ikanow.aleph2.analytics.storm.utils;
  */
 public class ErrorUtils extends com.ikanow.aleph2.data_model.utils.ErrorUtils{
 
-	public static final String TOPOLOGY_NULL_ERROR = "Topology from {0} (bucket {0}) was null";
+	public static final String TOPOLOGY_NULL_ERROR = "Topology (bucket {0}) was null";
 	
 	public static final String INVALID_CALL_FROM_WRAPPED_ANALYTICS_CONTEXT_ENRICH = "This enrichment context is actually a wrapped analytics context and method={0} is not available";
 	

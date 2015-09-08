@@ -37,8 +37,10 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadTriggerBean.AnalyticThreadComplexTriggerBean;
 import com.ikanow.aleph2.data_model.objects.data_import.BucketDiffBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
@@ -236,22 +238,38 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 		try {
 			// (already validated)
 			final Collection<Object> underlying_artefacts = context.getUnderlyingArtefacts();
-			final Collection<String> user_lib_paths = context.getAnalyticsLibraries(Optional.of(analytic_bucket)).join().values();
+			final Collection<String> user_lib_paths = context.getAnalyticsLibraries(Optional.of(analytic_bucket)).join().values();  
 			final Class<?> module_type = Class.forName(job_to_start.entry_point());
 			final String cached_jars_dir = context.getServiceContext().getGlobalProperties().local_cached_jar_dir();
+			
+			//TODO (ALEPH-12): check built-in: passthrough, javascript
+			// (other, future, cases: enrichment module format, harvest module format; related, built-in modules: javascript)
+			
 			if (IEnrichmentStreamingTopology.class.isAssignableFrom(module_type)) {
-				
-				//TODO (ALEPH-12): check built-in: passthrough, javascript
 				
 				// CASE 1) ENRICHMENT TOPOLOGY FORMAT
 				
 				final IEnrichmentStreamingTopology generic_topology = (IEnrichmentStreamingTopology) module_type.newInstance();
 				final StreamingEnrichmentContextService wrapped_context = new StreamingEnrichmentContextService(context, generic_topology, analytic_bucket, job_to_start);
-				final Tuple2<Object,Map<String,String>> storm_topology = generic_topology.getTopologyAndConfiguration(analytic_bucket, wrapped_context);				
-				return StormControllerUtil.startJob(_storm_controller, analytic_bucket, underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir);
 				
-				// (other, future, cases: enrichment module format, harvest module format; related, built-in modules: javascript)				
-			}
+				// Create a pretend bucket that has this job as the (sole) enrichment topology...
+				final DataBucketBean converted_bucket = BeanTemplateUtils.clone(analytic_bucket)
+															.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.streaming)
+															.with(DataBucketBean::streaming_enrichment_topology, 
+																	BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
+																		.with(EnrichmentControlMetadataBean::enabled, true)
+																		.with(EnrichmentControlMetadataBean::name, job_to_start.name())
+																		.with(EnrichmentControlMetadataBean::config, job_to_start.config())
+																	.done().get()
+																	)
+															.done();
+				
+				//... then use that to "fool" the getTopologyAndConfiguration:
+				final Tuple2<Object,Map<String,String>> storm_topology = generic_topology.getTopologyAndConfiguration(converted_bucket, wrapped_context);
+				
+				//(generic topology submit):
+				return StormControllerUtil.startJob(_storm_controller, analytic_bucket, underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir);
+			}			
 			// (no other options -currently- possible because of validation that has taken place)
 			
 			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this, "startAnalyticJob", ErrorUtils.get("Bucket={0} Job={1} Error=Module_class_not_recognized: {2}", analytic_bucket, job_to_start.name(), job_to_start.entry_point())));
@@ -313,7 +331,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 												final ProcessingTestSpecBean test_spec, 
 												final IAnalyticsContext context)
 	{
-		//TODO: longer term this should run using a local storm controller (maybe spawned in a separate process?!)
+		//TODO (ALEPH-12): longer term this should run using a local storm controller (maybe spawned in a separate process?!)
 		//TODO: maybe need some more "test" infrastructure set up here 
 		return startAnalyticJob(analytic_bucket, jobs, job_to_test, context);
 	}

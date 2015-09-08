@@ -30,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.yaml.snakeyaml.Yaml;
@@ -44,7 +45,9 @@ import com.ikanow.aleph2.analytics.storm.services.LocalStormController;
 import com.ikanow.aleph2.analytics.storm.services.RemoteStormController;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 
 /**
  * Factory for returning a local or remote storm controller.
@@ -55,7 +58,7 @@ import com.ikanow.aleph2.data_model.utils.Lambdas;
  *
  */
 public class StormControllerUtil {
-	private static final Logger logger = LogManager.getLogger();
+	private static final Logger _logger = LogManager.getLogger();
 	private final static Set<String> dirs_to_ignore = Sets.newHashSet("org/slf4j", "org/apache/log4j");
 	protected final static ConcurrentHashMap<String, Date> storm_topology_jars_cache = new ConcurrentHashMap<>();
 	protected final static long MAX_RETRIES = 60; //60 retries at 1s == 1m max retry time
@@ -150,12 +153,12 @@ public class StormControllerUtil {
 	 */
 	public static boolean buildStormTopologyJar(final List<String> jars_to_merge, final String input_jar_location) {
 		try {				
-			logger.debug("creating jar to submit at: " + input_jar_location);
+			_logger.debug("creating jar to submit at: " + input_jar_location);
 			//final String input_jar_location = System.getProperty("java.io.tmpdir") + File.separator + UuidUtils.get().getTimeBasedUuid() + ".jar";
 			JarBuilderUtil.mergeJars(jars_to_merge, input_jar_location, dirs_to_ignore);
 			return true;
 		} catch (Exception e) {
-			logger.error(ErrorUtils.getLongForm("Error building storm jar {0}", e));
+			_logger.error(ErrorUtils.getLongForm("Error building storm jar {0}", e));
 			return false;
 		}			
 	}
@@ -202,52 +205,50 @@ public class StormControllerUtil {
 														final Map<String, String> config, 
 														final String cached_jar_dir)
 	{
-		//final CompletableFuture<BasicMessageBean> start_future = new CompletableFuture<BasicMessageBean>();
-
-		//Get topology from user
-		//TODO (ALEPH-12): find somewhere to put this code:
-//		final Tuple2<Object, Map<String, String>> top_ret_val = enrichment_toplogy.getTopologyAndConfiguration(bucket, context);
-//		final StormTopology topology = (StormTopology) top_ret_val._1;		
-//		if (null == topology) {
-//			start_future.complete(
-//					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "startJob", ErrorUtils.TOPOLOGY_NULL_ERROR, topology.getClass().getName(), bucket.full_name())
-//					 );
-//			return start_future;
-//		}
+		if (null == topology) {
+			return CompletableFuture.completedFuture(
+					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "startJob", ErrorUtils.TOPOLOGY_NULL_ERROR, bucket.full_name())
+					 );
+		}
 		
-		logger.info("Retrieved user Storm config topology: spouts=" + topology.get_spouts_size() + " bolts=" + topology.get_bolts_size() + " configs=" + config.toString());
+		_logger.info("Retrieved user Storm config topology: spouts=" + topology.get_spouts_size() + " bolts=" + topology.get_bolts_size() + " configs=" + config.toString());
 		
 		final List<String> jars_to_merge = new LinkedList<String>();
 		
-		//add in all the underlying artefacts file paths
-		//TODO (ALEPH-12): find somewhere to put this code:
-//		final Collection<Object> underlying_artefacts = Lambdas.get(() -> {
-//			// Check if the user has overridden the context, and set to the defaults if not
-//			try {
-//				return context.getUnderlyingArtefacts();
-//			}
-//			catch (Exception e) {
-//				// This is OK, it just means that the top. developer hasn't overridden the services, so we just use the default ones:
-//				context.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty());
-//				return context.getUnderlyingArtefacts();
-//			}			
-//		});
-				
-		jars_to_merge.addAll( underlying_artefacts.stream().map( artefact -> LiveInjector.findPathJar(artefact.getClass(), "")).collect(Collectors.toList()));
+		jars_to_merge.addAll( underlying_artefacts.stream()
+				.map(artefact -> LiveInjector.findPathJar(artefact.getClass(), ""))
+				.filter(f -> !f.equals(""))
+				.collect(Collectors.toList()));
+		
+		if (jars_to_merge.isEmpty()) { // special case: no aleph2 libs found, this is almost certainly because this is being run from eclipse...
+			final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
+			_logger.warn("WARNING: no library files found, probably because this is running from an IDE - instead taking all JARs from: " + (globals.local_root_dir() + "/lib/"));
+			try {
+				//... and LiveInjecter doesn't work on classes ... as a backup just copy everything from "<LOCAL_ALEPH2_HOME>/lib" into there 
+				jars_to_merge.addAll(
+						FileUtils.listFiles(new File(globals.local_root_dir() + "/lib/"), new String[] { "jar" }, false)
+							.stream()
+							.map(File::toString)
+							.collect(Collectors.toList())
+							);
+			}
+			catch (Exception e) {
+				throw new RuntimeException("In eclipse/IDE mode, directory not found: " + (globals.local_root_dir() + "/lib/"));
+			}
+		}
 		
 		//add in the user libs
 		jars_to_merge.addAll(user_lib_paths);
 		
 		//create jar
-		final CompletableFuture<String> jar_future = buildOrReturnCachedStormTopologyJar(jars_to_merge, cached_jar_dir);
-		
+		final CompletableFuture<String> jar_future = buildOrReturnCachedStormTopologyJar(jars_to_merge, cached_jar_dir);		
 		
 		//submit to storm
 		final CompletableFuture<BasicMessageBean> submit_future = Lambdas.get(() -> {
 			long retries = 0;			
 			while ( retries < MAX_RETRIES ) {				
 				try {
-					logger.debug("Trying to submit job, try: " + retries + " of " + MAX_RETRIES);
+					_logger.debug("Trying to submit job, try: " + retries + " of " + MAX_RETRIES);
 					final String jar_file_location = jar_future.get();
 					return storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
 					//return storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
@@ -275,40 +276,7 @@ public class StormControllerUtil {
 			error_future.completeExceptionally(new Exception("Error submitting job, ran out of retries (previous (same name) job is probably still alive)"));
 			return error_future;
 		});
-		return submit_future;
-		
-//		try {
-//			long retries = 0;
-//			final String jar_file_location = jar_future.get();
-//			//submit to storm
-//			CompletableFuture<BasicMessageBean> submit_future = null;
-//			while ( retries < MAX_RETRIES ) {				
-//				try {
-//					logger.debug("Trying to submit job, try: " + retries + " of " + MAX_RETRIES);
-//					submit_future = storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
-//					retries = MAX_RETRIES; //if we got here, we didn't throw an exception, so we completed successfully
-//				} catch ( Exception ex) {
-//					if ( ex instanceof AlreadyAliveException ) {
-//						retries++;
-//						Thread.sleep(1000); //sleep 1s, was seeing about 2s of sleep required before job successfully submitted on restart
-//					} else {
-//						retries = MAX_RETRIES; //we threw some other exception, bail out
-//						submit_future.completeExceptionally(ex);
-//					}
-//				}
-//			}			
-//			if ( submit_future.get().success() ) {
-//				ErrorUtils.buildSuccessMessage(StormControllerUtil.class, "startJob", "Started storm job succesfully");
-//			} else {
-//				start_future.complete(submit_future.get());				
-//			}						
-//		} catch ( Exception ex ) {
-//			start_future.complete(
-//					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "startJob", ErrorUtils.getLongForm("Error starting storm job: {0}", ex))
-//			 );
-//		}
-//		
-//		return start_future;
+		return submit_future;		
 	}
 	
 	/**
@@ -331,21 +299,21 @@ public class StormControllerUtil {
 			//if the cache is more recent than any of the files, we assume nothing has been updated
 			if ( storm_topology_jars_cache.get(hashed_jar_name).getTime() > most_recent_update.getTime() ) {
 				//RETURN return cached jar file path
-				logger.debug("Returning a cached copy of the jar");
+				_logger.debug("Returning a cached copy of the jar");
 				//update the cache copy to set its modified time to now so we don't clean it up
 				JarBuilderUtil.updateJarModifiedTime(hashed_jar_name);				
 				future.complete(hashed_jar_name);
 				return future;
 			} else {
 				//delete cache copy
-				logger.debug("Removing an expired cached copy of the jar");
+				_logger.debug("Removing an expired cached copy of the jar");
 				removeCachedJar(hashed_jar_name);
 			}
 		}
 				
 		//if we fall through
 		//3. create jar
-		logger.debug("Fell through or cache copy is old, have to create a new version");
+		_logger.debug("Fell through or cache copy is old, have to create a new version");
 		if ( buildStormTopologyJar(jars_to_merge, hashed_jar_name) ) {	//TODO do I need to set the jar name to the hash so we can always find it?	
 			//4. add jar to cache w/ current/newest file timestamp		
 			storm_topology_jars_cache.put(hashed_jar_name, new Date());
@@ -444,11 +412,11 @@ public class StormControllerUtil {
 				info = getJobStats(storm_controller, bucketPathToTopologyName(bucket.full_name()));
 			} catch (Exception ex) {}
 			if ( null == info ) {				
-				logger.debug("JOB_STATUS: no longer exists, assuming that job is dead and gone, spent: " + (System.currentTimeMillis()-start_time) + "ms waiting");				
+				_logger.debug("JOB_STATUS: no longer exists, assuming that job is dead and gone, spent: " + (System.currentTimeMillis()-start_time) + "ms waiting");				
 				return;
 			}
 			num_tries++;
-			logger.debug("Waiting for job status to go away, try number: " + num_tries);
+			_logger.debug("Waiting for job status to go away, try number: " + num_tries);
 			Thread.sleep(2000); //wait 2s between checks, in tests it was taking 8s to clear
 		}		
 	}
