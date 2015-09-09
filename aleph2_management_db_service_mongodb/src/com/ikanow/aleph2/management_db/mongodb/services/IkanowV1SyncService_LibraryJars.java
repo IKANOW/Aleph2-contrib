@@ -262,7 +262,7 @@ public class IkanowV1SyncService_LibraryJars {
 						.<Tuple2<String, ManagementFuture<?>>>map(id -> 
 							Tuples._2T(id, createLibraryBean(id, library_mgmt, aleph2_fs, true, share_db, share_fs)))
 						.<CompletableFuture<Boolean>>map(id_fres -> 
-							updateV1ShareErrorStatus_top(id_fres._1(), id_fres._2(), share_db, true))
+							updateV1ShareErrorStatus_top(id_fres._1(), id_fres._2(), library_mgmt, share_db, true))
 						.collect(Collectors.toList());
 					;
 					
@@ -280,7 +280,7 @@ public class IkanowV1SyncService_LibraryJars {
 							.<Tuple2<String, ManagementFuture<?>>>map(id -> 
 								Tuples._2T(id, createLibraryBean(id, library_mgmt, aleph2_fs, false, share_db, share_fs)))
 						.<CompletableFuture<Boolean>>map(id_fres -> 
-							updateV1ShareErrorStatus_top(id_fres._1(), id_fres._2(), share_db, false))
+							updateV1ShareErrorStatus_top(id_fres._1(), id_fres._2(), library_mgmt, share_db, false))
 							.collect(Collectors.toList());
 						;
 						
@@ -302,6 +302,7 @@ public class IkanowV1SyncService_LibraryJars {
 	 */
 	protected CompletableFuture<Boolean> updateV1ShareErrorStatus_top(final String id, 
 			final ManagementFuture<?> fres, 
+			final ICrudService<SharedLibraryBean> library_service,
 			final ICrudService<JsonNode> share_db,
 			final boolean create_not_update)
 	{		
@@ -309,7 +310,7 @@ public class IkanowV1SyncService_LibraryJars {
 				.<Boolean>thenCompose(res ->  {
 					try {
 						fres.get(); // (check if the DB side call has failed)
-						return updateV1ShareErrorStatus(new Date(), id, res, share_db, create_not_update);	
+						return updateV1ShareErrorStatus(new Date(), id, res, library_service, share_db, create_not_update);	
 					}
 					catch (Exception e) { // DB-side call has failed, create ad hoc error
 						final Collection<BasicMessageBean> errs = res.isEmpty()
@@ -325,7 +326,7 @@ public class IkanowV1SyncService_LibraryJars {
 											)
 									)
 								: res;
-						return updateV1ShareErrorStatus(new Date(), id, errs, share_db, create_not_update);											
+						return updateV1ShareErrorStatus(new Date(), id, errs, library_service, share_db, create_not_update);											
 					}
 				});
 	}
@@ -538,6 +539,7 @@ public class IkanowV1SyncService_LibraryJars {
 			final Date main_date,
 			final String id,
 			final Collection<BasicMessageBean> status_messages,
+			final ICrudService<SharedLibraryBean> library_service,
 			final ICrudService<JsonNode> share_db,
 			final boolean create_not_update
 			)
@@ -554,26 +556,35 @@ public class IkanowV1SyncService_LibraryJars {
 		// Only going to do something if we have errors:
 		
 		if (any_errors) {
-			if (create_not_update) {
-				return share_db.getObjectById(id, Arrays.asList("title", "description"), true).thenCompose(jsonopt -> {
-					if (jsonopt.isPresent()) { // (else share has vanished, nothing to do)
-						final CommonUpdateComponent<JsonNode> update = CrudUtils.update()
-								.set("title", "ERROR:" + safeJsonGet("title", jsonopt.get()))
-								.set("description", safeJsonGet("description", jsonopt.get()) + "\n" + message_block)
-								;
-						final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("_id", new ObjectId(id));					
-						final CompletableFuture<Boolean> update_res = share_db.updateObjectBySpec(v1_query, Optional.empty(), update);
-						return update_res;
+			_logger.warn(ErrorUtils.get("Error creating/updating shared library bean: {0} error= {1}", id, message_block.replace("\n", "; ")));
+			return share_db.getObjectById(id, Arrays.asList("title", "description"), true).thenCompose(jsonopt -> {
+				if (jsonopt.isPresent()) { // (else share has vanished, nothing to do)
+					
+					final CommonUpdateComponent<JsonNode> v1_update = 
+							Optional.of(CrudUtils.update()
+									.set("description", safeJsonGet("description", jsonopt.get()) + "\n" + message_block)										
+									)
+								// If shared lib already exists then can't update the title
+								.map(c -> create_not_update  
+										? c.set("title", "ERROR:" + safeJsonGet("title", jsonopt.get()))
+										: c
+										)
+								.get();
+
+					if (!create_not_update) { // also make a token effort to update the timestamp on the shared lib bean:
+						final CommonUpdateComponent<SharedLibraryBean> v2_update =
+								CrudUtils.update(SharedLibraryBean.class).set(SharedLibraryBean::modified, new Date());
+						
+						library_service.updateObjectById("v2_" + id, v2_update); // (just fire this off and forget about it)
 					}
-					else {
-						return CompletableFuture.completedFuture(false);
-					}
-				});
-			}
-			else { // just log:
-				_logger.warn(ErrorUtils.get("Error updating shared library bean: {0} error= {1}", id, message_block.replace("\n", "; ")));
-				return CompletableFuture.completedFuture(false);			
-			}
+					final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("_id", new ObjectId(id));					
+					final CompletableFuture<Boolean> update_res = share_db.updateObjectBySpec(v1_query, Optional.empty(), v1_update);
+					return update_res;
+				}
+				else {
+					return CompletableFuture.completedFuture(false);
+				}
+			});
 		}
 		else {
 			return CompletableFuture.completedFuture(false);			
