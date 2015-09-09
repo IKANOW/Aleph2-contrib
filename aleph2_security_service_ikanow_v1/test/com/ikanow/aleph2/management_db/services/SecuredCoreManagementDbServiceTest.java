@@ -98,8 +98,9 @@ public class SecuredCoreManagementDbServiceTest {
 			try {
 
 						AuthorizationBean authorizationBean  = new AuthorizationBean(ownerID);
-						IManagementCrudService<SharedLibraryBean> shareLibraryStore = managementDbService.getSecuredDb(authorizationBean).getSharedLibraryStore();
+						//IManagementCrudService<SharedLibraryBean> shareLibraryStore = managementDbService.getSecuredDb(authorizationBean).getSharedLibraryStore();
 //						IManagementCrudService<SharedLibraryBean> shareLibraryStore = managementDbService.getSharedLibraryStore();
+						IManagementCrudService<SharedLibraryBean> shareLibraryStore = managementDbService.getSharedLibraryStore().secured(_service_context, authorizationBean);
 												
 						//test single read
 						String share_id1="v1_55a544bee4b056ae0f9bd92b";

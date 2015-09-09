@@ -84,6 +84,7 @@ public class IkanowV1RealmTest {
 
 	
 	@Test		
+	@Ignore
 	public void testAuthenticated() {
         //token.setRememberMe(true);
 		ISubject subject = login();
@@ -105,6 +106,7 @@ public class IkanowV1RealmTest {
 	}
 
 	@Test
+	@Ignore
 	public void testRolePermission(){
 		ISubject subject = login();
 		// system community
