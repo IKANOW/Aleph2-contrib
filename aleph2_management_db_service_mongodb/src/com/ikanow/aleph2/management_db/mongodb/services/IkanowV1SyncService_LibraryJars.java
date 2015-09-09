@@ -575,7 +575,7 @@ public class IkanowV1SyncService_LibraryJars {
 						final CommonUpdateComponent<SharedLibraryBean> v2_update =
 								CrudUtils.update(SharedLibraryBean.class).set(SharedLibraryBean::modified, new Date());
 						
-						library_service.updateObjectById("v2_" + id, v2_update); // (just fire this off and forget about it)
+						library_service.updateObjectById("v1_" + id, v2_update); // (just fire this off and forget about it)
 					}
 					final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("_id", new ObjectId(id));					
 					final CompletableFuture<Boolean> update_res = share_db.updateObjectBySpec(v1_query, Optional.empty(), v1_update);
