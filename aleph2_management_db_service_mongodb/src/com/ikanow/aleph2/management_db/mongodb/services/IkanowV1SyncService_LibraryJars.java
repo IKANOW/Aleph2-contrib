@@ -573,23 +573,44 @@ public class IkanowV1SyncService_LibraryJars {
 
 					final CompletableFuture<Boolean> v2_res = Lambdas.get(() -> {
 						if (!create_not_update) { // also make a token effort to update the timestamp on the shared lib bean, so the same error doesn't keep getting repeated
+							/**/
+							_logger.debug("here1?! " + id);
+							
 							final CommonUpdateComponent<SharedLibraryBean> v2_update =
 									CrudUtils.update(SharedLibraryBean.class).set(SharedLibraryBean::modified, new Date());
+							
+							/**/
+							_logger.debug("here2?! " + v2_update.getAll());
 							
 							return library_service.updateObjectById("v1_" + id, v2_update); // (just fire this off and forget about it)
 						}
 						else return CompletableFuture.completedFuture(true);
 					});
+					/**/
+					_logger.debug("here3?! " + v2_res);
+					
 					final CompletableFuture<Boolean> update_res = v2_res.thenCompose(b -> {
+						/**/
+						_logger.debug("here4?! " + b);
+						
 						if (b) {
+							/**/
+							_logger.debug("here6?! " + v1_update);
+							
 							return share_db.updateObjectById(new ObjectId(id), v1_update);
 						}
 						else {
+							/**/
+							_logger.debug("here5?! " + id);
+							
 							_logger.warn(ErrorUtils.get("Error creating/updating v2 library bean: {0} unknown error", id));
 							return CompletableFuture.completedFuture(false);
 						}
 					})
 					.exceptionally(t -> {
+						/**/
+						_logger.debug("here7?! " + t);
+						
 						_logger.warn(ErrorUtils.getLongForm("Error creating/updating shared library bean: {1} error= {0}", t, id));
 						return false;
 					})
