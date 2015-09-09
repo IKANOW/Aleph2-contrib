@@ -302,7 +302,7 @@ public class IkanowV1SyncService_LibraryJars {
 	 */
 	protected CompletableFuture<Boolean> updateV1ShareErrorStatus_top(final String id, 
 			final ManagementFuture<?> fres, 
-			final ICrudService<SharedLibraryBean> library_service,
+			final IManagementCrudService<SharedLibraryBean> library_mgmt,
 			final ICrudService<JsonNode> share_db,
 			final boolean create_not_update)
 	{		
@@ -310,7 +310,7 @@ public class IkanowV1SyncService_LibraryJars {
 				.<Boolean>thenCompose(res ->  {
 					try {
 						fres.get(); // (check if the DB side call has failed)
-						return updateV1ShareErrorStatus(new Date(), id, res, library_service, share_db, create_not_update);	
+						return updateV1ShareErrorStatus(new Date(), id, res, library_mgmt, share_db, create_not_update);	
 					}
 					catch (Exception e) { // DB-side call has failed, create ad hoc error
 						final Collection<BasicMessageBean> errs = res.isEmpty()
@@ -326,7 +326,7 @@ public class IkanowV1SyncService_LibraryJars {
 											)
 									)
 								: res;
-						return updateV1ShareErrorStatus(new Date(), id, errs, library_service, share_db, create_not_update);											
+						return updateV1ShareErrorStatus(new Date(), id, errs, library_mgmt, share_db, create_not_update);											
 					}
 				});
 	}
@@ -539,7 +539,7 @@ public class IkanowV1SyncService_LibraryJars {
 			final Date main_date,
 			final String id,
 			final Collection<BasicMessageBean> status_messages,
-			final ICrudService<SharedLibraryBean> library_service,
+			final IManagementCrudService<SharedLibraryBean> library_mgmt,
 			final ICrudService<JsonNode> share_db,
 			final boolean create_not_update
 			)
@@ -582,7 +582,12 @@ public class IkanowV1SyncService_LibraryJars {
 							/**/
 							_logger.debug("here2?! " + v2_update.getAll());
 							
-							return library_service.updateObjectById("v1_" + id, v2_update); // (just fire this off and forget about it)
+							final CompletableFuture<Boolean> ret_val = library_mgmt.updateObjectById("v1_" + id, v2_update); // (just fire this off and forget about it)
+							
+							/**/
+							_logger.debug("here2b?! " + ret_val);												
+							
+							return ret_val;
 						}
 						else return CompletableFuture.completedFuture(true);
 					});
