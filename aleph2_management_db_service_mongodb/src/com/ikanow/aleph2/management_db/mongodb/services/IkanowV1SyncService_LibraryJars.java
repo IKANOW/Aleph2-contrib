@@ -564,14 +564,14 @@ public class IkanowV1SyncService_LibraryJars {
 							Optional.of(CrudUtils.update()
 									.set("description", safeJsonGet("description", jsonopt.get()) + "\n" + message_block)										
 									)
-								// If shared lib already exists then can't update the title
+								// If shared lib already exists then can't update the title (or the existing lib bean will get deleted)
 								.map(c -> create_not_update  
 										? c.set("title", "ERROR:" + safeJsonGet("title", jsonopt.get()))
 										: c
 										)
 								.get();
 
-					if (!create_not_update) { // also make a token effort to update the timestamp on the shared lib bean:
+					if (!create_not_update) { // also make a token effort to update the timestamp on the shared lib bean, so the same error doesn't keep getting repeated
 						final CommonUpdateComponent<SharedLibraryBean> v2_update =
 								CrudUtils.update(SharedLibraryBean.class).set(SharedLibraryBean::modified, new Date());
 						
