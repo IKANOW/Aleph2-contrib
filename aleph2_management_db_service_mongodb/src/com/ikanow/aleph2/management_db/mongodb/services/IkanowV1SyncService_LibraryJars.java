@@ -556,7 +556,7 @@ public class IkanowV1SyncService_LibraryJars {
 				if (jsonopt.isPresent()) { // (else share has vanished, nothing to do)
 					final CommonUpdateComponent<JsonNode> update = CrudUtils.update()
 							.set("title", "ERROR:" + safeJsonGet("title", jsonopt.get()))
-							.set("description", safeJsonGet("title", jsonopt.get()) + "\n" + message_block)
+							.set("description", safeJsonGet("description", jsonopt.get()) + "\n" + message_block)
 							;
 					final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("_id", new ObjectId(id));					
 					final CompletableFuture<Boolean> update_res = share_db.updateObjectBySpec(v1_query, Optional.empty(), update);
