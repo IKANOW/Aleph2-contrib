@@ -262,7 +262,7 @@ public class IkanowV1SyncService_LibraryJars {
 						.<Tuple2<String, ManagementFuture<?>>>map(id -> 
 							Tuples._2T(id, createLibraryBean(id, library_mgmt, aleph2_fs, true, share_db, share_fs)))
 						.<CompletableFuture<Boolean>>map(id_fres -> 
-							updateV1ShareErrorStatus_top(id_fres._1(), id_fres._2(), share_db))
+							updateV1ShareErrorStatus_top(id_fres._1(), id_fres._2(), share_db, true))
 						.collect(Collectors.toList());
 					;
 					
@@ -279,8 +279,8 @@ public class IkanowV1SyncService_LibraryJars {
 						create_update_delete._3().stream().parallel()
 							.<Tuple2<String, ManagementFuture<?>>>map(id -> 
 								Tuples._2T(id, createLibraryBean(id, library_mgmt, aleph2_fs, false, share_db, share_fs)))
-							.<CompletableFuture<Boolean>>map(id_fres -> 
-								CompletableFuture.completedFuture(true)) 
+						.<CompletableFuture<Boolean>>map(id_fres -> 
+							updateV1ShareErrorStatus_top(id_fres._1(), id_fres._2(), share_db, false))
 							.collect(Collectors.toList());
 						;
 						
@@ -302,13 +302,14 @@ public class IkanowV1SyncService_LibraryJars {
 	 */
 	protected CompletableFuture<Boolean> updateV1ShareErrorStatus_top(final String id, 
 			final ManagementFuture<?> fres, 
-			ICrudService<JsonNode> share_db)
+			final ICrudService<JsonNode> share_db,
+			final boolean create_not_update)
 	{		
 		return fres.getManagementResults()
 				.<Boolean>thenCompose(res ->  {
 					try {
 						fres.get(); // (check if the DB side call has failed)
-						return updateV1ShareErrorStatus(new Date(), id, res, share_db);	
+						return updateV1ShareErrorStatus(new Date(), id, res, share_db, create_not_update);	
 					}
 					catch (Exception e) { // DB-side call has failed, create ad hoc error
 						final Collection<BasicMessageBean> errs = res.isEmpty()
@@ -324,7 +325,7 @@ public class IkanowV1SyncService_LibraryJars {
 											)
 									)
 								: res;
-						return updateV1ShareErrorStatus(new Date(), id, errs, share_db);											
+						return updateV1ShareErrorStatus(new Date(), id, errs, share_db, create_not_update);											
 					}
 				});
 	}
@@ -537,7 +538,8 @@ public class IkanowV1SyncService_LibraryJars {
 			final Date main_date,
 			final String id,
 			final Collection<BasicMessageBean> status_messages,
-			final ICrudService<JsonNode> share_db
+			final ICrudService<JsonNode> share_db,
+			final boolean create_not_update
 			)
 	{
 		final String message_block = status_messages.stream()
@@ -552,20 +554,26 @@ public class IkanowV1SyncService_LibraryJars {
 		// Only going to do something if we have errors:
 		
 		if (any_errors) {
-			return share_db.getObjectById(id, Arrays.asList("title", "description"), true).thenCompose(jsonopt -> {
-				if (jsonopt.isPresent()) { // (else share has vanished, nothing to do)
-					final CommonUpdateComponent<JsonNode> update = CrudUtils.update()
-							.set("title", "ERROR:" + safeJsonGet("title", jsonopt.get()))
-							.set("description", safeJsonGet("description", jsonopt.get()) + "\n" + message_block)
-							;
-					final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("_id", new ObjectId(id));					
-					final CompletableFuture<Boolean> update_res = share_db.updateObjectBySpec(v1_query, Optional.empty(), update);
-					return update_res;
-				}
-				else {
-					return CompletableFuture.completedFuture(false);
-				}
-			});
+			if (create_not_update) {
+				return share_db.getObjectById(id, Arrays.asList("title", "description"), true).thenCompose(jsonopt -> {
+					if (jsonopt.isPresent()) { // (else share has vanished, nothing to do)
+						final CommonUpdateComponent<JsonNode> update = CrudUtils.update()
+								.set("title", "ERROR:" + safeJsonGet("title", jsonopt.get()))
+								.set("description", safeJsonGet("description", jsonopt.get()) + "\n" + message_block)
+								;
+						final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("_id", new ObjectId(id));					
+						final CompletableFuture<Boolean> update_res = share_db.updateObjectBySpec(v1_query, Optional.empty(), update);
+						return update_res;
+					}
+					else {
+						return CompletableFuture.completedFuture(false);
+					}
+				});
+			}
+			else { // just log:
+				_logger.warn(ErrorUtils.get("Error updating shared library bean: {0} error= {1}", id, message_block.replace("\n", "; ")));
+				return CompletableFuture.completedFuture(false);			
+			}
 		}
 		else {
 			return CompletableFuture.completedFuture(false);			
