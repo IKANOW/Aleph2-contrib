@@ -58,6 +58,8 @@ import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
 import com.ikanow.aleph2.storage_service_hdfs.utils.HdfsErrorUtils;
 
+import fj.Unit;
+
 /** Generic service for writing data out to HDFS
  * @author Alex
  */
@@ -185,12 +187,23 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 			ThreadPoolExecutor _workers = null;
 		}
 		final protected MutableState _state = new MutableState();
+		final protected SetOnce<Unit> _initialized = new SetOnce<>(); // (lazy initialization)
+		
+		/** Lazy initialization of the writers
+		 */
+		protected void setup() {
+			if (!_initialized.isSet()) {
+				_initialized.trySet(Unit.unit());
+				
+				// Launch the executor service
+				fillUpEmptyQueue();
+			}
+		}
 		
 		/** User constructor
 		 */
 		public BatchHdfsWriteService() {
-			// Launch the executor service
-			fillUpEmptyQueue();
+			//(do nothing, lazy initialization)
 		}
 		
 		/* (non-Javadoc)
@@ -208,19 +221,21 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				
 				int old_write_threads = _state.write_threads;
 				_state.write_threads = write_threads.orElse(_state.write_threads);
-				if (old_write_threads < _state.write_threads) { // easy case, just expand
-					_state._workers.setCorePoolSize(_state.write_threads);
-					_state._workers.setMaximumPoolSize(_state.write_threads);
-					for (int i = old_write_threads; i < _state.write_threads; ++i) {
-						_state._workers.execute(new WriterWorker());
-					}								
+				if ((old_write_threads != _state.write_threads) && _initialized.isSet()) {
+					if (old_write_threads < _state.write_threads) { // easy case, just expand
+						_state._workers.setCorePoolSize(_state.write_threads);
+						_state._workers.setMaximumPoolSize(_state.write_threads);
+						for (int i = old_write_threads; i < _state.write_threads; ++i) {
+							_state._workers.execute(new WriterWorker());
+						}								
+					}
+					else if (old_write_threads > _state.write_threads) { // this is a bit ugly, nuke the existing worker queue
+						_state._workers.shutdownNow();
+						fillUpEmptyQueue();
+					}
 				}
-				else if (old_write_threads > _state.write_threads) { // this is a bit ugly, nuke the existing worker queue
-					_state._workers.shutdownNow();
-					fillUpEmptyQueue();
-				}
-
 			}
+			setup();
 		}
 		
 		/* (non-Javadoc)
@@ -228,6 +243,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		 */
 		@Override
 		public void storeObjects(List<T> new_objects) {
+			setup();
 			_shared_queue.add(new_objects);
 		}
 
@@ -236,6 +252,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		 */
 		@Override
 		public void storeObject(T new_object) {
+			setup();
 			_shared_queue.add(new_object);
 		}
 
@@ -291,7 +308,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				complete_segment();
 			})));
 			
-			// (Some internal mutable state)
+			// (Some internal mutable state - these values are _always_ overwritten)
 			boolean more_objects = false;
 			int max_objects = 5000; // (5K objects)
 			long size_b = 20L*1024L*1024L; // (20MB)
