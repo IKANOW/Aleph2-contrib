@@ -557,7 +557,7 @@ public class IkanowV1SyncService_LibraryJars {
 		
 		if (any_errors) {
 			_logger.warn(ErrorUtils.get("Error creating/updating shared library bean: {0} error= {1}", id, message_block.replace("\n", "; ")));
-			return share_db.getObjectById(id, Arrays.asList("title", "description"), true).thenCompose(jsonopt -> {
+			return share_db.getObjectById(new ObjectId(id), Arrays.asList("title", "description"), true).thenCompose(jsonopt -> {
 				if (jsonopt.isPresent()) { // (else share has vanished, nothing to do)
 					
 					final CommonUpdateComponent<JsonNode> v1_update = 
@@ -577,8 +577,7 @@ public class IkanowV1SyncService_LibraryJars {
 						
 						library_service.updateObjectById("v1_" + id, v2_update); // (just fire this off and forget about it)
 					}
-					final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("_id", new ObjectId(id));					
-					final CompletableFuture<Boolean> update_res = share_db.updateObjectBySpec(v1_query, Optional.empty(), v1_update);
+					final CompletableFuture<Boolean> update_res = share_db.updateObjectById(new ObjectId(id), v1_update);
 					return update_res;
 				}
 				else {
