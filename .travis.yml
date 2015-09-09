@@ -12,6 +12,7 @@ env:
  - TEST_DIR=aleph2_storage_service_hdfs
  - TEST_DIR=aleph2_management_db_service_mongodb
  - TEST_DIR=aleph2_search_index_service_elasticsearch
+ - TEST_DIR=aleph2_security_service_ikanow_v1
 
 
 script: cd $TEST_DIR && mvn install -DskipTests=true && mvn test
