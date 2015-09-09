@@ -571,12 +571,17 @@ public class IkanowV1SyncService_LibraryJars {
 										)
 								.get();
 
+					@SuppressWarnings("unchecked")
 					final CompletableFuture<Boolean> v2_res = Lambdas.get(() -> {
 						if (!create_not_update) { // also make a token effort to update the timestamp on the shared lib bean, so the same error doesn't keep getting repeated
 							final CommonUpdateComponent<SharedLibraryBean> v2_update =
 									CrudUtils.update(SharedLibraryBean.class).set(SharedLibraryBean::modified, new Date());
 							
-							return library_mgmt.updateObjectById("v1_" + id, v2_update); // (just fire this off and forget about it)
+							//(need to do this because as of Aug 2015, the updateObjectById isn't plumbed in)
+							final ICrudService<SharedLibraryBean> library_service = (ICrudService<SharedLibraryBean>)
+										(ICrudService<?>)library_mgmt.getUnderlyingPlatformDriver(ICrudService.class, Optional.empty()).get();
+							
+							return library_service.updateObjectById("v1_" + id, v2_update); // (just fire this off and forget about it)
 						}
 						else return CompletableFuture.completedFuture(true);
 					});
