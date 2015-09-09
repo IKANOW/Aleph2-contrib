@@ -77,8 +77,10 @@ public class IkanowV1UserGroupRoleProvider implements IRoleProvider {
 			ObjectId objecId = new ObjectId(principalName); 
 			result = getPersonStore().getObjectBySpec(CrudUtils.anyOf().when("_id", objecId)).get();
 	        if(result.isPresent()){
-	        	JsonNode communities = result.get().get("communities");
-	        	if (communities.isArray()) {
+	        	// community based roles
+	        	JsonNode person = result.get();
+	        	JsonNode communities = person.get("communities");
+	        	if (communities!= null && communities.isArray()) {
 					if(communities.size()>0){
 						roleNames.add(principalName+"_user_group");						
 					}
@@ -88,8 +90,14 @@ public class IkanowV1UserGroupRoleProvider implements IRoleProvider {
 		        	    	String communityId = community.get("_id").asText();
 		        	    	permissions.add(communityId);
 	        	    	}
-	        	    }
-	        	}
+	        	    }	        	    
+	        	} // communities
+	        
+        	JsonNode accountType = person.get("accountType");
+	        		if(accountType!=null && ("Admin".equalsIgnoreCase(accountType.asText()) || "admin-enabled".equalsIgnoreCase(accountType.asText()))){
+						roleNames.add("admin");							        			
+	        	    	permissions.add("*");
+	        		}
 	        }
 		} catch (Exception e) {
 			logger.error("Caught Exception",e);
