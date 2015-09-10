@@ -91,7 +91,8 @@ public class TestIkanowV1SyncService_TestBuckets {
 			final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 			
 			// OK we're going to use guice, it was too painful doing this by hand...				
-			Config config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("test_v1_sync_service.properties")))
+			//Config config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("test_v1_sync_service.properties")))
+			Config config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("live_v1_sync_service.properties")))
 								.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 								.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 								.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
@@ -577,10 +578,9 @@ public class TestIkanowV1SyncService_TestBuckets {
 		
 		return BeanTemplateUtils.build(TestQueueBean.class)
 				.with(TestQueueBean::_id, new ObjectId().toString())
-				.with(TestQueueBean::source, v1_source)//mapper.readTree("{\"x\":\"abc\"}"))
+				.with(TestQueueBean::source, v1_source)
 				.with(TestQueueBean::test_params, new ProcessingTestSpecBean(10L, max_secs_to_run))
 				.with(TestQueueBean::status, "submitted")
-				.with(TestQueueBean::result, "z")
 				.done().get();
 	}
 	

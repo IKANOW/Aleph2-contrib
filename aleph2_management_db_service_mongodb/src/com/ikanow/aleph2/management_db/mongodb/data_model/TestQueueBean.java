@@ -29,6 +29,7 @@ public class TestQueueBean implements Serializable{
 	private ProcessingTestSpecBean test_params;
 	private String status;
 	private String result;
+	private String message;
 	private Date started_processing_on;
 	private Date last_processed_on;
 
@@ -37,6 +38,7 @@ public class TestQueueBean implements Serializable{
 	public ProcessingTestSpecBean test_params() { return test_params; }
 	public String status() { return status; }
 	public String result() { return result; }
+	public String message() { return message; }
 	public Date started_processing_on() { return started_processing_on; }
 	public Date last_processed_on() { return last_processed_on; }
 }

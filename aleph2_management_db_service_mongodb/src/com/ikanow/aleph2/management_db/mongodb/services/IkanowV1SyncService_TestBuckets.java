@@ -20,6 +20,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Spliterator;
@@ -60,10 +61,12 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
+import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.BeanUpdateComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
+import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
@@ -125,6 +128,7 @@ public class IkanowV1SyncService_TestBuckets {
 	/** Immediately start
 	 */
 	public void start() {
+		_logger.info("IkanowV1SyncService_TestBuckets started, running on a schedule (typically every 1s)");
 		_source_test_monitor_handle.get().cancel(true);
 		_source_test_monitor_handle.set(_source_test_scheduler.scheduleWithFixedDelay(new SourceTestMonitor(), 1, 1L, TimeUnit.SECONDS));
 	}
@@ -227,14 +231,16 @@ public class IkanowV1SyncService_TestBuckets {
 			final BucketTestService bucket_test_service
 			)
 	{
-		_logger.debug("Starting a sync test sources cycle");
+		//_logger.debug("Starting a sync test sources cycle");
 		final List<CompletableFuture<Boolean>> new_results = new ArrayList<CompletableFuture<Boolean>>();
 		final List<CompletableFuture<Boolean>> existing_results = new ArrayList<CompletableFuture<Boolean>>();		
 		
 		//check for entries in test db
 		return getAllTestSources(source_test_db).thenCompose( test_sources -> {
-			_logger.debug("Got test sources successfully, looping over any results");
+			//_logger.debug("Got test sources successfully, looping over any results");
 			test_sources.forEach(Lambdas.wrap_consumer_u(test_source -> {		
+				_logger.debug("Looking at test source: " + test_source._id());
+				//TODO if the getBucketFromV1Source throws an exeption, it gets tossed the entire way up to whatever called synchronizeTestSources (e.g. on the CF)
 				final DataBucketBean to_test = Lambdas.wrap_u(() -> getBucketFromV1Source(test_source.source())).get();
 				if ( test_source.status() != null &&
 						test_source.status().equals("in_progress") ) {
@@ -245,7 +251,7 @@ public class IkanowV1SyncService_TestBuckets {
 					new_results.add(handleNewTestSource(to_test, test_source, bucket_test_service, source_test_db));								
 				}
 			}));
-			_logger.debug("done looping over test sources");
+			//_logger.debug("done looping over test sources");
 			//combine response of new and old entries, return
 			List<CompletableFuture<?>> retval = 
 					Arrays.asList(new_results, existing_results).stream()
@@ -372,7 +378,7 @@ public class IkanowV1SyncService_TestBuckets {
 			//do final step for exists/not exists 
 			final String output_collection = data_bucket._id();		
 			//mark job as complete, point to v1 collection				
-			return updateTestSourceStatus(test_source._id(), "completed", source_test_db, Optional.of(new Date()), Optional.ofNullable(output_collection));
+			return updateTestSourceStatus(test_source._id(), "completed", source_test_db, Optional.of(new Date()), Optional.ofNullable(output_collection), Optional.empty());
 		});
 	}
 	
@@ -397,22 +403,36 @@ public class IkanowV1SyncService_TestBuckets {
 		final ProcessingTestSpecBean test_spec = new_test_source.test_params();
 		
 		//try to test the bucket
-		return bucket_test_service.test_bucket(_core_management_db, data_bucket, test_spec).thenApply(success -> {
-			if ( success ) {
-				//was successful, update status and return
-				return updateTestSourceStatus(new_test_source._id(), "in_progress", source_test_db, Optional.of(new Date()), Optional.empty());
-			} else {
-				//had an error running test, update status and return
-				return updateTestSourceStatus(new_test_source._id(), "error", source_test_db, Optional.of(new Date()), Optional.empty());				
+		_logger.debug("Running bucket test");
+		final ManagementFuture<Boolean> test_res_future = bucket_test_service.test_bucket(_core_management_db, data_bucket, test_spec);
+		return test_res_future.thenCompose(res -> {					
+			try {
+				_logger.debug("finished test_bucket, about to get any messages and update status");
+				Collection<BasicMessageBean> man_res = test_res_future.getManagementResults().get();
+				return updateTestSourceStatus(new_test_source._id(), (res ? "in_progress" : "error"), source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of(man_res.stream().map(
+						msg -> {
+							return "[" + msg.date() + "] " + msg.source() + " (" + msg.command() + "): " + (msg.success() ? "INFO" : "ERROR") + ": " + msg.message();}
+						).collect(Collectors.joining("\n"))));	
+			} catch (Exception e) {		
+				_logger.error("Had an exception in test_bucket: ", e);
+				return updateTestSourceStatus(new_test_source._id(), "error", source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of(ErrorUtils.getLongForm("{0}", e)));
 			}
+		});
+//			if ( success ) {
+//				//was successful, update status and return
+//				return updateTestSourceStatus(new_test_source._id(), "completed", source_test_db, Optional.of(new Date()), Optional.empty(), Optional.empty());
+//			} else {
+//				//had an error running test, update status and return
+//				return updateTestSourceStatus(new_test_source._id(), "error", source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of("Error during test bucket, failed somehow"));				
+//			}
 			
-		}).exceptionally(t-> {
-			_logger.error("Had an error trying to test_bucket: ", t);
-			//threw an exception when trying to run test_bucket, return exception
-			//had an error running test, update status and return
-			return updateTestSourceStatus(new_test_source._id(), "error", source_test_db, Optional.of(new Date()), Optional.empty());			
-			})
-			.thenCompose(x->x); //let an exception in updateTestSourceStatus throw
+//		}).exceptionally(t-> {
+//			_logger.error("Had an error trying to test_bucket: ", t);
+//			//threw an exception when trying to run test_bucket, return exception
+//			//had an error running test, update status and return
+//			return updateTestSourceStatus(new_test_source._id(), "error", source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of("Error during test bucket: " + t.getMessage()));			
+//			})
+//			.thenCompose(x->x); //let an exception in updateTestSourceStatus throw
 	}
 	
 	/**
@@ -428,11 +448,12 @@ public class IkanowV1SyncService_TestBuckets {
 	 */
 	private CompletableFuture<Boolean> updateTestSourceStatus(
 			final String id, 
-			final String status, 
+			final String status, 			
 			final ICrudService<TestQueueBean> source_test_db, 
 			Optional<Date> started_on,
-			Optional<String> output_collection) {		
-		_logger.debug("Setting test q: " + id + " status to: " + status);
+			Optional<String> output_collection,
+			Optional<String> message) {		
+		_logger.debug("Setting test q: " + id + " status to: " + status + " with message: " + (message.isPresent() ? message.get() : "(no message)"));
 		//create update with status, add started date if it was passed in
 		BeanUpdateComponent<TestQueueBean> update_component = CrudUtils.update(TestQueueBean.class)
 				.set(TestQueueBean::status, status)
@@ -440,7 +461,9 @@ public class IkanowV1SyncService_TestBuckets {
 		if ( started_on.isPresent() )
 			update_component.set(TestQueueBean::started_processing_on, started_on.get());
 		if ( output_collection.isPresent() )
-			update_component.set(TestQueueBean::result, output_collection.get());						
+			update_component.set(TestQueueBean::result, output_collection.get());		
+		if ( message.isPresent() )
+			update_component.set(TestQueueBean::message, message.get());
 										
 		final SingleQueryComponent<TestQueueBean> v1_query = CrudUtils.allOf(TestQueueBean.class).when("_id", id);
 		return source_test_db.updateObjectBySpec(v1_query, Optional.empty(), update_component);		
@@ -456,7 +479,7 @@ public class IkanowV1SyncService_TestBuckets {
 		return source_test_db.getObjectsBySpec(
 						CrudUtils.allOf(TestQueueBean.class)
 						.whenNot("status", "complete")
-						.whenNot("status", "error")); //can be complete | error | in_progress | {unset/anything else}
+						.whenNot("status", "error")); //can be complete | error | in_progress | submitted | {unset/anything else}
 	}
 	
 	////////////////////////////////////////////////////

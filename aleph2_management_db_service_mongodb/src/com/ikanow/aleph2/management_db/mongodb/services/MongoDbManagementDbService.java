@@ -108,7 +108,8 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 			final IMongoDbCrudServiceFactory crud_factory, 
 			final MongoDbManagementDbConfigBean properties,
 			final IkanowV1SyncService_Buckets sync_service_buckets,
-			final IkanowV1SyncService_LibraryJars sync_service_jars
+			final IkanowV1SyncService_LibraryJars sync_service_jars,
+			final IkanowV1SyncService_TestBuckets sync_service_test_buckets
 			)
 	{
 		_crud_factory = crud_factory;
