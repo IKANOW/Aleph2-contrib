@@ -25,20 +25,20 @@ import org.bson.types.ObjectId;
 
 import scala.Tuple2;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.security.IRoleProvider;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 
-public class IkanowV1UserGroupRoleProvider implements IRoleProvider {
-	private ICrudService<JsonNode> personDb = null;
+public class IkanowV1AdminRoleProvider implements IRoleProvider {
 	protected final IServiceContext _context;
 	protected IManagementDbService _core_management_db = null;
 	protected IManagementDbService _underlying_management_db = null;
-	private static final Logger logger = LogManager.getLogger(IkanowV1UserGroupRoleProvider.class);
+	private static final Logger logger = LogManager.getLogger(IkanowV1AdminRoleProvider.class);
+	private ICrudService<AuthenticationBean> authenticationDb = null;
 
 	@SuppressWarnings("unchecked")
 	protected void initDb(){
@@ -48,22 +48,25 @@ public class IkanowV1UserGroupRoleProvider implements IRoleProvider {
 		if(_underlying_management_db == null) {
 		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
 		}
-		String personOptions = "social.person";
-		personDb = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of(personOptions)).get();
-		logger.debug("PersonDB:"+personDb);
+
+		String authDboptions = "security.authentication/"+AuthenticationBean.class.getName();
+        authenticationDb = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of(authDboptions)).get();
+
+		logger.debug("AuthenticationDB:"+authenticationDb);
 	}
 
 	@Inject
-	public IkanowV1UserGroupRoleProvider(final IServiceContext service_context){
+	public IkanowV1AdminRoleProvider(final IServiceContext service_context){
 		_context = service_context;
 
 	}
 	
-	protected ICrudService<JsonNode> getPersonStore(){
-		if(personDb == null){
+
+	protected ICrudService<AuthenticationBean> getAuthenticationStore(){
+		if(authenticationDb == null){
 			initDb();
 		}
-	      return personDb;		
+	      return authenticationDb;		
 	}
 
 	@Override
@@ -71,29 +74,19 @@ public class IkanowV1UserGroupRoleProvider implements IRoleProvider {
 		
         Set<String> roleNames = new HashSet<String>();
         Set<String> permissions = new HashSet<String>();
-		Optional<JsonNode> result;
-		try {
 			
-			ObjectId objecId = new ObjectId(principalName); 
-			result = getPersonStore().getObjectBySpec(CrudUtils.anyOf().when("_id", objecId)).get();
+        try {
+    		SingleQueryComponent<AuthenticationBean> queryUsername = CrudUtils.anyOf(AuthenticationBean.class).when("profileId",new ObjectId(principalName));		
+    		Optional<AuthenticationBean> result = getAuthenticationStore().getObjectBySpec(queryUsername).get();
 	        if(result.isPresent()){
-	        	// community based roles
-	        	JsonNode person = result.get();
-	        	JsonNode communities = person.get("communities");
-	        	if (communities!= null && communities.isArray()) {
-					if(communities.size()>0){
-						roleNames.add(principalName+"_user_group");						
-					}
-	        	    for (final JsonNode community : communities) {
-	        	    	JsonNode type = community.get("type");
-	        	    	if(type!=null && "user".equalsIgnoreCase(type.asText())){
-		        	    	String communityId = community.get("_id").asText();
-		        	    	String communityName = community.get("name").asText();
-		        	    	permissions.add(communityId);
-		        			logger.debug("Permission (ShareIds) loaded for "+principalName+",("+communityName+"):" + communityId);
-	        	    	}
-	        	    }	        	    
-	        	} // communities
+	        	AuthenticationBean b = result.get();
+	        	logger.debug("Loaded user info from db:"+b);
+	        	String accountType =b.getAccountType();
+        		if(accountType!=null && ("Admin".equalsIgnoreCase(accountType) || "admin-enabled".equalsIgnoreCase(accountType))){
+					roleNames.add("admin");							        			
+        	    	permissions.add("*");
+        			logger.debug("Permission Admin(*) loaded for "+principalName);
+        		}
 
 	        }
 		} catch (Exception e) {

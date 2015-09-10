@@ -70,7 +70,7 @@ public class SecuredCoreManagementDbServiceTest {
 		final String temp_dir = System.getProperty("java.io.tmpdir");
 
 		// OK we're going to use guice, it was too painful doing this by hand...
-		config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v1.properties")))
+		config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v1_remote.properties")))
 				.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 				.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 				.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
@@ -79,6 +79,9 @@ public class SecuredCoreManagementDbServiceTest {
 		Injector app_injector = ModuleUtils.createTestInjector(Arrays.asList(), Optional.of(config));	
 		app_injector.injectMembers(this);
 		this.managementDbService = _service_context.getCoreManagementDbService();
+		//final JsonNode v1_source = mapper.readTree(this.getClass().getResourceAsStream("test_scripting_1.json"));
+		//underlying_db.getUnderlyingPlatform("blah.blah").storeObject(v1_source)
+		
 		this.securityService =  _service_context.getSecurityService();
 		} catch(Throwable e) {
 			
@@ -88,7 +91,7 @@ public class SecuredCoreManagementDbServiceTest {
 
 
 	@Test
-	@Ignore
+//	@Ignore
 	public void testSharedLibraryAccess(){
 			String bucketId = "aleph...bucket.demo_bucket_1.;";
 			// calebs id

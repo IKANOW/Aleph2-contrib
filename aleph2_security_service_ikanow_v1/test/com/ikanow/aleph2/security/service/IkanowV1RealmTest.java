@@ -65,7 +65,7 @@ public class IkanowV1RealmTest {
 		final String temp_dir = System.getProperty("java.io.tmpdir");
 
 		// OK we're going to use guice, it was too painful doing this by hand...
-		config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v1.properties")))
+		config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v1_remote.properties")))
 				.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 				.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 				.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
@@ -123,12 +123,15 @@ public class IkanowV1RealmTest {
 		ISubject subject = login();
 		// system community
 		String permission = "4c927585d591d31d7b37097a";
-		String runAsPrincipal = "54f86d8de4b03d27d1ea0d7b";
+//		String runAsPrincipal = "54f86d8de4b03d27d1ea0d7b"; // casey
+		String runAsPrincipal = "54dd042ae4b03356d004a922"; // victor
 		String caseysRole = "54f86d8de4b03d27d1ea0d7b_data_group";
 		String caseysPersonalPermission = "v1_55a544bee4b056ae0f9bd92b";
 		
 //		String role = System.getProperty("IKANOW_SECURITY_LOGIN","noone@ikanow.com")+"_communities";
 		((Subject)subject.getSubject()).runAs(new SimplePrincipalCollection(runAsPrincipal,this.getClass().getSimpleName()));
+		
+		assertEquals(true,securityService.hasRole(subject,"admin"));
 		assertEquals(true,securityService.hasRole(subject,caseysRole));
         //test a typed permission (not instance-level)
 		assertEquals(true,securityService.isPermitted(subject,caseysPersonalPermission));
