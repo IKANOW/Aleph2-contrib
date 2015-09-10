@@ -96,6 +96,7 @@ public class IkanowV1RealmTest {
 		assertEquals(System.getProperty("IKANOW_SECURITY_PWD")!=null, subject.isAuthenticated());		
 	}
 
+	//TODO fix this
 	protected ISubject login() throws AuthenticationException{
 		ISubject subject = securityService.getSubject();
 		assertNotNull(subject);
