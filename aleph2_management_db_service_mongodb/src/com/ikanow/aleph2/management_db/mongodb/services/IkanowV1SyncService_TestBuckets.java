@@ -398,7 +398,6 @@ public class IkanowV1SyncService_TestBuckets {
 			final TestQueueBean new_test_source, 
 			final BucketTestService bucket_test_service,
 			final ICrudService<TestQueueBean> source_test_db) {
-		//ENTRY: is new
 		//get the test params
 		final ProcessingTestSpecBean test_spec = new_test_source.test_params();
 		
