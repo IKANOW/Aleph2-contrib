@@ -78,8 +78,8 @@ import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbCon
 import com.ikanow.aleph2.management_db.mongodb.data_model.TestQueueBean;
 import com.ikanow.aleph2.management_db.mongodb.module.MongoDbManagementDbModule.BucketTestService;
 
-/** This service looks for changes to IKANOW sources and applies them to data bucket beans
- * @author acp
+/** This service looks for changes to IKANOW test db entries and kicks off test jobs
+ * @author cmb
  */
 public class IkanowV1SyncService_TestBuckets {
 	private static final Logger _logger = LogManager.getLogger();
@@ -405,7 +405,7 @@ public class IkanowV1SyncService_TestBuckets {
 		//try to test the bucket
 		_logger.debug("Running bucket test");
 		final ManagementFuture<Boolean> test_res_future = bucket_test_service.test_bucket(_core_management_db, data_bucket, test_spec);
-		return test_res_future.thenCompose(res -> {					
+		return test_res_future.thenApply(res -> {					
 			try {
 				_logger.debug("finished test_bucket, about to get any messages and update status");
 				Collection<BasicMessageBean> man_res = test_res_future.getManagementResults().get();
@@ -417,22 +417,13 @@ public class IkanowV1SyncService_TestBuckets {
 				_logger.error("Had an exception in test_bucket: ", e);
 				return updateTestSourceStatus(new_test_source._id(), "error", source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of(ErrorUtils.getLongForm("{0}", e)));
 			}
-		});
-//			if ( success ) {
-//				//was successful, update status and return
-//				return updateTestSourceStatus(new_test_source._id(), "completed", source_test_db, Optional.of(new Date()), Optional.empty(), Optional.empty());
-//			} else {
-//				//had an error running test, update status and return
-//				return updateTestSourceStatus(new_test_source._id(), "error", source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of("Error during test bucket, failed somehow"));				
-//			}
-			
-//		}).exceptionally(t-> {
-//			_logger.error("Had an error trying to test_bucket: ", t);
-//			//threw an exception when trying to run test_bucket, return exception
-//			//had an error running test, update status and return
-//			return updateTestSourceStatus(new_test_source._id(), "error", source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of("Error during test bucket: " + t.getMessage()));			
-//			})
-//			.thenCompose(x->x); //let an exception in updateTestSourceStatus throw
+		}).exceptionally(t-> {
+			_logger.error("Had an error trying to test_bucket: ", t);
+			//threw an exception when trying to run test_bucket, return exception
+			//had an error running test, update status and return
+			return updateTestSourceStatus(new_test_source._id(), "error", source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of("Error during test bucket: " + t.getMessage()));			
+			})
+			.thenCompose(x->x); //let an exception in updateTestSourceStatus throw
 	}
 	
 	/**
