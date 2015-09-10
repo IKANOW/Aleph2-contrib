@@ -47,10 +47,9 @@ public class Aleph2MultipleInputFormatBuilder {
 	 * @param extra_config
 	 * @param path
 	 */
-	@SuppressWarnings("rawtypes")
 	public void addInput(final String unique_name, 
 			final Job job,
-			final Class<? extends InputFormat> input_format_clazz, 
+			@SuppressWarnings("rawtypes") final Class<? extends InputFormat> input_format_clazz, 
 			final Map<String, Object> extra_config, 
 			final Optional<List<Path>> paths)
 	{
