@@ -178,7 +178,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 
 	@SuppressWarnings("deprecation")
 	@Test 
-	public void test_sourceToBucketConversion_scripting() throws JsonProcessingException, IOException, ParseException {		
+	public void test_SourceToBucketConversion_scripting() throws JsonProcessingException, IOException, ParseException {		
 		_logger.info("Starting test_SourceToBucketConversion_scripting");
 		
 		final ObjectMapper mapper = BeanTemplateUtils.configureMapper(Optional.empty());
