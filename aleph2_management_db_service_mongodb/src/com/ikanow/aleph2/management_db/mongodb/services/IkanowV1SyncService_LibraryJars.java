@@ -564,11 +564,11 @@ public class IkanowV1SyncService_LibraryJars {
 					
 					final CommonUpdateComponent<JsonNode> v1_update = 
 							Optional.of(CrudUtils.update()
-									.set("description", safeJsonGet("description", jsonopt.get()) + "\n" + message_block)										
+									.set("description", safeJsonGet("description", jsonopt.get()).asText() + "\n\n" + message_block)										
 									)
 								// If shared lib already exists then can't update the title (or the existing lib bean will get deleted)
 								.map(c -> create_not_update  
-										? c.set("title", "ERROR:" + safeJsonGet("title", jsonopt.get()))
+										? c.set("title", "ERROR:" + safeJsonGet("title", jsonopt.get()).asText())
 										: c
 										)
 								.get();
