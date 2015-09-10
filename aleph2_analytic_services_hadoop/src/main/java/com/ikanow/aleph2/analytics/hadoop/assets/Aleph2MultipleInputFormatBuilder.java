@@ -31,6 +31,7 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 /** A more generic multiple inputs than the one provided by Hadoop
  * @author Alex
  */
+@SuppressWarnings("rawtypes") 
 public class Aleph2MultipleInputFormatBuilder {
 
 	// (Check out http://grepcode.com/file/repo1.maven.org/maven2/com.ning/metrics.serialization-all/2.0.0-pre1/org/apache/hadoop/mapreduce/lib/input/MultipleInputs.java)
@@ -49,7 +50,7 @@ public class Aleph2MultipleInputFormatBuilder {
 	 */
 	public void addInput(final String unique_name, 
 			final Job job,
-			@SuppressWarnings("rawtypes") final Class<? extends InputFormat> input_format_clazz, 
+			final Class<? extends InputFormat> input_format_clazz, 
 			final Map<String, Object> extra_config, 
 			final Optional<List<Path>> paths)
 	{
