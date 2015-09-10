@@ -91,8 +91,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 			final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 			
 			// OK we're going to use guice, it was too painful doing this by hand...				
-			//Config config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("test_v1_sync_service.properties")))
-			Config config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("live_v1_sync_service.properties")))
+			Config config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("test_v1_sync_service.properties")))
 								.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 								.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 								.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
@@ -423,7 +422,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		
 		//ensure its status gets updated to in_progress
 		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), "in_progress"); //status should no longer be submitted		
-		
+		System.out.println("here");
 		//run a second time, it should find the in_progress source and check its status
 		sync_service.synchronizeTestSources(sync_service._core_management_db.getDataBucketStore(), 
 				sync_service._underlying_management_db.getDataBucketStatusStore(), 
@@ -478,7 +477,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		
 	@SuppressWarnings("unchecked")
 	@Test
-	public void test_ErrorsynchronizeSources() throws JsonProcessingException, IOException, ParseException, InterruptedException, ExecutionException {
+	public void test_ErrorSynchronizeSources() throws JsonProcessingException, IOException, ParseException, InterruptedException, ExecutionException {
 		_logger.info("Starting test_synchronizeSources");
 		final ICrudService<TestQueueBean> v2_test_q = this._service_context.getCoreManagementDbService().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.v2_test_q/" + TestQueueBean.class.getName())).get();
 		
