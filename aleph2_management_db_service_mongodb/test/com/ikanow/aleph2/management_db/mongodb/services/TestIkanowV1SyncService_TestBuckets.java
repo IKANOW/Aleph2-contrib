@@ -40,7 +40,6 @@ import org.junit.Test;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
@@ -139,7 +138,6 @@ public class TestIkanowV1SyncService_TestBuckets {
 		final DataBucketBean bucket = IkanowV1SyncService_TestBuckets.getBucketFromV1Source(v1_source);
 		
 		assertEquals("aleph...bucket.Template_V2_data_bucket.;", bucket._id());
-		assertEquals(ImmutableMap.<String, String>builder().put("50bcd6fffbf0fd0b27875a7c", "rw").build(), bucket.access_rights().auth_token());
 		assertEquals(Collections.unmodifiableSet(new HashSet<String>()), bucket.aliases());
 		assertEquals(1, bucket.batch_enrichment_configs().size());
 		assertEquals(false, bucket.batch_enrichment_configs().get(0).enabled());
@@ -189,7 +187,6 @@ public class TestIkanowV1SyncService_TestBuckets {
 			
 			// (all the existing stuff)
 			assertEquals("aleph...bucket.Template_V2_data_bucket.;", bucket._id());
-			assertEquals(ImmutableMap.<String, String>builder().put("50bcd6fffbf0fd0b27875a7c", "rw").build(), bucket.access_rights().auth_token());
 			assertEquals("21 May 2015 02:37:23 GMT", bucket.created().toGMTString());
 			assertEquals(null, bucket.data_locations());
 			assertEquals("DESCRIPTION HERE.", bucket.description());
@@ -220,7 +217,6 @@ public class TestIkanowV1SyncService_TestBuckets {
 			
 			// (all the existing stuff)
 			assertEquals("aleph...bucket.Template_V2_data_bucket.;", bucket._id());
-			assertEquals(ImmutableMap.<String, String>builder().put("50bcd6fffbf0fd0b27875a7c", "rw").build(), bucket.access_rights().auth_token());
 			assertEquals("21 May 2015 02:37:23 GMT", bucket.created().toGMTString());
 			assertEquals(null, bucket.data_locations());
 			assertEquals("DESCRIPTION HERE.", bucket.description());

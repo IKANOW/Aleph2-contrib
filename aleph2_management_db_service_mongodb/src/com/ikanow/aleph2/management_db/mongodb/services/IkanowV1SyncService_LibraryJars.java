@@ -260,7 +260,7 @@ public class IkanowV1SyncService_LibraryJars {
 				final List<CompletableFuture<Boolean>> l1 = 
 					create_update_delete._1().stream().parallel()
 						.<Tuple2<String, ManagementFuture<?>>>map(id -> 
-							Tuples._2T(id, createLibraryBean(id, library_mgmt, aleph2_fs, true, share_db, share_fs)))
+							Tuples._2T(id, createLibraryBean(id, library_mgmt, aleph2_fs, true, share_db, share_fs, _context)))
 						.<CompletableFuture<Boolean>>map(id_fres -> 
 							updateV1ShareErrorStatus_top(id_fres._1(), id_fres._2(), library_mgmt, share_db, true))
 						.collect(Collectors.toList());
@@ -278,7 +278,7 @@ public class IkanowV1SyncService_LibraryJars {
 				final List<CompletableFuture<Boolean>> l3 = 
 						create_update_delete._3().stream().parallel()
 							.<Tuple2<String, ManagementFuture<?>>>map(id -> 
-								Tuples._2T(id, createLibraryBean(id, library_mgmt, aleph2_fs, false, share_db, share_fs)))
+								Tuples._2T(id, createLibraryBean(id, library_mgmt, aleph2_fs, false, share_db, share_fs, _context)))
 						.<CompletableFuture<Boolean>>map(id_fres -> 
 							updateV1ShareErrorStatus_top(id_fres._1(), id_fres._2(), library_mgmt, share_db, false))
 							.collect(Collectors.toList());
@@ -471,8 +471,9 @@ public class IkanowV1SyncService_LibraryJars {
 			final IManagementCrudService<SharedLibraryBean> library_mgmt, 
 			final IStorageService aleph2_fs,
 			final boolean create_not_update,
-			final ICrudService<JsonNode> share_db,
-			final GridFS share_fs
+			final ICrudService<JsonNode> share_db,			
+			final GridFS share_fs,
+			final IServiceContext context
 			)
 	{
 		if (create_not_update) {
@@ -493,7 +494,8 @@ public class IkanowV1SyncService_LibraryJars {
 					final String binary_id = safeJsonGet("binaryId", jsonopt.get()).asText();					
 					copyFile(binary_id, new_object.path_name(), aleph2_fs, share_fs);
 					
-					final ManagementFuture<Supplier<Object>> ret = library_mgmt.storeObject(new_object, !create_not_update);
+					final AuthorizationBean auth = new AuthorizationBean(new_object.owner_id()); 					
+					final ManagementFuture<Supplier<Object>> ret = library_mgmt.secured(context, auth).storeObject(new_object, !create_not_update);
 					return ret;
 				}))
 				.exceptionally(e -> {
@@ -676,7 +678,7 @@ public class IkanowV1SyncService_LibraryJars {
 		
 		final LibraryType type = LibraryType.misc_archive;
 		final String owner_id = safeJsonGet("_id", safeJsonGet("owner", src_json)).asText();
-		final JsonNode comm_objs = safeJsonGet("communities", src_json); // collection of { _id: $oid } types
+		//final JsonNode comm_objs = safeJsonGet("communities", src_json); // collection of { _id: $oid } types
 		final String misc_entry_point = description_lines[0];
 		
 		final SharedLibraryBean bean = BeanTemplateUtils.build(SharedLibraryBean.class)
@@ -691,12 +693,6 @@ public class IkanowV1SyncService_LibraryJars {
 													.with(SharedLibraryBean::misc_entry_point, misc_entry_point)
 													.with(SharedLibraryBean::owner_id, owner_id)
 													.with(SharedLibraryBean::library_config, json.orElse(null))
-													.with(SharedLibraryBean::access_rights,
-															new AuthorizationBean(
-																	StreamSupport.stream(comm_objs.spliterator(), false)
-																		.collect(Collectors.toMap(obj -> safeJsonGet("_id", obj).asText(), __ -> "rw"))
-																	)
-															)
 													.done().get();
 		
 		return bean;		

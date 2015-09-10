@@ -174,10 +174,6 @@ public class TestIkanowV1SyncService_LibraryJars {
 			assertEquals("v1_555d44e3347d336b3e8c4cbe", lib1._id());
 			assertEquals("21 May 2015 02:37:23 GMT", lib1.created().toGMTString());
 			assertEquals("21 May 2015 02:37:24 GMT", lib1.modified().toGMTString());
-			assertEquals(ImmutableMap.builder()
-							.put("50bcd6fffbf0fd0b27875a7c", "rw")
-							.put("50bcd6fffbf0fd0b27875a7d", "rw").build(),
-					lib1.access_rights().auth_token());
 			assertEquals(null, lib1.batch_enrichment_entry_point());
 			assertEquals("This is a description.\nMore description.", lib1.description());
 			assertEquals("/app/aleph2/library/misc/library.jar", lib1.display_name());

@@ -62,7 +62,6 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudSe
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
-import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.CommonUpdateComponent;
@@ -617,7 +616,7 @@ public class IkanowV1SyncService_Buckets {
 		final String owner_id = safeJsonGet("ownerId", src_json).asText();
 		
 		final JsonNode tags = safeJsonGet("tags", src_json); // collection of strings
-		final JsonNode comm_ids = safeJsonGet("communityIds", src_json); // collection of strings
+		//final JsonNode comm_ids = safeJsonGet("communityIds", src_json); // collection of strings
 		final JsonNode px_pipeline = safeJsonGet("processingPipeline", src_json); // collection of JSON objects, first one should have data_bucket
 		final JsonNode px_pipeline_first_el = px_pipeline.get(0);
 		final JsonNode data_bucket_tmp = safeJsonGet("data_bucket", px_pipeline_first_el);// (WARNING: mutable, see below)
@@ -678,12 +677,6 @@ public class IkanowV1SyncService_Buckets {
 													.with(DataBucketBean::display_name, title)
 													.with(DataBucketBean::description, description)
 													.with(DataBucketBean::owner_id, owner_id)
-													.with(DataBucketBean::access_rights,
-															new AuthorizationBean(
-																	StreamSupport.stream(comm_ids.spliterator(), false)
-																		.collect(Collectors.toMap(id -> id.asText(), __ -> "rw"))
-																	)
-															)
 													.with(DataBucketBean::tags, 
 															StreamSupport.stream(tags.spliterator(), false)
 																			.map(jt -> jt.asText())
