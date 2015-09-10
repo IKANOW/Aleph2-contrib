@@ -150,7 +150,7 @@ public class IkanowV1Realm extends AuthorizingRealm {
 	        try {
 	            objectId = new ObjectId(username);
 	            // if we get here the username can be mapped to an id
-	           queryUsername = queryUsername.when("_id",new ObjectId(username));
+	           queryUsername = queryUsername.when("profileId",new ObjectId(username));
 			} catch (Exception e) {
 				// TODO: handle exception
 			}

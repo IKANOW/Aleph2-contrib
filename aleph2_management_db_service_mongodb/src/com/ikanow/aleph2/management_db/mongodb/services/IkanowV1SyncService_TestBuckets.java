@@ -20,7 +20,6 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Spliterator;
@@ -60,7 +59,6 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudSe
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
-import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.BeanUpdateComponent;
@@ -403,25 +401,14 @@ public class IkanowV1SyncService_TestBuckets {
 		//try to test the bucket
 		_logger.debug("Running bucket test");
 		final ManagementFuture<Boolean> test_res_future = bucket_test_service.test_bucket(_core_management_db, data_bucket, test_spec);
-		return test_res_future.thenApply(res -> {					
-			try {
-				_logger.debug("finished test_bucket, about to get any messages and update status");
-				Collection<BasicMessageBean> man_res = test_res_future.getManagementResults().get();
+		return test_res_future.thenCompose(res -> {
+			return test_res_future.getManagementResults().thenCompose(man_res -> {
 				return updateTestSourceStatus(new_test_source._id(), (res ? "in_progress" : "error"), source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of(man_res.stream().map(
-						msg -> {
-							return "[" + msg.date() + "] " + msg.source() + " (" + msg.command() + "): " + (msg.success() ? "INFO" : "ERROR") + ": " + msg.message();}
-						).collect(Collectors.joining("\n"))));	
-			} catch (Exception e) {		
-				_logger.error("Had an exception in test_bucket: ", e);
-				return updateTestSourceStatus(new_test_source._id(), "error", source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of(ErrorUtils.getLongForm("{0}", e)));
-			}
-		}).exceptionally(t-> {
-			_logger.error("Had an error trying to test_bucket: ", t);
-			//threw an exception when trying to run test_bucket, return exception
-			//had an error running test, update status and return
-			return updateTestSourceStatus(new_test_source._id(), "error", source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of("Error during test bucket: " + t.getMessage()));			
-			})
-			.thenCompose(x->x); //let an exception in updateTestSourceStatus throw
+					msg -> {
+					return "[" + msg.date() + "] " + msg.source() + " (" + msg.command() + "): " + (msg.success() ? "INFO" : "ERROR") + ": " + msg.message();}
+				).collect(Collectors.joining("\n"))));	
+			});
+		});
 	}
 	
 	/**
