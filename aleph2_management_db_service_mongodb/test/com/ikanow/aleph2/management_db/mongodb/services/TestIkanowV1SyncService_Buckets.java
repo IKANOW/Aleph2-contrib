@@ -180,7 +180,6 @@ public class TestIkanowV1SyncService_Buckets {
 		final DataBucketBean bucket = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source);
 		
 		assertEquals("aleph...bucket.Template_V2_data_bucket.;", bucket._id());
-		assertEquals("test", bucket.access_rights().getPrincipalName());
 		assertEquals(Collections.unmodifiableSet(new HashSet<String>()), bucket.aliases());
 		assertEquals(1, bucket.batch_enrichment_configs().size());
 		assertEquals(false, bucket.batch_enrichment_configs().get(0).enabled());

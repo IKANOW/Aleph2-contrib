@@ -7,11 +7,6 @@
         "tags" : [
                 "test"
         ],
-        "access_rights" : {
-                "auth_token_vs_role" : {
-                        "4c927585d591d31d7b37097a" : "rw"
-                }
-        },
         "multi_node_enabled" : false,
         "node_list_rules" : [ ],
         "aliases" : [ ],
