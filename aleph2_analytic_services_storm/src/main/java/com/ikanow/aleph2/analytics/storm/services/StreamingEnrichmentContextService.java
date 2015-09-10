@@ -146,18 +146,26 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 							//Topic naming: 5 cases: 
 							// 1) i.resource_name_or_id is a bucket path, ie starts with "/", and then:
 							// 1.1) if it ends ":name" then it points to a specific point in the bucket processing
-							// 1.2) if it ends ":" then it points to the start of that bucket's processing (ie the output of its harvester) .. which will generate the auto type "$start"
-							// 1.3) otherwise it points to the end of the bucket's processing (ie immediately before it's output)
+							// 1.2) if it ends ":" or ":$start" then it points to the start of that bucket's processing (ie the output of its harvester) .. which corresponds to the queue name with no sub-channel
+							// 1.3) otherwise it points to the end of the bucket's processing (ie immediately before it's output) ... which corresponds to the queue name with the sub-channel "$end"
 							// 2) i.resource_name_or_id does not (start with a /), in which case:
 							// 2.1) if it's a non-empty string, then it's the name of one the internal jobs (can interpret that as this.full_name + name)  
 							// 2.2) if it's "" or null then it's pointing to the output of its own bucket's harvester
 							
 							final String[] bucket_subchannel = Lambdas.<String, String[]> wrap_u(s -> {
 								if (s.startsWith("/")) { //1.*
-									if (s.endsWith(":")) {
-										return new String[] { s.substring(0, s.length() - 1), "$start" }; // (1.2)
+									if (s.endsWith(":") || s.endsWith(":$start")) {
+										return new String[] { s.substring(0, s.length() - 1), "" }; // (1.2)
 									}
-									return s.split(":"); //(1.1), (1.3)
+									else {
+										final String[] b_sc = s.split(":");
+										if (1 == b_sc.length) {
+											return new String[] { b_sc[0], "$end" }; // (1.3)
+										}
+										else {
+											return b_sc; //(1.1)
+										}
+									}
 								}
 								else { //2.*
 									return new String[] { my_bucket.full_name(), s };
@@ -167,6 +175,8 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 							;
 							
 							final String topic_name = KafkaUtils.bucketPathToTopicName(bucket_subchannel[0], Optional.ofNullable(bucket_subchannel[1]).filter(s -> !s.isEmpty()));
+							//TODO: ALEPH-12, register interest in a topic via ZK, which will (somehow!) result in data being streamed from that job (eg via checking ZK every minute)
+							//(+ spout config needs to have a different consumer name...)
 							cds.createTopic(topic_name);
 							final SpoutConfig spout_config = new SpoutConfig(hosts, topic_name, full_path, my_bucket._id()); 
 							spout_config.scheme = new SchemeAsMultiScheme(new StringScheme());

@@ -104,6 +104,19 @@
 		<version>1.1.2-RC3</version>
 		<type>jar</type>
 		<scope>compile</scope>
-	</dependency>  	
+	</dependency>
+	<dependency>
+		<!-- (this seems necessary to run this service in Storm, v unclear why - it has been moved to org.apache.htrace but Storm doesn't seem to know that?) -->
+		<groupId>org.htrace</groupId>
+		<artifactId>htrace-core</artifactId>
+		<version>3.0.4</version>
+	</dependency>
+	<dependency>
+		<!-- (this was also mentioned as a requirement for Storm + HDFS to work) -->
+		<groupId>xalan</groupId>
+		<artifactId>xalan</artifactId>
+		<version>2.7.1</version>
+	</dependency>
+	  	
   </dependencies>
 </project>

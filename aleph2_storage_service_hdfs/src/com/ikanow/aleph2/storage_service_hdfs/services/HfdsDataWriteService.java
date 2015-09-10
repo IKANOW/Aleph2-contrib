@@ -182,7 +182,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		public class MutableState {
 			int max_objects = 5000; // (5K objects)
 			long size_kb = 20L*1024L; // (20MB)
-			Duration flush_interval = Duration.ofMinutes(1L); // (1 minute)
+			Duration flush_interval = Duration.ofMinutes(10L); // (10 minutes)
 			int write_threads = 2;
 			ThreadPoolExecutor _workers = null;
 		}
@@ -312,7 +312,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 			boolean more_objects = false;
 			int max_objects = 5000; // (5K objects)
 			long size_b = 20L*1024L*1024L; // (20MB)
-			Duration flush_interval = Duration.ofMinutes(1L); // (1 minute)
+			Duration flush_interval = Duration.ofMinutes(10L); // (10 minutes)
 			long timeout_ns = flush_interval.toNanos();
 			long timeout_ms = timeout_ns*1000L;
 			
