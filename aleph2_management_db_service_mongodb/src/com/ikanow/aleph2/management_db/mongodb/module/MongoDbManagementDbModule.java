@@ -86,6 +86,9 @@ public class MongoDbManagementDbModule extends AbstractModule {
 	}
 
 	
+	/** This is here simply so we can override it in tests rather than actually make the core_mgmt_db test call
+	 * @author Burch
+	 */
 	public static class BucketTestService {
 		public ManagementFuture<Boolean> test_bucket(final IManagementDbService core_management_db, final DataBucketBean to_test, final ProcessingTestSpecBean test_spec) {
 			return core_management_db.testBucket(to_test, test_spec);
