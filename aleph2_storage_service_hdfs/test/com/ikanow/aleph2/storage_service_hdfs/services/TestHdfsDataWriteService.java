@@ -622,7 +622,14 @@ public class TestHdfsDataWriteService {
 		assertEquals("Needs to have 6 files, including 3x .crc: " + Arrays.toString(init_dir.list()), 6, init_dir.list().length); //*2 because CRC
 		assertTrue("Nothing in final dir: " + (final_dir.exists()?Arrays.toString(final_dir.list()):"(non-exist)"), !final_dir.exists()|| final_dir.list().length == 0);
 
-		Thread.sleep(2500L);
+		int ii = 1;
+		for (; ii <= 50; ++ii) {
+			Thread.sleep(2500L);
+			if (0 == init_dir.list().length) {
+				break;
+			}
+		}
+		System.out.println("(exited from file system check after " + ii*2.5 + " s)");
 
 		assertEquals(0, init_dir.list().length); //*2 because CRC
 		assertEquals(6, final_dir.list().length); //*2 because CRC		
