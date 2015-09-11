@@ -369,7 +369,9 @@ public class IkanowV1SyncService_TestBuckets {
 			final ICrudService<JsonNode> v1_output_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + data_bucket._id())).get();		
 			List<JsonNode> objects_to_store = new ArrayList<JsonNode>();
 			results.forEach(objects_to_store::add);
-			return v1_output_db.storeObjects(objects_to_store).thenCompose(x->CompletableFuture.completedFuture(true));
+			return objects_to_store.isEmpty()
+					? CompletableFuture.completedFuture(true)
+					: v1_output_db.storeObjects(objects_to_store).thenCompose(x->CompletableFuture.completedFuture(true));
 		}).thenCompose(x -> {
 			_logger.debug("Marking job completed");
 			//do final step for exists/not exists 
