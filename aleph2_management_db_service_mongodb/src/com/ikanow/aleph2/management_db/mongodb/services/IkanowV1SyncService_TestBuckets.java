@@ -402,9 +402,14 @@ public class IkanowV1SyncService_TestBuckets {
 		
 		//try to test the bucket
 		_logger.debug("Running bucket test");
-				
+		@SuppressWarnings("unchecked")
+		final ICrudService<JsonNode> v1_output_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + data_bucket._id())).get();		
 		final ManagementFuture<Boolean> test_res_future = bucket_test_service.test_bucket(_core_management_db, data_bucket, test_spec);
-		return test_res_future.thenCompose(res -> {
+		
+		return v1_output_db.deleteDatastore().exceptionally(ex->{
+			_logger.error("Error trying to clear v1 output db before test run: ingest." + data_bucket._id(),ex);
+			return false;
+		}).thenCompose(y -> test_res_future.thenCompose(res -> {
 			return test_res_future.getManagementResults().<Boolean>thenCompose(man_res -> {
 				return updateTestSourceStatus(new_test_source._id(), (res ? "in_progress" : "error"), source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of(man_res.stream().map(
 					msg -> {
@@ -419,7 +424,7 @@ public class IkanowV1SyncService_TestBuckets {
 				return CompletableFuture.completedFuture(x); //this return doesn't matter
 			});
 			return false;
-		});
+		}));
 	}
 	
 	/**
@@ -555,7 +560,7 @@ public class IkanowV1SyncService_TestBuckets {
 		final JsonNode data_bucket = _mapper.readTree(data_bucket_str);
 		
 		final DataBucketBean bucket = BeanTemplateUtils.build(data_bucket, DataBucketBean.class)
-													.with(DataBucketBean::_id, getBucketIdFromV1SourceKey(key))
+													.with(DataBucketBean::_id, owner_id + getBucketIdFromV1SourceKey(key))				
 													.with(DataBucketBean::created, parseJavaDate(created))
 													.with(DataBucketBean::modified, parseJavaDate(modified))
 													.with(DataBucketBean::display_name, title)

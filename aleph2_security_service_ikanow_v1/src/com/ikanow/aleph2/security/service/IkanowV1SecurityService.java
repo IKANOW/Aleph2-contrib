@@ -93,7 +93,7 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 		
 		String password = (String)credentials;
         UsernamePasswordToken token = new UsernamePasswordToken(principalName,password);
-        token.setRememberMe(true);
+        //token.setRememberMe(true);
 
         ISubject subject = getSubject(); 
 		((Subject)subject.getSubject()).login((AuthenticationToken)token);
