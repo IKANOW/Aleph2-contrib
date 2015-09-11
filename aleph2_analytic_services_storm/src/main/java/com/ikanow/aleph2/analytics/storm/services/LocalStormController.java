@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.analytics.storm.services;
 
 import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import org.apache.logging.log4j.LogManager;
@@ -60,11 +61,12 @@ public class LocalStormController implements IStormController {
 	 */
 	@Override
 	public CompletableFuture<BasicMessageBean> submitJob(String job_name, String input_jar_location,
-			StormTopology topology) {
+			StormTopology topology, Map<String, String> config_override) {
 		CompletableFuture<BasicMessageBean> future = new CompletableFuture<BasicMessageBean>();
 		logger.info("Submitting job: " + job_name);
 		Config config = new Config();
 		config.setDebug(true);
+		config_override.forEach((k, v) -> config.put(k, v));
 		local_cluster.submitTopology(job_name, config, topology);
 		
 		future.complete(ErrorUtils.buildSuccessMessage(this, "submitJob", "Submitted job successfully"));
