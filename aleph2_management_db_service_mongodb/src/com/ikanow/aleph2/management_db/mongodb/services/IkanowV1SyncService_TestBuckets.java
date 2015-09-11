@@ -400,14 +400,23 @@ public class IkanowV1SyncService_TestBuckets {
 		
 		//try to test the bucket
 		_logger.debug("Running bucket test");
+				
 		final ManagementFuture<Boolean> test_res_future = bucket_test_service.test_bucket(_core_management_db, data_bucket, test_spec);
 		return test_res_future.thenCompose(res -> {
-			return test_res_future.getManagementResults().thenCompose(man_res -> {
+			return test_res_future.getManagementResults().<Boolean>thenCompose(man_res -> {
 				return updateTestSourceStatus(new_test_source._id(), (res ? "in_progress" : "error"), source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of(man_res.stream().map(
 					msg -> {
 					return "[" + msg.date() + "] " + msg.source() + " (" + msg.command() + "): " + (msg.success() ? "INFO" : "ERROR") + ": " + msg.message();}
 				).collect(Collectors.joining("\n"))));	
 			});
+		}).exceptionally(t -> {
+			updateTestSourceStatus(new_test_source._id(), ("error"), source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of("Error during test_bucket: " + t.getMessage()))
+			.thenCompose(x -> {
+				if ( !x )
+					_logger.error("Had an error trying to update status of test object after having an error during test bucket, somethings gone horribly wrong");
+				return CompletableFuture.completedFuture(x); //this return doesn't matter
+			});
+			return false;
 		});
 	}
 	
