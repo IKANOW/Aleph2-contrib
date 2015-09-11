@@ -158,7 +158,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 						ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
 								SharedLibraryBean.class, String.class, 
 								_crud_factory.getMongoDbCollection(MongoDbManagementDbService.SHARED_LIBRARY_STORE), 
-								Optional.of(BeanTemplateUtils.from(SharedLibraryBean.class).field(SharedLibraryBean::access_rights)), 
+								Optional.empty(), 
 								_auth, _project)).readOnlyVersion(_read_only)
 						);
 			}
@@ -253,7 +253,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 						ManagementDbUtils.wrap(_crud_factory.getMongoDbCrudService(
 								DataBucketBean.class, String.class, 
 								_crud_factory.getMongoDbCollection(MongoDbManagementDbService.DATA_BUCKET_STORE), 
-								Optional.of(BeanTemplateUtils.from(DataBucketBean.class).field(DataBucketBean::access_rights)), 
+								Optional.empty(), 
 								_auth, _project)).readOnlyVersion(_read_only)
 							);
 			}
