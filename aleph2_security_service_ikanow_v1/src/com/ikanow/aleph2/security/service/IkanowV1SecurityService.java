@@ -27,8 +27,10 @@ import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.AuthenticationToken;
 import org.apache.shiro.authc.UsernamePasswordToken;
 import org.apache.shiro.mgt.SecurityManager;
+import org.apache.shiro.session.Session;
 import org.apache.shiro.subject.SimplePrincipalCollection;
 import org.apache.shiro.subject.Subject;
+import org.apache.shiro.util.ThreadContext;
 
 import com.google.inject.Inject;
 import com.google.inject.Module;
@@ -59,7 +61,7 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 
 
 	        // get the currently executing user:
-	        Subject currentUser = SecurityUtils.getSubject();
+	        Subject currentUser = getShiroSubject();
 	        this.currentSubject = new SubjectWrapper(currentUser);
 	        // Do some stuff with a Session (no need for a web or EJB container!!!)
 	        
@@ -67,6 +69,19 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 			logger.error("Caught exception",e);
 		}
 
+	}
+	
+	// Clean way to get the subject
+	private Subject getShiroSubject()
+	{
+	    Subject currentUser = ThreadContext.getSubject();// SecurityUtils.getSubject();
+
+	    if (currentUser == null)
+	    {
+	        currentUser = SecurityUtils.getSubject();
+	    }
+
+	    return currentUser;
 	}
 	
 	@Override
@@ -95,11 +110,34 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
         UsernamePasswordToken token = new UsernamePasswordToken(principalName,password);
         //token.setRememberMe(true);
 
-        ISubject subject = getSubject(); 
-		((Subject)subject.getSubject()).login((AuthenticationToken)token);
-		return subject;
+        ensureUserIsLoggedOut();
+        Subject shiroSubject = getShiroSubject();
+        shiroSubject.login((AuthenticationToken)token);
+		return new SubjectWrapper(shiroSubject);
 	}
 
+	private void ensureUserIsLoggedOut()
+	{
+	    try
+	    {
+	    	Subject shiroSubject = getShiroSubject();
+	        if (shiroSubject == null)
+	            return;
+
+	        // Log the user out and kill their session if possible.
+	        shiroSubject.logout();
+	        Session session = shiroSubject.getSession(false);
+	        if (session == null)
+	            return;
+
+	        session.stop();
+	    }
+	    catch (Exception e)
+	    {
+	        // Ignore all errors, as we're trying to silently 
+	        // log the user out.
+	    }
+	}
 	@Override
 	public boolean hasRole(ISubject subject, String roleIdentifier) {
 		boolean ret = ((Subject)getSubject().getSubject()).hasRole(roleIdentifier);

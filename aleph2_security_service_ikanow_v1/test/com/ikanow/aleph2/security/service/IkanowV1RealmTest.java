@@ -18,6 +18,7 @@ package com.ikanow.aleph2.security.service;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.Optional;
@@ -32,18 +33,24 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISubject;
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
+import com.ikanow.aleph2.management_db.mongodb.services.IkanowV1SyncService_TestBuckets;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
 
-public class IkanowV1RealmTest {
+public class IkanowV1RealmTest extends MockDbTest{
 	private static final Logger logger = LogManager.getLogger(IkanowV1RealmTest.class);
 
 	protected Config config = null;
@@ -75,6 +82,8 @@ public class IkanowV1RealmTest {
 		app_injector.injectMembers(this);
 		this._management_db = _service_context.getCoreManagementDbService();
 		this.securityService =  _service_context.getSecurityService();
+		
+		initMockDb(_service_context);
 		} catch(Throwable e) {
 			
 			e.printStackTrace();
@@ -97,11 +106,9 @@ public class IkanowV1RealmTest {
 
 	//TODO fix this
 	protected ISubject login() throws AuthenticationException{
-		ISubject subject = securityService.getSubject();
-		assertNotNull(subject);
 		String userName = System.getProperty("IKANOW_SECURITY_LOGIN","noone@ikanow.com");
 		String password = System.getProperty("IKANOW_SECURITY_PWD", "not allowed!");
-		securityService.login(userName,password);			
+		ISubject subject = securityService.login(userName,password);			
 		return subject;
 	}
 
@@ -123,8 +130,8 @@ public class IkanowV1RealmTest {
 		ISubject subject = login();
 		// system community
 		String permission = "4c927585d591d31d7b37097a";
-//		String runAsPrincipal = "54f86d8de4b03d27d1ea0d7b"; // casey
-		String runAsPrincipal = "54dd042ae4b03356d004a922"; // victor
+		String runAsPrincipal = "54f86d8de4b03d27d1ea0d7b"; // casey
+//		String runAsPrincipal = "54dd042ae4b03356d004a922"; // victor
 		String caseysRole = "54f86d8de4b03d27d1ea0d7b_data_group";
 		String caseysPersonalPermission = "v1_55a544bee4b056ae0f9bd92b";
 		
@@ -137,12 +144,28 @@ public class IkanowV1RealmTest {
 		assertEquals(true,securityService.isPermitted(subject,caseysPersonalPermission));
 		PrincipalCollection p = ((Subject)subject.getSubject()).releaseRunAs();	
 		logger.debug("Released Principals:"+p);
-		assertEquals(false,securityService.isPermitted(subject,caseysPersonalPermission));
+		//assertEquals(false,securityService.isPermitted(subject,caseysPersonalPermission));
 	}
 
+	
 	@Test
 	@Ignore
-	public void testAuthorizedService(){
+	public void testSessionTimeout(){
 		ISubject subject = login();
+		// system community
+		String permission = "4c927585d591d31d7b37097a";
+		String role = "admin";
+		assertEquals(true,securityService.hasRole(subject,"admin"));
+		try {
+			Thread.sleep(5000);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		subject = login();
+		//assertEquals(true,subject.isAuthenticated());
+		
+		assertEquals(true,securityService.hasRole(subject,"admin"));
 	}
+
 }
