@@ -15,6 +15,7 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.storm.services;
 
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import backtype.storm.generated.StormTopology;
@@ -30,7 +31,7 @@ public class NoStormController implements IStormController {
 
 	@Override
 	public CompletableFuture<BasicMessageBean> submitJob(String job_name,
-			String input_jar_location, StormTopology topology) {
+			String input_jar_location, StormTopology topology, Map<String, String> config_override) {
 		return null;
 	}
 

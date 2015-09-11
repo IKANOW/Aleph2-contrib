@@ -15,6 +15,7 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.storm.data_model;
 
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
@@ -36,9 +37,10 @@ public interface IStormController {
 	 * @param job_name
 	 * @param input_jar_location
 	 * @param topology
+	 * @param config_override - the client set of overrides submitted to the topology
 	 * @throws Exception
 	 */
-	CompletableFuture<BasicMessageBean> submitJob(String job_name, String input_jar_location, StormTopology topology);
+	CompletableFuture<BasicMessageBean> submitJob(String job_name, String input_jar_location, StormTopology topology, Map<String, String> config_override);
 	/**
 	 * Should stop a job on the storm cluster given the job_name
 	 * 

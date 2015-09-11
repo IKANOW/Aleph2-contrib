@@ -22,6 +22,7 @@ import java.util.concurrent.CompletableFuture;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.storm.guava.collect.ImmutableMap;
 import org.apache.thrift7.TException;
 import org.json.simple.JSONValue;
 
@@ -99,13 +100,13 @@ public class RemoteStormController implements IStormController  {
 	 * 
 	 */
 	@Override
-	public CompletableFuture<BasicMessageBean> submitJob(String job_name, String input_jar_location,
-			StormTopology topology)  {
+	public CompletableFuture<BasicMessageBean> submitJob(String job_name, String input_jar_location, StormTopology topology, Map<String, String> config_override)
+	{
 		CompletableFuture<BasicMessageBean> future = new CompletableFuture<BasicMessageBean>();
 		logger.info("Submitting job: " + job_name + " jar: " + input_jar_location);
 		logger.info("submitting jar");		
 		String remote_jar_location = StormSubmitter.submitJar(remote_config, input_jar_location);
-		String json_conf = JSONValue.toJSONString(remote_config);
+		String json_conf = JSONValue.toJSONString(ImmutableMap.<String, Object>builder().putAll(remote_config).putAll(config_override).build());
 		logger.info("submitting topology");
 		try {
 			synchronized (client) {

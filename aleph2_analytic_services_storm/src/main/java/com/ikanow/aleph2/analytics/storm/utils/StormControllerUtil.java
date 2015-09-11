@@ -108,8 +108,8 @@ public class StormControllerUtil {
 	 * @param topology
 	 * @throws Exception
 	 */
-	public static void submitJob(IStormController storm_controller, String job_name, String input_jar_location, StormTopology topology) throws Exception {		
-		storm_controller.submitJob(job_name, input_jar_location, topology);
+	public static void submitJob(IStormController storm_controller, String job_name, String input_jar_location, StormTopology topology, Map<String, String> config_override) throws Exception {		
+		storm_controller.submitJob(job_name, input_jar_location, topology, config_override);
 	}
 	
 	/**
@@ -250,7 +250,7 @@ public class StormControllerUtil {
 				try {
 					_logger.debug("Trying to submit job, try: " + retries + " of " + MAX_RETRIES);
 					final String jar_file_location = jar_future.get();
-					return storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
+					return storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology, config);
 					//return storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
 				} catch ( Exception ex) {
 					if ( ex instanceof AlreadyAliveException ) {
