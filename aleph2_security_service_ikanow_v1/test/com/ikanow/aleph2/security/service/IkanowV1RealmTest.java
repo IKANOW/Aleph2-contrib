@@ -50,7 +50,8 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
 
-public class IkanowV1RealmTest extends MockDbTest{
+//TODO I think MockDbTest didn;t get checkeded in?
+public class IkanowV1RealmTest /*extends MockDbTest*/ {
 	private static final Logger logger = LogManager.getLogger(IkanowV1RealmTest.class);
 
 	protected Config config = null;
@@ -83,7 +84,8 @@ public class IkanowV1RealmTest extends MockDbTest{
 		this._management_db = _service_context.getCoreManagementDbService();
 		this.securityService =  _service_context.getSecurityService();
 		
-		initMockDb(_service_context);
+		//TODOD
+		//initMockDb(_service_context);
 		} catch(Throwable e) {
 			
 			e.printStackTrace();
