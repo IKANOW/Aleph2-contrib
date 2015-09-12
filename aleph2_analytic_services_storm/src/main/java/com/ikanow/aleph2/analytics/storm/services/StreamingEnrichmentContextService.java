@@ -52,6 +52,7 @@ import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean.State
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -65,7 +66,7 @@ import fj.data.Either;
  *
  */
 public class StreamingEnrichmentContextService implements IEnrichmentModuleContext {
-	protected IAnalyticsContext _delegate;
+	protected final SetOnce<IAnalyticsContext> _delegate = new SetOnce<>();
 	protected final SetOnce<IEnrichmentStreamingTopology> _user_topology = new SetOnce<>();
 	protected final SetOnce<DataBucketBean> _bucket = new SetOnce<>();
 	protected final SetOnce<AnalyticThreadJobBean> _job = new SetOnce<>();
@@ -77,7 +78,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 */
 	public StreamingEnrichmentContextService(final IAnalyticsContext analytics_context, final IEnrichmentStreamingTopology user_topology, final DataBucketBean bucket, final AnalyticThreadJobBean job)
 	{
-		_delegate = analytics_context;
+		_delegate.trySet(analytics_context);
 		_user_topology.set(user_topology);
 		_bucket.set(bucket);
 		_job.set(job);
@@ -96,7 +97,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 */
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
-		return _delegate.getUnderlyingArtefacts();
+		return _delegate.get().getUnderlyingArtefacts();
 	}
 
 	/* (non-Javadoc)
@@ -108,7 +109,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 		if (IAnalyticsContext.class.isAssignableFrom(driver_class)) {
 			return (Optional<T>) Optional.of(_delegate);
 		}
-		return _delegate.getUnderlyingPlatformDriver(driver_class, driver_options);
+		return _delegate.get().getUnderlyingPlatformDriver(driver_class, driver_options);
 	}
 
 	/* (non-Javadoc)
@@ -118,7 +119,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	public String getEnrichmentContextSignature(final Optional<DataBucketBean> bucket,
 												final Optional<Set<Tuple2<Class<? extends IUnderlyingService>, Optional<String>>>> services)
 	{
-		return _delegate.getClass().getName() + ":" + _delegate.getAnalyticsContextSignature(bucket, services);
+		return _delegate.get().getClass().getName() + ":" + _delegate.get().getAnalyticsContextSignature(bucket, services);
 	}
 
 	/* (non-Javadoc)
@@ -135,9 +136,9 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 		}
 		final DataBucketBean my_bucket = bucket.orElseGet(() -> _bucket.get());
 		final BrokerHosts hosts = new ZkHosts(KafkaUtils.getZookeperConnectionString());
-		final String full_path = (_delegate.getServiceContext().getGlobalProperties().distributed_root_dir() + GlobalPropertiesBean.BUCKET_DATA_ROOT_OFFSET + my_bucket.full_name()).replace("//", "/");
+		final String full_path = (_delegate.get().getServiceContext().getGlobalProperties().distributed_root_dir() + GlobalPropertiesBean.BUCKET_DATA_ROOT_OFFSET + my_bucket.full_name()).replace("//", "/");
 		
-		final ICoreDistributedServices cds = _delegate.getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();
+		final ICoreDistributedServices cds = _delegate.get().getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();
 		
 		return _job.get().inputs().stream().flatMap(input -> {
 			return Optional.of(input)
@@ -174,11 +175,11 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 							.apply(i.resource_name_or_id())
 							;
 							
-							final String topic_name = KafkaUtils.bucketPathToTopicName(bucket_subchannel[0], Optional.ofNullable(bucket_subchannel[1]).filter(s -> !s.isEmpty()));
+							final String topic_name = cds.generateTopicName(bucket_subchannel[0], Optional.ofNullable(bucket_subchannel[1]).filter(s -> !s.isEmpty()));
 							//TODO: ALEPH-12, register interest in a topic via ZK, which will (somehow!) result in data being streamed from that job (eg via checking ZK every minute)
 							//(+ spout config needs to have a different consumer name...)
-							cds.createTopic(topic_name);
-							final SpoutConfig spout_config = new SpoutConfig(hosts, topic_name, full_path, my_bucket._id()); 
+							cds.createTopic(topic_name, Optional.empty());
+							final SpoutConfig spout_config = new SpoutConfig(hosts, topic_name, full_path, BucketUtils.getUniqueSignature(my_bucket.full_name(), Optional.of(_job.get().name()))); 
 							spout_config.scheme = new SchemeAsMultiScheme(new StringScheme());
 							final KafkaSpout kafka_spout = new KafkaSpout(spout_config);
 							return Tuples._2T((T) kafka_spout, topic_name);			
@@ -207,12 +208,12 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 		final DataBucketBean my_bucket = bucket.orElseGet(() -> _bucket.get());
 		if (!_job.get().output().is_transient()) { // Final output for this analytic
 			// Just return an aleph2 output bolt:
-			return (T) new OutputBolt(my_bucket, _delegate.getAnalyticsContextSignature(bucket, Optional.empty()), _user_topology.get().getClass().getName());			
+			return (T) new OutputBolt(my_bucket, _delegate.get().getAnalyticsContextSignature(bucket, Optional.empty()), _user_topology.get().getClass().getName());			
 		}
 		else {
-			final ICoreDistributedServices cds = _delegate.getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();			
-			final String topic_name = KafkaUtils.bucketPathToTopicName(my_bucket.full_name(), Optional.of(my_bucket.streaming_enrichment_topology().name()));
-			cds.createTopic(topic_name);
+			final ICoreDistributedServices cds = _delegate.get().getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();			
+			final String topic_name = cds.generateTopicName(my_bucket.full_name(), Optional.of(my_bucket.streaming_enrichment_topology().name()));
+			cds.createTopic(topic_name, Optional.empty());
 			
 			return (T) new KafkaBolt<String, String>().withTopicSelector(__ -> topic_name).withTupleToKafkaMapper(new TupleToKafkaMapper<String, String>() {
 				private static final long serialVersionUID = -1651711778714775009L;
@@ -255,7 +256,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 */
 	@Override
 	public void emitMutableObject(final long id, final ObjectNode mutated_json, final Optional<AnnotationBean> annotation) {		
-		_delegate.emitObject(_delegate.getBucket(), _job.get(), Either.left((JsonNode) mutated_json));
+		_delegate.get().emitObject(_delegate.get().getBucket(), _job.get(), Either.left((JsonNode) mutated_json));
 	}
 
 	/* (non-Javadoc)
@@ -279,7 +280,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 */
 	@Override
 	public IServiceContext getServiceContext() {
-		return _delegate.getServiceContext();
+		return _delegate.get().getServiceContext();
 	}
 
 	/* (non-Javadoc)
@@ -287,7 +288,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 */
 	@Override
 	public Optional<DataBucketBean> getBucket() {
-		return _delegate.getBucket();
+		return _delegate.get().getBucket();
 	}
 
 	/* (non-Javadoc)
@@ -295,7 +296,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 */
 	@Override
 	public SharedLibraryBean getLibraryConfig() {
-		return _delegate.getLibraryConfig();
+		return _delegate.get().getLibraryConfig();
 	}
 
 	/* (non-Javadoc)
@@ -304,7 +305,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	@Override
 	public Future<DataBucketStatusBean> getBucketStatus(
 			final Optional<DataBucketBean> bucket) {
-		return _delegate.getBucketStatus(bucket);
+		return _delegate.get().getBucketStatus(bucket);
 	}
 
 	/* (non-Javadoc)
@@ -350,8 +351,8 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	public void initializeNewContext(String signature) {
 		try {
 			final String[] sig_options = signature.split(":");
-			_delegate = (IAnalyticsContext) Class.forName(sig_options[0]).newInstance();		
-			_delegate.initializeNewContext(sig_options[1]);
+			_delegate.trySet((IAnalyticsContext) Class.forName(sig_options[0]).newInstance());		
+			_delegate.get().initializeNewContext(sig_options[1]);
 		}
 		catch (Throwable t) {
 			throw new RuntimeException(t);
@@ -365,7 +366,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	public <S> ICrudService<S> getGlobalEnrichmentModuleObjectStore(
 			final Class<S> clazz, final Optional<String> collection)
 	{
-		return _delegate.getGlobalAnalyticTechnologyObjectStore(clazz, collection);
+		return _delegate.get().getGlobalAnalyticTechnologyObjectStore(clazz, collection);
 	}
 
 	/* (non-Javadoc)
@@ -377,7 +378,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 			final Optional<StateDirectoryType> type)
 	{
 		Optional<StateDirectoryType> translated_type = Optional.ofNullable(type.orElse(StateDirectoryType.enrichment));
-		return _delegate.getBucketObjectStore(clazz, bucket, collection, translated_type);
+		return _delegate.get().getBucketObjectStore(clazz, bucket, collection, translated_type);
 	}
 
 }
