@@ -618,7 +618,7 @@ public class IkanowV1SyncService_Buckets {
 		final JsonNode tags = safeJsonGet("tags", src_json); // collection of strings
 		//final JsonNode comm_ids = safeJsonGet("communityIds", src_json); // collection of strings
 		final JsonNode px_pipeline = safeJsonGet("processingPipeline", src_json); // collection of JSON objects, first one should have data_bucket
-		final JsonNode px_pipeline_first_el = px_pipeline.get(0);
+		final JsonNode px_pipeline_first_el = ((ObjectNode) px_pipeline.get(0)).without(Arrays.asList("test_params"));
 		final JsonNode data_bucket_tmp = safeJsonGet("data_bucket", px_pipeline_first_el);// (WARNING: mutable, see below)
 		final JsonNode scripting = safeJsonGet("scripting", data_bucket_tmp);
 		
@@ -668,7 +668,7 @@ public class IkanowV1SyncService_Buckets {
 												(acc1, acc2) -> acc1);
 		
 		// Convert back to the bucket JSON
-		final JsonNode data_bucket = _mapper.readTree(data_bucket_str);
+		final JsonNode data_bucket = ((ObjectNode) _mapper.readTree(data_bucket_str)).without(Arrays.asList("test_params"));
 		
 		final DataBucketBean bucket = BeanTemplateUtils.build(data_bucket, DataBucketBean.class)
 													.with(DataBucketBean::_id, getBucketIdFromV1SourceKey(key))

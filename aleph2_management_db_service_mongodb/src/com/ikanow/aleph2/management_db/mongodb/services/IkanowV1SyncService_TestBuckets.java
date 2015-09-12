@@ -22,9 +22,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.Spliterator;
-import java.util.Spliterators;
-import java.util.function.UnaryOperator;
 import java.util.Date;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
@@ -32,7 +29,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import org.apache.curator.framework.CuratorFramework;
@@ -40,15 +36,11 @@ import org.apache.curator.framework.recipes.leader.LeaderLatch;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import scala.Tuple2;
-
-import com.codepoetics.protonpack.StreamUtils;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
@@ -70,7 +62,6 @@ import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
-import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
 import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
 import com.ikanow.aleph2.management_db.mongodb.data_model.TestQueueBean;
@@ -81,7 +72,7 @@ import com.ikanow.aleph2.management_db.mongodb.module.MongoDbManagementDbModule.
  */
 public class IkanowV1SyncService_TestBuckets {
 	private static final Logger _logger = LogManager.getLogger();
-	private static final ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
+	protected static final ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 	
 	protected final MongoDbManagementDbConfigBean _config;
 	protected final IServiceContext _context;
@@ -518,85 +509,11 @@ public class IkanowV1SyncService_TestBuckets {
 	 * @throws ParseException
 	 */
 	public static DataBucketBean getBucketFromV1Source(final JsonNode src_json) throws JsonParseException, JsonMappingException, IOException, ParseException {
-		// (think we'll use key instead of _id):
-		//final String _id = safeJsonGet("_id", src_json).asText(); 
-		final String key = safeJsonGet("key", src_json).asText();
-		final String created = safeJsonGet("created", src_json).asText();
-		final String modified = safeJsonGet("modified", src_json).asText();
-		final String title = safeJsonGet("title", src_json).asText();
-		final String description = safeJsonGet("description", src_json).asText();
-		final String owner_id = safeJsonGet("ownerId", src_json).asText();
-		
-		final JsonNode tags = safeJsonGet("tags", src_json); // collection of strings
-		//final JsonNode comm_ids = safeJsonGet("communityIds", src_json); // collection of strings
-		final JsonNode px_pipeline = safeJsonGet("processingPipeline", src_json); // collection of JSON objects, first one should have data_bucket
-		final JsonNode px_pipeline_first_el = px_pipeline.get(0);
-		final JsonNode data_bucket_tmp = safeJsonGet("data_bucket", px_pipeline_first_el);// (WARNING: mutable, see below)
-		final JsonNode scripting = safeJsonGet("scripting", data_bucket_tmp);
-		
-		// HANDLE SUBSTITUTION
-		final String sub_prefix = Optional.ofNullable(scripting.get("sub_prefix")).map(x -> x.asText()).orElse("$$SCRIPT_");
-		final String sub_suffix = Optional.ofNullable(scripting.get("sub_suffix")).map(x -> x.asText()).orElse("$$");
-		final List<UnaryOperator<String>> search_replace = 
-				StreamSupport.stream(Spliterators.spliteratorUnknownSize(scripting.fieldNames(), Spliterator.ORDERED), false)
-						.filter(f -> !f.equals("sub_prefix") && !f.equals("sub_suffix")) // (remove non language fields)
-						.map(lang -> Tuples._2T(scripting.get(lang), lang))
-						// Get (separator regex, entire script, sub prefix)
-						.map(scriptobj_lang -> Tuples._3T(safeJsonGet("separator_regex", scriptobj_lang._1()).asText(""), 
-															safeJsonGet("script", scriptobj_lang._1()).asText(""), 
-																sub_prefix + scriptobj_lang._2()))
-						// Split each "entire script" up into blocks of format (bloc, lang)
-						.<Stream<Tuple2<String,String>>>
-							map(regex_script_lang -> Stream.concat(
-														Stream.of(Tuples._2T(regex_script_lang._2(), regex_script_lang._3()))
-														, 
-														regex_script_lang._1().isEmpty() 
-															? 
-															Stream.of(Tuples._2T(regex_script_lang._2(), regex_script_lang._3()))																	
-															:
-															Arrays.stream(regex_script_lang._2().split(regex_script_lang._1()))
-																.<Tuple2<String, String>>map(s -> Tuples._2T(s, regex_script_lang._3()))
-													))
-						// Associate a per-lang index with each  script block -> (replacement, string_sub)
-						.<Tuple2<String,String>>
-							flatMap(stream -> StreamUtils.zip(stream, 
-														Stream.iterate(0, i -> i+1), (script_lang, i) -> 
-															Tuples._2T(script_lang._1().replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r"), 
-																	i == 0
-																	? script_lang._2() + sub_suffix // (entire thing)
-																	: script_lang._2() + "_" + i + sub_suffix))) //(broken down components)
 
-						.<UnaryOperator<String>>map(t2 -> (String s) -> s.replace(t2._2(), t2._1()))
-							//(need to escape "s and newlines)
-						.collect(Collectors.toList())
-						;
-		
-		// Apply the list of transforms to the string
-		((ObjectNode) data_bucket_tmp).remove("scripting"); // (WARNING: mutable)
-		final String data_bucket_str = search_replace.stream()
-											.reduce(
-												data_bucket_tmp.toString(), 
-												(acc, s) -> s.apply(acc), 
-												(acc1, acc2) -> acc1);
-		
-		// Convert back to the bucket JSON
-		final JsonNode data_bucket = _mapper.readTree(data_bucket_str);
-		
-		final DataBucketBean bucket = BeanTemplateUtils.build(data_bucket, DataBucketBean.class)
-													.with(DataBucketBean::_id, owner_id + getBucketIdFromV1SourceKey(key))				
-													.with(DataBucketBean::created, parseJavaDate(created))
-													.with(DataBucketBean::modified, parseJavaDate(modified))
-													.with(DataBucketBean::display_name, title)
-													.with(DataBucketBean::description, description)
-													.with(DataBucketBean::owner_id, owner_id)
-													.with(DataBucketBean::tags, 
-															StreamSupport.stream(tags.spliterator(), false)
-																			.map(jt -> jt.asText())
-																			.collect(Collectors.toSet()))																	
-													.done().get();
-		
-		return bucket;
-		
+		final DataBucketBean not_test_version = IkanowV1SyncService_Buckets.getBucketFromV1Source(src_json);
+		return BeanTemplateUtils.clone(not_test_version)
+					.with(DataBucketBean::_id, not_test_version.owner_id() + not_test_version._id())
+				.done();
 	}
 	
 	/** Gets a JSON field that may not be present (justs an empty JsonNode if no)

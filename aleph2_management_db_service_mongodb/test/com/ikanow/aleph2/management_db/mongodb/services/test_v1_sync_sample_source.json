@@ -55,6 +55,7 @@
                     "technology_override_schema": {}
                 }
             },
+            "test_params": {"max_run_time_secs": 60},
             "full_name": "/bucket/path/here",
             "harvest_configs": [{
                 "config": {"key1": "value1_harvest", "key2": 1},
