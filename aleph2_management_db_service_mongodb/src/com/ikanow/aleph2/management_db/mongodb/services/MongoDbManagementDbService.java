@@ -62,10 +62,6 @@ import com.mongodb.gridfs.GridFS;
  * @author acp
  *
  */
-/**
- * @author Alex
- *
- */
 public class MongoDbManagementDbService implements IManagementDbService, IExtraDependencyLoader  {
 
 	public static final String STATE_DIRECTORY_STORE = "aleph2_shared.state_directory_store";

@@ -195,7 +195,7 @@ public class IkanowV1SyncService_TestBuckets {
 				final ICrudService<TestQueueBean> v1_config_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.v2_test_q/" + TestQueueBean.class.getName())).get();				
 				_v1_db.set(v1_config_db);
 				
-				_v1_db.get().optimizeQuery(Arrays.asList("status"));
+				_v1_db.get().optimizeQuery(Arrays.asList(BeanTemplateUtils.from(TestQueueBean.class).field(TestQueueBean::status)));
 			}
 			
 			try {
@@ -205,6 +205,7 @@ public class IkanowV1SyncService_TestBuckets {
 						_underlying_management_db.getDataBucketStatusStore(), 
 						_v1_db.get(),
 						new BucketTestService());
+				//(could put a .get() here, which would just make it wait on updating existing results based on the CF construction, but I don't think there's a need)
 				
 				//(note you can have multiple instances of the called code running even though the main thread pool is one,
 				// because of the futures - the code handles it so that it doesn't try to start the code multiple times)
@@ -243,9 +244,12 @@ public class IkanowV1SyncService_TestBuckets {
 				//TODO if the getBucketFromV1Source throws an exeption, it gets tossed the entire way up to whatever called synchronizeTestSources (e.g. on the CF)
 				final DataBucketBean to_test = Lambdas.wrap_u(() -> getBucketFromV1Source(test_source.source())).get();
 				if ( test_source.status() != null &&
-						test_source.status().equals("in_progress") ) {
+						test_source.status().equals("in_progress") || test_source.status().equals("completed") || test_source.status().equals("error")
+						)
+				{
 					existing_results.add(handleExistingTestSource(to_test, test_source, source_test_db));
-				} else {
+				} else { // in progress...
+					
 					_logger.debug("Found a new entry, setting up test");
 					new_results.add(handleNewTestSource(to_test, test_source, bucket_test_service, source_test_db));								
 				}
@@ -253,7 +257,7 @@ public class IkanowV1SyncService_TestBuckets {
 			//_logger.debug("done looping over test sources");
 			//combine response of new and old entries, return
 			List<CompletableFuture<?>> retval = 
-					Arrays.asList(new_results, existing_results).stream()
+					Arrays.asList(existing_results).stream() // potentially block on existing results but not new results 'cos that can take ages
 					.flatMap(l -> l.stream())
 					.collect(Collectors.toList());			
 			return CompletableFuture.allOf(retval.toArray(new CompletableFuture[0]));
