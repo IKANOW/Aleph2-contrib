@@ -52,7 +52,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
@@ -62,7 +61,9 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.BeanUpdateComponent;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
@@ -122,12 +123,13 @@ public class IkanowV1SyncService_TestBuckets {
 				//(give it 10 seconds before starting, let everything else settle down - eg give the bucket choose handler time to register)			
 		}
 	}
-	/** Immediately start
+	/** Immediately start (for testing)
 	 */
+	@SuppressWarnings("deprecation")
 	public void start() {
 		_logger.info("IkanowV1SyncService_TestBuckets started, running on a schedule (typically every 1s)");
 		_source_test_monitor_handle.get().cancel(true);
-		_source_test_monitor_handle.set(_source_test_scheduler.scheduleWithFixedDelay(new SourceTestMonitor(), 1, 1L, TimeUnit.SECONDS));
+		_source_test_monitor_handle.forceSet(_source_test_scheduler.scheduleWithFixedDelay(new SourceTestMonitor(), 1, 1L, TimeUnit.SECONDS));
 	}
 	
 	/** Stop threads (just for testing I think)
@@ -193,7 +195,7 @@ public class IkanowV1SyncService_TestBuckets {
 				final ICrudService<TestQueueBean> v1_config_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.v2_test_q/" + TestQueueBean.class.getName())).get();				
 				_v1_db.set(v1_config_db);
 				
-				//_v1_db.get().optimizeQuery(Arrays.asList("extractType"));
+				_v1_db.get().optimizeQuery(Arrays.asList("status"));
 			}
 			
 			try {
@@ -202,9 +204,10 @@ public class IkanowV1SyncService_TestBuckets {
 						_core_management_db.getDataBucketStore(), 
 						_underlying_management_db.getDataBucketStatusStore(), 
 						_v1_db.get(),
-						new BucketTestService())
-						.get();
-					// (the get at the end just ensures that you don't get two of these scheduled results colliding)
+						new BucketTestService());
+				
+				//(note you can have multiple instances of the called code running even though the main thread pool is one,
+				// because of the futures - the code handles it so that it doesn't try to start the code multiple times)
 			}			
 			catch (Throwable t) {
 				_logger.error(ErrorUtils.getLongForm("{0}", t));
@@ -241,8 +244,7 @@ public class IkanowV1SyncService_TestBuckets {
 				final DataBucketBean to_test = Lambdas.wrap_u(() -> getBucketFromV1Source(test_source.source())).get();
 				if ( test_source.status() != null &&
 						test_source.status().equals("in_progress") ) {
-					_logger.debug("Found an old entry, checking if test is done");
-					existing_results.add(handleExistingTestSource(to_test, test_source, source_test_db));					
+					existing_results.add(handleExistingTestSource(to_test, test_source, source_test_db));
 				} else {
 					_logger.debug("Found a new entry, setting up test");
 					new_results.add(handleNewTestSource(to_test, test_source, bucket_test_service, source_test_db));								
@@ -467,11 +469,28 @@ public class IkanowV1SyncService_TestBuckets {
 	 * @param source_test_db
 	 * @return
 	 */
-	protected CompletableFuture<Cursor<TestQueueBean>> getAllTestSources(final ICrudService<TestQueueBean> source_test_db) {
-		return source_test_db.getObjectsBySpec(
-						CrudUtils.allOf(TestQueueBean.class)
-						.whenNot("status", "complete")
-						.whenNot("status", "error")); //can be complete | error | in_progress | submitted | {unset/anything else}
+	protected CompletableFuture<List<TestQueueBean>> getAllTestSources(final ICrudService<TestQueueBean> source_test_db) {
+		final QueryComponent<TestQueueBean> get_query =
+				CrudUtils.allOf(TestQueueBean.class)
+				.whenNot(TestQueueBean::status, "complete")
+				.whenNot(TestQueueBean::status, "error"); //can be complete | error | in_progress | submitted | {unset/anything else}
+				
+		final QueryComponent<TestQueueBean> update_query =
+				CrudUtils.allOf(TestQueueBean.class)
+				.whenNot(TestQueueBean::status, "in_progress")
+				.whenNot(TestQueueBean::status, "complete")
+				.whenNot(TestQueueBean::status, "error"); //can be complete | error | in_progress | submitted | {unset/anything else}
+
+		final UpdateComponent<TestQueueBean> update_command = CrudUtils.update(TestQueueBean.class).set(TestQueueBean::status, "in_progress");		
+		
+		final CompletableFuture<List<TestQueueBean>> get_command = 
+				source_test_db.getObjectsBySpec(get_query)
+				.thenApply(c -> StreamSupport.stream(c.spliterator(), false).collect(Collectors.toList()));
+		
+		return get_command.thenCompose(__ -> {
+			return source_test_db.updateObjectsBySpec(update_query, Optional.of(false), update_command);
+		})
+		.thenCompose(__ -> get_command); // (ie return the original command but only once the update has completed)
 	}
 	
 	////////////////////////////////////////////////////

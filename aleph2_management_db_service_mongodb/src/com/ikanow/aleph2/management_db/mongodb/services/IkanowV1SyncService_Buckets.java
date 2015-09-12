@@ -130,7 +130,7 @@ public class IkanowV1SyncService_Buckets {
 	@SuppressWarnings("deprecation")
 	public void start() {
 		_source_monitor_handle.get().cancel(true);
-		_source_monitor_handle.forceSet(_source_scheduler.scheduleWithFixedDelay(new SourceMonitor(), 1, 1L, TimeUnit.SECONDS));
+		_source_monitor_handle.forceSet(_source_scheduler.scheduleWithFixedDelay(new SourceMonitor(), 1L, 1L, TimeUnit.SECONDS));
 	}
 	
 	/** Stop threads (just for testing I think)
@@ -206,7 +206,7 @@ public class IkanowV1SyncService_Buckets {
 						_underlying_management_db.getDataBucketStatusStore(), 
 						_v1_db.get())
 						.get();
-					// (the get at the end just ensures that you don't get two of these scheduled results colliding)
+					// (the get at the end just ensures that you don't get two of these scheduled results colliding - because of the 1-thread thread pool)
 			}			
 			catch (Throwable t) {
 				_logger.error(ErrorUtils.getLongForm("{0}", t));

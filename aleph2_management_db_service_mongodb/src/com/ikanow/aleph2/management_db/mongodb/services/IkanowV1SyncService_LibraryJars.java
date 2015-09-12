@@ -218,7 +218,7 @@ public class IkanowV1SyncService_LibraryJars {
 						_v1_db.get(),
 						_mongodb_distributed_fs.get())
 						.get();
-					// (the get at the end just ensures that you don't get two of these scheduled results colliding)
+					// (the get at the end just ensures that you don't get two of these scheduled results colliding - because of the 1-thread thread pool)
 			}			
 			catch (Throwable t) {
 				_logger.error(ErrorUtils.getLongForm("{0}", t));

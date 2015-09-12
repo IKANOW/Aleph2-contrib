@@ -845,7 +845,7 @@ public class TestIkanowV1SyncService_Buckets {
 		
 		// Now sleep a bit more to let the monitor have time to finish:
 		Thread.sleep(3000L);
-		
+
 		// Check a few things have happened:
 		
 		// 1) bucket3 has been deleted
