@@ -168,23 +168,31 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	{
 		final DataBucketBean my_bucket = bucket.orElseGet(() -> _bucket.get());
 		if (!_job.get().output().is_transient()) { // Final output for this analytic
+			//TODO (ALEPH-12): handle child-buckets 
+			
 			// Just return an aleph2 output bolt:
 			return (T) new OutputBolt(my_bucket, _delegate.get().getAnalyticsContextSignature(bucket, Optional.empty()), _user_topology.get().getClass().getName());			
 		}
 		else {
-			final ICoreDistributedServices cds = _delegate.get().getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();			
-			final String topic_name = cds.generateTopicName(my_bucket.full_name(), Optional.of(my_bucket.streaming_enrichment_topology().name()));
-			cds.createTopic(topic_name, Optional.empty());
+			final Optional<String> topic_name = _delegate.get().getOutputTopic(bucket, _job.get());
 			
-			return (T) new KafkaBolt<String, String>().withTopicSelector(__ -> topic_name).withTupleToKafkaMapper(new TupleToKafkaMapper<String, String>() {
-				private static final long serialVersionUID = -1651711778714775009L;
-				public String getKeyFromTuple(final Tuple tuple) {
-					return null; // (no key, will randomly assign across partition)
-				}
-				public String getMessageFromTuple(final Tuple tuple) {
-					return  _user_topology.get().rebuildObject(tuple, OutputBolt::tupleToLinkedHashMap).toString();
-				}
-			});
+			if (topic_name.isPresent()) {
+				final ICoreDistributedServices cds = _delegate.get().getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();			
+				cds.createTopic(topic_name.get(), Optional.empty());
+				
+				return (T) new KafkaBolt<String, String>().withTopicSelector(__ -> topic_name.get()).withTupleToKafkaMapper(new TupleToKafkaMapper<String, String>() {
+					private static final long serialVersionUID = -1651711778714775009L;
+					public String getKeyFromTuple(final Tuple tuple) {
+						return null; // (no key, will randomly assign across partition)
+					}
+					public String getMessageFromTuple(final Tuple tuple) {
+						return  _user_topology.get().rebuildObject(tuple, OutputBolt::tupleToLinkedHashMap).toString();
+					}
+				});
+			}
+			else { //TODO (ALEPH-12): Write an output bolt for temporary HDFS storage, and another one for both
+				throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "batch output from getTopologyStorageEndpoint"));
+			}
 		}
 	}
 
