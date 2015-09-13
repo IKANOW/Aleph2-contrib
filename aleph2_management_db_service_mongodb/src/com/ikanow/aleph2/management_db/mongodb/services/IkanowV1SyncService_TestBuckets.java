@@ -236,7 +236,7 @@ public class IkanowV1SyncService_TestBuckets {
 
 				final DataBucketBean to_test = Lambdas.wrap_u(() -> getBucketFromV1Source(test_source.source())).get();
 				if ( test_source.status() != null &&
-						test_source.status().equals("in_progress") || test_source.status().equals("completed") || test_source.status().equals("error")
+						(test_source.status().equals("in_progress") || test_source.status().equals("completed") || test_source.status().equals("error"))
 						)
 				{
 					existing_results.add(handleExistingTestSource(to_test, test_source, source_test_db));
@@ -377,11 +377,11 @@ public class IkanowV1SyncService_TestBuckets {
 			//do final step for exists/not exists 
 			final String output_collection = data_bucket._id();		
 			//mark job as complete, point to v1 collection				
-			return updateTestSourceStatus(test_source._id(), "completed", source_test_db, Optional.of(new Date()), Optional.ofNullable(output_collection), Optional.empty());
+			return updateTestSourceStatus(test_source._id(), "completed", source_test_db, Optional.empty(), Optional.ofNullable(output_collection), Optional.empty());
 		})
 		.exceptionally(t -> {
 			_logger.debug("Marking job completed with error");
-			return updateTestSourceStatus(test_source._id(), ErrorUtils.get("error: {0}", t.getMessage()), source_test_db, Optional.of(new Date()), Optional.empty(), Optional.empty())
+			return updateTestSourceStatus(test_source._id(), ErrorUtils.get("error: {0}", t.getMessage()), source_test_db, Optional.empty(), Optional.empty(), Optional.empty())
 					.join();
 		})
 		;
@@ -486,7 +486,10 @@ public class IkanowV1SyncService_TestBuckets {
 				.whenNot(TestQueueBean::status, "complete")
 				.whenNot(TestQueueBean::status, "error"); //can be complete | error | in_progress | submitted | {unset/anything else}
 
-		final UpdateComponent<TestQueueBean> update_command = CrudUtils.update(TestQueueBean.class).set(TestQueueBean::status, "in_progress");		
+		final UpdateComponent<TestQueueBean> update_command = CrudUtils.update(TestQueueBean.class)
+				.set(TestQueueBean::status, "in_progress")
+				.set(TestQueueBean::started_processing_on, new Date())
+				;		
 		
 		final CompletableFuture<List<TestQueueBean>> get_command = 
 				source_test_db.getObjectsBySpec(get_query)
@@ -495,7 +498,7 @@ public class IkanowV1SyncService_TestBuckets {
 		return get_command.thenCompose(__ -> {
 			return source_test_db.updateObjectsBySpec(update_query, Optional.of(false), update_command);
 		})
-		.thenCompose(__ -> get_command); // (ie return the original command but only once the update has completed)
+		.thenApply(__ -> get_command.join()); // (ie return the original command but only once the update has completed)
 	}
 	
 	////////////////////////////////////////////////////
