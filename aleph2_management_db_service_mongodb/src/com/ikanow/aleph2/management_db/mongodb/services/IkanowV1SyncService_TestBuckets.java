@@ -225,11 +225,13 @@ public class IkanowV1SyncService_TestBuckets {
 			)
 	{
 		//_logger.debug("Starting a sync test sources cycle");
-		final List<CompletableFuture<Boolean>> new_results = new ArrayList<CompletableFuture<Boolean>>();
-		final List<CompletableFuture<Boolean>> existing_results = new ArrayList<CompletableFuture<Boolean>>();		
+		final List<CompletableFuture<?>> new_results = new ArrayList<CompletableFuture<?>>(); // (not used for synchronization - in a single)
+		final List<CompletableFuture<?>> existing_results = new ArrayList<CompletableFuture<?>>();		
+		
+		final CompletableFuture<List<TestQueueBean>> future_test_sources = getAllTestSources(source_test_db);
 		
 		//check for entries in test db
-		return getAllTestSources(source_test_db).thenCompose( test_sources -> {
+		return future_test_sources.thenCompose( test_sources -> {
 			//_logger.debug("Got test sources successfully, looping over any results");
 			test_sources.forEach(Lambdas.wrap_consumer_u(test_source -> {		
 				_logger.debug("Looking at test source: " + test_source._id());
@@ -246,10 +248,13 @@ public class IkanowV1SyncService_TestBuckets {
 					new_results.add(handleNewTestSource(to_test, test_source, bucket_test_service, source_test_db));								
 				}
 			}));
+			if (existing_results.isEmpty()) { // Make sure at least that we don't start a new thread until we've got all the tests from the previous sources
+				existing_results.add(future_test_sources);
+			}
 			//_logger.debug("done looping over test sources");
 			//combine response of new and old entries, return
 			List<CompletableFuture<?>> retval = 
-					Arrays.asList(existing_results).stream() // potentially block on existing results but not new tests  'cos that can take ages
+					Arrays.asList(existing_results).stream() // potentially block on existing results but not new tests 'cos that can take ages
 					.flatMap(l -> l.stream())
 					.collect(Collectors.toList());			
 			return CompletableFuture.allOf(retval.toArray(new CompletableFuture[0]));
