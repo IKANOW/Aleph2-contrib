@@ -180,7 +180,7 @@ public class HadoopControllerService {
 						}
 						
 						if (data_service.equals("storage_service")) { // (special case since we know we're using HDFS for the storage service...)
-							final Optional<List<Path>> base_paths = context.getInputPaths(Optional.of(bucket), job, input)
+							final Optional<List<Path>> base_paths = Optional.of(context.getInputPaths(Optional.of(bucket), job, input))
 																			.map(x -> x.stream().map(s -> new Path(s)).collect(Collectors.toList()));
 							base_paths.orElseThrow(() -> 
 									new BasicMessageException(ErrorUtils.buildErrorMessage(HadoopControllerService.class.getName(), "startJob", 
@@ -230,7 +230,7 @@ public class HadoopControllerService {
 						// So assuming it's a batch dependency, we'll grab the directory as a FileInputFormat 
 					
 						final String key = BucketUtils.getUniqueSignature(bucket.full_name(), Optional.of(input.resource_name_or_id()));
-						final Optional<List<Path>> base_paths = context.getInputPaths(Optional.of(bucket), job, input)
+						final Optional<List<Path>> base_paths = Optional.of(context.getInputPaths(Optional.of(bucket), job, input))
 																	.map(x -> x.stream().map(s -> new Path(s)).collect(Collectors.toList()));
 						final Class<? extends InputFormat> input_format_clazz = null; //TODO
 						input_format_builder.addInput(key, task, input_format_clazz, Collections.emptyMap(), base_paths);

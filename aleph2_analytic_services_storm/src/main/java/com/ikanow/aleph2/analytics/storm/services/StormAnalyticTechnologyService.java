@@ -238,7 +238,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 		try {
 			// (already validated)
 			final Collection<Object> underlying_artefacts = context.getUnderlyingArtefacts();
-			final Collection<String> user_lib_paths = context.getAnalyticsLibraries(Optional.of(analytic_bucket)).join().values();  
+			final Collection<String> user_lib_paths = context.getAnalyticsLibraries(Optional.of(analytic_bucket), jobs).join().values();  
 			final Class<?> module_type = Class.forName(job_to_start.entry_point());
 			final String cached_jars_dir = context.getServiceContext().getGlobalProperties().local_cached_jar_dir();
 			

@@ -16,11 +16,14 @@
 package com.ikanow.aleph2.analytics.storm.services;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import scala.Tuple2;
 import storm.kafka.BrokerHosts;
@@ -53,7 +56,6 @@ import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
-import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
@@ -138,61 +140,20 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 		final BrokerHosts hosts = new ZkHosts(KafkaUtils.getZookeperConnectionString());
 		final String full_path = (_delegate.get().getServiceContext().getGlobalProperties().distributed_root_dir() + GlobalPropertiesBean.BUCKET_DATA_ROOT_OFFSET + my_bucket.full_name()).replace("//", "/");
 		
-		final ICoreDistributedServices cds = _delegate.get().getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();
-		
-		return _job.get().inputs().stream().flatMap(input -> {
-			return Optional.of(input)
-						.filter(i -> "stream".equalsIgnoreCase(i.data_service()))
-						.map(i -> {					
-							//Topic naming: 5 cases: 
-							// 1) i.resource_name_or_id is a bucket path, ie starts with "/", and then:
-							// 1.1) if it ends ":name" then it points to a specific point in the bucket processing
-							// 1.2) if it ends ":" or ":$start" then it points to the start of that bucket's processing (ie the output of its harvester) .. which corresponds to the queue name with no sub-channel
-							// 1.3) otherwise it points to the end of the bucket's processing (ie immediately before it's output) ... which corresponds to the queue name with the sub-channel "$end"
-							// 2) i.resource_name_or_id does not (start with a /), in which case:
-							// 2.1) if it's a non-empty string, then it's the name of one the internal jobs (can interpret that as this.full_name + name)  
-							// 2.2) if it's "" or null then it's pointing to the output of its own bucket's harvester
-							
-							final String[] bucket_subchannel = Lambdas.<String, String[]> wrap_u(s -> {
-								if (s.startsWith("/")) { //1.*
-									if (s.endsWith(":") || s.endsWith(":$start")) {
-										return new String[] { s.substring(0, s.length() - 1), "" }; // (1.2)
-									}
-									else {
-										final String[] b_sc = s.split(":");
-										if (1 == b_sc.length) {
-											return new String[] { b_sc[0], "$end" }; // (1.3)
-										}
-										else {
-											return b_sc; //(1.1)
-										}
-									}
-								}
-								else { //2.*
-									return new String[] { my_bucket.full_name(), s };
-								}
-							})
-							.apply(i.resource_name_or_id())
-							;
-							
-							final String topic_name = cds.generateTopicName(bucket_subchannel[0], Optional.ofNullable(bucket_subchannel[1]).filter(s -> !s.isEmpty()));
-							//TODO: ALEPH-12, register interest in a topic via ZK, which will (somehow!) result in data being streamed from that job (eg via checking ZK every minute)
-							//(+ spout config needs to have a different consumer name...)
-							cds.createTopic(topic_name, Optional.empty());
-							final SpoutConfig spout_config = new SpoutConfig(hosts, topic_name, full_path, BucketUtils.getUniqueSignature(my_bucket.full_name(), Optional.of(_job.get().name()))); 
-							spout_config.scheme = new SchemeAsMultiScheme(new StringScheme());
-							final KafkaSpout kafka_spout = new KafkaSpout(spout_config);
-							return Tuples._2T((T) kafka_spout, topic_name);			
-						})
-						// convert optional to stream:
-						.map(Stream::of).orElseGet(Stream::empty)
-						;
-		})
-		.collect(Collectors.toList());
+		return _job.get().inputs().stream()
+				.flatMap(input -> _delegate.get().getInputTopics(bucket, _job.get(), input).stream())
+				.map(topic_name -> {
+					final SpoutConfig spout_config = new SpoutConfig(hosts, topic_name, full_path, BucketUtils.getUniqueSignature(my_bucket.full_name(), Optional.of(_job.get().name()))); 
+					spout_config.scheme = new SchemeAsMultiScheme(new StringScheme());
+					final KafkaSpout kafka_spout = new KafkaSpout(spout_config);
+					return Tuples._2T((T) kafka_spout, topic_name);
+				})
+				.collect(Collectors.toList())
+				;
 
-		//TODO (ALEPH-12): More sophisticated spout building functionality (eg generic batch->storm checking via CRUD service)
+		//TODO (ALEPH-12): More sophisticated spout building functionality (eg generic batch->storm checking via CRUD service), handle storage service possibly via Camus?
 		
-		//TODO: if a legit data service is specified then see if that service contains a spout and if so use that, else throw error
+		//TODO (ALEPH-12): if a legit data service is specified then see if that service contains a spout and if so use that, else throw error
 		//TODO: (if a legit data service is specified then need to ensure that the service is included in the underlying artefacts)
 		
 	}
@@ -248,7 +209,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 */
 	@Override
 	public ObjectNode convertToMutable(final JsonNode original) {
-		throw new RuntimeException(ErrorUtils.get(ErrorUtils.INVALID_CALL_FROM_WRAPPED_ANALYTICS_CONTEXT_ENRICH, "convertToMutable"));
+		return (ObjectNode) original;
 	}
 
 	/* (non-Javadoc)
@@ -256,7 +217,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 */
 	@Override
 	public void emitMutableObject(final long id, final ObjectNode mutated_json, final Optional<AnnotationBean> annotation) {		
-		_delegate.get().emitObject(_delegate.get().getBucket(), _job.get(), Either.left((JsonNode) mutated_json));
+		_delegate.get().emitObject(_delegate.get().getBucket(), _job.get(), Either.left((JsonNode) mutated_json), annotation);
 	}
 
 	/* (non-Javadoc)
@@ -264,7 +225,15 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 */
 	@Override
 	public void emitImmutableObject(final long id, final JsonNode original_json, final Optional<ObjectNode> mutations, final Optional<AnnotationBean> annotations) {
-		throw new RuntimeException(ErrorUtils.get(ErrorUtils.INVALID_CALL_FROM_WRAPPED_ANALYTICS_CONTEXT_ENRICH, "emitImmutableObject"));
+		if (annotations.isPresent()) {
+			throw new RuntimeException(ErrorUtils.NOT_YET_IMPLEMENTED);			
+		}
+		final JsonNode to_emit = 
+				mutations.map(o -> StreamSupport.<Map.Entry<String, JsonNode>>stream(Spliterators.spliteratorUnknownSize(o.fields(), Spliterator.ORDERED), false)
+									.reduce(original_json, (acc, kv) -> ((ObjectNode) acc).set(kv.getKey(), kv.getValue()), (val1, val2) -> val2))
+									.orElse(original_json);
+		
+		emitMutableObject(0L, (ObjectNode)to_emit, annotations);
 	}
 
 	/* (non-Javadoc)
