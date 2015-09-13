@@ -195,8 +195,9 @@ public class IkanowV1SyncService_TestBuckets {
 						_core_management_db.getDataBucketStore(), 
 						_underlying_management_db.getDataBucketStatusStore(), 
 						_v1_db.get(),
-						new BucketTestService());
-				//(could put a .get() here, which would just make it wait on updating existing results based on the CF construction, but I don't think there's a need)
+						new BucketTestService())
+						.get();
+				//(note this only waits for completions to finish, which should be super fast)
 				
 				//(note you can have multiple instances of the called code running even though the main thread pool is one,
 				// because of the futures - the code handles it so that it doesn't try to start the code multiple times)
@@ -232,7 +233,7 @@ public class IkanowV1SyncService_TestBuckets {
 			//_logger.debug("Got test sources successfully, looping over any results");
 			test_sources.forEach(Lambdas.wrap_consumer_u(test_source -> {		
 				_logger.debug("Looking at test source: " + test_source._id());
-				//TODO if the getBucketFromV1Source throws an exeption, it gets tossed the entire way up to whatever called synchronizeTestSources (e.g. on the CF)
+
 				final DataBucketBean to_test = Lambdas.wrap_u(() -> getBucketFromV1Source(test_source.source())).get();
 				if ( test_source.status() != null &&
 						test_source.status().equals("in_progress") || test_source.status().equals("completed") || test_source.status().equals("error")
@@ -248,7 +249,7 @@ public class IkanowV1SyncService_TestBuckets {
 			//_logger.debug("done looping over test sources");
 			//combine response of new and old entries, return
 			List<CompletableFuture<?>> retval = 
-					Arrays.asList(existing_results).stream() // potentially block on existing results but not new results 'cos that can take ages
+					Arrays.asList(existing_results).stream() // potentially block on existing results but not new tests  'cos that can take ages
 					.flatMap(l -> l.stream())
 					.collect(Collectors.toList());			
 			return CompletableFuture.allOf(retval.toArray(new CompletableFuture[0]));
@@ -368,14 +369,22 @@ public class IkanowV1SyncService_TestBuckets {
 			results.forEach(objects_to_store::add);
 			return objects_to_store.isEmpty()
 					? CompletableFuture.completedFuture(true)
-					: v1_output_db.storeObjects(objects_to_store).thenCompose(x->CompletableFuture.completedFuture(true));
+					: v1_output_db.deleteDatastore() // (should have already been deleted at test startup _and_ on completion, so this is to be on the safe side!)
+						.thenCompose(__ -> v1_output_db.storeObjects(objects_to_store).thenCompose(x->CompletableFuture.completedFuture(true)))
+						;
 		}).thenCompose(x -> {
 			_logger.debug("Marking job completed");
 			//do final step for exists/not exists 
 			final String output_collection = data_bucket._id();		
 			//mark job as complete, point to v1 collection				
 			return updateTestSourceStatus(test_source._id(), "completed", source_test_db, Optional.of(new Date()), Optional.ofNullable(output_collection), Optional.empty());
-		});
+		})
+		.exceptionally(t -> {
+			_logger.debug("Marking job completed with error");
+			return updateTestSourceStatus(test_source._id(), ErrorUtils.get("error: {0}", t.getMessage()), source_test_db, Optional.of(new Date()), Optional.empty(), Optional.empty())
+					.join();
+		})
+		;
 	}
 	
 	/**
@@ -400,10 +409,11 @@ public class IkanowV1SyncService_TestBuckets {
 		//try to test the bucket
 		_logger.debug("Running bucket test");
 		@SuppressWarnings("unchecked")
-		final ICrudService<JsonNode> v1_output_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + data_bucket._id())).get();		
+		final ICrudService<JsonNode> v1_output_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + data_bucket._id())).get();
+		final CompletableFuture<Boolean> delete_datastore = v1_output_db.deleteDatastore(); //(this is done in a few other places, so just to be on the safe side here)
 		final ManagementFuture<Boolean> test_res_future = bucket_test_service.test_bucket(_core_management_db, data_bucket, test_spec);
 		
-		return v1_output_db.deleteDatastore().exceptionally(ex->{
+		return delete_datastore.exceptionally(ex->{
 			_logger.error("Error trying to clear v1 output db before test run: ingest." + data_bucket._id(),ex);
 			return false;
 		}).thenCompose(y -> test_res_future.thenCompose(res -> {
