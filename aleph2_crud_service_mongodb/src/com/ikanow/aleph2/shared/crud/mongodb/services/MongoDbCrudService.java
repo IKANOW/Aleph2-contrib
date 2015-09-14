@@ -15,6 +15,8 @@
  ******************************************************************************/
 package com.ikanow.aleph2.shared.crud.mongodb.services;
 
+import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
@@ -39,6 +41,7 @@ import org.mongojack.internal.object.BsonObjectGenerator;
 
 import scala.Tuple2;
 
+import com.fasterxml.jackson.core.JsonStreamContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IBasicSearchService;
@@ -69,6 +72,12 @@ import com.mongodb.WriteConcern;
  *
  * @param <O> - the bean class
  * @param <K> - the key class (typically String or ObjectId)
+ */
+/**
+ * @author Alex
+ *
+ * @param <O>
+ * @param <K>
  */
 public class MongoDbCrudService<O, K> implements ICrudService<O> {
 
@@ -162,6 +171,35 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	protected final State _state;
 	protected final ObjectMapper _object_mapper;
 	
+	/** Extension of MongoJack to auto convert $oid to ObjectId
+	 * @author Alex
+	 */
+	public static class ExtraBsonObjectGenerator extends BsonObjectGenerator {	
+	    /* (non-Javadoc)
+	     * @see org.mongojack.internal.object.BsonObjectGenerator#writeEndObject()
+	     */
+	    @Override
+	    public void writeEndObject() throws IOException {
+	    	JsonStreamContext to_set = getOutputContext();
+	    	if ("$oid".equals(to_set.getCurrentName())) {
+		    	try {	    			    		
+			    	Method mget = to_set.getClass().getDeclaredMethod("get");
+			    	mget.setAccessible(true);
+			    	DBObject val = (DBObject) mget.invoke(to_set);
+			    	
+		    		JsonStreamContext parent =  to_set.getParent();
+			    	Method mset = parent.getClass().getDeclaredMethod("set", Object.class);
+			    	mset.setAccessible(true);
+			    	mset.invoke(parent, new ObjectId(val.get("$oid").toString()));
+		    	}
+		    	catch (Throwable e) {
+		    		throw new RuntimeException(e);
+		    	}
+	    	}
+    		else super.writeEndObject();
+	    }
+	}
+	
 	/** creates a new object and inserts an _id field if needed
 	 * @param bean the object to convert
 	 * @return the converted BSON (possibly with _id inserted)
@@ -170,7 +208,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		final DBObject dbo = Patterns.match().<DBObject>andReturn()
 				.when(() -> JsonNode.class != _state.bean_clazz, () -> _state.coll.convertToDbObject(bean))
 				.otherwise(() -> {
-					try (BsonObjectGenerator generator = new BsonObjectGenerator()) {
+					try (BsonObjectGenerator generator = new ExtraBsonObjectGenerator()) {
 						_object_mapper.writeTree(generator, (JsonNode)bean);
 						return generator.getDBObject();
 					} catch (Exception e) {

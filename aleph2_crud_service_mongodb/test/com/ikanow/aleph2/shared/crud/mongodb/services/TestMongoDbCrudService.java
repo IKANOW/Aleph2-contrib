@@ -40,6 +40,7 @@ import scala.Tuple2;
 import static org.hamcrest.CoreMatchers.instanceOf;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
@@ -982,6 +983,20 @@ public class TestMongoDbCrudService {
 		if (null != this._real_mongodb_connection) { // (doesn't work with fongo?)
 			assertEquals(0, service._state.coll.getIndexInfo().size());
 		}
+	}
+	
+	@SuppressWarnings("deprecation")
+	@Test
+	public void test_extendedBsonGenerator() throws InterruptedException, ExecutionException {
+		final MongoDbCrudService<JsonNode, Object> json_service = getTestService("test_extendedBsonGenerator", JsonNode.class, Object.class);
+		
+		ObjectNode o1 = json_service._object_mapper.createObjectNode();
+		o1.put("$oid", "550b189ae4b0e58fb26f71eb");
+		ObjectNode o2 = json_service._object_mapper.createObjectNode();
+		o2.put("_id", o1);
+		
+		json_service.storeObject(o2).get();
+		assertTrue(json_service.getObjectById(new ObjectId("550b189ae4b0e58fb26f71eb")).get().isPresent());
 	}
 	
 	@Test
