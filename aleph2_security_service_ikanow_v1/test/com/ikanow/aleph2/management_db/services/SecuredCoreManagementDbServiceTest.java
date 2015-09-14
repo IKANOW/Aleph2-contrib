@@ -70,7 +70,7 @@ public class SecuredCoreManagementDbServiceTest {
 		final String temp_dir = System.getProperty("java.io.tmpdir");
 
 		// OK we're going to use guice, it was too painful doing this by hand...
-		config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v1_remote.properties")))
+		config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v1.properties")))
 				.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 				.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 				.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
@@ -91,7 +91,7 @@ public class SecuredCoreManagementDbServiceTest {
 
 
 	@Test
-//	@Ignore
+	@Ignore
 	public void testSharedLibraryAccess(){
 			String bucketId = "aleph...bucket.demo_bucket_1.;";
 			// calebs id
@@ -121,12 +121,14 @@ public class SecuredCoreManagementDbServiceTest {
 						MultiQueryComponent<SharedLibraryBean> spec = CrudUtils.<SharedLibraryBean> anyOf(sharedLibsQuery);
 						List<SharedLibraryBean> sharedLibraries = StreamSupport.stream(	shareLibraryStore.getObjectsBySpec(spec).get().spliterator(), false).collect(Collectors.toList());
 						assertNotNull(sharedLibraries);
-						assertTrue(sharedLibraries.size()==1);
+						assertTrue(sharedLibraries.size()==3);
 						 
 			//} // odb present
 		} catch (Exception e) {
 			logger.error("Caught exception loading shared libraries for job:" + bucketId, e);
 
 		}
-	}	
+	}
+	
+	
 }
