@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.shared.crud.mongodb.services;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
@@ -181,6 +182,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	    @Override
 	    public void writeEndObject() throws IOException {
 	    	final JsonStreamContext to_set = getOutputContext();
+	    	
 	    	if ("$oid".equals(to_set.getCurrentName())) {
 		    	try {	    			    		
 		    		final Method mget = to_set.getClass().getDeclaredMethod("get");
@@ -190,11 +192,18 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			    	final JsonStreamContext parent =  to_set.getParent();
 			    	final Method mset = parent.getClass().getDeclaredMethod("set", Object.class);
 			    	mset.setAccessible(true);
+			    	
 			    	mset.invoke(parent, new ObjectId(val.get("$oid").toString()));
+			    	
+			    	// Close the object:
+			    	final Field fcurrentNode = this.getClass().getSuperclass().getDeclaredField("currentNode");			    	
+			    	fcurrentNode.setAccessible(true);
+			    	fcurrentNode.set(this, parent);
 		    	}
 		    	catch (Throwable e) {
 		    		throw new RuntimeException(e);
 		    	}
+		    	
 	    	}
     		else super.writeEndObject();
 	    }

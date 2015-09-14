@@ -985,7 +985,6 @@ public class TestMongoDbCrudService {
 		}
 	}
 	
-	@SuppressWarnings("deprecation")
 	@Test
 	public void test_extendedBsonGenerator() throws InterruptedException, ExecutionException {
 		final MongoDbCrudService<JsonNode, Object> json_service = getTestService("test_extendedBsonGenerator", JsonNode.class, Object.class);
@@ -993,10 +992,13 @@ public class TestMongoDbCrudService {
 		ObjectNode o1 = json_service._object_mapper.createObjectNode();
 		o1.put("$oid", "550b189ae4b0e58fb26f71eb");
 		ObjectNode o2 = json_service._object_mapper.createObjectNode();
-		o2.put("_id", o1);
+		o2.set("_id", o1);
+		o2.put("alex", "alex");
 		
 		json_service.storeObject(o2).get();
 		assertTrue(json_service.getObjectById(new ObjectId("550b189ae4b0e58fb26f71eb")).get().isPresent());
+		JsonNode x = json_service.getObjectById(new ObjectId("550b189ae4b0e58fb26f71eb")).get().get();
+		assertEquals("alex", x.get("alex").asText());
 	}
 	
 	@Test
