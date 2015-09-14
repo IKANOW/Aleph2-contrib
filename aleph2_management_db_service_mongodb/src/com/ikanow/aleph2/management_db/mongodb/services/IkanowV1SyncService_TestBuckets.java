@@ -277,6 +277,12 @@ public class IkanowV1SyncService_TestBuckets {
 			final DataBucketBean data_bucket,
 			final TestQueueBean old_test_source,
 			final ICrudService<TestQueueBean> source_test_db) {			
+		
+		// if null==started_processing_on, then source is still being started in a different thread, so just ignore it:
+		if (null == old_test_source.started_processing_on()) {
+			return CompletableFuture.completedFuture(true);
+		}
+		
 		//ENTRY: is old		
 		final ProcessingTestSpecBean test_spec = old_test_source.test_params();
 		//get v1 bucket
@@ -493,7 +499,7 @@ public class IkanowV1SyncService_TestBuckets {
 
 		final UpdateComponent<TestQueueBean> update_command = CrudUtils.update(TestQueueBean.class)
 				.set(TestQueueBean::status, "in_progress")
-				.set(TestQueueBean::started_processing_on, new Date())
+				// (don't set started_processing_on - only set that once the job has been launched)
 				;		
 		
 		final CompletableFuture<List<TestQueueBean>> get_command = 
