@@ -56,9 +56,9 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 	}
 
 
-	protected void init(){
+	protected void initUnauthorized(){
 		try {
-
+			logger.debug("Init was called, it should not be called except in rare cases, use login instead.");
 
 	        // get the currently executing user:
 	        Subject currentUser = getShiroSubject();
@@ -66,7 +66,7 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 	        // Do some stuff with a Session (no need for a web or EJB container!!!)
 	        
 		} catch (Throwable e) {
-			logger.error("Caught exception",e);
+			logger.error("initUnauthorized Caught exception",e);
 		}
 
 	}
@@ -98,7 +98,7 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 
 	public ISubject getSubject() {
 		if(currentSubject == null){
-			init();
+			initUnauthorized();
 		}
 		return currentSubject;
 	}
@@ -113,7 +113,8 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
         ensureUserIsLoggedOut();
         Subject shiroSubject = getShiroSubject();
         shiroSubject.login((AuthenticationToken)token);
-		return new SubjectWrapper(shiroSubject);
+        currentSubject = new SubjectWrapper(shiroSubject);
+		return currentSubject;
 	}
 
 	private void ensureUserIsLoggedOut()
