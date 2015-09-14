@@ -180,15 +180,15 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	     */
 	    @Override
 	    public void writeEndObject() throws IOException {
-	    	JsonStreamContext to_set = getOutputContext();
+	    	final JsonStreamContext to_set = getOutputContext();
 	    	if ("$oid".equals(to_set.getCurrentName())) {
 		    	try {	    			    		
-			    	Method mget = to_set.getClass().getDeclaredMethod("get");
+		    		final Method mget = to_set.getClass().getDeclaredMethod("get");
 			    	mget.setAccessible(true);
-			    	DBObject val = (DBObject) mget.invoke(to_set);
+			    	final DBObject val = (DBObject) mget.invoke(to_set);
 			    	
-		    		JsonStreamContext parent =  to_set.getParent();
-			    	Method mset = parent.getClass().getDeclaredMethod("set", Object.class);
+			    	final JsonStreamContext parent =  to_set.getParent();
+			    	final Method mset = parent.getClass().getDeclaredMethod("set", Object.class);
 			    	mset.setAccessible(true);
 			    	mset.invoke(parent, new ObjectId(val.get("$oid").toString()));
 		    	}
