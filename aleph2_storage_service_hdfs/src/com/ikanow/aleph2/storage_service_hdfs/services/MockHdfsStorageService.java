@@ -18,9 +18,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Optional;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 
@@ -28,13 +25,14 @@ import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /** The local file system version of the HDFS service
  * @author alex
  */
 public class MockHdfsStorageService extends HdfsStorageService {
-
-	private static final Logger logger = LogManager.getLogger(MockHdfsStorageService.class);
+	protected static final Logger _logger = LogManager.getLogger();	
 
 	@Inject 
 	public MockHdfsStorageService(GlobalPropertiesBean globals) {
@@ -78,7 +76,7 @@ public class MockHdfsStorageService extends HdfsStorageService {
 			
 		} // !=null
 		} catch (Exception e) {
-			logger.error("Caught Exception:",e);
+			_logger.error("Caught Exception:",e);
 		}
 		return Optional.ofNullable(driver);
 	}

@@ -89,7 +89,7 @@
   		<version>${aleph2.version}</version>
 		<scope>${aleph2.scope}</scope>  		
   	</dependency>
-  	  	<dependency>
+ 	<dependency>
 		<groupId>org.apache.hadoop</groupId>
 		<artifactId>hadoop-common</artifactId>
   		<version>${aleph2.hadoop}</version>

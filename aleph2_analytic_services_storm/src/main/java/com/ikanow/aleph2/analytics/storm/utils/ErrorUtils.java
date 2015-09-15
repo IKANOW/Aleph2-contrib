@@ -27,4 +27,15 @@ public class ErrorUtils extends com.ikanow.aleph2.data_model.utils.ErrorUtils{
 	final public static String NOT_YET_IMPLEMENTED = "Functionality is not yet implemented: {0}";
 	
 	final public static String INVALID_TOPOLOGY_CLASSES = "Only spouts and bolts are supported, invalid topology: {0}"; 
+		
+	final public static String NOT_SUPPORTED_IN_STREAMING = "Functionality does not apply to streaming operations - this is for batch operations";
+	
+	final public static String SERVICE_RESTRICTIONS = "Can't call get*ContextSignature with different 'services' parameter; can't call getUnderlyingArtefacts without having called get*ContextSignature.";
+	
+	final public static String TECHNOLOGY_NOT_MODULE = "Can only be called from technology, not module";
+	
+	final public static String MODULE_NOT_TECHNOLOGY = "Can only be called from module, not technology";
+	
+	final public static String USER_TOPOLOGY_NOT_SET = "This method {0} cannot be called until the framework has set the user entry point";
+	
 }
