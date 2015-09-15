@@ -40,7 +40,6 @@ import scala.Tuple2;
 import static org.hamcrest.CoreMatchers.instanceOf;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
@@ -985,24 +984,25 @@ public class TestMongoDbCrudService {
 		}
 	}
 	
-	@Test
-	public void test_extendedBsonGenerator() throws InterruptedException, ExecutionException {
-		final MongoDbCrudService<JsonNode, Object> json_service = getTestService("test_extendedBsonGenerator", JsonNode.class, Object.class);
-		
-		ObjectNode o1 = json_service._object_mapper.createObjectNode();
-		o1.put("$oid", "550b189ae4b0e58fb26f71eb");
-		ObjectNode o2 = json_service._object_mapper.createObjectNode();
-		o2.set("_id", o1);
-		o2.put("alex", "alex");
-		ObjectNode o3 = json_service._object_mapper.createObjectNode();
-		o3.put("$date", "2015-03-19T18:42:34.000Z");
-		o2.set("created", o3);
-		
-		json_service.storeObject(o2).get();
-		assertTrue(json_service.getObjectById(new ObjectId("550b189ae4b0e58fb26f71eb")).get().isPresent());
-		JsonNode x = json_service.getObjectById(new ObjectId("550b189ae4b0e58fb26f71eb")).get().get();
-		assertEquals("alex", x.get("alex").asText());
-	}
+	// (Removed this code for now, since it's easier just to use getUnderlyingPlatformDriver(DBCollection.class and com.mongodb.util.bson.parse)
+//	@Test
+//	public void test_extendedBsonGenerator() throws InterruptedException, ExecutionException {
+//		final MongoDbCrudService<JsonNode, Object> json_service = getTestService("test_extendedBsonGenerator", JsonNode.class, Object.class);
+//		
+//		ObjectNode o1 = json_service._object_mapper.createObjectNode();
+//		o1.put("$oid", "550b189ae4b0e58fb26f71eb");
+//		ObjectNode o2 = json_service._object_mapper.createObjectNode();
+//		o2.set("_id", o1);
+//		o2.put("alex", "alex");
+//		ObjectNode o3 = json_service._object_mapper.createObjectNode();
+//		o3.put("$date", "2015-03-19T18:42:34.000Z");
+//		o2.set("created", o3);
+//		
+//		json_service.storeObject(o2).get();
+//		assertTrue(json_service.getObjectById(new ObjectId("550b189ae4b0e58fb26f71eb")).get().isPresent());
+//		JsonNode x = json_service.getObjectById(new ObjectId("550b189ae4b0e58fb26f71eb")).get().get();
+//		assertEquals("alex", x.get("alex").asText());
+//	}
 	
 	@Test
 	public void testJsonRepositoryCalls() throws InterruptedException, ExecutionException {
