@@ -994,6 +994,9 @@ public class TestMongoDbCrudService {
 		ObjectNode o2 = json_service._object_mapper.createObjectNode();
 		o2.set("_id", o1);
 		o2.put("alex", "alex");
+		ObjectNode o3 = json_service._object_mapper.createObjectNode();
+		o3.put("$date", "2015-03-19T18:42:34.000Z");
+		o2.set("created", o3);
 		
 		json_service.storeObject(o2).get();
 		assertTrue(json_service.getObjectById(new ObjectId("550b189ae4b0e58fb26f71eb")).get().isPresent());

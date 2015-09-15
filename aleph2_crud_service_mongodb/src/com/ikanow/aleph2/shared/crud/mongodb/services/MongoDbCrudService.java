@@ -182,8 +182,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	    @Override
 	    public void writeEndObject() throws IOException {
 	    	final JsonStreamContext to_set = getOutputContext();
-	    	
-	    	if ("$oid".equals(to_set.getCurrentName())) {
+	    	String cn = to_set.getCurrentName(); 
+	    	if ("$oid".equals(cn) || "$date".equals(cn)) {
 		    	try {	    			    		
 		    		final Method mget = to_set.getClass().getDeclaredMethod("get");
 			    	mget.setAccessible(true);
@@ -193,7 +193,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			    	final Method mset = parent.getClass().getDeclaredMethod("set", Object.class);
 			    	mset.setAccessible(true);
 			    	
-			    	mset.invoke(parent, new ObjectId(val.get("$oid").toString()));
+			    	mset.invoke(parent, new ObjectId(val.get(cn).toString()));
 			    	
 			    	// Close the object:
 			    	final Field fcurrentNode = this.getClass().getSuperclass().getDeclaredField("currentNode");			    	
@@ -204,8 +204,10 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		    		throw new RuntimeException(e);
 		    	}
 		    	
-	    	}
-    		else super.writeEndObject();
+	    	}	    	
+    		else {
+    			super.writeEndObject();
+    		}
 	    }
 	}
 	
