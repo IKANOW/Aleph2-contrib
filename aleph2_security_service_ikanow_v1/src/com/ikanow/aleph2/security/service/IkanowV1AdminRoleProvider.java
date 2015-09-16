@@ -51,8 +51,6 @@ public class IkanowV1AdminRoleProvider implements IRoleProvider {
 
 		String authDboptions = "security.authentication/"+AuthenticationBean.class.getName();
         authenticationDb = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of(authDboptions)).get();
-
-		logger.debug("AuthenticationDB:"+authenticationDb);
 	}
 
 	@Inject
