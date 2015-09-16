@@ -151,5 +151,30 @@
 		<artifactId>snakeyaml</artifactId>
 		<version>1.15</version>
 	</dependency>
+	<!-- Test deps -->
+	   	<dependency>
+	  		<groupId>com.ikanow.aleph2</groupId>
+	  		<artifactId>aleph2_storage_service_hdfs</artifactId>
+	  		<version>${aleph2.version}</version>
+		    <scope>test</scope>
+	  	</dependency>  	
+	  	<dependency>
+	  		<groupId>com.ikanow.aleph2</groupId>
+	  		<artifactId>aleph2_management_db_service</artifactId>
+	  		<version>${aleph2.version}</version>
+		    <scope>test</scope>
+	  	</dependency>
+	  	<dependency>
+	  		<groupId>com.ikanow.aleph2</groupId>
+	  		<artifactId>aleph2_management_db_service_mongodb</artifactId>
+	  		<version>${aleph2.version}</version>
+		    <scope>test</scope>
+	  	</dependency>
+	   	<dependency>
+	  		<groupId>com.ikanow.aleph2</groupId>
+	  		<artifactId>aleph2_search_index_service_elasticsearch</artifactId>
+	  		<version>${aleph2.version}</version>
+			<scope>test</scope>
+	  	</dependency>  		
   </dependencies>
 </project>

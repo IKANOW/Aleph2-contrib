@@ -250,7 +250,11 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 				// CASE 1) ENRICHMENT TOPOLOGY FORMAT
 				
 				final IEnrichmentStreamingTopology generic_topology = (IEnrichmentStreamingTopology) module_type.newInstance();
-				final StreamingEnrichmentContextService wrapped_context = new StreamingEnrichmentContextService(context, generic_topology, analytic_bucket, job_to_start);
+				final StreamingEnrichmentContextService wrapped_context = new StreamingEnrichmentContextService(context);
+				wrapped_context.setBucket(analytic_bucket);
+				wrapped_context.setUserTopology(generic_topology);
+				wrapped_context.setJob(job_to_start);
+				//(it's set up this way for testability)
 				
 				// Create a pretend bucket that has this job as the (sole) enrichment topology...
 				final DataBucketBean converted_bucket = BeanTemplateUtils.clone(analytic_bucket)
