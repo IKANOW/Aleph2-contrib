@@ -246,9 +246,10 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 			// (other, future, cases: enrichment module format, harvest module format; related, built-in modules: javascript)
 			
 			final Class<?> module_type = Class.forName(entry_point);
-			final String cached_jars_dir = context.getServiceContext().getGlobalProperties().local_cached_jar_dir();			
 			
 			if (IEnrichmentStreamingTopology.class.isAssignableFrom(module_type)) {
+				
+				final String cached_jars_dir = context.getServiceContext().getGlobalProperties().local_cached_jar_dir();
 				
 				// CASE 1) ENRICHMENT TOPOLOGY FORMAT
 				
@@ -293,7 +294,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 			}			
 			// (no other options -currently- possible because of validation that has taken place)
 			
-			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this, "startAnalyticJob", ErrorUtils.get("Bucket={0} Job={1} Error=Module_class_not_recognized: {2}", analytic_bucket, job_to_start.name(), job_to_start.entry_point())));
+			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this, "startAnalyticJob", ErrorUtils.get("Bucket={0} Job={1} Error=Module_class_not_recognized: {2}", analytic_bucket.full_name(), job_to_start.name(), job_to_start.entry_point())));
 		}
 		catch (Throwable t) {
 			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this, "startAnalyticJob", ErrorUtils.getLongForm("Bucket={1} Job={2} Error={0}", t, analytic_bucket, job_to_start.name())));
@@ -369,7 +370,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 	{
 		// Streaming job never completes
 		return FutureUtils.createManagementFuture(
-				CompletableFuture.completedFuture(false)
+				CompletableFuture.completedFuture(true)
 				,
 				CompletableFuture.completedFuture(
 						Arrays.asList(

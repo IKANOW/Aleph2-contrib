@@ -20,6 +20,7 @@ import com.ikanow.aleph2.analytics.storm.data_model.IStormController;
 import com.ikanow.aleph2.analytics.storm.services.LocalStormController;
 
 /** Defines guice dependencies
+ *  NO TEST COVERAGE - TEST BY HAND IF CHANGED
  * @author Alex
  */
 public class MockStormAnalyticTechnologyModule extends AbstractModule {
