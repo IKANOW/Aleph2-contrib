@@ -21,6 +21,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import scala.Tuple2;
 import backtype.storm.topology.TopologyBuilder;
@@ -40,6 +44,8 @@ import com.ikanow.aleph2.data_model.utils.Tuples;
  * @author Alex
  */
 public class PassthroughTopology implements IEnrichmentStreamingTopology {
+	protected static final Logger _logger = LogManager.getLogger();	
+	
 	private static final String BOLT_NAME = "aleph2_default_output_bolt";
 
 	protected static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
@@ -51,7 +57,12 @@ public class PassthroughTopology implements IEnrichmentStreamingTopology {
 	public Tuple2<Object, Map<String, String>> getTopologyAndConfiguration(final DataBucketBean bucket, final IEnrichmentModuleContext context) {		
 		final TopologyBuilder builder = new TopologyBuilder();
 		
-		final Collection<Tuple2<BaseRichSpout, String>>  entry_points = context.getTopologyEntryPoints(BaseRichSpout.class, Optional.of(bucket));				
+		final Collection<Tuple2<BaseRichSpout, String>>  entry_points = context.getTopologyEntryPoints(BaseRichSpout.class, Optional.of(bucket));
+		
+		/**/
+		//DEBUG
+		_logger.info("Passthrough topology: loaded: " + entry_points.stream().map(x->x.toString()).collect(Collectors.joining(":")));
+		
 		entry_points.forEach(spout_name -> builder.setSpout(spout_name._2(), spout_name._1()));
 		entry_points.stream().reduce(
 				builder.setBolt(BOLT_NAME, context.getTopologyStorageEndpoint(BaseRichBolt.class, Optional.of(bucket))),

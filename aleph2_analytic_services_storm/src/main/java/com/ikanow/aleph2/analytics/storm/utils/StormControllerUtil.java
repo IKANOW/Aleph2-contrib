@@ -217,33 +217,41 @@ public class StormControllerUtil {
 		
 		final List<String> jars_to_merge = new LinkedList<String>();
 		
-		jars_to_merge.addAll( underlying_artefacts.stream()
-				.map(artefact -> LiveInjector.findPathJar(artefact.getClass(), ""))
-				.filter(f -> !f.equals(""))
-				.collect(Collectors.toList()));
-		
-		if (jars_to_merge.isEmpty()) { // special case: no aleph2 libs found, this is almost certainly because this is being run from eclipse...
-			final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
-			_logger.warn("WARNING: no library files found, probably because this is running from an IDE - instead taking all JARs from: " + (globals.local_root_dir() + "/lib/"));
-			try {
-				//... and LiveInjecter doesn't work on classes ... as a backup just copy everything from "<LOCAL_ALEPH2_HOME>/lib" into there 
-				jars_to_merge.addAll(
-						FileUtils.listFiles(new File(globals.local_root_dir() + "/lib/"), new String[] { "jar" }, false)
-							.stream()
-							.map(File::toString)
-							.collect(Collectors.toList())
-							);
+		final CompletableFuture<String> jar_future = Lambdas.get(() -> {
+			if (RemoteStormController.class.isAssignableFrom(storm_controller.getClass())) {
+				// (This is only necessary in the remote case)
+				
+				jars_to_merge.addAll( underlying_artefacts.stream()
+						.map(artefact -> LiveInjector.findPathJar(artefact.getClass(), ""))
+						.filter(f -> !f.equals(""))
+						.collect(Collectors.toList()));
+				
+				if (jars_to_merge.isEmpty()) { // special case: no aleph2 libs found, this is almost certainly because this is being run from eclipse...
+					final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
+					_logger.warn("WARNING: no library files found, probably because this is running from an IDE - instead taking all JARs from: " + (globals.local_root_dir() + "/lib/"));
+					try {
+						//... and LiveInjecter doesn't work on classes ... as a backup just copy everything from "<LOCAL_ALEPH2_HOME>/lib" into there 
+						jars_to_merge.addAll(
+								FileUtils.listFiles(new File(globals.local_root_dir() + "/lib/"), new String[] { "jar" }, false)
+									.stream()
+									.map(File::toString)
+									.collect(Collectors.toList())
+									);
+					}
+					catch (Exception e) {
+						throw new RuntimeException("In eclipse/IDE mode, directory not found: " + (globals.local_root_dir() + "/lib/"));
+					}
+				}
+				//add in the user libs
+				jars_to_merge.addAll(user_lib_paths);
+				
+				//create jar
+				return buildOrReturnCachedStormTopologyJar(jars_to_merge, cached_jar_dir);		
 			}
-			catch (Exception e) {
-				throw new RuntimeException("In eclipse/IDE mode, directory not found: " + (globals.local_root_dir() + "/lib/"));
+			else {
+				return CompletableFuture.completedFuture("/unused/dummy.jar");
 			}
-		}
-		
-		//add in the user libs
-		jars_to_merge.addAll(user_lib_paths);
-		
-		//create jar
-		final CompletableFuture<String> jar_future = buildOrReturnCachedStormTopologyJar(jars_to_merge, cached_jar_dir);		
+		});
 		
 		//submit to storm
 		final CompletableFuture<BasicMessageBean> submit_future = Lambdas.get(() -> {
@@ -253,8 +261,8 @@ public class StormControllerUtil {
 					_logger.debug("Trying to submit job, try: " + retries + " of " + MAX_RETRIES);
 					final String jar_file_location = jar_future.get();
 					return storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology, config);
-					//return storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology);
-				} catch ( Exception ex) {
+				} 
+				catch ( Exception ex) {
 					if ( ex instanceof AlreadyAliveException ) {
 						retries++;
 						//sleep 1s, was seeing about 2s of sleep required before job successfully submitted on restart

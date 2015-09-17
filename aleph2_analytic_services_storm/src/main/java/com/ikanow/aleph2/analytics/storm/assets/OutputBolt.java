@@ -66,7 +66,7 @@ public class OutputBolt extends BaseRichBolt {
 	public void prepare(final @SuppressWarnings("rawtypes") Map arg0, final TopologyContext arg1, final OutputCollector arg2) {
 		try {
 			_context = ContextUtils.getEnrichmentContext(_context_signature);
-			_user_topology = (IEnrichmentStreamingTopology )Class.forName(_user_topology_entry_point).newInstance();
+			_user_topology = (IEnrichmentStreamingTopology) Class.forName(_user_topology_entry_point).newInstance();
 			_collector = arg2;
 		}
 		catch (Exception e) { // nothing to be done here?
