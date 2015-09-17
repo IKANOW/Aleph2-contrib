@@ -94,6 +94,8 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 	
 	@Test
 	public void testAuthenticated() {
+		initMockDb(_service_context);
+
         //token.setRememberMe(true);
 		ISubject subject = loginAsTestUser();
         try {
@@ -127,6 +129,7 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 
 	@Test
 	public void testRole(){
+		initMockDb(_service_context);
 		ISubject subject = loginAsAdmin();
         //test a typed permission (not instance-level)
 		assertEquals(true,securityService.hasRole(subject,"admin"));
@@ -134,6 +137,7 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 
 	@Test
 	public void testPermission(){
+		initMockDb(_service_context);
 		ISubject subject = loginAsRegularUser();
 		// system community
 		String permission = "4c927585d591d31d7b37097a";
@@ -144,6 +148,7 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 	@Test
 	@Ignore
 	public void testRunAs(){
+		initMockDb(_service_context);
 		ISubject subject = loginAsTestUser();
 		// system community
 		String permission = "4c927585d591d31d7b37097a";
