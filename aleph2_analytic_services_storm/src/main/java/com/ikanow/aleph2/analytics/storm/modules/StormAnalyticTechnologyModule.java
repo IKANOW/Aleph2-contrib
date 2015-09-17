@@ -39,6 +39,7 @@ import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
 
 /** Defines guice dependencies
+ *  NO TEST COVERAGE - TEST BY HAND IF CHANGED
  * @author Alex
  */
 public class StormAnalyticTechnologyModule extends AbstractModule {

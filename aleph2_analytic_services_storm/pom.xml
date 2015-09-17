@@ -35,6 +35,7 @@
 				<exclude>**backtype.storm**</exclude>
 				<!--  This actually removes code from coveralls.io -->
 				<exclude>**/backtype/storm/*</exclude>
+				<exclude>**/analytics/storm/modules/*</exclude>
 				<!-- Example:
 				<exclude>**/path/to/package/*</exclude>
 				-->
