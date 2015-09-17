@@ -16,9 +16,7 @@
 package com.ikanow.aleph2.security.service;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.Optional;
@@ -33,19 +31,13 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISubject;
-import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
-import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
-import com.ikanow.aleph2.management_db.mongodb.services.IkanowV1SyncService_TestBuckets;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
@@ -83,8 +75,6 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 		this._management_db = _service_context.getCoreManagementDbService();
 		this.securityService =  _service_context.getSecurityService();
 		
-		//TODOD
-		initMockDb(_service_context);
 		} catch(Throwable e) {
 			
 			e.printStackTrace();
