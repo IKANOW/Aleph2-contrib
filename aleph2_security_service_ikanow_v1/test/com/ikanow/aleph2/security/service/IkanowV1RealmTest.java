@@ -142,7 +142,7 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 		// system community
 		String permission = "4c927585d591d31d7b37097a";
         //test a typed permission (not instance-level)
-		assertEquals(System.getProperty("IKANOW_SECURITY_LOGIN")!=null,securityService.isPermitted(subject,permission));
+		assertEquals(true,securityService.isPermitted(subject,permission));
 	}
 
 	@Test
