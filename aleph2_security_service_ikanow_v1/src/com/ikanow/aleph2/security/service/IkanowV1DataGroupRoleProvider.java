@@ -48,7 +48,9 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 	protected IManagementDbService _underlying_management_db = null;
 	private static final Logger logger = LogManager.getLogger(IkanowV1DataGroupRoleProvider.class);
 	private ICrudService<JsonNode> communityDb = null;
-
+	
+	public static String SYSTEM_COMMUNITY_ID ="4c927585d591d31d7b37097a";
+	
 	@SuppressWarnings("unchecked")
 	protected void initDb() {
 		if (_core_management_db == null) {
@@ -122,29 +124,23 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 		
         Set<String> roleNames = new HashSet<String>();
         Set<String> permissions = new HashSet<String>();
-		Cursor<JsonNode> result;
+//		Cursor<JsonNode> result;
+		Optional<JsonNode> result;
 		try {
 			
 			ObjectId objecId = new ObjectId(principalName); 
-//			result = getPersonDb().getObjectBySpec(CrudUtils.anyOf().when("_id", objecId)).get();
-			result = getCommunityDb().getObjectsBySpec(CrudUtils.allOf().when("members._id", objecId).when("isSystemCommunity" , false)).get();
-//			result = getCommunityDb().getObjectsBySpec(CrudUtils.allOf().when("members._id", objecId)).get();
-	        //if(result.isPresent()){
-	        	/*JsonNode communities = result.get(); //.get("communities"); 
-	        	if (communities.isArray()) {
-					if(communities.size()>0){
-						roleNames.add(principalName+"_data_group");						
-					} */
-					boolean roleAssigned = false;
-					for (Iterator<JsonNode> it = result.iterator(); it.hasNext();) {
-						if(!roleAssigned){
-							roleNames.add(principalName+"_data_group");
-							roleAssigned=true;
-						}
+			result = getPersonDb().getObjectBySpec(CrudUtils.anyOf().when("_id", objecId)).get();
+			roleNames.add(principalName);						
+	        if(result.isPresent()){
+	        	JsonNode person = result.get();
+	        	JsonNode communities = person.get("communities"); 
+	        	if (communities!=null && communities.isArray()) {
+					for (Iterator<JsonNode> it = communities.iterator(); it.hasNext();) {
 	        	    JsonNode community = it.next();
 	        	    	JsonNode type = community.get("type");
 	        	    	if(type==null || "data".equalsIgnoreCase(type.asText())){
 		        	    	String communityId = community.get("_id").asText();
+		        	    	if(!SYSTEM_COMMUNITY_ID.equals(communityId)){
 		        	    	String communityName = community.get("name").asText();
 		        	    	permissions.add(communityId);
 		        	    	Tuple2<Set<String>,Set<String>> sourceAndBucketIds = loadSourcesAndBucketIdsByCommunityId(communityId);
@@ -166,9 +162,10 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 		        	    	permissions.addAll(shareIds);
 		        			logger.debug("Permission (ShareIds) loaded for "+principalName+",("+communityName+"):");
 		        			logger.debug(shareIds);
+		        	    	}
 	        	    	}
-					//}
-	        	//}
+					} // it
+	        	}
 	        }
 		} catch (Exception e) {
 			logger.error("Caught Exception",e);

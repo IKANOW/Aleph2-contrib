@@ -129,34 +129,28 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 	public void testPermission(){
 		initMockDb(_service_context);
 		ISubject subject = loginAsRegularUser();
-		// system community
-		String permission = "4c927585d591d31d7b37097a";
+		// test personal community permission
+		String permission = "54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
 		assertEquals(true,securityService.isPermitted(subject,permission));
 	}
 
 	@Test
-	@Ignore
 	public void testRunAs(){
 		initMockDb(_service_context);
 		ISubject subject = loginAsTestUser();
 		// system community
-		String permission = "4c927585d591d31d7b37097a";
 		String runAsPrincipal = "54f86d8de4b03d27d1ea0d7b"; // casey
-//		String runAsPrincipal = "54dd042ae4b03356d004a922"; // victor
-		String caseysRole = "54f86d8de4b03d27d1ea0d7b_data_group";
-		String caseysPersonalPermission = "v1_55a544bee4b056ae0f9bd92b";
+		String runAsRole = "54f86d8de4b03d27d1ea0d7b";
+		String runAsPersonalPermission = "v1_54fa4ab9e4b0b269e3a0c837";
 		
-//		String role = System.getProperty("IKANOW_SECURITY_LOGIN","noone@ikanow.com")+"_communities";
-		((Subject)subject.getSubject()).runAs(new SimplePrincipalCollection(runAsPrincipal,this.getClass().getSimpleName()));
+		securityService.runAs(subject,Arrays.asList(runAsPrincipal));
 		
-		assertEquals(true,securityService.hasRole(subject,"admin"));
-		assertEquals(true,securityService.hasRole(subject,caseysRole));
+		assertEquals(true,securityService.hasRole(subject,runAsRole));
         //test a typed permission (not instance-level)
-		assertEquals(true,securityService.isPermitted(subject,caseysPersonalPermission));
+		assertEquals(true,securityService.isPermitted(subject,runAsPersonalPermission));
 		PrincipalCollection p = ((Subject)subject.getSubject()).releaseRunAs();	
 		logger.debug("Released Principals:"+p);
-		//assertEquals(false,securityService.isPermitted(subject,caseysPersonalPermission));
 	}
 
 	
