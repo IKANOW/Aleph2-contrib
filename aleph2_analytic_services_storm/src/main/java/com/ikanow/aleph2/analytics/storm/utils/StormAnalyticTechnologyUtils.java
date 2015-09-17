@@ -113,7 +113,7 @@ public class StormAnalyticTechnologyUtils {
 			if (Optional.ofNullable(job.output().is_transient()).orElse(false)) {
 				final MasterEnrichmentType output_type = Optional.ofNullable(job.output().transient_type()).orElse(MasterEnrichmentType.none);
 				if (MasterEnrichmentType.streaming != output_type) {
-					errors.add(ErrorUtils.get(ErrorUtils.TEMP_INPUTS_MUST_BE_STREAMING, analytic_bucket.full_name(), job.name(), output_type));					
+					errors.add(ErrorUtils.get(ErrorUtils.TEMP_TRANSIENT_OUTPUTS_MUST_BE_STREAMING, analytic_bucket.full_name(), job.name(), output_type));					
 				}
 			}
 		}
@@ -128,7 +128,7 @@ public class StormAnalyticTechnologyUtils {
 	 * @return
 	 */
 	public static DataBucketBean convertStreamingEnrichmentToAnalyticBucket(final DataBucketBean bucket) {
-		//TODO
+		//TODO (ALEPH-12) implementation
 		return null;
 	}
 }
