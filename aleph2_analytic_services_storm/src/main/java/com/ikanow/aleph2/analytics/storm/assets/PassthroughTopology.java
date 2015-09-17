@@ -59,9 +59,8 @@ public class PassthroughTopology implements IEnrichmentStreamingTopology {
 		
 		final Collection<Tuple2<BaseRichSpout, String>>  entry_points = context.getTopologyEntryPoints(BaseRichSpout.class, Optional.of(bucket));
 		
-		/**/
 		//DEBUG
-		_logger.info("Passthrough topology: loaded: " + entry_points.stream().map(x->x.toString()).collect(Collectors.joining(":")));
+		_logger.debug("Passthrough topology: loaded: " + entry_points.stream().map(x->x.toString()).collect(Collectors.joining(":")));
 		
 		entry_points.forEach(spout_name -> builder.setSpout(spout_name._2(), spout_name._1()));
 		entry_points.stream().reduce(

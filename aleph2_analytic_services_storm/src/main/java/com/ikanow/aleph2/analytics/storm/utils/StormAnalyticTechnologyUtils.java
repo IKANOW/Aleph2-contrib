@@ -16,13 +16,17 @@
 package com.ikanow.aleph2.analytics.storm.utils;
 
 import java.util.Collection;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean.MasterEnrichmentType;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
-import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.Optionals;
 
 /** Contains some utility logic for the Storm Analytic Technology Service
  * @author Alex
@@ -35,6 +39,37 @@ public class StormAnalyticTechnologyUtils {
 	 * @return the validated bean (check for success:false)
 	 */
 	public static BasicMessageBean validateJobs(final DataBucketBean analytic_bucket, final Collection<AnalyticThreadJobBean> jobs) {
+		
+		// Global validation:
+		
+		// Here we'll check:
+		// - doesn't have both streaming and analytic threads (maybe later we can allow this but it's gonna get a bit complicated to start with)
+
+		final BasicMessageBean global_res = Lambdas.get(() -> {
+			if ((null != analytic_bucket.streaming_enrichment_topology()) // streaming is present...
+					&&
+					Optional.ofNullable(analytic_bucket.streaming_enrichment_topology().enabled()).orElse(true) //..and enabled...
+					&&
+				(null != analytic_bucket.analytic_thread()) // ...and analytics is present...
+					&&
+					Optionals.ofNullable(analytic_bucket.analytic_thread().jobs())
+							.stream()
+							.filter(j -> Optional.ofNullable(j.enabled()).orElse(true)) //...and at least one job is enabled!
+							.findAny().isPresent()					
+				)
+			{
+				return ErrorUtils.buildErrorMessage(StormAnalyticTechnologyUtils.class, "validateJobs", ErrorUtils.get(ErrorUtils.TEMP_MIXED_ANALYTICS_AND_ENRICHMENT, analytic_bucket.full_name()));
+			}
+			else return ErrorUtils.buildSuccessMessage(StormAnalyticTechnologyUtils.class, "validateJobs", "");
+		});
+		
+		if (!global_res.success()) {
+			return global_res;
+		}
+		// (Else graduate to per job validation)
+		
+		// Per-job validation:
+		
 		final List<BasicMessageBean> res = 
 				jobs.stream()
 					.map(job -> validateJob(analytic_bucket, jobs, job))
@@ -54,9 +89,46 @@ public class StormAnalyticTechnologyUtils {
 	 * @return the validated bean (check for success:false)
 	 */
 	public static BasicMessageBean validateJob(final DataBucketBean analytic_bucket, final Collection<AnalyticThreadJobBean> jobs, final AnalyticThreadJobBean job) {
-		//TODO bucket validation - check "names" for simpleness (alphanum + _ only)
-		//TODO here - check for unimplemented functions
-		//TOOD here - check for non streaming operations
+		
+		final LinkedList<String> errors = new LinkedList<>();
+		
+		// This is for Storm specific validation
+		// The core validation checks most of the "boilerplate" type requirements
+		
+		// Temporary limitations we'll police
+		// - currently can only handle streaming inputs
+		// - currently transient outputs have to be streaming
+		
+		// inputs
+		
+		Optionals.ofNullable(job.inputs()).stream().forEach(input -> {
+			if (!"stream".equals(input.data_service())) {
+				errors.add(ErrorUtils.get(ErrorUtils.TEMP_INPUTS_MUST_BE_STREAMING, analytic_bucket.full_name(), job.name(), input.data_service()));
+			}
+		});
+		
+		// output:
+		
+		if (null != job.output()) {
+			if (Optional.ofNullable(job.output().is_transient()).orElse(false)) {
+				final MasterEnrichmentType output_type = Optional.ofNullable(job.output().transient_type()).orElse(MasterEnrichmentType.none);
+				if (MasterEnrichmentType.streaming != output_type) {
+					errors.add(ErrorUtils.get(ErrorUtils.TEMP_INPUTS_MUST_BE_STREAMING, analytic_bucket.full_name(), job.name(), output_type));					
+				}
+			}
+		}
+		
+		final boolean success = errors.isEmpty();
+		
+		return ErrorUtils.buildMessage(success, StormAnalyticTechnologyUtils.class, "validateJobs", errors.stream().collect(Collectors.joining(";")));
+	}
+	
+	/** Converts a bucket with only streaming enrichment settings into one that has an analytic thread dervied
+	 * @param bucket
+	 * @return
+	 */
+	public static DataBucketBean convertStreamingEnrichmentToAnalyticBucket(final DataBucketBean bucket) {
+		//TODO
 		return null;
 	}
 }

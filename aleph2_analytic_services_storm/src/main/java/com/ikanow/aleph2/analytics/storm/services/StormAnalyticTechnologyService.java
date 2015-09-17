@@ -237,8 +237,8 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 												final AnalyticThreadJobBean job_to_start, 
 												final IAnalyticsContext context)
 	{
+		// (job already validated)
 		try {
-			// (already validated)
 			final Collection<String> user_lib_paths = context.getAnalyticsLibraries(Optional.of(analytic_bucket), jobs).join().values();
 			
 			final String entry_point = Optional.ofNullable(job_to_start.entry_point()).orElse(PassthroughTopology.class.getName());

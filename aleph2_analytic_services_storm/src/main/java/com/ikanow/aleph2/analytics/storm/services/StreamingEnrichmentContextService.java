@@ -201,9 +201,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 			return Optionals.ofNullable(_job.get().inputs()).stream()
 					.flatMap(input -> _delegate.get().getInputTopics(bucket, _job.get(), input).stream())
 					.map(topic_name -> {
-						/**/
-						//DEBUG
-						_logger.info("Created input topic for topology entry point: " + topic_name + " for bucket " + my_bucket.full_name());
+						_logger.debug("Created input topic for topology entry point: " + topic_name + " for bucket " + my_bucket.full_name());
 						
 						final SpoutConfig spout_config = new SpoutConfig(hosts, topic_name, full_path, BucketUtils.getUniqueSignature(my_bucket.full_name(), Optional.of(_job.get().name()))); 
 						spout_config.scheme = new SchemeAsMultiScheme(new StringScheme());
