@@ -25,6 +25,7 @@ import backtype.storm.generated.StormTopology;
 
 import com.google.inject.Inject;
 import com.google.inject.Module;
+import com.ikanow.aleph2.analytics.storm.assets.PassthroughTopology;
 import com.ikanow.aleph2.analytics.storm.data_model.IStormController;
 import com.ikanow.aleph2.analytics.storm.modules.StormAnalyticTechnologyModule;
 import com.ikanow.aleph2.analytics.storm.utils.StormAnalyticTechnologyUtils;
@@ -43,6 +44,7 @@ import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 
 import java.util.Arrays;
@@ -237,13 +239,14 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 	{
 		try {
 			// (already validated)
-			final Collection<Object> underlying_artefacts = context.getUnderlyingArtefacts();
-			final Collection<String> user_lib_paths = context.getAnalyticsLibraries(Optional.of(analytic_bucket), jobs).join().values();  
-			final Class<?> module_type = Class.forName(job_to_start.entry_point());
-			final String cached_jars_dir = context.getServiceContext().getGlobalProperties().local_cached_jar_dir();
+			final Collection<String> user_lib_paths = context.getAnalyticsLibraries(Optional.of(analytic_bucket), jobs).join().values();
 			
-			//TODO (ALEPH-12): check built-in: passthrough, javascript
+			final String entry_point = Optional.ofNullable(job_to_start.entry_point()).orElse(PassthroughTopology.class.getName());
+			//TODO (ALEPH-12): check built-in: eg javascript
 			// (other, future, cases: enrichment module format, harvest module format; related, built-in modules: javascript)
+			
+			final Class<?> module_type = Class.forName(entry_point);
+			final String cached_jars_dir = context.getServiceContext().getGlobalProperties().local_cached_jar_dir();			
 			
 			if (IEnrichmentStreamingTopology.class.isAssignableFrom(module_type)) {
 				
@@ -251,7 +254,6 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 				
 				final IEnrichmentStreamingTopology generic_topology = (IEnrichmentStreamingTopology) module_type.newInstance();
 				final StreamingEnrichmentContextService wrapped_context = new StreamingEnrichmentContextService(context);
-				wrapped_context.setBucket(analytic_bucket);
 				wrapped_context.setUserTopology(generic_topology);
 				wrapped_context.setJob(job_to_start);
 				//(it's set up this way for testability)
@@ -268,8 +270,23 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 																	)
 															.done();
 				
+				wrapped_context.setBucket(converted_bucket);
+				
 				//... then use that to "fool" the getTopologyAndConfiguration:
 				final Tuple2<Object,Map<String,String>> storm_topology = generic_topology.getTopologyAndConfiguration(converted_bucket, wrapped_context);
+				
+				//add in all the underlying artefacts file paths (now that the user has had the chance to override the defaults inside the getTopologyAndConfig call above)
+				final Collection<Object> underlying_artefacts = Lambdas.get(() -> {
+					// Check if the user has overridden the context, and set to the defaults if not
+					try {
+						return context.getUnderlyingArtefacts();
+					}
+					catch (Exception e) {
+						// This is OK, it just means that the top. developer hasn't overridden the services, so we just use the default ones:
+						context.getAnalyticsContextSignature(Optional.of(converted_bucket), Optional.empty());
+						return context.getUnderlyingArtefacts();
+					}			
+				});				
 				
 				//(generic topology submit):
 				return StormControllerUtil.startJob(_storm_controller, analytic_bucket, underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir);

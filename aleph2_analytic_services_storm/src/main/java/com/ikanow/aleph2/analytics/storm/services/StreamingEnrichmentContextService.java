@@ -26,6 +26,9 @@ import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import scala.Tuple2;
 import storm.kafka.BrokerHosts;
 import storm.kafka.KafkaSpout;
@@ -70,6 +73,8 @@ import fj.data.Either;
  *
  */
 public class StreamingEnrichmentContextService implements IEnrichmentModuleContext {
+	protected static final Logger _logger = LogManager.getLogger();	
+	
 	protected final SetOnce<IAnalyticsContext> _delegate = new SetOnce<>();
 	protected final SetOnce<IEnrichmentStreamingTopology> _user_topology = new SetOnce<>();
 	protected final SetOnce<AnalyticThreadJobBean> _job = new SetOnce<>();
@@ -196,6 +201,10 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 			return Optionals.ofNullable(_job.get().inputs()).stream()
 					.flatMap(input -> _delegate.get().getInputTopics(bucket, _job.get(), input).stream())
 					.map(topic_name -> {
+						/**/
+						//DEBUG
+						_logger.info("Created input topic for topology entry point: " + topic_name + " for bucket " + my_bucket.full_name());
+						
 						final SpoutConfig spout_config = new SpoutConfig(hosts, topic_name, full_path, BucketUtils.getUniqueSignature(my_bucket.full_name(), Optional.of(_job.get().name()))); 
 						spout_config.scheme = new SchemeAsMultiScheme(new StringScheme());
 						final KafkaSpout kafka_spout = new KafkaSpout(spout_config);
@@ -228,7 +237,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 				//TODO (ALEPH-12): handle child-buckets 
 				
 				// Just return an aleph2 output bolt:
-				return (T) new OutputBolt(my_bucket, _delegate.get().getAnalyticsContextSignature(bucket, Optional.empty()), _user_topology.get().getClass().getName());			
+				return (T) new OutputBolt(my_bucket, this.getEnrichmentContextSignature(bucket, Optional.empty()), _user_topology.get().getClass().getName());			
 			}
 			else {
 				final Optional<String> topic_name = _delegate.get().getOutputTopic(bucket, _job.get());

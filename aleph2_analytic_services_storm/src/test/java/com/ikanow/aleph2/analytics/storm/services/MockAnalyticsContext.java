@@ -160,8 +160,8 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	
 	/** FOR DEBUGGING AND TESTING ONLY, inserts a copy of the current context into the saved "in module" versions
 	 */
-	public void overrideSavedContext() {
-		static_instances.put(_mutable_state.signature_override.get().split(":", 2)[1], this);
+	public void overrideSavedContext() {		
+		static_instances.put(_mutable_state.signature_override.get(), this);
 	}
 	
 	/* (non-Javadoc)
@@ -292,9 +292,12 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 												)
 												;
 			
-			final String ret = this.getClass().getName() + ":" + last_call.root().render(ConfigRenderOptions.concise());
-			_mutable_state.signature_override.set(ret);
+			final String ret1 = last_call.root().render(ConfigRenderOptions.concise());
+			_mutable_state.signature_override.set(ret1);
+			final String ret = this.getClass().getName() + ":" + ret1;
 
+			this.overrideSavedContext(); // (FOR TESTING ONLY - ie BECAUSE THIS IS MOCK ANALYTIC CONTEXT)
+			
 			return ret;
 		}
 		else {
@@ -388,9 +391,12 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	{	
 		// (Note this is just the bare bones required for Storm streaming enrichment testing, nothing more functional than that)
 		final DataBucketBean my_bucket = bucket.orElseGet(() -> _mutable_state.bucket.get());
-
+				
 		final String topic = _distributed_services.generateTopicName(my_bucket.full_name(), Optional.empty());
 		_distributed_services.createTopic(topic, Optional.empty());
+		
+		_logger.info("Created input topic for passthrough topology: " + topic);
+		
 		return Arrays.asList(topic);
 	}
 	
@@ -424,7 +430,8 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	 */
 	@Override
 	public CompletableFuture<Map<String, String>> getAnalyticsLibraries(final Optional<DataBucketBean> bucket, final Collection<AnalyticThreadJobBean> jobs) {
-		throw new RuntimeException("Not part of mock analytics context for Storm");
+		//(just return empty, only used with local storm controller)
+		return CompletableFuture.completedFuture(Collections.emptyMap());
 	}
 
 	/* (non-Javadoc)

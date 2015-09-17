@@ -33,15 +33,19 @@ import org.junit.Test;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
+import com.ikanow.aleph2.analytics.storm.services.LocalStormController;
 import com.ikanow.aleph2.analytics.storm.services.MockAnalyticsContext;
-import com.ikanow.aleph2.analytics.storm.services.StreamingEnrichmentContextService;
+import com.ikanow.aleph2.analytics.storm.services.StormAnalyticTechnologyService;
 import com.ikanow.aleph2.analytics.storm.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
+import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
@@ -51,7 +55,6 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
 import backtype.storm.LocalCluster;
-import backtype.storm.generated.StormTopology;
 
 public class TestPassthroughTopology {
 	static final Logger _logger = LogManager.getLogger(); 
@@ -64,7 +67,16 @@ public class TestPassthroughTopology {
 	
 	@Before
 	public void injectModules() throws Exception {
-		final Config config = ConfigFactory.parseFile(new File("./example_config_files/context_local_test.properties"));
+		@SuppressWarnings("unused")
+		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
+		
+		final Config config = ConfigFactory.parseFile(new File("./example_config_files/context_local_test.properties"))
+				//these seeem to cause storm.kafka to break - it isn't clear why
+//				.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
+//				.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
+//				.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
+//				.withValue("globals.local_yarn_config_dir", ConfigValueFactory.fromAnyRef(temp_dir))
+				;
 		
 		try {
 			_app_injector = ModuleUtils.createTestInjector(Arrays.asList(), Optional.of(config));
@@ -77,18 +89,41 @@ public class TestPassthroughTopology {
 				System.out.println(ErrorUtils.getLongForm("{0}", e));
 			}
 		}
+		
+		_app_injector.injectMembers(this);
 		_local_cluster = new LocalCluster();
 	}
 	
-	@org.junit.Ignore
 	@Test
 	public void test_passthroughTopology() throws InterruptedException, ExecutionException {
 		// PHASE 1: GET AN IN-TECHNOLOGY CONTEXT
 		// Bucket
+		final AnalyticThreadJobBean.AnalyticThreadJobInputBean analytic_input = 
+				BeanTemplateUtils.build(AnalyticThreadJobBean.AnalyticThreadJobInputBean.class)
+					.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::data_service, "stream")
+					.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::resource_name_or_id, "")
+				.done().get();
+		
+		final AnalyticThreadJobBean.AnalyticThreadJobOutputBean analytic_output =
+				BeanTemplateUtils.build(AnalyticThreadJobBean.AnalyticThreadJobOutputBean.class)
+					.with(AnalyticThreadJobBean.AnalyticThreadJobOutputBean::is_transient, false)
+				.done().get();
+		
+		final AnalyticThreadJobBean analytic_job1 = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+				.with(AnalyticThreadJobBean::name, "analytic_job1")
+				.with(AnalyticThreadJobBean::inputs, Arrays.asList(analytic_input))
+				.with(AnalyticThreadJobBean::output, analytic_output)
+				.done().get();		
+		
+		final AnalyticThreadBean analytic_thread = 	BeanTemplateUtils.build(AnalyticThreadBean.class)
+				.with(AnalyticThreadBean::jobs, Arrays.asList(analytic_job1))
+				.done().get();		
+		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
 				.with(DataBucketBean::_id, "test_passthroughtopology")
 				.with(DataBucketBean::modified, new Date())
 				.with(DataBucketBean::full_name, "/test/passthrough")
+				.with(DataBucketBean::analytic_thread, analytic_thread)
 				.with("data_schema", BeanTemplateUtils.build(DataSchemaBean.class)
 						.with("search_index_schema", BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
 								.done().get())
@@ -98,37 +133,44 @@ public class TestPassthroughTopology {
 		final SharedLibraryBean library = BeanTemplateUtils.build(SharedLibraryBean.class)
 				.with(SharedLibraryBean::path_name, "/test/lib")
 				.done().get();
-
+				
 		// Context		
 		final MockAnalyticsContext test_analytics_context = new MockAnalyticsContext(_service_context);
-		final StreamingEnrichmentContextService test_context = new StreamingEnrichmentContextService(test_analytics_context);
 		test_analytics_context.setBucket(test_bucket);
-		test_analytics_context.setLibraryConfig(library);		
+		test_analytics_context.setLibraryConfig(library);
+				
+		//PHASE 2: CREATE TOPOLOGY AND SUBMit
 		
-		//TODO: sort this out 
-//		test_context.setUserTopologyEntryPoint("com.ikanow.aleph2.data_import.stream_enrichment.storm.PassthroughTopology");
-//		test_context.getEnrichmentContextSignature(Optional.empty(), Optional.empty());
-//		test_context.overrideSavedContext(); // (THIS IS NEEDED WHEN TESTING THE KAFKA SPOUT)
+		final ICoreDistributedServices cds = test_analytics_context.getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();
 		
-		
-		//PHASE 2: CREATE TOPOLOGY AND SUBMit		
-		final ICoreDistributedServices cds = test_context.getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();
-		final StormTopology topology = (StormTopology) new PassthroughTopology()
-											.getTopologyAndConfiguration(test_bucket, test_context)
-											._1();
-
 		//(Also: register a listener on the output to generate a secondary queue)
 		final String end_queue_topic = cds.generateTopicName(test_bucket.full_name(), ICoreDistributedServices.QUEUE_END_NAME);
 		cds.createTopic(end_queue_topic, Optional.of(Collections.emptyMap()));
-
-		final backtype.storm.Config config = new backtype.storm.Config();
-		config.setDebug(true);
-		_local_cluster.submitTopology("test_passthroughTopology", config, topology);
-		_logger.info("******** Submitted storm cluster");
+		
+		//METHOD A:
+		final StormAnalyticTechnologyService analytic_tech = new StormAnalyticTechnologyService(new LocalStormController());
+		final BasicMessageBean res = analytic_tech.startAnalyticJob(test_bucket, Arrays.asList(analytic_job1), analytic_job1, test_analytics_context).get();
+		assertTrue("Storm starts", res.success());
+		
+		//METHOD  B:
+		//(Just for debugging - method A is obv nicer and provides better test coverage)
+//		test_analytics_context.getAnalyticsContextSignature(Optional.empty(), Optional.empty());
+//		test_analytics_context.overrideSavedContext(); // (THIS + PREV LINE ARE NEEDED WHEN TO AVOID CREATING 2 ModuleUtils INSTANCES WHICH BREAKS EVERYTHING)
+//		final StreamingEnrichmentContextService test_context = new StreamingEnrichmentContextService(test_analytics_context);
+//		final PassthroughTopology generic_top = new PassthroughTopology();
+//		test_context.setUserTopology(generic_top);
+//		test_context.setJob(analytic_job1);
+//		final StormTopology storm_top = (StormTopology) generic_top.getTopologyAndConfiguration(test_bucket, test_context)._1();
+//		final BasicMessageBean res = ErrorUtils.buildSuccessMessage("test", "test", "no status");
+//		final backtype.storm.Config config = new backtype.storm.Config();
+//		config.setDebug(true);
+//		_local_cluster.submitTopology("test_passthroughTopology", config, storm_top);
+		
+		_logger.info("******** Submitted storm cluster: " + res.message());
 		Thread.sleep(5000L);
 		
 		//PHASE 3: CHECK INDEX
-		final ISearchIndexService index_service = test_context.getServiceContext().getService(ISearchIndexService.class, Optional.empty()).get();
+		final ISearchIndexService index_service = test_analytics_context.getServiceContext().getService(ISearchIndexService.class, Optional.empty()).get();
 		final ICrudService<JsonNode> crud_service = 
 				index_service.getDataService()
 					.flatMap(s -> s.getWritableDataService(JsonNode.class, test_bucket, Optional.empty(), Optional.empty()))
@@ -141,8 +183,9 @@ public class TestPassthroughTopology {
 		
 		//PHASE4 : WRITE TO KAFKA
 		
-		cds.produce(cds.generateTopicName(test_bucket.full_name(), Optional.empty()), "{\"test\":\"test1\"}");
-		_logger.info("******** Written to CDS");
+		final String topic_name = cds.generateTopicName(test_bucket.full_name(), Optional.empty());
+		cds.produce(topic_name, "{\"test\":\"test1\"}");
+		_logger.info("******** Written to CDS: " + topic_name);
 		
 		for (int i = 0; i < 60; ++i) {
 			Thread.sleep(1000L);
