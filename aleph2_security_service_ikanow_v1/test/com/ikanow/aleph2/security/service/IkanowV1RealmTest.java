@@ -50,8 +50,7 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
 
-//TODO I think MockDbTest didn;t get checkeded in?
-public class IkanowV1RealmTest /*extends MockDbTest*/ {
+public class IkanowV1RealmTest extends MockDbBasedTest {
 	private static final Logger logger = LogManager.getLogger(IkanowV1RealmTest.class);
 
 	protected Config config = null;
@@ -73,7 +72,7 @@ public class IkanowV1RealmTest /*extends MockDbTest*/ {
 		final String temp_dir = System.getProperty("java.io.tmpdir");
 
 		// OK we're going to use guice, it was too painful doing this by hand...
-		config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v1_remote.properties")))
+		config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v1.properties")))
 				.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 				.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 				.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
@@ -85,7 +84,7 @@ public class IkanowV1RealmTest /*extends MockDbTest*/ {
 		this.securityService =  _service_context.getSecurityService();
 		
 		//TODOD
-		//initMockDb(_service_context);
+		initMockDb(_service_context);
 		} catch(Throwable e) {
 			
 			e.printStackTrace();
@@ -93,35 +92,51 @@ public class IkanowV1RealmTest /*extends MockDbTest*/ {
 	}
 
 	
-	@Test		
-	@Ignore
+	@Test
 	public void testAuthenticated() {
         //token.setRememberMe(true);
-		ISubject subject = login();
+		ISubject subject = loginAsTestUser();
         try {
 		} catch (AuthenticationException e) {
 			logger.info("Caught (expected) Authentication exception:"+e.getMessage());
 			
 		}
-		assertEquals(System.getProperty("IKANOW_SECURITY_PWD")!=null, subject.isAuthenticated());		
+		assertEquals(true, subject.isAuthenticated());		
 	}
 
-	//TODO fix this
-	protected ISubject login() throws AuthenticationException{
-		String userName = System.getProperty("IKANOW_SECURITY_LOGIN","noone@ikanow.com");
-		String password = System.getProperty("IKANOW_SECURITY_PWD", "not allowed!");
+	protected ISubject loginAsTestUser() throws AuthenticationException{
+		String userName = "4e3706c48d26852237079004";
+		String password = "xxxxxx";
+		ISubject subject = securityService.login(userName,password);			
+		return subject;
+	}
+
+	protected ISubject loginAsAdmin() throws AuthenticationException{
+		String userName = "4e3706c48d26852237078005";
+		String password = "xxxxxxxx";
+		ISubject subject = securityService.login(userName,password);			
+		return subject;
+	}
+
+	protected ISubject loginAsRegularUser() throws AuthenticationException{
+		String userName = "54f86d8de4b03d27d1ea0d7b";  //cb_user
+		String password = "xxxxxxxx";
 		ISubject subject = securityService.login(userName,password);			
 		return subject;
 	}
 
 	@Test
-	@Ignore
-	public void testRolePermission(){
-		ISubject subject = login();
+	public void testRole(){
+		ISubject subject = loginAsAdmin();
+        //test a typed permission (not instance-level)
+		assertEquals(true,securityService.hasRole(subject,"admin"));
+	}
+
+	@Test
+	public void testPermission(){
+		ISubject subject = loginAsRegularUser();
 		// system community
 		String permission = "4c927585d591d31d7b37097a";
-		String role = System.getProperty("IKANOW_SECURITY_LOGIN","noone@ikanow.com")+"_communities";
-//		assertEquals(System.getProperty("IKANOW_SECURITY_LOGIN")!=null,securityService.hasRole(subject,role));
         //test a typed permission (not instance-level)
 		assertEquals(System.getProperty("IKANOW_SECURITY_LOGIN")!=null,securityService.isPermitted(subject,permission));
 	}
@@ -129,7 +144,7 @@ public class IkanowV1RealmTest /*extends MockDbTest*/ {
 	@Test
 	@Ignore
 	public void testRunAs(){
-		ISubject subject = login();
+		ISubject subject = loginAsTestUser();
 		// system community
 		String permission = "4c927585d591d31d7b37097a";
 		String runAsPrincipal = "54f86d8de4b03d27d1ea0d7b"; // casey
@@ -153,7 +168,7 @@ public class IkanowV1RealmTest /*extends MockDbTest*/ {
 	@Test
 	@Ignore
 	public void testSessionTimeout(){
-		ISubject subject = login();
+		ISubject subject = loginAsAdmin();
 		// system community
 		String permission = "4c927585d591d31d7b37097a";
 		String role = "admin";
@@ -164,7 +179,7 @@ public class IkanowV1RealmTest /*extends MockDbTest*/ {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		subject = login();
+		subject = loginAsAdmin();
 		//assertEquals(true,subject.isAuthenticated());
 		
 		assertEquals(true,securityService.hasRole(subject,"admin"));

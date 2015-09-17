@@ -50,7 +50,6 @@ public class IkanowV1UserGroupRoleProvider implements IRoleProvider {
 		}
 		String personOptions = "social.person";
 		personDb = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of(personOptions)).get();
-		logger.debug("PersonDB:"+personDb);
 	}
 
 	@Inject

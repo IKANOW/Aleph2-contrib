@@ -64,7 +64,6 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 		if (sourceDb == null) {
 			String ingestOptions = "ingest.source";
 			sourceDb = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of(ingestOptions)).get();
-			logger.debug("SourceDB:" + sourceDb);
 		}
 		if (bucketDb == null) {
 			bucketDb = _core_management_db.getDataBucketStore();

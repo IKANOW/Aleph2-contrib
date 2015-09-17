@@ -123,5 +123,9 @@ public class AuthenticationBean implements Serializable{
     "profileId" : ObjectId("4e3706c48d26852237079004"),
     "username" : "test_user@ikanow.com"
     */
-	
+	@Override
+	public String toString() {
+		return "AB: profileId="+profileId+", id="+_id;
+	}
+
 }
