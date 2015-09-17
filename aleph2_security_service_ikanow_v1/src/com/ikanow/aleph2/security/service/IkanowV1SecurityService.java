@@ -35,9 +35,11 @@ import org.apache.shiro.util.ThreadContext;
 import com.google.inject.Inject;
 import com.google.inject.Module;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISubject;
+import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.security.module.IkanowV1SecurityModule;
 
 public class IkanowV1SecurityService implements ISecurityService, IExtraDependencyLoader{
@@ -175,6 +177,13 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 
 	@Override
 	public Collection<String> releaseRunAs(ISubject subject) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+
+	@Override
+	public <O> IManagementCrudService<O> secured(IManagementCrudService<O> crud, AuthorizationBean authorizationBean) {
 		// TODO Auto-generated method stub
 		return null;
 	}
