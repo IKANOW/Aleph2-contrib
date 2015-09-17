@@ -640,11 +640,11 @@ public class TestHdfsDataWriteService {
 		List<TestBean> l2 = IntStream.range(8, 15).boxed().map(i -> new TestBean("id" + i, "val" + i)).collect(Collectors.toList());
 		
 		batch.storeObjects(l1);
-		Thread.sleep(250L);
+		Thread.sleep(750L);
 		assertEquals(6, final_dir.list().length); //*2 because CRC		
 				
 		batch.storeObjects(l2);
-		Thread.sleep(250L);
+		Thread.sleep(750L);
 		assertEquals(8, final_dir.list().length); //*2 because CRC		
 	}
 }
