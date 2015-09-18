@@ -39,6 +39,7 @@ public class TestStormAnalyticTechnologyUtils {
 			final DataBucketBean test_bucket1 = BeanTemplateUtils.build(DataBucketBean.class)
 					.with(DataBucketBean::_id, "test")
 					.with(DataBucketBean::full_name, "/test")
+					.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.streaming)
 					.with(DataBucketBean::streaming_enrichment_topology, BeanTemplateUtils.build(EnrichmentControlMetadataBean.class).done().get())
 					.with(DataBucketBean::analytic_thread, 
 							BeanTemplateUtils.build(AnalyticThreadBean.class)
@@ -55,11 +56,33 @@ public class TestStormAnalyticTechnologyUtils {
 			assertEquals("Correct error message: " + res1.message(), ErrorUtils.get(ErrorUtils.TEMP_MIXED_ANALYTICS_AND_ENRICHMENT, "/test"), res1.message());
 			
 		}
+		// Pass: both present but streaming not being used
+		{
+			final DataBucketBean test_bucket1 = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::_id, "test")
+					.with(DataBucketBean::full_name, "/test")
+					.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.batch)
+					.with(DataBucketBean::streaming_enrichment_topology, BeanTemplateUtils.build(EnrichmentControlMetadataBean.class).with(EnrichmentControlMetadataBean::enabled, false).done().get())
+					.with(DataBucketBean::analytic_thread, 
+							BeanTemplateUtils.build(AnalyticThreadBean.class)
+							.with(AnalyticThreadBean::jobs, Arrays.asList(BeanTemplateUtils.build(AnalyticThreadJobBean.class).with(AnalyticThreadJobBean::enabled, false).done().get())
+									)
+									.done().get()
+							)
+							.done().get();
+						
+			final BasicMessageBean res1 = StormAnalyticTechnologyUtils.validateJobs(test_bucket1, Collections.emptyList());
+			
+			assertTrue("Validation should pass", res1.success());
+			assertEquals("Correct error message: " + res1.message(), "", res1.message());
+			
+		}
 		// Pass: both present but disabled 
 		{
 			final DataBucketBean test_bucket1 = BeanTemplateUtils.build(DataBucketBean.class)
 					.with(DataBucketBean::_id, "test")
 					.with(DataBucketBean::full_name, "/test")
+					.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.streaming)
 					.with(DataBucketBean::streaming_enrichment_topology, BeanTemplateUtils.build(EnrichmentControlMetadataBean.class).with(EnrichmentControlMetadataBean::enabled, false).done().get())
 					.with(DataBucketBean::analytic_thread, 
 							BeanTemplateUtils.build(AnalyticThreadBean.class)
@@ -80,6 +103,7 @@ public class TestStormAnalyticTechnologyUtils {
 			final DataBucketBean test_bucket1 = BeanTemplateUtils.build(DataBucketBean.class)
 					.with(DataBucketBean::_id, "test")
 					.with(DataBucketBean::full_name, "/test")
+					.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.streaming)
 					.with(DataBucketBean::streaming_enrichment_topology, BeanTemplateUtils.build(EnrichmentControlMetadataBean.class).with(EnrichmentControlMetadataBean::enabled, true).done().get())
 					.done().get();
 						
@@ -94,6 +118,7 @@ public class TestStormAnalyticTechnologyUtils {
 			final DataBucketBean test_bucket1 = BeanTemplateUtils.build(DataBucketBean.class)
 					.with(DataBucketBean::_id, "test")
 					.with(DataBucketBean::full_name, "/test")
+					.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.streaming)
 					.with(DataBucketBean::analytic_thread, 
 							BeanTemplateUtils.build(AnalyticThreadBean.class)
 							.with(AnalyticThreadBean::jobs, Arrays.asList(BeanTemplateUtils.build(AnalyticThreadJobBean.class).with(AnalyticThreadJobBean::enabled, true).done().get())

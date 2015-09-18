@@ -15,16 +15,23 @@
  ******************************************************************************/
 package com.ikanow.aleph2.analytics.storm.utils;
 
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.Maps;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean.MasterEnrichmentType;
+import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 
@@ -33,6 +40,9 @@ import com.ikanow.aleph2.data_model.utils.Optionals;
  */
 public class StormAnalyticTechnologyUtils {
 
+	private static EnumSet<DataBucketBean.MasterEnrichmentType> _enrichment_types = 
+			EnumSet.of(DataBucketBean.MasterEnrichmentType.streaming, DataBucketBean.MasterEnrichmentType.streaming_and_batch);
+	
 	/** Validate a single job for this analytic technology in the context of the bucket/other jobs
 	 * @param analytic_bucket - the bucket (just for context)
 	 * @param jobs - the entire list of jobs
@@ -46,9 +56,7 @@ public class StormAnalyticTechnologyUtils {
 		// - doesn't have both streaming and analytic threads (maybe later we can allow this but it's gonna get a bit complicated to start with)
 
 		final BasicMessageBean global_res = Lambdas.get(() -> {
-			if ((null != analytic_bucket.streaming_enrichment_topology()) // streaming is present...
-					&&
-					Optional.ofNullable(analytic_bucket.streaming_enrichment_topology().enabled()).orElse(true) //..and enabled...
+			if (streamingEnrichmentEnabled(analytic_bucket) // (see below - all streaming options on)
 					&&
 				(null != analytic_bucket.analytic_thread()) // ...and analytics is present...
 					&&
@@ -128,7 +136,69 @@ public class StormAnalyticTechnologyUtils {
 	 * @return
 	 */
 	public static DataBucketBean convertStreamingEnrichmentToAnalyticBucket(final DataBucketBean bucket) {
-		//TODO (ALEPH-12) implementation
-		return null;
+		
+		if (streamingEnrichmentEnabled(bucket)) {
+			
+			final EnrichmentControlMetadataBean enrichment = bucket.streaming_enrichment_topology();
+			
+			final AnalyticThreadJobBean.AnalyticThreadJobInputBean input =
+					new AnalyticThreadJobBean.AnalyticThreadJobInputBean(
+							true, //(enabled) 
+							"", // (myself) 
+							"stream", 
+							null, // (no filter)
+							null // (no extra config)
+							);
+			
+			
+			final AnalyticThreadJobBean.AnalyticThreadJobOutputBean output =
+					new AnalyticThreadJobBean.AnalyticThreadJobOutputBean(
+							false, // (not used for streaming) 
+							false, // (not transient, ie final output) 
+							null,  // (no sub-bucket path)
+							DataBucketBean.MasterEnrichmentType.streaming // (not used for non-transient)
+							);					
+
+			//TODO: how do you get the entry point?!
+			
+			final AnalyticThreadJobBean job = new AnalyticThreadJobBean(
+					Optional.ofNullable(enrichment.name()).orElse("streaming_enrichment"), //(name) 
+					true, // (enabled)
+					"system", //(technology name or id)
+					enrichment.library_ids_or_names(), //(additional modules)
+					Maps.newLinkedHashMap(Optional.ofNullable(enrichment.config()).orElse(Collections.emptyMap())), //(config)
+					"TODO", // entry point
+					DataBucketBean.MasterEnrichmentType.streaming, // (type) 
+					Collections.emptyList(), //(node rules)
+					false, //(multi node enabled)
+					Collections.emptyList(), // (dependencies) 
+					Arrays.asList(input), 
+					null, //(global input config)
+					output
+					);
+			
+			return BeanTemplateUtils.clone(bucket)
+					.with(DataBucketBean::analytic_thread,
+							BeanTemplateUtils.build(AnalyticThreadBean.class)
+								.with(AnalyticThreadBean::jobs, Arrays.asList(job))
+							.done().get()
+					)
+					.done();
+		}
+		else return bucket;
+	}
+	
+	/** Utility function returning whether a bucket is using streaming enrichment
+	 * @param bucket
+	 * @return
+	 */
+	private static boolean streamingEnrichmentEnabled(final DataBucketBean bucket) {
+		return
+			_enrichment_types.contains(bucket.master_enrichment_type()) // streaming is being used...
+			&&
+			(null != bucket.streaming_enrichment_topology()) // ...and streaming is present...
+			&&
+			Optional.ofNullable(bucket.streaming_enrichment_topology().enabled()).orElse(true) //..and enabled...
+			;
 	}
 }
