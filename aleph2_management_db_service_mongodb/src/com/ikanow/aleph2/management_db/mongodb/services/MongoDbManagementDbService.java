@@ -226,9 +226,8 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 			}
 		});
 		
-		final ICrudService<T> intercepted_crud = CrudServiceUtils.intercept(clazz, state_crud, Optional.empty(), interceptors, Optional.empty());		
-		
-		return ManagementDbUtils.wrap(intercepted_crud).readOnlyVersion(_read_only);
+		final ICrudService<T> intercepted_crud = CrudServiceUtils.intercept(clazz, state_crud, Optional.empty(), interceptors, Optional.empty());				
+		return intercepted_crud.readOnlyVersion(_read_only);
 	}
 	
 	/* (non-Javadoc)
