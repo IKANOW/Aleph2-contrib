@@ -35,8 +35,8 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Curs
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
-import com.ikanow.aleph2.data_model.security.IRoleProvider;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 
 public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 	private ICrudService<JsonNode> personDb = null;

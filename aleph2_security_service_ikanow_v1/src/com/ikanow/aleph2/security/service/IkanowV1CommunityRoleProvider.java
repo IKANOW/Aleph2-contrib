@@ -30,8 +30,8 @@ import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
-import com.ikanow.aleph2.data_model.security.IRoleProvider;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 
 public class IkanowV1CommunityRoleProvider implements IRoleProvider {
 	private ICrudService<JsonNode> personDb = null;
