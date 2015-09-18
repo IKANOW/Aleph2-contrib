@@ -22,7 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -69,12 +68,6 @@ import com.mongodb.WriteConcern;
  *
  * @param <O> - the bean class
  * @param <K> - the key class (typically String or ObjectId)
- */
-/**
- * @author Alex
- *
- * @param <O>
- * @param <K>
  */
 public class MongoDbCrudService<O, K> implements ICrudService<O> {
 
@@ -583,11 +576,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 													Optional.of(true), Arrays.asList("_id"), true); 					
 
 			// Return a future that just wraps ret_val - ie returns true if the doc is present, ie was just deleted
-			return new CompletableFuture<Boolean>() {
-				@Override public Boolean get() throws ExecutionException, InterruptedException {
-					return ret_val.get().isPresent();
-				}
-			};		
+			return ret_val.thenApply(opt -> opt.isPresent());
 		}
 		catch (Exception e) {			
 			return FutureUtils.<Boolean>returnError(e);
