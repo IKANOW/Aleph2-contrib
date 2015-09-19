@@ -190,7 +190,7 @@ public class TestStreamingEnrichmentContextService {
 					.with(SharedLibraryBean::path_name, "/test/lib")
 					.done().get();
 			
-			context_pair._1().setLibraryConfig(library);			
+			context_pair._1().setModuleConfig(library);			
 			context_pair._1().setBucket(test_bucket);			
 			context_pair._2().setUserTopology(new IEnrichmentStreamingTopology() {
 
@@ -271,7 +271,7 @@ public class TestStreamingEnrichmentContextService {
 					.with(SharedLibraryBean::path_name, "/test/lib")
 					.done().get();
 
-			context_pair._1().setLibraryConfig(library);
+			context_pair._1().setModuleConfig(library);
 			context_pair._1().setBucket(test_bucket);
 			context_pair._2().setJob(analytic_job1);
 			
@@ -300,7 +300,7 @@ public class TestStreamingEnrichmentContextService {
 			// Create another injector:
 			Tuple2<MockAnalyticsContext, StreamingEnrichmentContextService> context_pair2 = getContextPair();
 			final StreamingEnrichmentContextService test_context2 = context_pair2._2();
-			context_pair2._1().setLibraryConfig(library);
+			context_pair2._1().setModuleConfig(library);
 			context_pair2._1().setBucket(test_bucket);
 			context_pair2._2().setJob(analytic_job1);
 
@@ -424,7 +424,7 @@ public class TestStreamingEnrichmentContextService {
 				.with(SharedLibraryBean::path_name, "/test/lib")
 				.done().get();
 		
-		context_pair._1().setLibraryConfig(library);
+		context_pair._1().setModuleConfig(library);
 		context_pair._2().setJob(analytic_job1);
 		
 		// Empty service set:
@@ -542,7 +542,7 @@ public class TestStreamingEnrichmentContextService {
 				.with(SharedLibraryBean::path_name, "/test/lib")
 				.done().get();
 		
-		context_pair._1().setLibraryConfig(library);
+		context_pair._1().setModuleConfig(library);
 		context_pair._1().setBucket(test_bucket);
 		context_pair._2().setJob(analytic_job1);
 		
@@ -628,7 +628,7 @@ public class TestStreamingEnrichmentContextService {
 		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class).with("full_name", "TEST_HARVEST_CONTEXT").done().get();
 
 		final SharedLibraryBean lib_bean = BeanTemplateUtils.build(SharedLibraryBean.class).with("path_name", "TEST_HARVEST_CONTEXT").done().get();
-		context_pair._1().setLibraryConfig(lib_bean);
+		context_pair._1().setModuleConfig(lib_bean);
 		context_pair._2().setBucket(bucket);
 		
 		ICrudService<AssetStateDirectoryBean> dir_a = _core_management_db.getStateDirectory(Optional.empty(), Optional.of(AssetStateDirectoryBean.StateDirectoryType.analytic_thread));

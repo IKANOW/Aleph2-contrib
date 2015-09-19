@@ -89,7 +89,8 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	
 	protected static class MutableState {
 		SetOnce<DataBucketBean> bucket = new SetOnce<DataBucketBean>();
-		SetOnce<SharedLibraryBean> library_config = new SetOnce<>();
+		SetOnce<SharedLibraryBean> technology_config = new SetOnce<>();
+		SetOnce<SharedLibraryBean> module_config = new SetOnce<>();
 		SetOnce<String> user_topology_entry_point = new SetOnce<>();
 		final SetOnce<ImmutableSet<Tuple2<Class<? extends IUnderlyingService>, Optional<String>>>> service_manifest_override = new SetOnce<>();
 		final SetOnce<String> signature_override = new SetOnce<>();		
@@ -154,10 +155,18 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	 * @returns whether the library bean has been updated (ie fails if it's already been set)
 	 */
 	@SuppressWarnings("deprecation")
-	public MockAnalyticsContext setLibraryConfig(final SharedLibraryBean lib_config) {
-		_mutable_state.library_config.forceSet(lib_config);
+	public MockAnalyticsContext setTechnologyConfig(final SharedLibraryBean lib_config) {
+		_mutable_state.technology_config.forceSet(lib_config);
 		return this;
 	}
+	
+	/** (FOR INTERNAL DATA MANAGER USE ONLY) Sets the optional module library bean for this context instance
+	 * @param this_bucket - the library bean to be associated
+	 * @returns whether the library bean has been updated (ie fails if it's already been set)
+	 */
+	public boolean setModuleConfig(final SharedLibraryBean lib_config) {
+		return _mutable_state.module_config.set(lib_config);
+	}	
 	
 	/** FOR DEBUGGING AND TESTING ONLY, inserts a copy of the current context into the saved "in module" versions
 	 */
@@ -198,7 +207,7 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 			final BeanTemplate<DataBucketBean> retrieve_bucket = BeanTemplateUtils.from(parsed_config.getString(__MY_BUCKET_ID), DataBucketBean.class);
 			_mutable_state.bucket.set(retrieve_bucket.get());
 			final BeanTemplate<SharedLibraryBean> retrieve_library = BeanTemplateUtils.from(parsed_config.getString(__MY_LIBRARY_ID), SharedLibraryBean.class);
-			_mutable_state.library_config.set(retrieve_library.get());
+			_mutable_state.technology_config.set(retrieve_library.get());
 			
 			_batch_index_service = 
 					(_crud_index_service = _index_service.getDataService()
@@ -290,7 +299,7 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 												)
 								.withValue(__MY_LIBRARY_ID, 
 											ConfigValueFactory
-												.fromAnyRef(BeanTemplateUtils.toJson(_mutable_state.library_config.get()).toString())
+												.fromAnyRef(BeanTemplateUtils.toJson(_mutable_state.technology_config.get()).toString())
 												)
 												;
 			
@@ -485,9 +494,19 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	 */
 	@Override
 	public SharedLibraryBean getTechnologyConfig() {
-		return _mutable_state.library_config.get();
+		return _mutable_state.technology_config.get();
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#getModuleConfig()
+	 */
+	@Override
+	public Optional<SharedLibraryBean> getModuleConfig() {
+		return _mutable_state.module_config.isSet()
+				? Optional.of(_mutable_state.module_config.get())
+				: Optional.empty();
+	}
+		
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#getBucketStatus(java.util.Optional)
 	 */
@@ -613,11 +632,4 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 		}
 		//(else nothing to do)
 	}
-
-	@Override
-	public Optional<SharedLibraryBean> getModuleConfig() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
 }

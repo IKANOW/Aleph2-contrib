@@ -137,7 +137,7 @@ public class TestPassthroughTopology {
 		// Context		
 		final MockAnalyticsContext test_analytics_context = new MockAnalyticsContext(_service_context);
 		test_analytics_context.setBucket(test_bucket);
-		test_analytics_context.setLibraryConfig(library);
+		test_analytics_context.setTechnologyConfig(library);
 				
 		//PHASE 2: CREATE TOPOLOGY AND SUBMit
 		

@@ -346,7 +346,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 */
 	@Override
 	public SharedLibraryBean getModuleConfig() {
-		return _delegate.get().getTechnologyConfig();
+		return _delegate.get().getModuleConfig().get(); //(present by construction)
 	}
 
 	/* (non-Javadoc)
