@@ -335,7 +335,7 @@ public class TestStreamingEnrichmentContextService {
 			
 			final StreamingEnrichmentContextService test_external2b = (StreamingEnrichmentContextService)test_external2a;
 			
-			assertEquals("/test/lib", test_external2b.getLibraryConfig().path_name());			
+			assertEquals("/test/lib", test_external2b.getModuleConfig().path_name());			
 			
 			assertTrue("I can see my additonal services", null != test_external2b.getServiceContext().getService(IStorageService.class, Optional.empty()));
 			assertTrue("I can see my additonal services", null != test_external2b.getServiceContext().getService(IManagementDbService.class, Optional.of("test")));

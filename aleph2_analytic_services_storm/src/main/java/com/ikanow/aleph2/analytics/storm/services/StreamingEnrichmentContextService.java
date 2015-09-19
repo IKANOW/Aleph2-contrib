@@ -345,8 +345,8 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getLibraryConfig()
 	 */
 	@Override
-	public SharedLibraryBean getLibraryConfig() {
-		return _delegate.get().getLibraryConfig();
+	public SharedLibraryBean getModuleConfig() {
+		return _delegate.get().getTechnologyConfig();
 	}
 
 	/* (non-Javadoc)
