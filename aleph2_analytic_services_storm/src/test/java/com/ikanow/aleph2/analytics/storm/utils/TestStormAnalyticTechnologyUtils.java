@@ -161,7 +161,7 @@ public class TestStormAnalyticTechnologyUtils {
 				.with(AnalyticThreadJobBean::name, "analytic_job_1")
 				.with(AnalyticThreadJobBean::analytic_technology_name_or_id, "test_analytic_tech_id")
 				.with(AnalyticThreadJobBean::inputs, Arrays.asList(analytic_input1))
-				.with(AnalyticThreadJobBean::module_names_or_ids, Arrays.asList("id1", "name2"))
+				.with(AnalyticThreadJobBean::library_names_or_ids, Arrays.asList("id1", "name2"))
 				.done().get();
 
 		{
@@ -181,7 +181,7 @@ public class TestStormAnalyticTechnologyUtils {
 				.with(AnalyticThreadJobBean::name, "analytic_job_2")
 				.with(AnalyticThreadJobBean::analytic_technology_name_or_id, "test_analytic_tech_id")
 				.with(AnalyticThreadJobBean::output, analytic_output1)
-				.with(AnalyticThreadJobBean::module_names_or_ids, Arrays.asList("id1", "name2"))
+				.with(AnalyticThreadJobBean::library_names_or_ids, Arrays.asList("id1", "name2"))
 				.done().get();
 		
 		{
@@ -206,7 +206,7 @@ public class TestStormAnalyticTechnologyUtils {
 				.with(AnalyticThreadJobBean::analytic_technology_name_or_id, "test_analytic_tech_id")
 				.with(AnalyticThreadJobBean::inputs, Arrays.asList(analytic_input2))
 				.with(AnalyticThreadJobBean::output, analytic_output2)
-				.with(AnalyticThreadJobBean::module_names_or_ids, Arrays.asList("id1", "name2"))
+				.with(AnalyticThreadJobBean::library_names_or_ids, Arrays.asList("id1", "name2"))
 				.done().get();
 		
 		{

@@ -131,6 +131,8 @@ public class StormAnalyticTechnologyUtils {
 		return ErrorUtils.buildMessage(success, StormAnalyticTechnologyUtils.class, "validateJobs", errors.stream().collect(Collectors.joining(";")));
 	}
 	
+	//TODO: this should get moved into the DIM I think, no reason for every technology to implement this
+	
 	/** Converts a bucket with only streaming enrichment settings into one that has an analytic thread dervied
 	 * @param bucket
 	 * @return
@@ -159,15 +161,14 @@ public class StormAnalyticTechnologyUtils {
 							DataBucketBean.MasterEnrichmentType.streaming // (not used for non-transient)
 							);					
 
-			//TODO: how do you get the entry point?!
-			
 			final AnalyticThreadJobBean job = new AnalyticThreadJobBean(
 					Optional.ofNullable(enrichment.name()).orElse("streaming_enrichment"), //(name) 
 					true, // (enabled)
 					"system", //(technology name or id)
-					enrichment.library_ids_or_names(), //(additional modules)
+					enrichment.module_name_or_id(),
+					enrichment.library_names_or_ids(), //(additional modules)
+					enrichment.entry_point(), // entry point
 					Maps.newLinkedHashMap(Optional.ofNullable(enrichment.config()).orElse(Collections.emptyMap())), //(config)
-					"TODO", // entry point
 					DataBucketBean.MasterEnrichmentType.streaming, // (type) 
 					Collections.emptyList(), //(node rules)
 					false, //(multi node enabled)
