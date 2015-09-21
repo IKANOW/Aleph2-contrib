@@ -35,9 +35,10 @@ public class MockMongoDbManagementDbService extends MongoDbManagementDbService {
 			final MongoDbManagementDbConfigBean properties,
 			final IkanowV1SyncService_Buckets sync_service_buckets,
 			final IkanowV1SyncService_LibraryJars sync_service_jars,
-			final IkanowV1SyncService_TestBuckets sync_service_test_buckets)
+			final IkanowV1SyncService_TestBuckets sync_service_test_buckets,
+			final IkanowV1SyncService_PurgeBuckets sync_service_purge_buckets)
 	{
-		super(crud_factory, properties, sync_service_buckets, sync_service_jars, sync_service_test_buckets);
+		super(crud_factory, properties, sync_service_buckets, sync_service_jars, sync_service_test_buckets, sync_service_purge_buckets);
 
 		//DEBUG
 		//System.out.println("Hello world from: " + this.getClass() + ": underlying=" + crud_factory);

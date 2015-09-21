@@ -47,7 +47,7 @@ public class TestMongoDbManagementDbService {
 		
 		MockMongoDbCrudServiceFactory mock_crud_service_factory = new MockMongoDbCrudServiceFactory();
 
-		MongoDbManagementDbService management_db_service = new MongoDbManagementDbService(mock_crud_service_factory, new MongoDbManagementDbConfigBean(false), null, null, null);
+		MongoDbManagementDbService management_db_service = new MongoDbManagementDbService(mock_crud_service_factory, new MongoDbManagementDbConfigBean(false), null, null, null, null);
 		
 		assertEquals(MongoDbManagementDbService.DATA_BUCKET_STATUS_STORE,
 				management_db_service.getDataBucketStatusStore().getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
@@ -244,7 +244,7 @@ public class TestMongoDbManagementDbService {
 		
 		// Set up:
 		MockMongoDbCrudServiceFactory mock_crud_service_factory = new MockMongoDbCrudServiceFactory();
-		MongoDbManagementDbService management_db_service = new MongoDbManagementDbService(mock_crud_service_factory, new MongoDbManagementDbConfigBean(false), null, null, null);
+		MongoDbManagementDbService management_db_service = new MongoDbManagementDbService(mock_crud_service_factory, new MongoDbManagementDbConfigBean(false), null, null, null, null);
 		IManagementDbService management_db_service_ro = management_db_service.readOnlyVersion();
 		
 		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+extra/4354____42").done().get();
@@ -422,7 +422,7 @@ public class TestMongoDbManagementDbService {
 		
 		// Set up:
 		MockMongoDbCrudServiceFactory mock_crud_service_factory = new MockMongoDbCrudServiceFactory();
-		MongoDbManagementDbService management_db_service = new MongoDbManagementDbService(mock_crud_service_factory, new MongoDbManagementDbConfigBean(false), null, null, null);
+		MongoDbManagementDbService management_db_service = new MongoDbManagementDbService(mock_crud_service_factory, new MongoDbManagementDbConfigBean(false), null, null, null, null);
 		IManagementDbService management_db_service_ro = management_db_service.readOnlyVersion();
 		
 		final SharedLibraryBean library = BeanTemplateUtils.build(SharedLibraryBean.class).with(SharedLibraryBean::path_name, "/test+extra/4354____42").done().get();
