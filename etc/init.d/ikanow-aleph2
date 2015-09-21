@@ -29,10 +29,10 @@ start() {
         if [ $? -ne 0 ] || [ $? -eq 1 ]; then
                 runuser tomcat -c "$exec"
                 RETVAL=$?
-                pgrep -f "java.*v1_sync_service.properties" > $pid_file
-
+                sleep 5
                 if [ $RETVAL -eq 0 ]; then
                         touch $lock_file
+                        pgrep -f "java.*v1_sync_service.properties" > $pid_file
                         success
                         echo
                 else
