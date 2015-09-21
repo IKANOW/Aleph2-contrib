@@ -425,7 +425,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	public <S> ICrudService<S> getGlobalEnrichmentModuleObjectStore(
 			final Class<S> clazz, final Optional<String> collection)
 	{
-		return _delegate.get().getGlobalAnalyticTechnologyObjectStore(clazz, collection);
+		return _delegate.get().getGlobalModuleObjectStore(clazz, collection).get(); // (exists by construction)
 	}
 
 	/* (non-Javadoc)
@@ -436,8 +436,14 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 			final Optional<DataBucketBean> bucket, final Optional<String> collection,
 			final Optional<StateDirectoryType> type)
 	{
-		Optional<StateDirectoryType> translated_type = Optional.ofNullable(type.orElse(StateDirectoryType.enrichment));
-		return _delegate.get().getBucketObjectStore(clazz, bucket, collection, translated_type);
+		// Translate default to enrichment, and handle bucket store being the module not the analytic technology
+		if (type.isPresent() && (StateDirectoryType.library == type.get())) {
+			return _delegate.get().getGlobalModuleObjectStore(clazz, collection).get(); // (exists by construction)			
+		}
+		else {
+			Optional<StateDirectoryType> translated_type = Optional.ofNullable(type.orElse(StateDirectoryType.enrichment));
+			return _delegate.get().getBucketObjectStore(clazz, bucket, collection, translated_type);
+		}
 	}
 
 }

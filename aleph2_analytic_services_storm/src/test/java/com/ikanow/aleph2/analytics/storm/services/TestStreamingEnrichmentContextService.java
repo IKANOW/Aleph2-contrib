@@ -186,11 +186,15 @@ public class TestStreamingEnrichmentContextService {
 					.with(AnalyticThreadJobBean::name, "analytic_output3")
 					.done().get();
 						
-			final SharedLibraryBean library = BeanTemplateUtils.build(SharedLibraryBean.class)
-					.with(SharedLibraryBean::path_name, "/test/lib")
+			final SharedLibraryBean mod_library = BeanTemplateUtils.build(SharedLibraryBean.class)
+					.with(SharedLibraryBean::path_name, "/test/module")
+					.done().get();
+			final SharedLibraryBean tech_library = BeanTemplateUtils.build(SharedLibraryBean.class)
+					.with(SharedLibraryBean::path_name, "/test/tech")
 					.done().get();
 			
-			context_pair._1().setModuleConfig(library);			
+			context_pair._1().setModuleConfig(mod_library);
+			context_pair._1().setTechnologyConfig(tech_library);
 			context_pair._1().setBucket(test_bucket);			
 			context_pair._2().setUserTopology(new IEnrichmentStreamingTopology() {
 
@@ -267,18 +271,22 @@ public class TestStreamingEnrichmentContextService {
 															.done().get())
 													.done().get();						
 			
-			final SharedLibraryBean library = BeanTemplateUtils.build(SharedLibraryBean.class)
-					.with(SharedLibraryBean::path_name, "/test/lib")
+			final SharedLibraryBean mod_library = BeanTemplateUtils.build(SharedLibraryBean.class)
+					.with(SharedLibraryBean::path_name, "/test/module")
+					.done().get();
+			final SharedLibraryBean tech_library = BeanTemplateUtils.build(SharedLibraryBean.class)
+					.with(SharedLibraryBean::path_name, "/test/tech")
 					.done().get();
 
-			context_pair._1().setModuleConfig(library);
+			context_pair._1().setModuleConfig(mod_library);
+			context_pair._1().setTechnologyConfig(tech_library);
 			context_pair._1().setBucket(test_bucket);
 			context_pair._2().setJob(analytic_job1);
 			
 			// Empty service set:
 			final String signature = test_context.getEnrichmentContextSignature(Optional.of(test_bucket), Optional.empty());
 						
-			final String expected_sig = "com.ikanow.aleph2.analytics.storm.services.StreamingEnrichmentContextService:analytic_job1:com.ikanow.aleph2.analytics.storm.services.MockAnalyticsContext:{\"3fdb4bfa-2024-11e5-b5f7-727283247c7e\":\"{\\\"_id\\\":\\\"test\\\",\\\"modified\\\":1436194933000,\\\"full_name\\\":\\\"/test/external-context/creation\\\",\\\"analytic_thread\\\":{\\\"jobs\\\":[{\\\"name\\\":\\\"analytic_job1\\\"}]},\\\"data_schema\\\":{\\\"search_index_schema\\\":{}}}\",\"3fdb4bfa-2024-11e5-b5f7-727283247c7f\":\"{\\\"path_name\\\":\\\"/test/lib\\\"}\",\"CoreDistributedServices\":{},\"MongoDbManagementDbService\":{\"mongodb_connection\":\"localhost:9999\"},\"globals\":{\"local_cached_jar_dir\":\"file://temp/\"},\"service\":{\"CoreDistributedServices\":{\"interface\":\"com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices\",\"service\":\"com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices\"},\"CoreManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.services.CoreManagementDbService\"},\"ManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"SearchIndexService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService\",\"service\":\"com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService\"},\"SecurityService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService\",\"service\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService\"},\"StorageService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService\",\"service\":\"com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService\"}}}";			
+			final String expected_sig = "com.ikanow.aleph2.analytics.storm.services.StreamingEnrichmentContextService:analytic_job1:com.ikanow.aleph2.analytics.storm.services.MockAnalyticsContext:{\"3fdb4bfa-2024-11e5-b5f7-727283247c7e\":\"{\\\"_id\\\":\\\"test\\\",\\\"modified\\\":1436194933000,\\\"full_name\\\":\\\"/test/external-context/creation\\\",\\\"analytic_thread\\\":{\\\"jobs\\\":[{\\\"name\\\":\\\"analytic_job1\\\"}]},\\\"data_schema\\\":{\\\"search_index_schema\\\":{}}}\",\"3fdb4bfa-2024-11e5-b5f7-727283247c7f\":\"{\\\"path_name\\\":\\\"/test/tech\\\"}\",\"3fdb4bfa-2024-11e5-b5f7-727283247cff\":\"{\\\"path_name\\\":\\\"/test/module\\\"}\",\"CoreDistributedServices\":{},\"MongoDbManagementDbService\":{\"mongodb_connection\":\"localhost:9999\"},\"globals\":{\"local_cached_jar_dir\":\"file://temp/\"},\"service\":{\"CoreDistributedServices\":{\"interface\":\"com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices\",\"service\":\"com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices\"},\"CoreManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.services.CoreManagementDbService\"},\"ManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"SearchIndexService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService\",\"service\":\"com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService\"},\"SecurityService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService\",\"service\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService\"},\"StorageService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService\",\"service\":\"com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService\"}}}";			
 			assertEquals(expected_sig, signature);
 
 			// Check can't call multiple times
@@ -300,7 +308,8 @@ public class TestStreamingEnrichmentContextService {
 			// Create another injector:
 			Tuple2<MockAnalyticsContext, StreamingEnrichmentContextService> context_pair2 = getContextPair();
 			final StreamingEnrichmentContextService test_context2 = context_pair2._2();
-			context_pair2._1().setModuleConfig(library);
+			context_pair2._1().setModuleConfig(mod_library);
+			context_pair2._1().setTechnologyConfig(tech_library);
 			context_pair2._1().setBucket(test_bucket);
 			context_pair2._2().setJob(analytic_job1);
 
@@ -314,7 +323,7 @@ public class TestStreamingEnrichmentContextService {
 					);
 			
 			
-			final String expected_sig2 = "com.ikanow.aleph2.analytics.storm.services.StreamingEnrichmentContextService:analytic_job1:com.ikanow.aleph2.analytics.storm.services.MockAnalyticsContext:{\"3fdb4bfa-2024-11e5-b5f7-727283247c7e\":\"{\\\"_id\\\":\\\"test\\\",\\\"modified\\\":1436194933000,\\\"full_name\\\":\\\"/test/external-context/creation\\\",\\\"analytic_thread\\\":{\\\"jobs\\\":[{\\\"name\\\":\\\"analytic_job1\\\"}]},\\\"data_schema\\\":{\\\"search_index_schema\\\":{}}}\",\"3fdb4bfa-2024-11e5-b5f7-727283247c7f\":\"{\\\"path_name\\\":\\\"/test/lib\\\"}\",\"CoreDistributedServices\":{},\"MongoDbManagementDbService\":{\"mongodb_connection\":\"localhost:9999\"},\"globals\":{\"local_cached_jar_dir\":\"file://temp/\"},\"service\":{\"CoreDistributedServices\":{\"interface\":\"com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices\",\"service\":\"com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices\"},\"CoreManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.services.CoreManagementDbService\"},\"ManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"SearchIndexService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService\",\"service\":\"com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService\"},\"SecurityService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService\",\"service\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService\"},\"StorageService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService\",\"service\":\"com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService\"},\"test\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"}}}"; 
+			final String expected_sig2 = "com.ikanow.aleph2.analytics.storm.services.StreamingEnrichmentContextService:analytic_job1:com.ikanow.aleph2.analytics.storm.services.MockAnalyticsContext:{\"3fdb4bfa-2024-11e5-b5f7-727283247c7e\":\"{\\\"_id\\\":\\\"test\\\",\\\"modified\\\":1436194933000,\\\"full_name\\\":\\\"/test/external-context/creation\\\",\\\"analytic_thread\\\":{\\\"jobs\\\":[{\\\"name\\\":\\\"analytic_job1\\\"}]},\\\"data_schema\\\":{\\\"search_index_schema\\\":{}}}\",\"3fdb4bfa-2024-11e5-b5f7-727283247c7f\":\"{\\\"path_name\\\":\\\"/test/tech\\\"}\",\"3fdb4bfa-2024-11e5-b5f7-727283247cff\":\"{\\\"path_name\\\":\\\"/test/module\\\"}\",\"CoreDistributedServices\":{},\"MongoDbManagementDbService\":{\"mongodb_connection\":\"localhost:9999\"},\"globals\":{\"local_cached_jar_dir\":\"file://temp/\"},\"service\":{\"CoreDistributedServices\":{\"interface\":\"com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices\",\"service\":\"com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices\"},\"CoreManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.services.CoreManagementDbService\"},\"ManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"SearchIndexService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService\",\"service\":\"com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService\"},\"SecurityService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService\",\"service\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService\"},\"StorageService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService\",\"service\":\"com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService\"},\"test\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"}}}"; 
 			assertEquals(expected_sig2, signature2);
 			
 			final IEnrichmentModuleContext test_external1a = ContextUtils.getEnrichmentContext(signature);		
@@ -335,7 +344,7 @@ public class TestStreamingEnrichmentContextService {
 			
 			final StreamingEnrichmentContextService test_external2b = (StreamingEnrichmentContextService)test_external2a;
 			
-			assertEquals("/test/lib", test_external2b.getModuleConfig().path_name());			
+			assertEquals("/test/module", test_external2b.getModuleConfig().path_name());			
 			
 			assertTrue("I can see my additonal services", null != test_external2b.getServiceContext().getService(IStorageService.class, Optional.empty()));
 			assertTrue("I can see my additonal services", null != test_external2b.getServiceContext().getService(IManagementDbService.class, Optional.of("test")));
@@ -420,11 +429,15 @@ public class TestStreamingEnrichmentContextService {
 														.done().get())
 												.done().get();
 		
-		final SharedLibraryBean library = BeanTemplateUtils.build(SharedLibraryBean.class)
-				.with(SharedLibraryBean::path_name, "/test/lib")
+		final SharedLibraryBean mod_library = BeanTemplateUtils.build(SharedLibraryBean.class)
+				.with(SharedLibraryBean::path_name, "/test/module")
+				.done().get();
+		final SharedLibraryBean tech_library = BeanTemplateUtils.build(SharedLibraryBean.class)
+				.with(SharedLibraryBean::path_name, "/test/tech")
 				.done().get();
 		
-		context_pair._1().setModuleConfig(library);
+		context_pair._1().setModuleConfig(mod_library);
+		context_pair._1().setTechnologyConfig(tech_library);
 		context_pair._2().setJob(analytic_job1);
 		
 		// Empty service set:
@@ -538,11 +551,15 @@ public class TestStreamingEnrichmentContextService {
 						.done().get())
 				.done().get();
 
-		final SharedLibraryBean library = BeanTemplateUtils.build(SharedLibraryBean.class)
-				.with(SharedLibraryBean::path_name, "/test/lib")
+		final SharedLibraryBean mod_library = BeanTemplateUtils.build(SharedLibraryBean.class)
+				.with(SharedLibraryBean::path_name, "/test/module")
+				.done().get();
+		final SharedLibraryBean tech_library = BeanTemplateUtils.build(SharedLibraryBean.class)
+				.with(SharedLibraryBean::path_name, "/test/tech")
 				.done().get();
 		
-		context_pair._1().setModuleConfig(library);
+		context_pair._1().setModuleConfig(mod_library);
+		context_pair._1().setTechnologyConfig(tech_library);
 		context_pair._1().setBucket(test_bucket);
 		context_pair._2().setJob(analytic_job1);
 		
@@ -629,6 +646,7 @@ public class TestStreamingEnrichmentContextService {
 
 		final SharedLibraryBean lib_bean = BeanTemplateUtils.build(SharedLibraryBean.class).with("path_name", "TEST_HARVEST_CONTEXT").done().get();
 		context_pair._1().setModuleConfig(lib_bean);
+		//(note deliberately don't set tech config library here to double check it accesses the right one...)
 		context_pair._2().setBucket(bucket);
 		
 		ICrudService<AssetStateDirectoryBean> dir_a = _core_management_db.getStateDirectory(Optional.empty(), Optional.of(AssetStateDirectoryBean.StateDirectoryType.analytic_thread));

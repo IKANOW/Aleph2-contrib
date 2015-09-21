@@ -59,6 +59,7 @@ import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
@@ -85,7 +86,8 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	// CONSTRUCTION
 	
 	public static final String __MY_BUCKET_ID = "3fdb4bfa-2024-11e5-b5f7-727283247c7e";	
-	public static final String __MY_LIBRARY_ID = "3fdb4bfa-2024-11e5-b5f7-727283247c7f";
+	public static final String __MY_TECH_LIBRARY_ID = "3fdb4bfa-2024-11e5-b5f7-727283247c7f";
+	public static final String __MY_MODULE_LIBRARY_ID = "3fdb4bfa-2024-11e5-b5f7-727283247cff";
 	
 	protected static class MutableState {
 		SetOnce<DataBucketBean> bucket = new SetOnce<DataBucketBean>();
@@ -206,8 +208,12 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 
 			final BeanTemplate<DataBucketBean> retrieve_bucket = BeanTemplateUtils.from(parsed_config.getString(__MY_BUCKET_ID), DataBucketBean.class);
 			_mutable_state.bucket.set(retrieve_bucket.get());
-			final BeanTemplate<SharedLibraryBean> retrieve_library = BeanTemplateUtils.from(parsed_config.getString(__MY_LIBRARY_ID), SharedLibraryBean.class);
+			final BeanTemplate<SharedLibraryBean> retrieve_library = BeanTemplateUtils.from(parsed_config.getString(__MY_TECH_LIBRARY_ID), SharedLibraryBean.class);
 			_mutable_state.technology_config.set(retrieve_library.get());
+			if (parsed_config.hasPath(__MY_MODULE_LIBRARY_ID)) {
+				final BeanTemplate<SharedLibraryBean> retrieve_module = BeanTemplateUtils.from(parsed_config.getString(__MY_MODULE_LIBRARY_ID), SharedLibraryBean.class);
+				_mutable_state.module_config.set(retrieve_module.get());				
+			}
 			
 			_batch_index_service = 
 					(_crud_index_service = _index_service.getDataService()
@@ -292,16 +298,27 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 				
 			final Config config_subset_services = config_no_services.withValue("service", service_subset.root());
 			
-			final Config last_call = config_subset_services
-								.withValue(__MY_BUCKET_ID, 
-											ConfigValueFactory
-												.fromAnyRef(BeanTemplateUtils.toJson(bucket.orElseGet(() -> _mutable_state.bucket.get())).toString())
-												)
-								.withValue(__MY_LIBRARY_ID, 
-											ConfigValueFactory
-												.fromAnyRef(BeanTemplateUtils.toJson(_mutable_state.technology_config.get()).toString())
-												)
-												;
+			final Config last_call = 
+					Lambdas.get(() -> 
+						_mutable_state.module_config.isSet()
+						?
+						config_subset_services
+							.withValue(__MY_MODULE_LIBRARY_ID, 
+									ConfigValueFactory
+										.fromAnyRef(BeanTemplateUtils.toJson(_mutable_state.module_config.get()).toString())
+										)
+						:
+						config_subset_services						
+					)
+					.withValue(__MY_BUCKET_ID, 
+								ConfigValueFactory
+									.fromAnyRef(BeanTemplateUtils.toJson(bucket.orElseGet(() -> _mutable_state.bucket.get())).toString())
+									)
+					.withValue(__MY_TECH_LIBRARY_ID, 
+								ConfigValueFactory
+									.fromAnyRef(BeanTemplateUtils.toJson(_mutable_state.technology_config.get()).toString())
+									)
+									;
 			
 			final String ret1 = last_call.root().render(ConfigRenderOptions.concise());
 			_mutable_state.signature_override.set(ret1);
@@ -455,6 +472,17 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	}
 
 	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#getGlobalModuleObjectStore(java.lang.Class, java.util.Optional)
+	 */
+	@Override
+	public <S> Optional<ICrudService<S>> getGlobalModuleObjectStore(
+			final Class<S> clazz, final Optional<String> collection) {
+		return this.getModuleConfig().map(module_lib -> 
+			_core_management_db.getPerLibraryState(clazz, module_lib, collection)
+		);
+	}
+
+	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#getBucketObjectStore(java.lang.Class, java.util.Optional, java.util.Optional, java.util.Optional)
 	 */
 	@Override
@@ -474,6 +502,7 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 						__ -> _core_management_db.getBucketEnrichmentState(clazz, this_bucket.get(), collection))
 				.when(t -> t.isPresent() && AssetStateDirectoryBean.StateDirectoryType.harvest == t.get(), 
 						__ -> _core_management_db.getBucketHarvestState(clazz, this_bucket.get(), collection))
+				// assume this is the technology context, most likely usage
 				.when(t -> t.isPresent() && AssetStateDirectoryBean.StateDirectoryType.library == t.get(), 
 						__ -> _core_management_db.getPerLibraryState(clazz, this.getTechnologyConfig(), collection))
 				// default: analytics or not specified: analytics
