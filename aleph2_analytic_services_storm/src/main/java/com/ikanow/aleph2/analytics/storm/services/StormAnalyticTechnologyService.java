@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.analytics.storm.services;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -31,7 +32,7 @@ import com.ikanow.aleph2.analytics.storm.modules.StormAnalyticTechnologyModule;
 import com.ikanow.aleph2.analytics.storm.utils.StormAnalyticTechnologyUtils;
 import com.ikanow.aleph2.analytics.storm.utils.StormControllerUtil;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
-import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyModule;
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyService;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentStreamingTopology;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
@@ -54,7 +55,7 @@ import scala.Tuple2;
 /** Storm analytic technology module - provides the interface between Storm and Aleph2
  * @author Alex
  */
-public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModule, IExtraDependencyLoader {
+public class StormAnalyticTechnologyService implements IAnalyticsTechnologyService, IExtraDependencyLoader {
 
 	////////////////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////
@@ -391,6 +392,23 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 	@Override
 	public void youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules() {
 		//(done see above)
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingArtefacts()
+	 */
+	@Override
+	public Collection<Object> getUnderlyingArtefacts() {
+		return Collections.emptyList();
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingPlatformDriver(java.lang.Class, java.util.Optional)
+	 */
+	@Override
+	public <T> Optional<T> getUnderlyingPlatformDriver(Class<T> driver_class,
+			Optional<String> driver_options) {
+		return Optional.empty();
 	}
 
 }

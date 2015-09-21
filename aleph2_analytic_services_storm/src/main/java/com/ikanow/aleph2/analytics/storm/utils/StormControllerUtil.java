@@ -324,7 +324,7 @@ public class StormControllerUtil {
 		//if we fall through
 		//3. create jar
 		_logger.debug("Fell through or cache copy is old, have to create a new version");
-		if ( buildStormTopologyJar(jars_to_merge, hashed_jar_name) ) {	//TODO do I need to set the jar name to the hash so we can always find it?	
+		if ( buildStormTopologyJar(jars_to_merge, hashed_jar_name) ) {		
 			//4. add jar to cache w/ current/newest file timestamp		
 			storm_topology_jars_cache.put(hashed_jar_name, new Date());
 			//RETURN return new jar file path
