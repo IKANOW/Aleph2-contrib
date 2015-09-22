@@ -48,7 +48,8 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 	protected Config config = null;
 
 	@Inject
-	protected IServiceContext _service_context = null;
+	protected IServiceContext _temp_service_context = null;
+	protected static IServiceContext _service_context = null;
 
 	protected IManagementDbService _management_db;
 	protected ISecurityService securityService = null;
@@ -56,22 +57,21 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 	@Before
 	public void setupDependencies() throws Exception {
 		try {
-			
-		if (_service_context != null) {
-			return;
+
+		if (null == _service_context) {
+			final String temp_dir = System.getProperty("java.io.tmpdir");
+	
+			// OK we're going to use guice, it was too painful doing this by hand...
+			config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v1.properties")))
+					.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
+					.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
+					.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
+					.withValue("globals.local_yarn_config_dir", ConfigValueFactory.fromAnyRef(temp_dir));
+	
+			Injector app_injector = ModuleUtils.createTestInjector(Arrays.asList(), Optional.of(config));	
+			app_injector.injectMembers(this);
+			_service_context = _temp_service_context;
 		}
-
-		final String temp_dir = System.getProperty("java.io.tmpdir");
-
-		// OK we're going to use guice, it was too painful doing this by hand...
-		config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v1.properties")))
-				.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
-				.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
-				.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
-				.withValue("globals.local_yarn_config_dir", ConfigValueFactory.fromAnyRef(temp_dir));
-
-		Injector app_injector = ModuleUtils.createTestInjector(Arrays.asList(), Optional.of(config));	
-		app_injector.injectMembers(this);
 		this._management_db = _service_context.getCoreManagementDbService();
 		this.securityService =  _service_context.getSecurityService();
 		initMockDb(_service_context);

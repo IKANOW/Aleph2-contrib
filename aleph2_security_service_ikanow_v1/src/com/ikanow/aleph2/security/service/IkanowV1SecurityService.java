@@ -148,10 +148,16 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 	}
 
 	
+	static IkanowV1SecurityModule _temp;
+	
 	public static List<Module> getExtraDependencyModules() {
-		return Arrays.asList((Module)new IkanowV1SecurityModule());
+		return Arrays.asList((Module)(_temp = new IkanowV1SecurityModule()));
 	}
 
+	public void killMe() throws Exception {
+		if (null != _temp) _temp.destroy();
+	}
+	
 
 	@Override
 	public void youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules() {
