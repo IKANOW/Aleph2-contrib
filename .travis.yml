@@ -4,7 +4,7 @@ jdk:
  - oraclejdk8
 
 before_install:
- - cd core_dependencies && git pull origin master &&  mvn install -f dependency_pom.xml -DskipTests=true && cd ../
+ - cd core_dependencies && git pull origin september_2015_release_inc_patches_v2.3 &&  mvn install -f dependency_pom.xml -DskipTests=true && cd ../
 
 env:
  - TEST_DIR=aleph2_crud_service_mongodb
