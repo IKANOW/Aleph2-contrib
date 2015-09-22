@@ -30,6 +30,7 @@ import org.apache.shiro.authc.credential.CredentialsMatcher;
 import org.apache.shiro.authz.AuthorizationException;
 import org.apache.shiro.authz.AuthorizationInfo;
 import org.apache.shiro.authz.SimpleAuthorizationInfo;
+import org.apache.shiro.cache.CacheManager;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
 import org.bson.types.ObjectId;
@@ -64,8 +65,8 @@ public class IkanowV1Realm extends AuthorizingRealm {
 	private Set<IRoleProvider> roleProviders;
 	
 	@Inject
-	public IkanowV1Realm(final IServiceContext service_context,CredentialsMatcher matcher, Set<IRoleProvider> roleProviders) {		
-		super(matcher);
+	public IkanowV1Realm(final IServiceContext service_context,CacheManager cacheManager, CredentialsMatcher matcher, Set<IRoleProvider> roleProviders) {		
+		super(cacheManager,matcher);
 		_context = service_context;
 		this.roleProviders = roleProviders;
 	}
