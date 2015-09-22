@@ -36,14 +36,13 @@ public class IkanowV1SecurityModule extends CoreSecurityModule{
 	protected void bindRealms() {
 		super.bindRealms();
 		
-			bind(CredentialsMatcher.class).to(AccountStatusCredentialsMatcher.class);
-			bind(IRoleProvider.class).to(IkanowV1CommunityRoleProvider.class);
-			bindRealm().to(IkanowV1Realm.class);
-			
-			Multibinder<IRoleProvider> uriBinder = Multibinder.newSetBinder(binder(), IRoleProvider.class);
-		    uriBinder.addBinding().to(IkanowV1AdminRoleProvider.class);
-		    uriBinder.addBinding().to(IkanowV1UserGroupRoleProvider.class);
-		    uriBinder.addBinding().to(IkanowV1DataGroupRoleProvider.class);
+		bind(CredentialsMatcher.class).to(AccountStatusCredentialsMatcher.class);
+		bind(IRoleProvider.class).to(IkanowV1CommunityRoleProvider.class);
+		bindRealm().to(IkanowV1Realm.class);
+		
+		Multibinder<IRoleProvider> uriBinder = Multibinder.newSetBinder(binder(), IRoleProvider.class);
+	    uriBinder.addBinding().to(IkanowV1AdminRoleProvider.class);
+	    uriBinder.addBinding().to(IkanowV1UserGroupRoleProvider.class);
+	    uriBinder.addBinding().to(IkanowV1DataGroupRoleProvider.class);
 	}
-
 }

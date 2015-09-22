@@ -25,7 +25,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.shiro.authc.AuthenticationException;
 import org.apache.shiro.subject.PrincipalCollection;
-import org.apache.shiro.subject.SimplePrincipalCollection;
 import org.apache.shiro.subject.Subject;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -38,6 +37,7 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISubject;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
+import com.ikanow.aleph2.util.ProfilingUtility;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
@@ -168,6 +168,46 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 		//assertEquals(true,subject.isAuthenticated());
 		
 		assertEquals(true,securityService.hasRole(subject,"admin"));
+	}
+
+	@Test
+	public void testCaching(){
+		ISubject subject = loginAsRegularUser();
+		// test personal community permission
+		String permission = "54f86d8de4b03d27d1ea0d7b";
+        //test a typed permission (not instance-level)
+		ProfilingUtility.timeStart("TU-permisssion0");
+		assertEquals(true,securityService.isPermitted(subject,permission));
+		ProfilingUtility.timeStopAndLog("TU-permisssion0");
+		for (int i = 0; i < 10; i++) {
+			ProfilingUtility.timeStart("TU-permisssion"+(i+1));
+			assertEquals(true,securityService.isPermitted(subject,permission));			
+			ProfilingUtility.timeStopAndLog("TU-permisssion"+(i+1));
+		}
+		subject = loginAsAdmin();
+		// test personal community permission
+		permission = "54f86d8de4b03d27d1ea0d7b";
+        //test a typed permission (not instance-level)
+		ProfilingUtility.timeStart("AU-permisssion0");
+		assertEquals(true,securityService.isPermitted(subject,permission));
+		ProfilingUtility.timeStopAndLog("AU-permisssion");
+		for (int i = 0; i < 10; i++) {
+			ProfilingUtility.timeStart("AU-permisssion"+i+1);
+			assertEquals(true,securityService.isPermitted(subject,permission));			
+			ProfilingUtility.timeStopAndLog("AU-permisssion"+i+1);
+		}
+		
+		for (int i = 0; i < 10; i++) {
+			ProfilingUtility.timeStart("TU2-permisssion_L"+(i+1));
+		subject = loginAsRegularUser();
+		ProfilingUtility.timeStopAndLog("TU2-permisssion_L"+(i+1));
+		// test personal community permission
+		permission = "54f86d8de4b03d27d1ea0d7b";
+        //test a typed permission (not instance-level)
+		ProfilingUtility.timeStart("TU2-permisssion"+(i+1));
+		assertEquals(true,securityService.isPermitted(subject,permission));
+			ProfilingUtility.timeStopAndLog("TU2-permisssion"+(i+1));
+		}
 	}
 
 }
