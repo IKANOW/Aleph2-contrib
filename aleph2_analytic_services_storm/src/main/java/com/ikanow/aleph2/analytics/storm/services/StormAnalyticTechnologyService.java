@@ -242,10 +242,14 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 		try {
 			final Collection<String> user_lib_paths = context.getAnalyticsLibraries(Optional.of(analytic_bucket), jobs).join().values();
 			
+			//TODO: this doesn't seem right? what did DIM used to do? i think get the entry point from the module/lib names
+			// the job_to_start entry point is for the analytic technology right? not the module at all
 			final String entry_point = Optional.ofNullable(job_to_start.entry_point()).orElse(PassthroughTopology.class.getName());
+			
 			//TODO (ALEPH-12): check built-in: eg javascript
 			// (other, future, cases: enrichment module format, harvest module format; related, built-in modules: javascript)
 			
+			//(note this only works because the analytic manager has set the thread classpath)
 			final Class<?> module_type = Class.forName(entry_point);
 			
 			if (IEnrichmentStreamingTopology.class.isAssignableFrom(module_type)) {
