@@ -704,6 +704,7 @@ public class IkanowV1SyncService_Buckets {
 	 * @throws ParseException
 	 */
 	protected static Date parseJavaDate(String java_date_tostring_format) throws ParseException {
+		if ( java_date_tostring_format.isEmpty() ) return new Date();
 		try {
 			return new SimpleDateFormat("EEE MMM d HH:mm:ss zzz yyyy").parse(java_date_tostring_format);
 		}
