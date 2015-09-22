@@ -242,8 +242,6 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 		try {
 			final Collection<String> user_lib_paths = context.getAnalyticsLibraries(Optional.of(analytic_bucket), jobs).join().values();
 			
-			//TODO: this doesn't seem right? what did DIM used to do? i think get the entry point from the module/lib names
-			// the job_to_start entry point is for the analytic technology right? not the module at all
 			final String entry_point = Optional.ofNullable(job_to_start.entry_point()).orElse(PassthroughTopology.class.getName());
 			
 			//TODO (ALEPH-12): check built-in: eg javascript
@@ -265,16 +263,19 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 				//(it's set up this way for testability)
 				
 				// Create a pretend bucket that has this job as the (sole) enrichment topology...
-				final DataBucketBean converted_bucket = BeanTemplateUtils.clone(analytic_bucket)
-															.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.streaming)
-															.with(DataBucketBean::streaming_enrichment_topology, 
-																	BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
-																		.with(EnrichmentControlMetadataBean::enabled, true)
-																		.with(EnrichmentControlMetadataBean::name, job_to_start.name())
-																		.with(EnrichmentControlMetadataBean::config, job_to_start.config())
-																	.done().get()
-																	)
-															.done();
+				final DataBucketBean converted_bucket = 
+						(null != analytic_bucket.streaming_enrichment_topology()) 
+						? analytic_bucket
+						: BeanTemplateUtils.clone(analytic_bucket)
+											.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.streaming)
+											.with(DataBucketBean::streaming_enrichment_topology, 
+													BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
+														.with(EnrichmentControlMetadataBean::enabled, true)
+														.with(EnrichmentControlMetadataBean::name, job_to_start.name())
+														.with(EnrichmentControlMetadataBean::config, job_to_start.config())
+													.done().get()
+													)
+											.done();
 				
 				wrapped_context.setBucket(converted_bucket);
 				
