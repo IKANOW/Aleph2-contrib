@@ -40,6 +40,13 @@ public class MockStormAnalyticTechnologyService extends StormAnalyticTechnologyS
 		super(storm_controller);
 	}		
 	
+	/** User constructor
+	 */
+	public MockStormAnalyticTechnologyService() {
+		super(MockStormAnalyticTechnologyModule.getController());
+	}
+		
+	
 	@Override
 	public boolean canRunOnThisNode(
 					final DataBucketBean analytic_bucket,

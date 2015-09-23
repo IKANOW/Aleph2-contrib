@@ -30,6 +30,14 @@ public class MockStormAnalyticTechnologyModule extends AbstractModule {
 	 */
 	@Override
 	public void configure() {
-		this.bind(IStormController.class).toInstance(new LocalStormController());
+		this.bind(IStormController.class).toInstance(getController());
 	}
+	
+	/** Initializes the storm instance
+	 * @return a local storm controller 
+	 */
+	public static IStormController getController() {
+		return new LocalStormController();
+	}
+	
 }
