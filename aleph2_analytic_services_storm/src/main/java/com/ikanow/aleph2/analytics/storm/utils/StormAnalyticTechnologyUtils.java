@@ -16,7 +16,6 @@
 package com.ikanow.aleph2.analytics.storm.utils;
 
 import java.util.Collection;
-import java.util.EnumSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
@@ -26,7 +25,6 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean.MasterEnrichmentType;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
-import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 
 /** Contains some utility logic for the Storm Analytic Technology Service
@@ -34,9 +32,6 @@ import com.ikanow.aleph2.data_model.utils.Optionals;
  */
 public class StormAnalyticTechnologyUtils {
 
-	private static EnumSet<DataBucketBean.MasterEnrichmentType> _enrichment_types = 
-			EnumSet.of(DataBucketBean.MasterEnrichmentType.streaming, DataBucketBean.MasterEnrichmentType.streaming_and_batch);
-	
 	/** Validate a single job for this analytic technology in the context of the bucket/other jobs
 	 * @param analytic_bucket - the bucket (just for context)
 	 * @param jobs - the entire list of jobs
@@ -47,27 +42,8 @@ public class StormAnalyticTechnologyUtils {
 		// Global validation:
 		
 		// Here we'll check:
-		// - doesn't have both streaming and analytic threads (maybe later we can allow this but it's gonna get a bit complicated to start with)
-
-		final BasicMessageBean global_res = Lambdas.get(() -> {
-			if (streamingEnrichmentEnabled(analytic_bucket) // (see below - all streaming options on)
-					&&
-				(null != analytic_bucket.analytic_thread()) // ...and analytics is present...
-					&&
-					Optionals.ofNullable(analytic_bucket.analytic_thread().jobs())
-							.stream()
-							.filter(j -> Optional.ofNullable(j.enabled()).orElse(true)) //...and at least one job is enabled!
-							.findAny().isPresent()					
-				)
-			{
-				return ErrorUtils.buildErrorMessage(StormAnalyticTechnologyUtils.class, "validateJobs", ErrorUtils.get(ErrorUtils.TEMP_MIXED_ANALYTICS_AND_ENRICHMENT, analytic_bucket.full_name()));
-			}
-			else return ErrorUtils.buildSuccessMessage(StormAnalyticTechnologyUtils.class, "validateJobs", "");
-		});
+		// (currently no global validation)
 		
-		if (!global_res.success()) {
-			return global_res;
-		}
 		// (Else graduate to per job validation)
 		
 		// Per-job validation:
@@ -123,19 +99,5 @@ public class StormAnalyticTechnologyUtils {
 		final boolean success = errors.isEmpty();
 		
 		return ErrorUtils.buildMessage(success, StormAnalyticTechnologyUtils.class, "validateJobs", errors.stream().collect(Collectors.joining(";")));
-	}
-	
-	/** Utility function returning whether a bucket is using streaming enrichment
-	 * @param bucket
-	 * @return
-	 */
-	private static boolean streamingEnrichmentEnabled(final DataBucketBean bucket) {
-		return
-			_enrichment_types.contains(bucket.master_enrichment_type()) // streaming is being used...
-			&&
-			(null != bucket.streaming_enrichment_topology()) // ...and streaming is present...
-			&&
-			Optional.ofNullable(bucket.streaming_enrichment_topology().enabled()).orElse(true) //..and enabled...
-			;
-	}
+	}	
 }

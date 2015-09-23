@@ -21,10 +21,9 @@ import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.util.Collection;
 import java.util.Date;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -153,7 +152,7 @@ public class StormControllerUtil {
 	 * @param jar_location location of the jar to send
 	 * @return
 	 */
-	public static boolean buildStormTopologyJar(final List<String> jars_to_merge, final String input_jar_location) {
+	public static boolean buildStormTopologyJar(final Collection<String> jars_to_merge, final String input_jar_location) {
 		try {				
 			_logger.debug("creating jar to submit at: " + input_jar_location);
 			//final String input_jar_location = System.getProperty("java.io.tmpdir") + File.separator + UuidUtils.get().getTimeBasedUuid() + ".jar";
@@ -215,7 +214,7 @@ public class StormControllerUtil {
 		
 		_logger.info("Retrieved user Storm config topology: spouts=" + topology.get_spouts_size() + " bolts=" + topology.get_bolts_size() + " configs=" + config.toString());
 		
-		final List<String> jars_to_merge = new LinkedList<String>();
+		final Set<String> jars_to_merge = new TreeSet<String>();
 		
 		final CompletableFuture<String> jar_future = Lambdas.get(() -> {
 			if (RemoteStormController.class.isAssignableFrom(storm_controller.getClass())) {
@@ -224,7 +223,7 @@ public class StormControllerUtil {
 				jars_to_merge.addAll( underlying_artefacts.stream()
 						.map(artefact -> LiveInjector.findPathJar(artefact.getClass(), ""))
 						.filter(f -> !f.equals(""))
-						.collect(Collectors.toList()));
+						.collect(Collectors.toSet()));
 				
 				if (jars_to_merge.isEmpty()) { // special case: no aleph2 libs found, this is almost certainly because this is being run from eclipse...
 					final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
@@ -298,7 +297,7 @@ public class StormControllerUtil {
 	 * @return
 	 * @throws Exception 
 	 */
-	public static synchronized CompletableFuture<String> buildOrReturnCachedStormTopologyJar(final List<String> jars_to_merge, final String cached_jar_dir) {
+	public static synchronized CompletableFuture<String> buildOrReturnCachedStormTopologyJar(final Collection<String> jars_to_merge, final String cached_jar_dir) {
 		CompletableFuture<String> future = new CompletableFuture<String>();
 		final String hashed_jar_name = JarBuilderUtil.getHashedJarName(jars_to_merge, cached_jar_dir);
 		//1. Check cache for this jar via hash of jar names
