@@ -286,12 +286,12 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 				final Collection<Object> underlying_artefacts = Lambdas.get(() -> {
 					// Check if the user has overridden the context, and set to the defaults if not
 					try {
-						return context.getUnderlyingArtefacts();
+						return wrapped_context.getUnderlyingArtefacts();
 					}
 					catch (Exception e) {
 						// This is OK, it just means that the top. developer hasn't overridden the services, so we just use the default ones:
 						context.getAnalyticsContextSignature(Optional.of(converted_bucket), Optional.empty());
-						return context.getUnderlyingArtefacts();
+						return wrapped_context.getUnderlyingArtefacts();
 					}			
 				});				
 				
