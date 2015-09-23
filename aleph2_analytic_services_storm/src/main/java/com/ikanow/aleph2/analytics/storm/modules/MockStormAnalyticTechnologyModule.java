@@ -25,6 +25,8 @@ import com.ikanow.aleph2.analytics.storm.services.LocalStormController;
  */
 public class MockStormAnalyticTechnologyModule extends AbstractModule {
 
+	private static IStormController _controller;
+	
 	/* (non-Javadoc)
 	 * @see com.google.inject.AbstractModule#configure()
 	 */
@@ -37,7 +39,12 @@ public class MockStormAnalyticTechnologyModule extends AbstractModule {
 	 * @return a local storm controller 
 	 */
 	public static IStormController getController() {
-		return new LocalStormController();
+		synchronized (IStormController.class) {
+			if (null != _controller) {
+				return _controller;
+			}
+			return (_controller = new LocalStormController());
+		}
 	}
 	
 }
