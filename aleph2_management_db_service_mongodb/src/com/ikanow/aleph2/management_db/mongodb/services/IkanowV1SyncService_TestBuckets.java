@@ -289,7 +289,8 @@ public class IkanowV1SyncService_TestBuckets {
 		return getTestOutputCrudService(data_bucket).map(v2_output_db -> {
 			//got the output crud, check if time is up or we have enough test results
 			//1: time is up by checking started_on+test_spec vs now
-			final long time_expires_on = old_test_source.started_processing_on().getTime()+(test_spec.max_run_time_secs()*1000);
+			final long max_run_time_secs = Optional.ofNullable(test_spec.max_run_time_secs()).orElse(60L);
+			final long time_expires_on = old_test_source.started_processing_on().getTime()+(max_run_time_secs*1000L);
 			if ( new Date().getTime() > time_expires_on ) {
 				_logger.debug("Test job: " + data_bucket.full_name() + " expired, need to retire");
 				return retireTestJob(data_bucket, old_test_source, source_test_db, v2_output_db);
@@ -372,7 +373,8 @@ public class IkanowV1SyncService_TestBuckets {
 			final ICrudService<TestQueueBean> source_test_db,
 			final ICrudService<JsonNode> v2_output_db) {
 		_logger.debug("retiring job");
-		return v2_output_db.getObjectsBySpec(CrudUtils.allOf().limit(test_source.test_params().requested_num_objects())).thenCompose( results -> {
+		final long requested_num_objects = Optional.ofNullable(test_source.test_params().requested_num_objects()).orElse(10L);
+		return v2_output_db.getObjectsBySpec(CrudUtils.allOf().limit(requested_num_objects)).thenCompose( results -> {
 			_logger.debug("returned: " + results.count() + " items in output collection (with limit, there could be more)");
 			_logger.debug("moving data to mongo collection: ingest." + data_bucket._id());
 			final ICrudService<JsonNode> v1_output_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + data_bucket._id())).get();		
