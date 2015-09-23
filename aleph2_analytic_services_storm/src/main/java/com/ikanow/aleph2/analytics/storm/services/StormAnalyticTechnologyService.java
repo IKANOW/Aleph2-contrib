@@ -248,7 +248,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 			// (other, future, cases: enrichment module format, harvest module format; related, built-in modules: javascript)
 			
 			//(note this only works because the analytic manager has set the thread classpath)
-			final Class<?> module_type = Class.forName(entry_point);
+			final Class<?> module_type = Class.forName(entry_point, true, this.getClass().getClassLoader());
 			
 			if (IEnrichmentStreamingTopology.class.isAssignableFrom(module_type)) {
 				
