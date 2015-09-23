@@ -392,7 +392,7 @@ public class IkanowV1SyncService_TestBuckets {
 		})
 		.exceptionally(t -> {
 			_logger.debug("Marking job completed with error");
-			return updateTestSourceStatus(test_source._id(), ErrorUtils.get("error: {0}", t.getMessage()), source_test_db, Optional.empty(), Optional.empty(), Optional.empty())
+			return updateTestSourceStatus(test_source._id(), ErrorUtils.getLongForm("error: {0}", t), source_test_db, Optional.empty(), Optional.empty(), Optional.empty())
 					.join();
 		})
 		;
@@ -435,7 +435,7 @@ public class IkanowV1SyncService_TestBuckets {
 				).collect(Collectors.joining("\n"))));	
 			});
 		}).exceptionally(t -> {
-			updateTestSourceStatus(new_test_source._id(), ("error"), source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of("Error during test_bucket: " + t.getMessage()))
+			updateTestSourceStatus(new_test_source._id(), ("error"), source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of(ErrorUtils.getLongForm("Error during test_bucket: {0}", t)))
 			.thenCompose(x -> {
 				if ( !x )
 					_logger.error("Had an error trying to update status of test object after having an error during test bucket, somethings gone horribly wrong");
