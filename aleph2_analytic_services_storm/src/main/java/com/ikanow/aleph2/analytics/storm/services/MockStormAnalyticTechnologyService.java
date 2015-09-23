@@ -29,6 +29,9 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 
+/** Storm analytic technology service using standalone local Storm instead of full remote service - otherwise should behave the same
+ * @author Alex
+ */
 public class MockStormAnalyticTechnologyService extends StormAnalyticTechnologyService {
 
 	public static final String DISABLE_FILE = "mock_storm_disable";
