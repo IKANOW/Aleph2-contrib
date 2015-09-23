@@ -190,8 +190,7 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 
 	@Override
 	public <O> IManagementCrudService<O> secured(IManagementCrudService<O> crud, AuthorizationBean authorizationBean) {
-		// TODO Auto-generated method stub
-		return null;
+		return new SecuredCrudManagementDbService<O>(serviceContext, crud, authorizationBean);
 	}
 			
 }
