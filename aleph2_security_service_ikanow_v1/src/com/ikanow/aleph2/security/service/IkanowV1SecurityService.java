@@ -18,6 +18,7 @@ package com.ikanow.aleph2.security.service;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,8 +27,10 @@ import org.apache.logging.log4j.Logger;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.AuthenticationToken;
 import org.apache.shiro.authc.UsernamePasswordToken;
+import org.apache.shiro.cache.CacheManager;
 import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.apache.shiro.mgt.SecurityManager;
+import org.apache.shiro.realm.Realm;
 import org.apache.shiro.session.Session;
 import org.apache.shiro.session.mgt.DefaultSessionManager;
 import org.apache.shiro.session.mgt.SessionManager;
@@ -53,12 +56,20 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 	private static final Logger logger = LogManager.getLogger(IkanowV1SecurityService.class);
 	@Inject
 	protected IServiceContext serviceContext;
-
+	protected CacheManager cacheManager;
+	Collection<Realm> realms = new HashSet<Realm>();
 	
 	@Inject
-	public IkanowV1SecurityService(IServiceContext serviceContext, SecurityManager securityManager) {
+	public IkanowV1SecurityService(IServiceContext serviceContext, SecurityManager securityManager, CacheManager cacheManager) {
 		this.serviceContext = serviceContext;
-		SecurityUtils.setSecurityManager(securityManager);		
+		SecurityUtils.setSecurityManager(securityManager);
+		this.cacheManager = cacheManager;
+		if(securityManager instanceof DefaultSecurityManager){
+			SessionManager sessionManager = ((DefaultSecurityManager)securityManager).getSessionManager();
+			this.realms = ((DefaultSecurityManager)securityManager).getRealms();
+			logger.debug("Session manager:"+sessionManager);	
+		}		
+
 	}
 
 
@@ -206,6 +217,16 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 				((DefaultSessionManager)sessionManager).setGlobalSessionTimeout(globalSessionTimeout);
 			}
 			logger.debug("Session manager:"+sessionManager);	
+		}
+	}
+
+	public void invalidateAuthenticationCache(Collection<String> principalNames){
+		for (Realm realm : realms) {
+			if(realm instanceof IkanowV1Realm){
+				IkanowV1Realm ar = (IkanowV1Realm)realm;
+				ar.clearCachedAuthorizationInfo(principalNames);
+		} 
+			
 		}
 	}
 }
