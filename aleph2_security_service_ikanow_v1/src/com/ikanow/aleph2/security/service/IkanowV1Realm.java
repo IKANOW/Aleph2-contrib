@@ -15,6 +15,7 @@
  *******************************************************************************/
 package com.ikanow.aleph2.security.service;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -33,6 +34,7 @@ import org.apache.shiro.authz.SimpleAuthorizationInfo;
 import org.apache.shiro.cache.CacheManager;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
+import org.apache.shiro.subject.SimplePrincipalCollection;
 import org.bson.types.ObjectId;
 
 import scala.Tuple2;
@@ -175,5 +177,8 @@ public class IkanowV1Realm extends AuthorizingRealm {
         return info;
     }
     
-
+     public void clearCachedAuthorizationInfo(Collection<String> principalNames){
+    	 SimplePrincipalCollection principals = new SimplePrincipalCollection(principalNames, this.getClass().getName());
+    	 super.doClearCache(principals);
+     }
 }
