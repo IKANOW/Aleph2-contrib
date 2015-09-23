@@ -26,8 +26,12 @@ import org.apache.logging.log4j.Logger;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.AuthenticationToken;
 import org.apache.shiro.authc.UsernamePasswordToken;
+import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.apache.shiro.mgt.SecurityManager;
 import org.apache.shiro.session.Session;
+import org.apache.shiro.session.mgt.DefaultSessionManager;
+import org.apache.shiro.session.mgt.SessionManager;
+import org.apache.shiro.subject.PrincipalCollection;
 import org.apache.shiro.subject.SimplePrincipalCollection;
 import org.apache.shiro.subject.Subject;
 import org.apache.shiro.util.ThreadContext;
@@ -54,7 +58,7 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 	@Inject
 	public IkanowV1SecurityService(IServiceContext serviceContext, SecurityManager securityManager) {
 		this.serviceContext = serviceContext;
-		SecurityUtils.setSecurityManager(securityManager);
+		SecurityUtils.setSecurityManager(securityManager);		
 	}
 
 
@@ -181,10 +185,11 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 	}
 
 
+	@SuppressWarnings("unchecked")
 	@Override
 	public Collection<String> releaseRunAs(ISubject subject) {
-		// TODO Auto-generated method stub
-		return null;
+		PrincipalCollection p = ((Subject)subject.getSubject()).releaseRunAs();	
+		return p.asList();
 	}
 
 
@@ -192,5 +197,15 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 	public <O> IManagementCrudService<O> secured(IManagementCrudService<O> crud, AuthorizationBean authorizationBean) {
 		return new SecuredCrudManagementDbService<O>(serviceContext, crud, authorizationBean);
 	}
-			
+
+	public void setSessionTimeout(long globalSessionTimeout){
+		SecurityManager securityManager = SecurityUtils.getSecurityManager();
+		if(securityManager instanceof DefaultSecurityManager){
+			SessionManager sessionManager = ((DefaultSecurityManager)securityManager).getSessionManager();
+			if(sessionManager instanceof DefaultSessionManager){
+				((DefaultSessionManager)sessionManager).setGlobalSessionTimeout(globalSessionTimeout);
+			}
+			logger.debug("Session manager:"+sessionManager);	
+		}
+	}
 }

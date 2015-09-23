@@ -19,15 +19,13 @@ import static org.junit.Assert.assertEquals;
 
 import java.io.InputStreamReader;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Optional;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.shiro.authc.AuthenticationException;
-import org.apache.shiro.subject.PrincipalCollection;
-import org.apache.shiro.subject.Subject;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.inject.Inject;
@@ -145,14 +143,21 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 		assertEquals(true,securityService.hasRole(subject,runAsRole));
         //test a typed permission (not instance-level)
 		assertEquals(true,securityService.isPermitted(subject,runAsPersonalPermission));
-		PrincipalCollection p = ((Subject)subject.getSubject()).releaseRunAs();	
+		Collection<String> p = securityService.releaseRunAs(subject);
+		logger.debug("Released Principals:"+p);
+		securityService.runAs(subject,Arrays.asList(runAsPrincipal));
+		
+		assertEquals(true,securityService.hasRole(subject,runAsRole));
+        //test a typed permission (not instance-level)
+		assertEquals(true,securityService.isPermitted(subject,runAsPersonalPermission));
+		p = securityService.releaseRunAs(subject);
 		logger.debug("Released Principals:"+p);
 	}
 
 	
 	@Test
-	@Ignore
 	public void testSessionTimeout(){
+		((IkanowV1SecurityService)securityService).setSessionTimeout(1000);
 		ISubject subject = loginAsAdmin();
 		// system community
 		String permission = "4c927585d591d31d7b37097a";
