@@ -331,7 +331,9 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 												final IAnalyticsContext context)
 	{
 		// (no specific resume function, just use start)
-		return startAnalyticJob(analytic_bucket, jobs, job_to_resume, context);
+		//(first stop the job if it's running)
+		return stopAnalyticJob(analytic_bucket, jobs, job_to_resume, context).thenCompose(__ -> 
+				startAnalyticJob(analytic_bucket, jobs, job_to_resume, context));
 	}
 
 	/* (non-Javadoc)
