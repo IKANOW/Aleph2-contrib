@@ -172,8 +172,6 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 
 	/////////////////////////////////////////////////////////////
 	
-	//TODO: i think need to store times as well, since otherwise you could get like 1 record/s and never time out a per 5 mins/1M obj setting
-	
 	/** BATCH SUB SERVICE
 	 * @author alex
 	 */
