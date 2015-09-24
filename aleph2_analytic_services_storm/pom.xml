@@ -142,6 +142,11 @@
   		<version>${aleph2.version}</version>
 		<scope>${aleph2.scope}</scope>
 	</dependency>
+	<dependency>
+		<groupId>org.apache.storm</groupId>
+		<artifactId>storm-kafka</artifactId>
+		<version>0.9.5</version>
+	</dependency>
 	<!-- Test deps -->
 	<dependency>
 		<groupId>com.ikanow.aleph2</groupId>
