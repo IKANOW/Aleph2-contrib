@@ -231,7 +231,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	{
 		if (_state_name == State.IN_TECHNOLOGY) {
 			final DataBucketBean my_bucket = bucket.orElseGet(() -> _bucket.get());
-			if (!_job.get().output().is_transient()) { // Final output for this analytic
+			if (!Optionals.of(() -> _job.get().output().is_transient()).orElse(false)) { // Final output for this analytic
 				//TODO (ALEPH-12): handle child-buckets 
 				
 				// Just return an aleph2 output bolt:

@@ -325,7 +325,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this, "startAnalyticJob", ErrorUtils.get("Bucket={0} Job={1} Error=Module_class_not_recognized: {2}", analytic_bucket.full_name(), job_to_start.name(), job_to_start.entry_point())));
 		}
 		catch (Throwable t) {
-			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this, "startAnalyticJob", ErrorUtils.getLongForm("Bucket={1} Job={2} Error={0}", t, analytic_bucket, job_to_start.name())));
+			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this, "startAnalyticJob", ErrorUtils.getLongForm("Bucket={1} Job={2} Error={0}", t, analytic_bucket.full_name(), job_to_start.name())));
 		}
 	}
 
