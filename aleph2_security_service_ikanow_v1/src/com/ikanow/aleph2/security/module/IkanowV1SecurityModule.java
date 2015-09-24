@@ -38,7 +38,7 @@ public class IkanowV1SecurityModule extends CoreSecurityModule{
 		
 		bind(CredentialsMatcher.class).to(AccountStatusCredentialsMatcher.class);
 		bind(IRoleProvider.class).to(IkanowV1CommunityRoleProvider.class);
-		bindRealm().to(IkanowV1Realm.class);
+		bindRealm().to(IkanowV1Realm.class).asEagerSingleton();
 		
 		Multibinder<IRoleProvider> uriBinder = Multibinder.newSetBinder(binder(), IRoleProvider.class);
 	    uriBinder.addBinding().to(IkanowV1AdminRoleProvider.class);

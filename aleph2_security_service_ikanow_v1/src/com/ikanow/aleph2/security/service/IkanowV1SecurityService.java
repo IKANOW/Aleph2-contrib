@@ -192,7 +192,7 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 	public void runAs(ISubject subject,Collection<String> principals) {
 		// TODO Auto-generated method stub
 		
-		((Subject)subject.getSubject()).runAs(new SimplePrincipalCollection(principals,IkanowV1Realm.class.getSimpleName()));
+		((Subject)subject.getSubject()).runAs(new SimplePrincipalCollection(principals,IkanowV1Realm.class.getName()));
 	}
 
 

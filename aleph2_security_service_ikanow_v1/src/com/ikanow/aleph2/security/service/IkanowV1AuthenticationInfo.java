@@ -32,7 +32,7 @@ public class IkanowV1AuthenticationInfo implements AuthenticationInfo {
 		this.authenticationBean = ab;
 		String realmName = IkanowV1Realm.class.getSimpleName();
 		this.principalCollection =  new SimplePrincipalCollection(ab.getProfileId(),realmName);
-		principalCollection.add(ab.get_id(), realmName);
+		//principalCollection.add(ab.get_id(), realmName);
 	}
 	/**
 	 * 
