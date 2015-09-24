@@ -410,7 +410,7 @@ public class StormControllerUtil {
 	 * @return
 	 * @throws Exception 
 	 */
-	private static void waitForJobToDie(
+	public static void waitForJobToDie(
 			IStormController storm_controller, DataBucketBean bucket, long seconds_to_wait) throws Exception {
 		long start_time = System.currentTimeMillis();
 		long num_tries = 0;
