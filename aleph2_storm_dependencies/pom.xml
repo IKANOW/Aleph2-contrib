@@ -1,7 +1,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.ikanow.aleph2</groupId>
-  <artifactId>aleph2_analytic_services_storm</artifactId>
+  <artifactId>aleph2_storm_dependencies</artifactId>
   <version>${aleph2.version}</version>
   <properties>
 	<aleph2.version>0.0.1-SNAPSHOT</aleph2.version>
@@ -117,49 +117,21 @@
   		<version>4.12</version>
   		<scope>test</scope>
   	</dependency>
-  	<!-- Example of internal dependency (always need data model anyway) -->
-  	<dependency>
-  		<groupId>com.ikanow.aleph2</groupId>
-  		<artifactId>aleph2_data_model</artifactId>
-  		<version>${aleph2.version}</version>
-		<scope>${aleph2.scope}</scope>
-	</dependency>
-  	<dependency>
-  		<groupId>com.ikanow.aleph2</groupId>
-  		<artifactId>aleph2_core_distributed_services_library</artifactId>
-  		<version>${aleph2.version}</version>
-		<scope>${aleph2.scope}</scope>
-	</dependency>
-  	<dependency>
-  		<groupId>com.ikanow.aleph2</groupId>
-  		<artifactId>aleph2_core_shared_library</artifactId>
-  		<version>${aleph2.version}</version>
-		<scope>${aleph2.scope}</scope>
-	</dependency>
-  	<dependency>
-  		<groupId>com.ikanow.aleph2</groupId>
-  		<artifactId>aleph2_storm_dependencies</artifactId>
-  		<version>${aleph2.version}</version>
-		<scope>${aleph2.scope}</scope>
-	</dependency>
-	<!-- Test deps -->
+	<!-- Other external dependencies here -->
 	<dependency>
-		<groupId>com.ikanow.aleph2</groupId>
-		<artifactId>aleph2_storage_service_hdfs</artifactId>
-		<version>${aleph2.version}</version>
-		<scope>test</scope>
+		<groupId>org.apache.storm</groupId>
+		<artifactId>storm-core</artifactId>
+		<version>0.9.3</version>
 	</dependency>
 	<dependency>
-		<groupId>com.ikanow.aleph2</groupId>
-		<artifactId>aleph2_management_db_service_mongodb</artifactId>
-		<version>${aleph2.version}</version>
-		<scope>test</scope>
+		<groupId>org.apache.storm</groupId>
+		<artifactId>storm-kafka</artifactId>
+		<version>0.9.5</version>
 	</dependency>
 	<dependency>
-		<groupId>com.ikanow.aleph2</groupId>
-		<artifactId>aleph2_search_index_service_elasticsearch</artifactId>
-		<version>${aleph2.version}</version>
-		<scope>test</scope>
-	</dependency>  		
+		<groupId>org.yaml</groupId>
+		<artifactId>snakeyaml</artifactId>
+		<version>1.15</version>
+	</dependency>
   </dependencies>
 </project>
