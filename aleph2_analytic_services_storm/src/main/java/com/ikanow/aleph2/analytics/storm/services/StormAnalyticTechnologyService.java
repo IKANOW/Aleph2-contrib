@@ -238,6 +238,25 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 												final AnalyticThreadJobBean job_to_start, 
 												final IAnalyticsContext context)
 	{
+		return startOrRestartAnalyticJob(analytic_bucket, jobs, job_to_start, context, false);
+	}
+	
+	/** Utility to start or restart the job
+	 * @param analytic_bucket
+	 * @param jobs
+	 * @param job_to_start
+	 * @param context
+	 * @param restart
+	 * @return
+	 */
+	public CompletableFuture<BasicMessageBean> startOrRestartAnalyticJob(
+			final DataBucketBean analytic_bucket,
+			final Collection<AnalyticThreadJobBean> jobs,
+			final AnalyticThreadJobBean job_to_start, 
+			final IAnalyticsContext context,
+			final boolean is_restart
+			)
+	{
 		// (job already validated)
 		try {
 			final Collection<String> user_lib_paths = context.getAnalyticsLibraries(Optional.of(analytic_bucket), jobs).join().values();
@@ -296,7 +315,10 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 				});				
 				
 				//(generic topology submit):
-				return StormControllerUtil.startJob(_storm_controller, analytic_bucket, underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir);
+				return is_restart
+						? StormControllerUtil.restartJob(_storm_controller, analytic_bucket, underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir)
+						: StormControllerUtil.startJob(_storm_controller, analytic_bucket, underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir)
+						;
 			}			
 			// (no other options -currently- possible because of validation that has taken place)
 			
@@ -330,12 +352,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 												final AnalyticThreadJobBean job_to_resume, 
 												final IAnalyticsContext context)
 	{
-		// (no specific resume function, just use start)
-		//(first stop the job if it's running)
-		return stopAnalyticJob(analytic_bucket, jobs, job_to_resume, context).thenComposeAsync(Lambdas.wrap_u(__ -> {
-			StormControllerUtil.waitForJobToDie(_storm_controller, analytic_bucket, 15L);
-			return startAnalyticJob(analytic_bucket, jobs, job_to_resume, context);
-		}));
+		return startOrRestartAnalyticJob(analytic_bucket, jobs, job_to_resume, context, true);
 	}
 
 	/* (non-Javadoc)
