@@ -52,6 +52,12 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 	protected IManagementDbService _management_db;
 	protected ISecurityService securityService = null;
 
+	protected String adminId = "4e3706c48d26852237078005";
+	protected String regularUserId = "54f86d8de4b03d27d1ea0d7b";  //cb_user
+	protected String testUserId = "4e3706c48d26852237079004"; 
+	
+
+	
 	@Before
 	public void setupDependencies() throws Exception {
 		try {
@@ -94,23 +100,20 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 	}
 
 	protected ISubject loginAsTestUser() throws AuthenticationException{
-		String userName = "4e3706c48d26852237079004";
 		String password = "xxxxxx";
-		ISubject subject = securityService.login(userName,password);			
+		ISubject subject = securityService.login(testUserId,password);			
 		return subject;
 	}
 
 	protected ISubject loginAsAdmin() throws AuthenticationException{
-		String userName = "4e3706c48d26852237078005";
 		String password = "xxxxxxxx";
-		ISubject subject = securityService.login(userName,password);			
+		ISubject subject = securityService.login(adminId,password);			
 		return subject;
 	}
 
 	protected ISubject loginAsRegularUser() throws AuthenticationException{
-		String userName = "54f86d8de4b03d27d1ea0d7b";  //cb_user
 		String password = "xxxxxxxx";
-		ISubject subject = securityService.login(userName,password);			
+		ISubject subject = securityService.login(regularUserId,password);			
 		return subject;
 	}
 
@@ -215,4 +218,26 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 		}
 	}
 
+	@Test
+	public void testCacheInvalidation(){
+		ISubject subject = loginAsTestUser();
+		
+		securityService.runAs(subject,Arrays.asList(regularUserId));
+
+		// test personal community permission
+		String permission = "54f86d8de4b03d27d1ea0d7b";
+        //test a typed permission (not instance-level)
+		ProfilingUtility.timeStart("TU-permisssion0");
+		assertEquals(true,securityService.isPermitted(subject,permission));
+		ProfilingUtility.timeStopAndLog("TU-permisssion0");
+		for (int i = 0; i < 10; i++) {
+			ProfilingUtility.timeStart("TU-permisssion"+(i+1));
+			assertEquals(true,securityService.isPermitted(subject,permission));			
+			ProfilingUtility.timeStopAndLog("TU-permisssion"+(i+1));
+			if(i==5){
+				((IkanowV1SecurityService)securityService).invalidateAuthenticationCache(Arrays.asList(regularUserId));	
+				//loginAsRegularUser();
+			}
+		}
+	}
 }

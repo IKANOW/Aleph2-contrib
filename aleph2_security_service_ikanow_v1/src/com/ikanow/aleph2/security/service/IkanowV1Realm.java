@@ -71,6 +71,7 @@ public class IkanowV1Realm extends AuthorizingRealm {
 		super(cacheManager,matcher);
 		_context = service_context;
 		this.roleProviders = roleProviders;
+		logger.debug("IkanowV1Realm name="+getName());
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -178,7 +179,9 @@ public class IkanowV1Realm extends AuthorizingRealm {
     }
     
      public void clearCachedAuthorizationInfo(Collection<String> principalNames){
+    	 logger.debug("clearCachedAuthorizationInfo for "+principalNames);
     	 SimplePrincipalCollection principals = new SimplePrincipalCollection(principalNames, this.getClass().getName());
-    	 super.doClearCache(principals);
+    	 super.doClearCache(principals);   	 
      }
+     
 }
