@@ -15,6 +15,7 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.storm.data_model;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -56,4 +57,11 @@ public interface IStormController {
 	 * @throws Exception
 	 */
 	TopologyInfo getJobStats(String job_name) throws Exception;
+	
+	/** Returns the list of (Aleph2-side) names associated with a given bucket
+	 * @param bucket_path
+	 * @return
+	 */
+	List<String> getJobNamesForBucket(String bucket_path);
+
 }

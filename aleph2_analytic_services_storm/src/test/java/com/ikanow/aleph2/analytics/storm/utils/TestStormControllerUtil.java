@@ -47,6 +47,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
@@ -80,9 +81,10 @@ public class TestStormControllerUtil {
 	
 	@Test
 	public void test_createTopologyName() {
-		assertEquals("path-to-bucket__", StormControllerUtil.bucketPathToTopologyName("/path/to/bucket"));
-		assertEquals("path-to-bucket-more__", StormControllerUtil.bucketPathToTopologyName("/path/to/bucket/more"));
-		assertEquals("path-_----more__", StormControllerUtil.bucketPathToTopologyName("/path/+-__////more"));
+		assertEquals(BucketUtils.getUniqueSignature("/path/to/bucket", Optional.empty()),
+				StormControllerUtil.bucketPathToTopologyName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/path/to/bucket").done().get(), Optional.empty()));
+		assertEquals(BucketUtils.getUniqueSignature("/path/to/bucket", Optional.of("test")), 
+				StormControllerUtil.bucketPathToTopologyName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/path/to/bucket").done().get(), Optional.of("test")));
 	}
 	
 	/**
@@ -117,23 +119,23 @@ public class TestStormControllerUtil {
 					.flatMap(IDataWriteService::getCrudService)
 					.get();
 		crud_service.deleteDatastore().get();
-		StormControllerUtil.startJob(storm_cluster, bucket, Collections.emptyList(), Collections.emptyList(), storm_top, Collections.emptyMap(), cached_jar_dir);
+		StormControllerUtil.startJob(storm_cluster, bucket, Optional.empty(), Collections.emptyList(), Collections.emptyList(), storm_top, Collections.emptyMap(), cached_jar_dir);
 		
 		//debug only, let's the job finish
 		//Thread.sleep(5000);
-		final TopologyInfo info = StormControllerUtil.getJobStats(storm_cluster, StormControllerUtil.bucketPathToTopologyName(bucket.full_name()));
+		final TopologyInfo info = StormControllerUtil.getJobStats(storm_cluster, StormControllerUtil.bucketPathToTopologyName(bucket, Optional.empty()));
 		_logger.debug("Status is: " + info.get_status());
 		assertTrue(info.get_status().equals("ACTIVE"));
 		
 		//Restart same job (should use cached jar)
-		StormControllerUtil.restartJob(storm_cluster, bucket, Collections.emptyList(), Collections.emptyList(), storm_top, Collections.emptyMap(), cached_jar_dir);
+		StormControllerUtil.restartJob(storm_cluster, bucket, Optional.empty(), Collections.emptyList(), Collections.emptyList(), storm_top, Collections.emptyMap(), cached_jar_dir);
 		
-		final TopologyInfo info1 = StormControllerUtil.getJobStats(storm_cluster, StormControllerUtil.bucketPathToTopologyName(bucket.full_name()));
+		final TopologyInfo info1 = StormControllerUtil.getJobStats(storm_cluster, StormControllerUtil.bucketPathToTopologyName(bucket, Optional.empty()));
 		_logger.debug("Status is: " + info.get_status());
 		assertTrue(info1.get_status().equals("ACTIVE"));	
 		
 		// Stop job and wait for result
-		StormControllerUtil.stopJob(storm_cluster, bucket).get();
+		StormControllerUtil.stopJob(storm_cluster, bucket, Optional.empty()).get();
 	}
 
 	protected DataBucketBean createBucket() {		

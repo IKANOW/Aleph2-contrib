@@ -21,7 +21,9 @@ import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
@@ -35,6 +37,7 @@ import org.apache.logging.log4j.Logger;
 import org.yaml.snakeyaml.Yaml;
 
 import backtype.storm.generated.AlreadyAliveException;
+import backtype.storm.generated.ClusterSummary;
 import backtype.storm.generated.StormTopology;
 import backtype.storm.generated.TopologyInfo;
 
@@ -47,8 +50,11 @@ import com.ikanow.aleph2.core.shared.utils.LiveInjector;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
+import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 
 /**
  * Factory for returning a local or remote storm controller.
@@ -200,6 +206,7 @@ public class StormControllerUtil {
 	public static CompletableFuture<BasicMessageBean> startJob(
 														final IStormController storm_controller, 
 														final DataBucketBean bucket, 
+														final Optional<String> sub_job,
 														final Collection<Object> underlying_artefacts, 
 														final Collection<String> user_lib_paths, 
 														final StormTopology topology, 
@@ -260,7 +267,7 @@ public class StormControllerUtil {
 				try {
 					_logger.debug("Trying to submit job, try: " + retries + " of " + MAX_RETRIES);
 					final String jar_file_location = jar_future.get();
-					return storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology, (Map<String, Object>)(Map<String, ?>)config);
+					return storm_controller.submitJob(bucketPathToTopologyName(bucket, sub_job), jar_file_location, topology, (Map<String, Object>)(Map<String, ?>)config);
 				} 
 				catch ( Exception ex) {
 					if ( ex instanceof AlreadyAliveException ) {
@@ -354,10 +361,10 @@ public class StormControllerUtil {
 	 * @param bucket
 	 * @return
 	 */
-	public static CompletableFuture<BasicMessageBean> stopJob(IStormController storm_controller, DataBucketBean bucket) {
+	public static CompletableFuture<BasicMessageBean> stopJob(IStormController storm_controller, DataBucketBean bucket, final Optional<String> sub_job) {
 		CompletableFuture<BasicMessageBean> stop_future = new CompletableFuture<BasicMessageBean>();
 		try {
-			storm_controller.stopJob(bucketPathToTopologyName(bucket.full_name()));
+			storm_controller.stopJob(bucketPathToTopologyName(bucket, sub_job));
 		} catch (Exception ex) {
 			stop_future.complete(
 					ErrorUtils.buildErrorMessage(StormControllerUtil.class, "stopJob", ErrorUtils.getLongForm("Error stopping storm job: {0}", ex))
@@ -381,16 +388,17 @@ public class StormControllerUtil {
 	public static CompletableFuture<BasicMessageBean> restartJob(
 														final IStormController storm_controller, 
 														final DataBucketBean bucket, 
+														final Optional<String> sub_job,
 														final Collection<Object> underlying_artefacts, 
 														final Collection<String> user_lib_paths, 
 														final StormTopology topology, 
 														final Map<String, String> config, 
 														final String cached_jar_dir)
 	{
-		CompletableFuture<BasicMessageBean> stop_future = stopJob(storm_controller, bucket);
+		CompletableFuture<BasicMessageBean> stop_future = stopJob(storm_controller, bucket, sub_job);
 		try {
 			stop_future.get(5, TimeUnit.SECONDS);
-			waitForJobToDie(storm_controller, bucket, 15L);
+			waitForJobToDie(storm_controller, bucket, sub_job, 30L);
 		} catch (Exception e) {
 			CompletableFuture<BasicMessageBean> error_future = new CompletableFuture<BasicMessageBean>();
 			error_future.complete(
@@ -398,7 +406,7 @@ public class StormControllerUtil {
 					);
 			return error_future;
 		}
-		return startJob(storm_controller, bucket, underlying_artefacts, user_lib_paths, topology, config, cached_jar_dir);
+		return startJob(storm_controller, bucket, sub_job, underlying_artefacts, user_lib_paths, topology, config, cached_jar_dir);
 	}
 	
 	/**
@@ -412,14 +420,14 @@ public class StormControllerUtil {
 	 * @throws Exception 
 	 */
 	public static void waitForJobToDie(
-			IStormController storm_controller, DataBucketBean bucket, long seconds_to_wait) throws Exception {
+			IStormController storm_controller, DataBucketBean bucket, final Optional<String> sub_job, long seconds_to_wait) throws Exception {
 		long start_time = System.currentTimeMillis();
 		long num_tries = 0;
 		long expire_time = System.currentTimeMillis() + (seconds_to_wait*1000);
 		while ( System.currentTimeMillis() < expire_time ) {
 			TopologyInfo info = null;
 			try {
-				info = getJobStats(storm_controller, bucketPathToTopologyName(bucket.full_name()));
+				info = getJobStats(storm_controller, bucketPathToTopologyName(bucket, sub_job));
 			} catch (Exception ex) {}
 			if ( null == info ) {				
 				_logger.debug("JOB_STATUS: no longer exists, assuming that job is dead and gone, spent: " + (System.currentTimeMillis()-start_time) + "ms waiting");				
@@ -436,19 +444,42 @@ public class StormControllerUtil {
 	/**
 	 * Converts a buckets path to a use-able topology name
 	 * 1 way conversion, ie can't convert back
-	 * Topology name cannot contain any of the following: #{"." "/" ":" "\\"})
-	 * . / : \
+	 * Uses the standard operation: 
+	 * name1_name2_name3[_<subjob>]__<uuid>
+	 * All <>s truncated and normalized
+	 * The uuid does not include the sub-job ie can be used to match on all sub-jobs of a job
 	 * 
 	 * @param bucket_path
 	 * @return
 	 */
-	public static String bucketPathToTopologyName(final String bucket_path) {
-		return bucket_path
-				.replaceFirst("^/", "") // "/" -> "-"
-				.replaceAll("[-]", "_") 
-				.replaceAll("[/]", "-")
-				.replaceAll("[^a-zA-Z0-9_-]", "_")
-				.replaceAll("__+", "_") // (don't allow __ anywhere except at the end)
-				+ "__"; // (always end in __) 
+	public static String bucketPathToTopologyName(final DataBucketBean bucket, Optional<String> sub_job) {
+		return BucketUtils.getUniqueSignature(bucket.full_name(), sub_job);
 	}	
+
+	/** Stops all jobs corresponding to a given bucket
+	 * @param storm_controller
+	 * @param bucket
+	 */
+	public static void stopAllJobsForBucket(IStormController storm_controller, DataBucketBean bucket) {
+		final List<String> jobs = storm_controller.getJobNamesForBucket(bucket.full_name());
+		jobs.forEach(job -> storm_controller.stopJob(job));
+	}
+	
+	/** Gets a list of (aleph2-side) names for a given bucket
+	 * @param bucket_path
+	 * @return
+	 */
+	public static List<String> getJobNamesForBucket(String bucket_path, final ClusterSummary cluster_summary) {
+		final String bucket_uuid = Optional.of(BucketUtils.getUniqueSignature(bucket_path, Optional.empty()))
+									.map(s -> s.substring(s.lastIndexOf("__")))
+									.get()
+									;
+		
+		return Optionals.streamOf(cluster_summary.get_topologies_iterator(), false)
+					.map(top_summary -> Tuples._2T(top_summary.get_name(), top_summary.get_name().indexOf(bucket_uuid)))
+					.filter(t2 -> (t2._2() > 0))
+					.map(t2 -> t2._1().substring(0, t2._2() + t2._1().length()))
+					.collect(Collectors.toList())
+					;
+	}
 }

@@ -121,6 +121,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 												final Optional<BucketDiffBean> diff, 
 												final IAnalyticsContext context)
 	{
+		StormControllerUtil.stopAllJobsForBucket(_storm_controller, new_analytic_bucket); // (don't wait for this to finish)
 		return CompletableFuture.completedFuture(StormAnalyticTechnologyUtils.validateJobs(new_analytic_bucket, jobs));
 	}
 
@@ -133,7 +134,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 												final Collection<AnalyticThreadJobBean> jobs, 
 												final IAnalyticsContext context)
 	{
-		// Nothing to do here
+		StormControllerUtil.stopAllJobsForBucket(_storm_controller, to_delete_analytic_bucket); // (don't wait for this to finish)
 		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onDeleteThread", "(Noted)"));
 	}
 
@@ -316,8 +317,8 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 				
 				//(generic topology submit):
 				return is_restart
-						? StormControllerUtil.restartJob(_storm_controller, analytic_bucket, underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir)
-						: StormControllerUtil.startJob(_storm_controller, analytic_bucket, underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir)
+						? StormControllerUtil.restartJob(_storm_controller, analytic_bucket, Optional.of(job_to_start.name()), underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir)
+						: StormControllerUtil.startJob(_storm_controller, analytic_bucket, Optional.of(job_to_start.name()), underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir)
 						;
 			}			
 			// (no other options -currently- possible because of validation that has taken place)
@@ -339,7 +340,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 												final AnalyticThreadJobBean job_to_stop, 
 												final IAnalyticsContext context)
 	{
-		return StormControllerUtil.stopJob(_storm_controller, analytic_bucket);
+		return StormControllerUtil.stopJob(_storm_controller, analytic_bucket, Optional.of(job_to_stop.name()));
 	}
 
 	/* (non-Javadoc)

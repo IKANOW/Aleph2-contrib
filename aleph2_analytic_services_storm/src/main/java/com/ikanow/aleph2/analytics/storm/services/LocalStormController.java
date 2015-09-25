@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.analytics.storm.services;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -24,6 +25,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.thrift7.TException;
 
 import com.ikanow.aleph2.analytics.storm.data_model.IStormController;
+import com.ikanow.aleph2.analytics.storm.utils.StormControllerUtil;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
@@ -107,6 +109,16 @@ public class LocalStormController implements IStormController {
 		if ( job_id != null )
 			return local_cluster.getTopologyInfo(job_id);			
 		return null;
+	}
+	
+	
+	/** Gets a list of (aleph2-side) names for a given bucket
+	 * @param bucket_path
+	 * @return
+	 */
+	@Override 
+	public List<String> getJobNamesForBucket(String bucket_path) {
+		return StormControllerUtil.getJobNamesForBucket(bucket_path, local_cluster.getClusterInfo());
 	}
 	
 	/**

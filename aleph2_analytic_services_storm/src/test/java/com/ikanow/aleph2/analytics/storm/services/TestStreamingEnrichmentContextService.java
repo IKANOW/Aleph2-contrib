@@ -38,7 +38,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import scala.Tuple2;
-import storm.kafka.bolt.KafkaBolt;
 import backtype.storm.spout.ISpout;
 import backtype.storm.task.IBolt;
 
@@ -49,6 +48,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.analytics.storm.assets.OutputBolt;
+import com.ikanow.aleph2.analytics.storm.assets.TransientStreamingOutputBolt;
 import com.ikanow.aleph2.analytics.storm.services.StreamingEnrichmentContextService;
 import com.ikanow.aleph2.analytics.storm.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
@@ -233,7 +233,7 @@ public class TestStreamingEnrichmentContextService {
 			{
 				context_pair._2().setJob(analytic_job2);			
 				final Object endpoint_2 = test_context.getTopologyStorageEndpoint(Object.class, Optional.empty());
-				assertTrue("This endpoint should be KafkaBolt: " + endpoint_2.getClass(), endpoint_2 instanceof KafkaBolt);
+				assertTrue("This endpoint should be KafkaBolt: " + endpoint_2.getClass(), endpoint_2 instanceof TransientStreamingOutputBolt);
 				
 				// (check it's serializable - ie that this doesn't exception)
 				ObjectOutputStream out_bolt2 = new ObjectOutputStream(new ByteArrayOutputStream());

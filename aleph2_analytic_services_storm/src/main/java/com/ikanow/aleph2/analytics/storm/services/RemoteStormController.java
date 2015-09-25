@@ -17,6 +17,7 @@ package com.ikanow.aleph2.analytics.storm.services;
 
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -27,6 +28,7 @@ import org.apache.thrift7.TException;
 import org.json.simple.JSONValue;
 
 import com.ikanow.aleph2.analytics.storm.data_model.IStormController;
+import com.ikanow.aleph2.analytics.storm.utils.StormControllerUtil;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
@@ -178,6 +180,21 @@ public class RemoteStormController implements IStormController  {
 			}
 		}
 		return null;
+	}
+	
+	/** Gets a list of (aleph2-side) names for a given bucket
+	 * @param bucket_path
+	 * @return
+	 */
+	@Override 
+	public List<String> getJobNamesForBucket(String bucket_path) {		
+		return StormControllerUtil.getJobNamesForBucket(bucket_path, 
+									Lambdas.wrap_u(() -> {
+										synchronized (client) {
+											return client.getClusterInfo();
+										}
+									}).get()
+				);		
 	}
 	
 	/**

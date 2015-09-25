@@ -15,6 +15,7 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.storm.services;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -42,6 +43,11 @@ public class NoStormController implements IStormController {
 
 	@Override
 	public TopologyInfo getJobStats(String job_name) throws Exception {
+		return null;
+	}
+
+	@Override
+	public List<String> getJobNamesForBucket(String bucket_path) {
 		return null;
 	}
 
