@@ -29,6 +29,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+
 import com.google.common.collect.ImmutableMap;
 
 import org.apache.logging.log4j.LogManager;
@@ -57,6 +58,8 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISubject;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean;
@@ -70,6 +73,7 @@ import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
 import com.ikanow.aleph2.search_service.elasticsearch.module.ElasticsearchIndexServiceModule;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
@@ -91,6 +95,7 @@ import fj.data.Validation;
 public class ElasticsearchIndexService implements ISearchIndexService, ITemporalService, IColumnarService, IExtraDependencyLoader {
 	final static protected Logger _logger = LogManager.getLogger();
 
+	protected final IServiceContext _service_context; // (need the security service)
 	protected final IElasticsearchCrudServiceFactory _crud_factory;
 	protected final ElasticsearchIndexServiceConfigBean _config;
 	
@@ -103,9 +108,11 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	 */
 	@Inject
 	public ElasticsearchIndexService(
+			final IServiceContext service_context,
 			final IElasticsearchCrudServiceFactory crud_factory,
 			final ElasticsearchIndexServiceConfigBean configuration)
 	{
+		_service_context = service_context;
 		_crud_factory = crud_factory;
 		_config = configuration;
 	}
@@ -512,9 +519,21 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	 */
 	@Override
 	public Tuple2<String, List<BasicMessageBean>> validateSchema(final SearchIndexSchemaBean schema, final DataBucketBean bucket) {
+		final LinkedList<BasicMessageBean> errors = new LinkedList<BasicMessageBean>(); // (Warning mutable code)
 		try {
+			// If the user is trying to override the index name then they have to be admin:
+			final Optional<String> manual_index_name = Optionals.<String>of(() -> 
+				((String) bucket.data_schema().search_index_schema().technology_override_schema().get(SearchIndexSchemaDefaultBean.index_name_override_)));
+			
+			if (manual_index_name.isPresent()) { // (then must be admin)
+				final ISubject system_user = _service_context.getSecurityService().login(null, null); //TODO (ALEPH-31) needs to be login as system .. currently will fail in practice, which is fine
+				_service_context.getSecurityService().runAs(system_user, Arrays.asList(bucket.owner_id())); // (Switch to sys user)
+				if (!_service_context.getSecurityService().hasRole(system_user, "admin")) {
+					errors.add(ErrorUtils.buildErrorMessage(bucket.full_name(), "validateSchema", SearchIndexErrorUtils.NON_ADMIN_BUCKET_NAME_OVERRIDE));
+				}
+			}
+			
 			final String index_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
-			final LinkedList<BasicMessageBean> errors = new LinkedList<BasicMessageBean>(); // (Warning mutable code)
 			boolean error = false; // (Warning mutable code)
 			final boolean is_verbose = is_verbose(schema);
 			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);
