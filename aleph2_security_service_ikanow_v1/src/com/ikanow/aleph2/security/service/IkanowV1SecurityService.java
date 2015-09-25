@@ -229,4 +229,17 @@ public class IkanowV1SecurityService implements ISecurityService, IExtraDependen
 			
 		}
 	}
+
+	/**
+	 * This function invalidates the whole cache
+	 */
+	public void invalidateCache(){
+		for (Realm realm : realms) {
+			if(realm instanceof IkanowV1Realm){
+				IkanowV1Realm ar = (IkanowV1Realm)realm;
+				ar.clearAllCaches();
+		} 
+			
+		}
+	}
 }

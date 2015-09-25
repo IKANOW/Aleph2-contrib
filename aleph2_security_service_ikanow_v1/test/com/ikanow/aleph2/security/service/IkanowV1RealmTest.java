@@ -219,6 +219,29 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 	}
 
 	@Test
+	public void testCacheUserInvalidation(){
+		ISubject subject = loginAsTestUser();
+		
+		securityService.runAs(subject,Arrays.asList(regularUserId));
+
+		// test personal community permission
+		String permission = "54f86d8de4b03d27d1ea0d7b";
+        //test a typed permission (not instance-level)
+		ProfilingUtility.timeStart("TU-permisssion0");
+		assertEquals(true,securityService.isPermitted(subject,permission));
+		ProfilingUtility.timeStopAndLog("TU-permisssion0");
+		for (int i = 0; i < 10; i++) {
+			ProfilingUtility.timeStart("TU-permisssion"+(i+1));
+			assertEquals(true,securityService.isPermitted(subject,permission));			
+			ProfilingUtility.timeStopAndLog("TU-permisssion"+(i+1));
+			if(i==5){
+				((IkanowV1SecurityService)securityService).invalidateAuthenticationCache(Arrays.asList(regularUserId));	
+				//loginAsRegularUser();
+			}
+		}
+	}
+
+	@Test
 	public void testCacheInvalidation(){
 		ISubject subject = loginAsTestUser();
 		
@@ -240,4 +263,21 @@ public class IkanowV1RealmTest extends MockDbBasedTest {
 			}
 		}
 	}
+
+	@Test
+	public void testRunAsDemoted(){
+		ISubject subject = loginAsAdmin();
+		// system community
+		String runAsPrincipal = regularUserId; 
+		
+		assertEquals(true,securityService.hasRole(subject,"admin"));
+
+		securityService.runAs(subject,Arrays.asList(runAsPrincipal));
+		
+		assertEquals(false,securityService.hasRole(subject,"admin"));
+		Collection<String> p = securityService.releaseRunAs(subject);
+		assertEquals(true,securityService.hasRole(subject,"admin"));
+		logger.debug("Released Principals:"+p);
+	}
+
 }

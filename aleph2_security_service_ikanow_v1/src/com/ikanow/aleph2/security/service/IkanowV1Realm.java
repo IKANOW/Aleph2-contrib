@@ -31,6 +31,7 @@ import org.apache.shiro.authc.credential.CredentialsMatcher;
 import org.apache.shiro.authz.AuthorizationException;
 import org.apache.shiro.authz.AuthorizationInfo;
 import org.apache.shiro.authz.SimpleAuthorizationInfo;
+import org.apache.shiro.cache.Cache;
 import org.apache.shiro.cache.CacheManager;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
@@ -178,10 +179,25 @@ public class IkanowV1Realm extends AuthorizingRealm {
         return info;
     }
     
-     public void clearCachedAuthorizationInfo(Collection<String> principalNames){
-    	 logger.debug("clearCachedAuthorizationInfo for "+principalNames);
-    	 SimplePrincipalCollection principals = new SimplePrincipalCollection(principalNames, this.getClass().getName());
-    	 super.doClearCache(principals);   	 
-     }
+    public void clearCachedAuthorizationInfo(Collection<String> principalNames){
+   	 logger.debug("clearCachedAuthorizationInfo for "+principalNames);
+   	 SimplePrincipalCollection principals = new SimplePrincipalCollection(principalNames, this.getClass().getName());
+   	 super.doClearCache(principals);   	 
+    }
+
+    public void clearAllCaches(){
+		 logger.debug("clearAllCaches");
+			
+
+		 Cache<Object, AuthenticationInfo> ac = getAuthenticationCache();
+			if(ac!=null){
+				ac.clear();
+			}
+			Cache<Object, AuthorizationInfo> ar = getAuthorizationCache();
+			if(ar!=null){
+				ar.clear();
+			}
+		
+    }
      
 }
