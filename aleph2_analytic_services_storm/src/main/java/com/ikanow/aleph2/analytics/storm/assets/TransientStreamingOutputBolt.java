@@ -53,6 +53,8 @@ public class TransientStreamingOutputBolt extends BaseRichBolt {
 	transient protected IAnalyticsContext _context;
 	transient protected IEnrichmentStreamingTopology _user_topology;
 	
+	protected OutputCollector _collector;
+	
 	/** User constructor (pre serialization)
 	 * @param bucket
 	 * @param context_signature
@@ -74,6 +76,7 @@ public class TransientStreamingOutputBolt extends BaseRichBolt {
 	@Override
 	public void prepare(final @SuppressWarnings("rawtypes") Map arg0, final TopologyContext arg1, final OutputCollector arg2) {
 		try {
+			_collector = arg2;
 			_context = ContextUtils.getAnalyticsContext(_context_signature);
 			_user_topology = (IEnrichmentStreamingTopology) Class.forName(_user_topology_entry_point).newInstance();
 		}
@@ -87,6 +90,7 @@ public class TransientStreamingOutputBolt extends BaseRichBolt {
      */
     @Override
     public void execute(Tuple input) {
+		_collector.ack(input);
     	_context.sendObjectToStreamingPipeline(Optional.of(_bucket), _job, 
     			Either.left(_user_topology.rebuildObject(input, OutputBolt::tupleToLinkedHashMap)), Optional.empty());
     }	

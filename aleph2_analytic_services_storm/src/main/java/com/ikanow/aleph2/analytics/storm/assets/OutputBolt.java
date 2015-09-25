@@ -88,8 +88,8 @@ public class OutputBolt extends BaseRichBolt {
 	 */
 	@Override
 	public void execute(final Tuple arg0) {		
-		_context.emitMutableObject(0L, (ObjectNode) _user_topology.rebuildObject(arg0, OutputBolt::tupleToLinkedHashMap), Optional.empty());
 		_collector.ack(arg0);
+		_context.emitMutableObject(0L, (ObjectNode) _user_topology.rebuildObject(arg0, OutputBolt::tupleToLinkedHashMap), Optional.empty());
 	}
 
 	/* (non-Javadoc)
