@@ -50,6 +50,9 @@ import com.google.common.io.Resources;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.IBatchSubservice;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.MockServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
@@ -59,6 +62,7 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConfigurationBean;
@@ -73,9 +77,11 @@ public class TestElasticsearchIndexService {
 
 	public static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());	
 	
+	protected MockServiceContext _service_context;
 	protected MockElasticsearchIndexService _index_service;
 	protected IElasticsearchCrudServiceFactory _crud_factory;
 	protected ElasticsearchIndexServiceConfigBean _config_bean;
+	protected MockSecurityService _security_service;
 	
 	// Set this string to connect vs a real DB
 	private final String _connection_string = null;
@@ -95,7 +101,12 @@ public class TestElasticsearchIndexService {
 		}
 		_config_bean = ElasticsearchIndexConfigUtils.buildConfigBean(full_config);
 		
-		_index_service = new MockElasticsearchIndexService(_crud_factory, _config_bean);
+		_security_service = new MockSecurityService();
+		
+		_service_context = new MockServiceContext();
+		_service_context.addService(ISecurityService.class, Optional.empty(), _security_service);
+		
+		_index_service = new MockElasticsearchIndexService(_service_context, _crud_factory, _config_bean);
 	}
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -258,6 +269,40 @@ public class TestElasticsearchIndexService {
 			assertEquals(false, res_search.stream().allMatch(BasicMessageBean::success));
 			BasicMessageBean res_search_message = res_search.iterator().next();
 			assertTrue("Right message: " + res_search_message.message(), res_search_message.message().contains("10 MB"));			
+		}
+		
+		// 3) Check overriding the search index fails when not an admin
+		{
+			final String bucket_str_2 = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_bucket_validate_success.json"), Charsets.UTF_8);
+			final DataBucketBean bucket2 = BeanTemplateUtils.build(bucket_str_2, DataBucketBean.class).done().get();
+
+			final DataSchemaBean.SearchIndexSchemaBean s = BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+					.with(DataSchemaBean.SearchIndexSchemaBean::technology_override_schema, 
+							ImmutableMap.builder().put(SearchIndexSchemaDefaultBean.index_name_override_, "test").build()
+					).done().get();
+
+			
+			final DataBucketBean bucket_with_override = BeanTemplateUtils.clone(bucket2)
+					.with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.clone(bucket2.data_schema())
+								.with(
+									DataSchemaBean::search_index_schema, s
+								)
+								.done()
+					)
+					.done();
+			
+			// Works for admins
+			_security_service.setGlobalMockRole("admin", true);
+
+			final Collection<BasicMessageBean> res_search_yes = _index_service.validateSchema(bucket.data_schema().search_index_schema(), bucket_with_override)._2();
+			assertEquals(0, res_search_yes.size());			
+			
+			// Fails for non admins
+			_security_service.setGlobalMockRole("admin", false);
+			
+			final Collection<BasicMessageBean> res_search_no = _index_service.validateSchema(bucket.data_schema().search_index_schema(), bucket_with_override)._2();
+			assertEquals(1, res_search_no.size());						
 		}
 		
 	}
