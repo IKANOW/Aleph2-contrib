@@ -396,13 +396,16 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 			final AnalyticThreadJobBean job)
 	{
 		final DataBucketBean this_bucket = bucket.orElseGet(() -> _mutable_state.bucket.get());
+		
 		if ((MasterEnrichmentType.streaming == job.output().transient_type()) || (MasterEnrichmentType.streaming_and_batch == job.output().transient_type())) {
+			
 			final String topic = job.output().is_transient()
 					? _distributed_services.generateTopicName(this_bucket.full_name(), Optional.of(job.name()))
 					: 
 					  _distributed_services.generateTopicName(Optional.ofNullable(job.output().sub_bucket_path()).orElse(this_bucket.full_name()), 
 																ICoreDistributedServices.QUEUE_END_NAME)
 					;
+					
 			return Optional.of(topic);
 		}
 		else return Optional.empty();
@@ -596,7 +599,17 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 			final Either<JsonNode, Map<String, Object>> object, 
 			final Optional<AnnotationBean> annotations)
 	{
-		throw new RuntimeException("Not part of mock analytics context for Storm");
+		if (annotations.isPresent()) {
+			throw new RuntimeException(ErrorUtils.NOT_YET_IMPLEMENTED);			
+		}
+		final JsonNode obj_json =  object.either(__->__, map -> (JsonNode) _mapper.convertValue(map, JsonNode.class));
+
+		this.getOutputTopic(bucket, job).ifPresent(topic -> {				
+			if (_distributed_services.doesTopicExist(topic)) {
+				// (ie someone is listening in on our output data, so duplicate it for their benefit)
+				_distributed_services.produce(topic, obj_json.toString());
+			}
+		});
 	}
 
 	/* (non-Javadoc)

@@ -31,7 +31,7 @@ public class NoStormController implements IStormController {
 
 	@Override
 	public CompletableFuture<BasicMessageBean> submitJob(String job_name,
-			String input_jar_location, StormTopology topology, Map<String, String> config_override) {
+			String input_jar_location, StormTopology topology, Map<String, Object> config_override) {
 		return null;
 	}
 

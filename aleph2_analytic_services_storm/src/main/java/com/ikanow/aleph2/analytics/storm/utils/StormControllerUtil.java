@@ -109,7 +109,7 @@ public class StormControllerUtil {
 	 * @param topology
 	 * @throws Exception
 	 */
-	public static void submitJob(IStormController storm_controller, String job_name, String input_jar_location, StormTopology topology, Map<String, String> config_override) throws Exception {		
+	public static void submitJob(IStormController storm_controller, String job_name, String input_jar_location, StormTopology topology, Map<String, Object> config_override) throws Exception {				
 		storm_controller.submitJob(job_name, input_jar_location, topology, config_override);
 	}
 	
@@ -253,13 +253,14 @@ public class StormControllerUtil {
 		});
 		
 		//submit to storm
+		@SuppressWarnings("unchecked")
 		final CompletableFuture<BasicMessageBean> submit_future = Lambdas.get(() -> {
 			long retries = 0;			
 			while ( retries < MAX_RETRIES ) {				
 				try {
 					_logger.debug("Trying to submit job, try: " + retries + " of " + MAX_RETRIES);
 					final String jar_file_location = jar_future.get();
-					return storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology, config);
+					return storm_controller.submitJob(bucketPathToTopologyName(bucket.full_name()), jar_file_location, topology, (Map<String, Object>)(Map<String, ?>)config);
 				} 
 				catch ( Exception ex) {
 					if ( ex instanceof AlreadyAliveException ) {
@@ -430,6 +431,8 @@ public class StormControllerUtil {
 		}		
 	}
 	
+	//TODO: oh noes! this is all basked on the bucket, which is not correct because we can have jobs within a bucket... currently they get the same name
+	
 	/**
 	 * Converts a buckets path to a use-able topology name
 	 * 1 way conversion, ie can't convert back
@@ -439,7 +442,7 @@ public class StormControllerUtil {
 	 * @param bucket_path
 	 * @return
 	 */
-	public static String bucketPathToTopologyName(final String bucket_path ) {
+	public static String bucketPathToTopologyName(final String bucket_path) {
 		return bucket_path
 				.replaceFirst("^/", "") // "/" -> "-"
 				.replaceAll("[-]", "_") 

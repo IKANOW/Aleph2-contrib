@@ -61,7 +61,7 @@ public class LocalStormController implements IStormController {
 	 */
 	@Override
 	public CompletableFuture<BasicMessageBean> submitJob(String job_name, String input_jar_location,
-			StormTopology topology, Map<String, String> config_override) {
+			StormTopology topology, Map<String, Object> config_override) {
 		CompletableFuture<BasicMessageBean> future = new CompletableFuture<BasicMessageBean>();
 		logger.info("Submitting job: " + job_name);
 		Config config = new Config();
@@ -69,7 +69,7 @@ public class LocalStormController implements IStormController {
 		config_override.forEach((k, v) -> config.put(k, v));
 		local_cluster.submitTopology(job_name, config, topology);
 		
-		future.complete(ErrorUtils.buildSuccessMessage(this, "submitJob", "Submitted job successfully"));
+		future.complete(ErrorUtils.buildSuccessMessage(this, "submitJob", "Submitted job successfully: " + job_name));
 		return future;
 	}
 

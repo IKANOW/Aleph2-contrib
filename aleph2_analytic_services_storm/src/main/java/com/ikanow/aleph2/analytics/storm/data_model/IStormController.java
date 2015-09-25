@@ -40,7 +40,7 @@ public interface IStormController {
 	 * @param config_override - the client set of overrides submitted to the topology
 	 * @throws Exception
 	 */
-	CompletableFuture<BasicMessageBean> submitJob(String job_name, String input_jar_location, StormTopology topology, Map<String, String> config_override);
+	CompletableFuture<BasicMessageBean> submitJob(String job_name, String input_jar_location, StormTopology topology, Map<String, Object> config_override);
 	/**
 	 * Should stop a job on the storm cluster given the job_name
 	 * 

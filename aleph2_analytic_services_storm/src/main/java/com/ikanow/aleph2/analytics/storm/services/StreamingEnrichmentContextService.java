@@ -35,15 +35,13 @@ import storm.kafka.KafkaSpout;
 import storm.kafka.SpoutConfig;
 import storm.kafka.StringScheme;
 import storm.kafka.ZkHosts;
-import storm.kafka.bolt.KafkaBolt;
-import storm.kafka.bolt.mapper.TupleToKafkaMapper;
 import backtype.storm.spout.ISpout;
 import backtype.storm.spout.SchemeAsMultiScheme;
-import backtype.storm.tuple.Tuple;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ikanow.aleph2.analytics.storm.assets.OutputBolt;
+import com.ikanow.aleph2.analytics.storm.assets.TransientStreamingOutputBolt;
 import com.ikanow.aleph2.analytics.storm.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
@@ -243,16 +241,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 				if (topic_name.isPresent()) {
 					final ICoreDistributedServices cds = _delegate.get().getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();			
 					cds.createTopic(topic_name.get(), Optional.empty());
-					
-					return (T) new KafkaBolt<String, String>().withTopicSelector(__ -> topic_name.get()).withTupleToKafkaMapper(new TupleToKafkaMapper<String, String>() {
-						private static final long serialVersionUID = -1651711778714775009L;
-						public String getKeyFromTuple(final Tuple tuple) {
-							return null; // (no key, will randomly assign across partition)
-						}
-						public String getMessageFromTuple(final Tuple tuple) {
-							return  _user_topology.get().rebuildObject(tuple, OutputBolt::tupleToLinkedHashMap).toString();
-						}
-					});
+					return (T) new TransientStreamingOutputBolt(my_bucket, _job.get(), _delegate.get().getAnalyticsContextSignature(bucket, Optional.empty()), _user_topology.get().getClass().getName(), topic_name.get());
 				}
 				else { //TODO (ALEPH-12): Write an output bolt for temporary HDFS storage, and another one for both
 					throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "batch output from getTopologyStorageEndpoint"));

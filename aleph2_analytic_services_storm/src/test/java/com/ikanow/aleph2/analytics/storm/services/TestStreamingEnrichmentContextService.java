@@ -19,7 +19,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.ObjectOutputStream;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
@@ -127,7 +129,7 @@ public class TestStreamingEnrichmentContextService {
 	}
 	
 	@Test
-	public void test_basicContextCreation() {
+	public void test_basicContextCreation() throws Exception {
 		_logger.info("run test_basicContextCreation");
 		try {
 			assertTrue("Injector created", _app_injector != null);
@@ -216,16 +218,28 @@ public class TestStreamingEnrichmentContextService {
 			
 			// 1) Transient job => gets user topology
 			
-			context_pair._2().setJob(analytic_job1);			
-			final Object endpoint_1 = test_context.getTopologyStorageEndpoint(Object.class, Optional.empty());
-			assertTrue("This endpoint should be OutputBolt: " + endpoint_1.getClass(), endpoint_1 instanceof OutputBolt);
+			{
+				context_pair._2().setJob(analytic_job1);			
+				final Object endpoint_1 = test_context.getTopologyStorageEndpoint(Object.class, Optional.empty());
+				assertTrue("This endpoint should be OutputBolt: " + endpoint_1.getClass(), endpoint_1 instanceof OutputBolt);
+				
+				// (check it's serializable - ie that this doesn't exception)
+				ObjectOutputStream out_bolt1 = new ObjectOutputStream(new ByteArrayOutputStream());
+				out_bolt1.writeObject(endpoint_1);
+				out_bolt1.close(); 
+			}
 			
 			// 2) Non-transient, output topic exists (ie output is streaming)
-
-			context_pair._2().setJob(analytic_job2);			
-			final Object endpoint_2 = test_context.getTopologyStorageEndpoint(Object.class, Optional.empty());
-			assertTrue("This endpoint should be KafkaBolt: " + endpoint_2.getClass(), endpoint_2 instanceof KafkaBolt);
-			
+			{
+				context_pair._2().setJob(analytic_job2);			
+				final Object endpoint_2 = test_context.getTopologyStorageEndpoint(Object.class, Optional.empty());
+				assertTrue("This endpoint should be KafkaBolt: " + endpoint_2.getClass(), endpoint_2 instanceof KafkaBolt);
+				
+				// (check it's serializable - ie that this doesn't exception)
+				ObjectOutputStream out_bolt2 = new ObjectOutputStream(new ByteArrayOutputStream());
+				out_bolt2.writeObject(endpoint_2);
+				out_bolt2.close(); 
+			}
 			// 3) Non-transient, batch output
 			
 			context_pair._2().setJob(analytic_job3);			
