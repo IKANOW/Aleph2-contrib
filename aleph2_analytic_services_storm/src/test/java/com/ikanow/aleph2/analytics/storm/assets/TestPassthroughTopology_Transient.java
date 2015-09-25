@@ -17,7 +17,6 @@ package com.ikanow.aleph2.analytics.storm.assets;
 
 import static org.junit.Assert.*;
 
-import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -27,20 +26,15 @@ import java.util.concurrent.ExecutionException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.junit.Before;
 import org.junit.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.google.inject.Inject;
-import com.google.inject.Injector;
 import com.ikanow.aleph2.analytics.storm.services.LocalStormController;
 import com.ikanow.aleph2.analytics.storm.services.MockAnalyticsContext;
 import com.ikanow.aleph2.analytics.storm.services.StormAnalyticTechnologyService;
-import com.ikanow.aleph2.analytics.storm.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
@@ -48,51 +42,11 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
-import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
-import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
-import backtype.storm.LocalCluster;
-
-public class TestPassthroughTopology_Transient {
+public class TestPassthroughTopology_Transient extends TestPassthroughBase {
 	static final Logger _logger = LogManager.getLogger(); 
 
-	LocalCluster _local_cluster;
-	
-	protected Injector _app_injector;
-	
-	@Inject IServiceContext _service_context;
-	
-	@Before
-	public void injectModules() throws Exception {
-		@SuppressWarnings("unused")
-		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
-		
-		final Config config = ConfigFactory.parseFile(new File("./example_config_files/context_local_test.properties"))
-				//these seeem to cause storm.kafka to break - it isn't clear why
-//				.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
-//				.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
-//				.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
-//				.withValue("globals.local_yarn_config_dir", ConfigValueFactory.fromAnyRef(temp_dir))
-				;
-		
-		try {
-			_app_injector = ModuleUtils.createTestInjector(Arrays.asList(), Optional.of(config));
-		}
-		catch (Exception e) {
-			try {
-				e.printStackTrace();
-			}
-			catch (Exception ee) {
-				System.out.println(ErrorUtils.getLongForm("{0}", e));
-			}
-		}
-		
-		_app_injector.injectMembers(this);
-		_local_cluster = new LocalCluster();
-	}
-	
 	@Test
 	public void test_passthroughTopology() throws InterruptedException, ExecutionException {
 		// PHASE 1: GET AN IN-TECHNOLOGY CONTEXT
