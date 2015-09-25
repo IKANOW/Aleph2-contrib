@@ -15,6 +15,7 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.storm.services;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -23,6 +24,7 @@ import backtype.storm.generated.StormTopology;
 import backtype.storm.generated.TopologyInfo;
 
 import com.ikanow.aleph2.analytics.storm.data_model.IStormController;
+import com.ikanow.aleph2.analytics.storm.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 
 /** Dummy instance of Storm controller to let us know that we request a remote version but it could not be initialized
@@ -33,12 +35,12 @@ public class NoStormController implements IStormController {
 	@Override
 	public CompletableFuture<BasicMessageBean> submitJob(String job_name,
 			String input_jar_location, StormTopology topology, Map<String, Object> config_override) {
-		return null;
+		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage("", "", ""));
 	}
 
 	@Override
 	public CompletableFuture<BasicMessageBean> stopJob(String job_name) {
-		return null;
+		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage("", "", ""));
 	}
 
 	@Override
@@ -48,7 +50,7 @@ public class NoStormController implements IStormController {
 
 	@Override
 	public List<String> getJobNamesForBucket(String bucket_path) {
-		return null;
+		return Collections.emptyList();
 	}
 
 }

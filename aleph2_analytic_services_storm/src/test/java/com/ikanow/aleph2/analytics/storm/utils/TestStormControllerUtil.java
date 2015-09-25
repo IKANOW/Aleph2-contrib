@@ -22,7 +22,9 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -37,6 +39,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.analytics.storm.assets.SampleStormStreamTopology1;
 import com.ikanow.aleph2.analytics.storm.data_model.IStormController;
+import com.ikanow.aleph2.analytics.storm.services.LocalStormController;
 import com.ikanow.aleph2.analytics.storm.services.MockAnalyticsContext;
 import com.ikanow.aleph2.analytics.storm.services.StreamingEnrichmentContextService;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentStreamingTopology;
@@ -138,6 +141,93 @@ public class TestStormControllerUtil {
 		StormControllerUtil.stopJob(storm_cluster, bucket, Optional.empty()).get();
 	}
 
+	@Test
+	public void test_stopAllJobs() throws Exception {
+		
+		// Some beans
+		
+		final DataBucketBean bucket = BeanTemplateUtils.clone(createBucket())
+											.with(DataBucketBean::full_name, "/test/stop/jobs")
+										.done();
+		final SharedLibraryBean library_tech = BeanTemplateUtils.build(SharedLibraryBean.class)
+				.with(SharedLibraryBean::path_name, "/test/lib")
+				.done().get();
+		final SharedLibraryBean library_mod = BeanTemplateUtils.build(SharedLibraryBean.class)
+				.with(SharedLibraryBean::path_name, "/test/module")
+				.done().get();
+		
+		// Context
+		
+		final MockAnalyticsContext test_analytics_context = _app_injector.getInstance(MockAnalyticsContext.class);
+		final StreamingEnrichmentContextService context = new StreamingEnrichmentContextService(test_analytics_context);
+		test_analytics_context.setBucket(bucket);
+		test_analytics_context.setTechnologyConfig(library_tech);
+		test_analytics_context.setModuleConfig(library_mod);
+		
+		// Job1
+		{
+			final IEnrichmentStreamingTopology enrichment_topology = new SampleStormStreamTopology1();
+			final StormTopology storm_top = (StormTopology) enrichment_topology.getTopologyAndConfiguration(bucket, context)._1();
+			final String cached_jar_dir = System.getProperty("java.io.tmpdir");
+			StormControllerUtil.startJob(storm_cluster, bucket, Optional.of("job1_name"), Collections.emptyList(), Collections.emptyList(), storm_top, Collections.emptyMap(), cached_jar_dir);
+		}
+		
+		// Job2
+		{
+			final IEnrichmentStreamingTopology enrichment_topology = new SampleStormStreamTopology1();
+			final StormTopology storm_top = (StormTopology) enrichment_topology.getTopologyAndConfiguration(bucket, context)._1();
+			final String cached_jar_dir = System.getProperty("java.io.tmpdir");
+			StormControllerUtil.startJob(storm_cluster, bucket, Optional.of("job2_name"), Collections.emptyList(), Collections.emptyList(), storm_top, Collections.emptyMap(), cached_jar_dir);
+		}		
+		
+		// Unrelated job
+		{
+			final IEnrichmentStreamingTopology enrichment_topology = new SampleStormStreamTopology1();
+			final StormTopology storm_top = (StormTopology) enrichment_topology.getTopologyAndConfiguration(bucket, context)._1();
+			final String cached_jar_dir = System.getProperty("java.io.tmpdir");
+			StormControllerUtil.startJob(storm_cluster, 
+					BeanTemplateUtils.clone(bucket).with(DataBucketBean::full_name, "/test/stop/jobs/1").done(), 
+					Optional.of("job2_name"), Collections.emptyList(), Collections.emptyList(), storm_top, Collections.emptyMap(), cached_jar_dir);
+		}		
+		
+		// OK test: check we list all the names
+		
+		final LocalStormController storm_controller = (LocalStormController)storm_cluster;
+		
+		{
+			List<String> jobs = storm_controller.getJobNamesForBucket(bucket.full_name());		
+			assertEquals("test_stop_jobs_job1_name__dd6725792433 ; test_stop_jobs_job2_name__dd6725792433", jobs.stream().sorted().collect(Collectors.joining(" ; ")));
+		}		
+		
+		for (int ii = 0; ii < 60; ++ii) {
+			final TopologyInfo info1 = StormControllerUtil.getJobStats(storm_cluster, StormControllerUtil.bucketPathToTopologyName(bucket, Optional.of("job1_name")));
+			final TopologyInfo info2 = StormControllerUtil.getJobStats(storm_cluster, StormControllerUtil.bucketPathToTopologyName(bucket, Optional.of("job1_name")));
+			if (info1.get_status().equals("ACTIVE") && info2.get_status().equals("ACTIVE")) {
+				break;
+			}
+		}
+		
+		Thread.sleep(5000L); // (wait a bit for the jobs to be fully started)
+		
+		StormControllerUtil.stopAllJobsForBucket(storm_cluster, bucket);
+		
+		// wait for jobs to die:
+		for (int ii = 0; ii < 60; ++ii) {
+			Thread.sleep(1000L);
+			List<String> jobs = storm_controller.getJobNamesForBucket(bucket.full_name());
+			if (jobs.isEmpty()) break;			
+		}
+		{
+			List<String> jobs = storm_controller.getJobNamesForBucket(bucket.full_name());
+			assertTrue("All jobs for this bucket removed: " + jobs.stream().collect(Collectors.joining(" ; ")), jobs.isEmpty());
+		}		
+		// Check the other job is still alive:
+		{
+			List<String> other_jobs = storm_controller.getJobNamesForBucket("/test/stop/jobs/1");
+			assertEquals("Just the one job: " + other_jobs.stream().collect(Collectors.joining(" ; ")), 1, other_jobs.size());
+		}
+	}
+	
 	protected DataBucketBean createBucket() {		
 		return BeanTemplateUtils.build(DataBucketBean.class)
 				.with(DataBucketBean::_id, "test_quickcache")

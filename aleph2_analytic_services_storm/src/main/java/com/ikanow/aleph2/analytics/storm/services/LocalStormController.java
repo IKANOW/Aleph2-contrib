@@ -133,8 +133,10 @@ public class LocalStormController implements IStormController {
 		Iterator<TopologySummary> iter = cluster_summary.get_topologies_iterator();
 		 while ( iter.hasNext() ) {
 			 TopologySummary summary = iter.next();
-			 System.out.println(summary.get_name() + summary.get_id() + summary.get_status());				 
-			 if ( summary.get_name().startsWith(job_prefix));
+			 
+			 //System.out.println(summary.get_name() + summary.get_id() + summary.get_status());				 
+			 
+			 if (summary.get_name().startsWith(job_prefix))
 			 	return summary;
 		 }	
 		 return null;

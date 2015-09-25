@@ -439,8 +439,6 @@ public class StormControllerUtil {
 		}		
 	}
 	
-	//TODO: oh noes! this is all basked on the bucket, which is not correct because we can have jobs within a bucket... currently they get the same name
-	
 	/**
 	 * Converts a buckets path to a use-able topology name
 	 * 1 way conversion, ie can't convert back
@@ -462,7 +460,9 @@ public class StormControllerUtil {
 	 */
 	public static void stopAllJobsForBucket(IStormController storm_controller, DataBucketBean bucket) {
 		final List<String> jobs = storm_controller.getJobNamesForBucket(bucket.full_name());
-		jobs.forEach(job -> storm_controller.stopJob(job));
+		jobs.forEach(job -> {
+			storm_controller.stopJob(job);	
+		});
 	}
 	
 	/** Gets a list of (aleph2-side) names for a given bucket
@@ -470,15 +470,23 @@ public class StormControllerUtil {
 	 * @return
 	 */
 	public static List<String> getJobNamesForBucket(String bucket_path, final ClusterSummary cluster_summary) {
-		final String bucket_uuid = Optional.of(BucketUtils.getUniqueSignature(bucket_path, Optional.empty()))
+		final String base_bucket_sig = BucketUtils.getUniqueSignature(bucket_path, Optional.empty());
+		final String bucket_uuid = Optional.of(base_bucket_sig)
 									.map(s -> s.substring(s.lastIndexOf("__")))
 									.get()
 									;
+		final String start_of_bucket_sig = Optional.of(base_bucket_sig)
+											.map(s -> s.substring(0, s.lastIndexOf("__")))
+											.get()
+											;
 		
+		// Has to start with bucket path path and end with the UUID, but the "middle" (ie job name) can be anything
 		return Optionals.streamOf(cluster_summary.get_topologies_iterator(), false)
-					.map(top_summary -> Tuples._2T(top_summary.get_name(), top_summary.get_name().indexOf(bucket_uuid)))
+					.map(top_summary -> top_summary.get_name())
+					.filter(top_summary -> top_summary.startsWith(start_of_bucket_sig))
+					.map(top_summary -> Tuples._2T(top_summary, top_summary.indexOf(bucket_uuid)))
 					.filter(t2 -> (t2._2() > 0))
-					.map(t2 -> t2._1().substring(0, t2._2() + t2._1().length()))
+					.map(t2 -> t2._1().substring(0, t2._2() + bucket_uuid.length()))
 					.collect(Collectors.toList())
 					;
 	}
