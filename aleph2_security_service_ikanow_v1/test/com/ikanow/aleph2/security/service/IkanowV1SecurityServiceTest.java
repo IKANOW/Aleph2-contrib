@@ -40,8 +40,8 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
 
-public class IkanowV1RealmTest extends MockDbBasedTest {
-	private static final Logger logger = LogManager.getLogger(IkanowV1RealmTest.class);
+public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
+	private static final Logger logger = LogManager.getLogger(IkanowV1SecurityServiceTest.class);
 
 	protected Config config = null;
 

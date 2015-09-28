@@ -10,7 +10,7 @@ import java.util.HashMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import com.ikanow.aleph2.security.service.IkanowV1RealmTest;
+import com.ikanow.aleph2.security.service.IkanowV1SecurityServiceTest;
 
 
 /**
@@ -19,7 +19,7 @@ import com.ikanow.aleph2.security.service.IkanowV1RealmTest;
  */
 public class ProfilingUtility
 {
-	private static final Logger logger = LogManager.getLogger(IkanowV1RealmTest.class);
+	private static final Logger logger = LogManager.getLogger(IkanowV1SecurityServiceTest.class);
 
 	private HashMap<String,Long> times = null;	
   private static ProfilingUtility instance;

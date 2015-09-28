@@ -47,10 +47,11 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
+import com.ikanow.aleph2.security.interfaces.IClearableRealmCache;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 
 
-public class IkanowV1Realm extends AuthorizingRealm {
+public class IkanowV1Realm extends AuthorizingRealm implements IClearableRealmCache {
 	private static final Logger logger = LogManager.getLogger(IkanowV1Realm.class);
 
 	
@@ -179,12 +180,14 @@ public class IkanowV1Realm extends AuthorizingRealm {
         return info;
     }
     
-    public void clearCachedAuthorizationInfo(Collection<String> principalNames){
+    @Override
+    public void clearAuthorizationCached(Collection<String> principalNames){
    	 logger.debug("clearCachedAuthorizationInfo for "+principalNames);
    	 SimplePrincipalCollection principals = new SimplePrincipalCollection(principalNames, this.getClass().getName());
    	 super.doClearCache(principals);   	 
     }
 
+    @Override
     public void clearAllCaches(){
 		 logger.debug("clearAllCaches");
 			
