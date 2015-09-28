@@ -58,10 +58,10 @@ import fj.Unit;
 import fj.data.Validation;
 
 /** Starts and stops hadoop jobs
+ *  CURRENTLY ON ICE WHILE I GET THE SIMPLER ENRICHMENT MODULE BASED SERVICE WORKING
  * @author alex
  */
 public class HadoopControllerService {
-	//TODO: logger
 	private static final ObjectMapper _json_mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 	
 	

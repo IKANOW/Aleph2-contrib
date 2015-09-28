@@ -15,10 +15,16 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.services;
 
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -27,16 +33,24 @@ import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.ikanow.aleph2.analytics.hadoop.utils.HadoopErrorUtils;
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.AnnotationBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
 import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean.StateDirectoryType;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.SetOnce;
+
+import fj.data.Either;
 
 /** The implementation of the batch  enrichment context
  * @author Joern
@@ -44,160 +58,299 @@ import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	static final Logger _logger = LogManager.getLogger(BatchEnrichmentContext.class);
 
+	protected final SetOnce<IAnalyticsContext> _delegate = new SetOnce<>();
+	protected final SetOnce<AnalyticThreadJobBean> _job = new SetOnce<>();
+	
+	/** User constructor - in technology
+	 * @param analytics_context - the context to wrap
+	 * @param bucket - the bucket being processed
+	 * @param job - the job being processed
+	 */
+	public BatchEnrichmentContext(final IAnalyticsContext analytics_context)
+	{
+		_state_name = State.IN_TECHNOLOGY;
+		_delegate.trySet(analytics_context);
+	}
+	
+	/** User constructor - in module
+	 *  All the fields get added by the initializeContext call
+	 */
+	public BatchEnrichmentContext()
+	{
+		//(nothing else to do, see above)
+		_state_name = State.IN_MODULE;		
+	}
+	
+	///////////////////////////////////////////////////////
+	
+	// SOME TEST METHODS/ARTEFACTS
+	
+	public enum State { IN_TECHNOLOGY, IN_MODULE };
+	protected final State _state_name; // (duplicate of delegate)	
+	
+	protected class BucketChain { // (duplicate of delegate)
+		protected final SetOnce<DataBucketBean> _bucket = new SetOnce<>();
+		@SuppressWarnings("deprecation")
+		public void override(DataBucketBean bucket) {
+			_bucket.forceSet(bucket);
+		}
+		public DataBucketBean get() {
+			return _bucket.isSet() ? _bucket.get() : _delegate.get().getBucket().get();			
+		}
+	}
+	protected final BucketChain _bucket = new BucketChain();
+	
+	/** Test function for setting the bucket
+	 * @param bucket
+	 */
+	public void setBucket(final DataBucketBean bucket) {
+		_bucket.override(bucket);		
+	}
+	
+	/** Test function for setting the analytic job
+	 * @param bucket
+	 */
+	@SuppressWarnings("deprecation")
+	public void setJob(final AnalyticThreadJobBean job) {
+		_job.forceSet(job);		
+	}
+	
+	/** (FOR TESTING) returns the analytics context delegate
+	 * @return
+	 */
+	IAnalyticsContext getAnalyticsContext() {
+		return _delegate.get();
+	}
+	
+	///////////////////////////////////////////////////////
+	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingArtefacts()
+	 */
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
-		// TODO Auto-generated method stub
-		return null;
+		// All this, and me also!
+		return java.util.stream.Stream.concat(Arrays.asList(this).stream(), _delegate.get().getUnderlyingArtefacts().stream()).collect(Collectors.toList());
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingPlatformDriver(java.lang.Class, java.util.Optional)
+	 */
+	@SuppressWarnings("unchecked")
 	@Override
 	public <T> Optional<T> getUnderlyingPlatformDriver(Class<T> driver_class,
 			Optional<String> driver_options) {
-		// TODO Auto-generated method stub
-		return null;
+		if (IAnalyticsContext.class.isAssignableFrom(driver_class)) {
+			return (Optional<T>) Optional.of(_delegate.get());
+		}
+		return _delegate.get().getUnderlyingPlatformDriver(driver_class, driver_options);
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getEnrichmentContextSignature(java.util.Optional, java.util.Optional)
+	 */
 	@Override
 	public String getEnrichmentContextSignature(
 			Optional<DataBucketBean> bucket,
 			Optional<Set<Tuple2<Class<? extends IUnderlyingService>, Optional<String>>>> services) {
-		// TODO Auto-generated method stub
-		return null;
+		return this.getClass().getName() + ":" + _job.get().name() + ":" + _delegate.get().getAnalyticsContextSignature(bucket, services);
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getTopologyEntryPoints(java.lang.Class, java.util.Optional)
+	 */
 	@Override
 	public <T> Collection<Tuple2<T, String>> getTopologyEntryPoints(
 			Class<T> clazz, Optional<DataBucketBean> bucket) {
-		// TODO Auto-generated method stub
-		return null;
+		throw new RuntimeException(HadoopErrorUtils.BATCH_TOPOLOGIES_NOT_YET_SUPPORTED);
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getTopologyStorageEndpoint(java.lang.Class, java.util.Optional)
+	 */
 	@Override
 	public <T> T getTopologyStorageEndpoint(Class<T> clazz,
 			Optional<DataBucketBean> bucket) {
-		// TODO Auto-generated method stub
-		return null;
+		throw new RuntimeException(HadoopErrorUtils.BATCH_TOPOLOGIES_NOT_YET_SUPPORTED);
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getTopologyErrorEndpoint(java.lang.Class, java.util.Optional)
+	 */
 	@Override
 	public <T> T getTopologyErrorEndpoint(Class<T> clazz,
 			Optional<DataBucketBean> bucket) {
-		// TODO Auto-generated method stub
-		return null;
+		throw new RuntimeException(HadoopErrorUtils.BATCH_TOPOLOGIES_NOT_YET_SUPPORTED);
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getNextUnusedId()
+	 */
 	@Override
 	public long getNextUnusedId() {
-		// TODO Auto-generated method stub
+		// TODO (ALEPH-12): don't 100% recall the way this was supposed to work
+		// but it was something like .. for each batch this would be the index, submitted across all jobs that might
+		// be running in parallel .. so then adding a mutation to an object could be managed across multiple concurrent jobs
+		// ... since currently it all runs in serial, i don't think it's needed ... probably should generate some locally unique _id though?
+		// otherwise someone might try to use it as an "id" in their logic...
 		return 0;
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#convertToMutable(com.fasterxml.jackson.databind.JsonNode)
+	 */
 	@Override
 	public ObjectNode convertToMutable(JsonNode original) {
-		// TODO Auto-generated method stub
-		return null;
+		//(this is v simple until we need to manage mutations to the same object across multiple threads_
+		return (ObjectNode) original;
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitMutableObject(long, com.fasterxml.jackson.databind.node.ObjectNode, java.util.Optional)
+	 */
 	@Override
 	public void emitMutableObject(long id, ObjectNode mutated_json,
 			Optional<AnnotationBean> annotation) {
-		// TODO Auto-generated method stub
-		
+		_delegate.get().emitObject(Optional.empty(), _job.get(), Either.left(mutated_json), annotation);
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitImmutableObject(long, com.fasterxml.jackson.databind.JsonNode, java.util.Optional, java.util.Optional)
+	 */
 	@Override
 	public void emitImmutableObject(long id, JsonNode original_json,
 			Optional<ObjectNode> mutations, Optional<AnnotationBean> annotations) {
-		// TODO Auto-generated method stub
+		final JsonNode to_emit = 
+				mutations.map(o -> StreamSupport.<Map.Entry<String, JsonNode>>stream(Spliterators.spliteratorUnknownSize(o.fields(), Spliterator.ORDERED), false)
+									.reduce(original_json, (acc, kv) -> ((ObjectNode) acc).set(kv.getKey(), kv.getValue()), (val1, val2) -> val2))
+									.orElse(original_json);
 		
+		emitMutableObject(0L, (ObjectNode)to_emit, annotations);
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#storeErroredObject(long, com.fasterxml.jackson.databind.JsonNode)
+	 */
 	@Override
 	public void storeErroredObject(long id, JsonNode original_json) {
-		// TODO Auto-generated method stub
-		
+		throw new RuntimeException(ErrorUtils.get(HadoopErrorUtils.NOT_YET_IMPLEMENTED, "storeErroredObject"));
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getServiceContext()
+	 */
 	@Override
 	public IServiceContext getServiceContext() {
-		// TODO Auto-generated method stub
-		return null;
+		return _delegate.get().getServiceContext();
 	}
 
-	@Override
-	public <S> ICrudService<S> getGlobalEnrichmentModuleObjectStore(
-			Class<S> clazz, Optional<String> collection) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public <S> ICrudService<S> getBucketObjectStore(Class<S> clazz,
-			Optional<DataBucketBean> bucket, Optional<String> collection,
-			Optional<StateDirectoryType> type) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getBucket()
+	 */
 	@Override
 	public Optional<DataBucketBean> getBucket() {
-		// TODO Auto-generated method stub
-		return null;
+		return _delegate.get().getBucket();
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getModuleConfig()
+	 */
 	@Override
 	public SharedLibraryBean getModuleConfig() {
-		// TODO Auto-generated method stub
-		return null;
+		return _delegate.get().getModuleConfig().get(); //(present by construction)
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getBucketStatus(java.util.Optional)
+	 */
 	@Override
 	public Future<DataBucketStatusBean> getBucketStatus(
 			Optional<DataBucketBean> bucket) {
-		// TODO Auto-generated method stub
-		return null;
+		return _delegate.get().getBucketStatus(bucket);
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#logStatusForBucketOwner(java.util.Optional, com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean, boolean)
+	 */
 	@Override
 	public void logStatusForBucketOwner(Optional<DataBucketBean> bucket,
 			BasicMessageBean message, boolean roll_up_duplicates) {
-		// TODO Auto-generated method stub
-		
+		throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "logStatusForBucketOwner"));
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#logStatusForBucketOwner(java.util.Optional, com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean)
+	 */
 	@Override
 	public void logStatusForBucketOwner(Optional<DataBucketBean> bucket,
 			BasicMessageBean message) {
-		// TODO Auto-generated method stub
-		
+		throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "logStatusForBucketOwner"));
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emergencyDisableBucket(java.util.Optional)
+	 */
 	@Override
 	public void emergencyDisableBucket(Optional<DataBucketBean> bucket) {
-		// TODO Auto-generated method stub
-		
+		throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "emergencyDisableBucket"));
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emergencyQuarantineBucket(java.util.Optional, java.lang.String)
+	 */
 	@Override
 	public void emergencyQuarantineBucket(Optional<DataBucketBean> bucket,
 			String quarantine_duration) {
-		// TODO Auto-generated method stub
-		
+		throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "emergencyQuarantineBucket"));
 	}
 
 	@Override
 	public void initializeNewContext(String signature) {
-		// TODO Auto-generated method stub
-		
+		try {
+			final String[] sig_options = signature.split(":", 3);
+			// job_name:delegate:config
+			_delegate.trySet((IAnalyticsContext) Class.forName(sig_options[1]).newInstance());		
+			_delegate.get().initializeNewContext(sig_options[2]);
+			
+			// OK now get the job and set it (must exist by construction):
+			Optionals.of(() -> 
+				_delegate.get().getBucket().get().analytic_thread().jobs()
+					.stream().filter(j -> j.name().equals(sig_options[0])).findFirst().get())
+					.ifPresent(j -> {
+						this.setJob(j);
+					});
+		}
+		catch (Throwable t) {
+			throw new RuntimeException(t);
+		}
 	}
 
-	public void setBucket(DataBucketBean bucket) {
-		// TODO Auto-generated method stub
-		
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getGlobalEnrichmentModuleObjectStore(java.lang.Class, java.util.Optional)
+	 */
+	@Override
+	public <S> ICrudService<S> getGlobalEnrichmentModuleObjectStore(
+			final Class<S> clazz, final Optional<String> collection)
+	{
+		return _delegate.get().getGlobalModuleObjectStore(clazz, collection).get(); // (exists by construction)
 	}
 
-	public void setLibraryConfig(SharedLibraryBean sharedLibraryBean) {
-		// TODO Auto-generated method stub
-		
-	} 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getBucketObjectStore(java.lang.Class, java.util.Optional, java.util.Optional, java.util.Optional)
+	 */
+	@Override
+	public <S> ICrudService<S> getBucketObjectStore(final Class<S> clazz,
+			final Optional<DataBucketBean> bucket, final Optional<String> collection,
+			final Optional<StateDirectoryType> type)
+	{
+		// Translate default to enrichment, and handle bucket store being the module not the analytic technology
+		if (type.isPresent() && (StateDirectoryType.library == type.get())) {
+			return _delegate.get().getGlobalModuleObjectStore(clazz, collection).get(); // (exists by construction)			
+		}
+		else {
+			Optional<StateDirectoryType> translated_type = Optional.ofNullable(type.orElse(StateDirectoryType.enrichment));
+			return _delegate.get().getBucketObjectStore(clazz, bucket, collection, translated_type);
+		}
+	}
+
 }

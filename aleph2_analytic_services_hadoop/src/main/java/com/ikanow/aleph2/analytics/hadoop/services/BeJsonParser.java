@@ -30,6 +30,9 @@ import com.ikanow.aleph2.analytics.hadoop.data_model.IParser;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 
+/** Parser for reading in JSON data
+ * @author Alex
+ */
 public class BeJsonParser implements IParser {
 	private static final Logger logger = LogManager.getLogger(BeJsonParser.class);
 

@@ -23,8 +23,13 @@ public class HadoopErrorUtils {
 	public static final String NO_MAPPERS = "Found no mappers bucket={0} job={1} config={2}";
 	public static final String MISSING_REQUIRED_FIELD = "The field {0} in bucket {1} is missing but required";
 	
+	public static final String BATCH_TOPOLOGIES_NOT_YET_SUPPORTED = "Batch topologies not yet supported";
+	final public static String TECHNOLOGY_NOT_MODULE = "Can only be called from technology, not module";
+	final public static String SERVICE_RESTRICTIONS = "Can't call getAnalyticsContextSignature with different 'services' parameter; can't call getUnderlyingArtefacts without having called getEnrichmentContextSignature.";
+	
 	// General errors:
 	
 	public final static String EXCEPTION_CAUGHT = "Caught Exception: {0}";
 	final public static String VALIDATION_ERROR = "Validation Error: {0}";
+	final public static String NOT_YET_IMPLEMENTED = "This operation is not currently supported: {0}";
 }

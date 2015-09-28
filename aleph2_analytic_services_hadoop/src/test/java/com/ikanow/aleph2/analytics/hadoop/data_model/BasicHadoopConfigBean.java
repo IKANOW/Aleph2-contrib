@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Defines a fairly generic Hadoop job - other beans will contain more complex functionality
+ *  CURRENTLY ON ICE WHILE I GET THE SIMPLER ENRICHMENT MODULE BASED SERVICE WORKING
  * @author alex
  */
 public class BasicHadoopConfigBean {

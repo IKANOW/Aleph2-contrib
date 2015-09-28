@@ -35,9 +35,10 @@ import com.ikanow.aleph2.analytics.hadoop.assets.BeFileOutputFormat;
 import com.ikanow.aleph2.analytics.hadoop.data_model.BeJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
-import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 
-
+/** Responsible for launching the hadoop job
+ * @author jfreydank
+ */
 public class BeJobLauncher implements IBeJobService{
 
 	private static final Logger logger = LogManager.getLogger(BeJobLauncher.class);
@@ -83,8 +84,9 @@ public class BeJobLauncher implements IBeJobService{
 		return configuration;
 	}
 
-
-
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.analytics.hadoop.services.IBeJobService#runEnhancementJob(java.lang.String, java.lang.String, java.lang.String)
+	 */
 	@Override
 	public String runEnhancementJob(String bucketFullName, String bucketPathStr, String ecMetadataBeanName){
 		
@@ -100,7 +102,8 @@ public class BeJobLauncher implements IBeJobService{
 			if(bucket!=null){
 
 				batchEnrichmentContext.setBucket(bucket);
-				batchEnrichmentContext.setLibraryConfig(BeJobBean.extractLibrary(beJob.getSharedLibraries(),SharedLibraryBean.LibraryType.enrichment_module).get());
+				//TODO (ALEPH-12): this needs to get moved somewhere else
+				//batchEnrichmentContext.setLibraryConfig(BeJobBean.extractLibrary(beJob.getSharedLibraries(),SharedLibraryBean.LibraryType.enrichment_module).get());
 
 				String contextSignature = batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
 			    config.set(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE, contextSignature);
@@ -146,10 +149,14 @@ public class BeJobLauncher implements IBeJobService{
 	     		
 	}
 	
-	// default behavior is to
+	/** Launches the job
+	 * @param job
+	 * @throws ClassNotFoundException
+	 * @throws IOException
+	 * @throws InterruptedException
+	 */
 	public void launch(Job job) throws ClassNotFoundException, IOException, InterruptedException{
-		job.submit();
-		
+		job.submit();		
 	}
 
 }

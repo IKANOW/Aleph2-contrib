@@ -16,7 +16,7 @@
 package com.ikanow.aleph2.analytics.hadoop.services;
 
 
-/** Interface for 
+/** Interface for launching batch enrichment jobs
  * @author Alex
  */
 public interface IBeJobService {
