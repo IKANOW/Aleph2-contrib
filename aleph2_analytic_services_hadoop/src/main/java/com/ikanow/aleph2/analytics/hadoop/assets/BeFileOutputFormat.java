@@ -17,9 +17,11 @@ package com.ikanow.aleph2.analytics.hadoop.assets;
 
 import java.io.IOException;
 
+import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hadoop.mapreduce.OutputCommitter;
+import org.apache.hadoop.mapreduce.OutputFormat;
 import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 import scala.Tuple2;
 
@@ -33,15 +35,16 @@ import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 
 /** Output Format specific to batch enrichment
  *  (Note it's actually in here that the calls to the batch enrichment module implementation live)
+ *  TODO (ALEPH-12): not sure if we actually use any element of the FileOutputFormat here?
  * @author jfreydank
  */
-public class BeFileOutputFormat extends FileOutputFormat<String, Tuple2<Long, IBatchRecord>> implements IBeJobConfigurable{
+public class BeFileOutputFormat extends OutputFormat<String, Tuple2<Long, IBatchRecord>> implements IBeJobConfigurable{
 
-	private EnrichmentControlMetadataBean ecMetadata;
-	private SharedLibraryBean beSharedLibrary;
-	private DataBucketBean dataBucket;
-	private IEnrichmentModuleContext enrichmentContext;
-	private IEnrichmentBatchModule enrichmentBatchModule = null;			
+	private EnrichmentControlMetadataBean _ecMetadata;
+	private SharedLibraryBean _beSharedLibrary;
+	private DataBucketBean _dataBucket;
+	private IEnrichmentModuleContext _enrichmentContext;
+	private IEnrichmentBatchModule _enrichmentBatchModule = null;			
 
 
 	/* (non-Javadoc)
@@ -55,7 +58,7 @@ public class BeFileOutputFormat extends FileOutputFormat<String, Tuple2<Long, IB
 		} catch (Exception e) {
 			throw new IOException(e);
 		}
-		return new BeFileOutputWriter(jobContext.getConfiguration(), enrichmentContext,enrichmentBatchModule,dataBucket,beSharedLibrary,ecMetadata);
+		return new BeFileOutputWriter(jobContext.getConfiguration(), _enrichmentContext,_enrichmentBatchModule,_dataBucket,_beSharedLibrary,_ecMetadata);
 	}
 
 	/* (non-Javadoc)
@@ -63,7 +66,7 @@ public class BeFileOutputFormat extends FileOutputFormat<String, Tuple2<Long, IB
 	 */
 	@Override
 	public void setEcMetadata(EnrichmentControlMetadataBean ecMetadata) {
-		this.ecMetadata = ecMetadata;
+		this._ecMetadata = ecMetadata;
 	}
 
 	/* (non-Javadoc)
@@ -71,7 +74,7 @@ public class BeFileOutputFormat extends FileOutputFormat<String, Tuple2<Long, IB
 	 */
 	@Override
 	public void setBeSharedLibrary(SharedLibraryBean beSharedLibrary) {
-		this.beSharedLibrary = beSharedLibrary;
+		this._beSharedLibrary = beSharedLibrary;
 	}
 
 	/* (non-Javadoc)
@@ -79,7 +82,7 @@ public class BeFileOutputFormat extends FileOutputFormat<String, Tuple2<Long, IB
 	 */
 	@Override
 	public void setDataBucket(DataBucketBean dataBucketBean) {
-		this.dataBucket = dataBucketBean;
+		this._dataBucket = dataBucketBean;
 		
 	}
 			
@@ -88,7 +91,7 @@ public class BeFileOutputFormat extends FileOutputFormat<String, Tuple2<Long, IB
 	 */
 	@Override
 	public void setEnrichmentContext(IEnrichmentModuleContext enrichmentContext) {
-		this.enrichmentContext = enrichmentContext;
+		this._enrichmentContext = enrichmentContext;
 	}
 
 	/* (non-Javadoc)
@@ -105,8 +108,48 @@ public class BeFileOutputFormat extends FileOutputFormat<String, Tuple2<Long, IB
 	 */
 	@Override
 	public void setEnrichmentBatchModule(IEnrichmentBatchModule enrichmentBatchModule) {
-		this.enrichmentBatchModule = enrichmentBatchModule;
+		this._enrichmentBatchModule = enrichmentBatchModule;
 		
 	}
 
+	/* (non-Javadoc)
+	 * @see org.apache.hadoop.mapreduce.OutputFormat#checkOutputSpecs(org.apache.hadoop.mapreduce.JobContext)
+	 */
+	@Override
+	public void checkOutputSpecs(JobContext arg0) throws IOException,
+			InterruptedException {
+		// Nothing to do here
+	}
+
+	@Override
+	public OutputCommitter getOutputCommitter(TaskAttemptContext arg0)
+			throws IOException, InterruptedException {
+		return new BeOutputCommiter();
+	}
+
+	/** Currently empty output committer (currently: always commits, so will reproduce the v1 bug where failed reduces result
+	 *  in duplicate data)
+	 * @author Alex
+	 */
+	public class BeOutputCommiter extends OutputCommitter {
+
+	    public void abortTask( TaskAttemptContext taskContext ){
+	    }
+
+	    public void cleanupJob( JobContext jobContext ){
+	    }
+
+	    public void commitTask( TaskAttemptContext taskContext ){
+	    }
+
+	    public boolean needsTaskCommit( TaskAttemptContext taskContext ){
+	    	return true;
+	    }
+
+	    public void setupJob( JobContext jobContext ){
+	    }
+
+	    public void setupTask( TaskAttemptContext taskContext ){
+	    }
+	}
 }

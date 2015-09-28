@@ -41,23 +41,23 @@ public class MiniClusterBeJobLauncher extends BeJobLauncher {
 
 	@Override
 	public Configuration getConf() {
-		if (configuration == null) {
+		if (_configuration == null) {
 
-			this.configuration = new Configuration(true);
-			String stagingdir = configuration.get("yarn.app.mapreduce.am.staging-dir");
+			this._configuration = new Configuration(true);
+			String stagingdir = _configuration.get("yarn.app.mapreduce.am.staging-dir");
 			logger.debug("staging dir:" + stagingdir);
-			configuration.setBoolean(YarnConfiguration.YARN_MINICLUSTER_FIXED_PORTS, true);
-			configuration.setBoolean(JHAdminConfig.MR_HISTORY_MINICLUSTER_FIXED_PORTS, true);
+			_configuration.setBoolean(YarnConfiguration.YARN_MINICLUSTER_FIXED_PORTS, true);
+			_configuration.setBoolean(JHAdminConfig.MR_HISTORY_MINICLUSTER_FIXED_PORTS, true);
 
 			try {
 				mrCluster = new MiniMRYarnCluster("MiniClusterTest", 1);
-				mrCluster.init(configuration);
+				mrCluster.init(_configuration);
 				start();
 			} catch (Exception e) {
 				logger.error("getConfiguration caused exception", e);
 			}
 		}
-		return configuration;
+		return _configuration;
 	}
 
     public void start() {

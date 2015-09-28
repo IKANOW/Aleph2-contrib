@@ -44,13 +44,13 @@ public class BeFileOutputWriter extends RecordWriter<String, Tuple2<Long, IBatch
 	static final Logger _logger = LogManager.getLogger(BeFileOutputWriter.class); 
 	List<Tuple2<Long, IBatchRecord>> batch = new ArrayList<Tuple2<Long, IBatchRecord>>();
 
-	Configuration configuration = null;
-	IEnrichmentModuleContext enrichmentContext = null;
-	DataBucketBean dataBucket = null;
-	SharedLibraryBean beSharedLibrary = null;
-	EnrichmentControlMetadataBean ecMetadata = null;
-	private int batchSize = 100;
-	private IEnrichmentBatchModule enrichmentBatchModule = null;
+	Configuration _configuration = null;
+	IEnrichmentModuleContext _enrichmentContext = null;
+	DataBucketBean _dataBucket = null;
+	SharedLibraryBean _beSharedLibrary = null;
+	EnrichmentControlMetadataBean _ecMetadata = null;
+	private int _batchSize = 100;
+	private IEnrichmentBatchModule _enrichmentBatchModule = null;
 	
 	/** User c'tor
 	 * @param configuration
@@ -63,13 +63,14 @@ public class BeFileOutputWriter extends RecordWriter<String, Tuple2<Long, IBatch
 	public BeFileOutputWriter(Configuration configuration, IEnrichmentModuleContext enrichmentContext,IEnrichmentBatchModule enrichmentBatchModule,DataBucketBean dataBucket,
 			SharedLibraryBean beSharedLibrary, EnrichmentControlMetadataBean ecMetadata) {
 		super();
-		this.configuration = configuration;
-		this.enrichmentContext =  enrichmentContext;
-		this.enrichmentBatchModule = enrichmentBatchModule;
-		this.dataBucket = dataBucket;
-		this.beSharedLibrary = beSharedLibrary;
-		this.ecMetadata = ecMetadata;
-		// TODO check where final_stage is defined
+		this._configuration = configuration;
+		this._enrichmentContext =  enrichmentContext;
+		this._enrichmentBatchModule = enrichmentBatchModule;
+		this._dataBucket = dataBucket;
+		this._beSharedLibrary = beSharedLibrary;
+		this._ecMetadata = ecMetadata;
+		
+		// TODO (ALEPH-12) check where final_stage is defined
 		boolean final_stage = true;
 		enrichmentBatchModule.onStageInitialize(enrichmentContext, dataBucket, final_stage);
 
@@ -84,12 +85,12 @@ public class BeFileOutputWriter extends RecordWriter<String, Tuple2<Long, IBatch
 		checkBatch(false);
 	}
 
-	/**
+	/** Checks if we should send a batch of objects to the next stage in the pipeline
 	 * @param flush
 	 */
 	protected void checkBatch(boolean flush){
-		if((batch.size()>=batchSize) || flush){
-			enrichmentBatchModule.onObjectBatch(batch.stream(), Optional.empty(), Optional.empty());
+		if((batch.size()>=_batchSize) || flush){
+			_enrichmentBatchModule.onObjectBatch(batch.stream(), Optional.empty(), Optional.empty());
 			batch.clear();
 		}		
 	}
@@ -100,7 +101,7 @@ public class BeFileOutputWriter extends RecordWriter<String, Tuple2<Long, IBatch
 	@Override
 	public void close(TaskAttemptContext context) throws IOException, InterruptedException {
 		checkBatch(true);
-		enrichmentBatchModule.onStageComplete(true);		
+		_enrichmentBatchModule.onStageComplete(true);		
 	}
 
 }

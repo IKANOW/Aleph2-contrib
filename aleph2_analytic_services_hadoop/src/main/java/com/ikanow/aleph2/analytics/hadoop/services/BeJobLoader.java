@@ -15,95 +15,57 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.services;
 
-import java.util.List;
+import java.util.Arrays;
+import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
+import java.util.concurrent.ExecutionException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import com.google.inject.Inject;
 import com.ikanow.aleph2.analytics.hadoop.data_model.BeJobBean;
-import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
-import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
-import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
-import com.ikanow.aleph2.data_model.utils.CrudUtils;
-import com.ikanow.aleph2.data_model.utils.CrudUtils.MultiQueryComponent;
-import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
-import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 
 
-/** Responsible for 
+/** Responsible for getting a bucket from the management DB, caching all its library elements, etc
  * @author jfreydank
  */
 public class BeJobLoader {
-	private static final Logger logger = LogManager.getLogger(BeJobLoader.class);
+	protected static final Logger logger = LogManager.getLogger(BeJobLoader.class);
 
-	protected final IManagementDbService managementDbService;
+	protected final BatchEnrichmentContext _enrichmentContext;
 	
 	/** Guice/user c'tor
 	 * @param serviceContext
 	 */
-	@Inject
-	public BeJobLoader(IServiceContext serviceContext)
+	public BeJobLoader(BatchEnrichmentContext context)
 	{
-		this.managementDbService = serviceContext.getCoreManagementDbService();
+		this._enrichmentContext = context;
 	}
 	
 	/** Copies all the information needed inside Hadoop to construct the requested job
-	 * @param bucketFullName
-	 * @param bucketPathStr
-	 * @param ecMetadataBeanName
+	 * @param bucket
+	 * @param config_element
 	 * @return
+	 * @throws ExecutionException 
+	 * @throws InterruptedException 
 	 */
-	public BeJobBean loadBeJob(String bucketFullName, String bucketPathStr, String ecMetadataBeanName) {
-		BeJobBean beJob = null;
-		try {
-			IManagementCrudService<DataBucketBean> dataBucketStore = managementDbService.getDataBucketStore();
-			SingleQueryComponent<DataBucketBean> querydatBucketFullName = CrudUtils.anyOf(DataBucketBean.class).when("full_name",
-					bucketFullName);
-			Optional<DataBucketBean> odb = dataBucketStore.getObjectBySpec(querydatBucketFullName).get();
-			if (odb.isPresent()) {
-				DataBucketBean dataBucketBean = odb.get();
-				// TODO hook in security check
-				@SuppressWarnings("unused")
-				String ownerId = dataBucketBean.owner_id();
-
-				List<EnrichmentControlMetadataBean> enrichmentConfigs = dataBucketBean.batch_enrichment_configs();
-				for (EnrichmentControlMetadataBean ec : enrichmentConfigs) {
-					if (ec.name().equals(ecMetadataBeanName)) {
-						logger.info("Loading libraries: " + bucketFullName);
-
-						List<QueryComponent<SharedLibraryBean>> sharedLibsQuery = ec
-								.library_names_or_ids()
-								.stream()
-								.map(name -> {
-									return CrudUtils.anyOf(SharedLibraryBean.class)
-											.when(SharedLibraryBean::_id, name)
-											.when(SharedLibraryBean::path_name, name);
-								}).collect(Collectors.toList());
-
-						MultiQueryComponent<SharedLibraryBean> spec = CrudUtils.<SharedLibraryBean> anyOf(sharedLibsQuery);
-						IManagementCrudService<SharedLibraryBean> shareLibraryStore = managementDbService.getSharedLibraryStore();
-
-						List<SharedLibraryBean> sharedLibraries = StreamSupport.stream(
-								shareLibraryStore.getObjectsBySpec(spec).get().spliterator(), false).collect(Collectors.toList());
-						beJob = new BeJobBean(dataBucketBean, ecMetadataBeanName, sharedLibraries, bucketPathStr,bucketPathStr + "/managed_bucket/import/ready",bucketPathStr + "/managed_bucket/import/temp");
-					} // if name
-					else {
-						logger.info("Skipping Enrichment, no enrichment found for bean:" + bucketFullName + " and enrichmentName:"
-								+ ecMetadataBeanName);
-					}
-				} // for
-			} // odb present
-		} catch (Exception e) {
-			logger.error("Caught exception loading shared libraries for job:" + bucketFullName, e);
-
-		}
+	public BeJobBean loadBeJob(DataBucketBean bucket, String configElement) throws InterruptedException, ExecutionException {
+		
+		// Get all the shared libraries:
+		
+		final String baseBucketPath = _enrichmentContext.getServiceContext().getGlobalProperties().local_root_dir()
+									+ bucket.full_name();
+		
+		final Map<String, String> sharedLibraries = _enrichmentContext.getAnalyticsContext().getAnalyticsLibraries(Optional.of(bucket), Arrays.asList(_enrichmentContext.getJob())).get();
+		
+		//TODO: (ALEPH-12) shouldn't this come from the context?!
+		
+		final String bucketInPath = baseBucketPath + IStorageService.TO_IMPORT_DATA_SUFFIX;
+		
+		final BeJobBean beJob = new BeJobBean(bucket, configElement, sharedLibraries, baseBucketPath, bucketInPath);		
+		
 		return beJob;
 	}
 

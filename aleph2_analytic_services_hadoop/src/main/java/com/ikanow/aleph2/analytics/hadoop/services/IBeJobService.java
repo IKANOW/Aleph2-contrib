@@ -15,6 +15,8 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.services;
 
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+
 
 /** Interface for launching batch enrichment jobs
  * @author Alex
@@ -22,10 +24,9 @@ package com.ikanow.aleph2.analytics.hadoop.services;
 public interface IBeJobService {
 
 	/** Launches a batch enrichment job
-	 * @param bucketFullName
-	 * @param bucketPathStr
-	 * @param ecMetadataBeanName
+	 * @param bucket - the enrichment bucket to launch
+	 * @param config_element - the name of the config element
 	 * @return
 	 */
-	String runEnhancementJob(String bucketFullName, String bucketPathStr, String ecMetadataBeanName);
+	String runEnhancementJob(DataBucketBean bucket, String config_element);
 }

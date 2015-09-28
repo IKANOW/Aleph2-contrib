@@ -63,7 +63,7 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	
 	/** User constructor - in technology
 	 * @param analytics_context - the context to wrap
-	 * @param bucket - the bucket being processed
+	 * @param _bucket - the bucket being processed
 	 * @param job - the job being processed
 	 */
 	public BatchEnrichmentContext(final IAnalyticsContext analytics_context)
@@ -108,7 +108,7 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	}
 	
 	/** Test function for setting the analytic job
-	 * @param bucket
+	 * @param _bucket
 	 */
 	@SuppressWarnings("deprecation")
 	public void setJob(final AnalyticThreadJobBean job) {
@@ -120,6 +120,13 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	 */
 	IAnalyticsContext getAnalyticsContext() {
 		return _delegate.get();
+	}
+	
+	/** Returns the currently active job
+	 * @return
+	 */
+	public AnalyticThreadJobBean getJob() {
+		return _job.get();
 	}
 	
 	///////////////////////////////////////////////////////

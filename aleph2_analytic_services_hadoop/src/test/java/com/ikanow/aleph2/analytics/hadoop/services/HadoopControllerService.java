@@ -327,7 +327,7 @@ public class HadoopControllerService {
 	}
 	
 	/** Get the general configuration object before job specific variables
-	 * @param context
+	 * @param _context
 	 * @return
 	 */
 	protected static Configuration getConfig(final GlobalPropertiesBean globals, final String context_signature){

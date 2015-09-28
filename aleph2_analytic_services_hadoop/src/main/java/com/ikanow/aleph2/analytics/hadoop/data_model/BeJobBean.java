@@ -15,12 +15,11 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.data_model;
 
-import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
-import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 
 /** This class contains data objects for one batch entrichment bucket enhancement job. 
 */
@@ -28,43 +27,45 @@ import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 public class BeJobBean {
 	private String bucketPathStr;
 	private String bucketInputPath = null;
-	private String bucketOutPath = null;
-	private List<SharedLibraryBean> sharedLibraries = null;
+	private Map<String, String> sharedLibraries = null;
 	private DataBucketBean dataBucketBean = null;
 	private String enrichmentControlMetadataName;
 	
+	/** Jackson c'tor
+	 */
 	public BeJobBean(){
 		
 	}
 
-	public BeJobBean(DataBucketBean dataBucketBean, String enrichmentControlMetadataName, List<SharedLibraryBean> sharedLibraries, String bucketPathStr, String bucketInputPath, String bucketOutPath){
+	/** User c'tor 
+	 * @param dataBucketBean
+	 * @param enrichmentControlMetadataName
+	 * @param sharedLibraries
+	 * @param bucketPathStr
+	 * @param bucketInputPath
+	 * @param bucketOutPath
+	 */
+	public BeJobBean(DataBucketBean dataBucketBean, String enrichmentControlMetadataName, Map<String, String> sharedLibraries, String bucketPathStr, String bucketInputPath){
 		this.dataBucketBean = dataBucketBean;
 		this.enrichmentControlMetadataName = enrichmentControlMetadataName;
 		this.sharedLibraries =  sharedLibraries;
 		this.bucketPathStr = bucketPathStr;
 		this.bucketInputPath = bucketInputPath;
-		this.bucketOutPath = bucketOutPath;
 	}
 	
 	
+	/** The bucket being 
+	 * @return
+	 */
 	public DataBucketBean getDataBucketBean() {
 		return dataBucketBean;
 	}
-	public void setDataBucketBean(DataBucketBean dataBucketBean) {
-		this.dataBucketBean = dataBucketBean;
-	}
-	public List<SharedLibraryBean> getSharedLibraries() {
+	public Map<String, String> getSharedLibraries() {
 		return sharedLibraries;
-	}
-	public void setSharedLibraries(List<SharedLibraryBean> sharedLibraries) {
-		this.sharedLibraries = sharedLibraries;
 	}
 
 	public String getBucketPathStr() {
 		return bucketPathStr;
-	}
-	public void setBucketPathStr(String bucketPathStr) {
-		this.bucketPathStr = bucketPathStr;
 	}
 
 	
@@ -72,36 +73,12 @@ public class BeJobBean {
 		return enrichmentControlMetadataName;
 	}
 
-
-	public void setEnrichmentControlMetadataName(String enrichmentControlMetadataName) {
-		this.enrichmentControlMetadataName = enrichmentControlMetadataName;
-	}
-
-
 	public String getBucketInputPath() {
 		return bucketInputPath;
 	}
 
-	public void setBucketInputPath(String bucketInputPath) {
-		this.bucketInputPath = bucketInputPath;
-	}
-
-	public String getBucketOutPath() {
-		return bucketOutPath;
-	}
-
-	public void setBucketOutPath(String bucketOutPath) {
-		this.bucketOutPath = bucketOutPath;
-	}
-
 	public static Optional<EnrichmentControlMetadataBean> extractEnrichmentControlMetadata(DataBucketBean dataBucketBean,String enrichmentControlMetadataName){
 		Optional<EnrichmentControlMetadataBean> oecm = dataBucketBean.batch_enrichment_configs().stream().filter(ec -> ec.name().equals(enrichmentControlMetadataName)).findFirst();
-		return oecm;
-		
-	}
-	
-	public static Optional<SharedLibraryBean> extractLibrary(List<SharedLibraryBean> sharedLibraries, SharedLibraryBean.LibraryType libType){
-		Optional<SharedLibraryBean> olib = sharedLibraries.stream().filter(l -> l.type() == libType).findFirst();
-		return olib;		
+		return oecm;		
 	}
 }
