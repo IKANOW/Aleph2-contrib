@@ -22,4 +22,9 @@ public class HadoopErrorUtils {
 
 	public static final String NO_MAPPERS = "Found no mappers bucket={0} job={1} config={2}";
 	public static final String MISSING_REQUIRED_FIELD = "The field {0} in bucket {1} is missing but required";
+	
+	// General errors:
+	
+	public final static String EXCEPTION_CAUGHT = "Caught Exception: {0}";
+	final public static String VALIDATION_ERROR = "Validation Error: {0}";
 }
