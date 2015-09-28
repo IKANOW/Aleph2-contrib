@@ -65,6 +65,7 @@ import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
 import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
 import com.ikanow.aleph2.management_db.mongodb.data_model.TestQueueBean;
+import com.ikanow.aleph2.management_db.mongodb.data_model.TestQueueBean.TestStatus;
 import com.ikanow.aleph2.management_db.mongodb.module.MongoDbManagementDbModule.BucketTestService;
 
 /** This service looks for changes to IKANOW test db entries and kicks off test jobs
@@ -238,7 +239,8 @@ public class IkanowV1SyncService_TestBuckets {
 
 				final DataBucketBean to_test = Lambdas.wrap_u(() -> getBucketFromV1Source(test_source.source())).get();
 				if ( test_source.status() != null &&
-						(test_source.status().equals("in_progress") || test_source.status().equals("completed") || test_source.status().equals("error"))
+						(test_source.status() == TestStatus.in_progress || test_source.status() == TestStatus.completed || test_source.status() == TestStatus.error ) 
+						//(test_source.status().equals("in_progress") || test_source.status().equals("completed") || test_source.status().equals("error"))
 						)
 				{
 					existing_results.add(handleExistingTestSource(to_test, test_source, source_test_db));
@@ -390,11 +392,11 @@ public class IkanowV1SyncService_TestBuckets {
 			//do final step for exists/not exists 
 			final String output_collection = data_bucket._id();		
 			//mark job as complete, point to v1 collection				
-			return updateTestSourceStatus(test_source._id(), "completed", source_test_db, Optional.empty(), Optional.ofNullable(output_collection), Optional.empty());
+			return updateTestSourceStatus(test_source._id(), TestStatus.completed, source_test_db, Optional.empty(), Optional.ofNullable(output_collection), Optional.empty());
 		})
 		.exceptionally(t -> {
 			_logger.debug("Marking job completed with error");
-			return updateTestSourceStatus(test_source._id(), ErrorUtils.getLongForm("error: {0}", t), source_test_db, Optional.empty(), Optional.empty(), Optional.empty())
+			return updateTestSourceStatus(test_source._id(), TestStatus.error, source_test_db, Optional.empty(), Optional.empty(), Optional.of(ErrorUtils.getLongForm("error: {0}", t)))
 					.join();
 		})
 		;
@@ -431,13 +433,14 @@ public class IkanowV1SyncService_TestBuckets {
 			return false;
 		}).thenCompose(y -> test_res_future.thenCompose(res -> {
 			return test_res_future.getManagementResults().<Boolean>thenCompose(man_res -> {
-				return updateTestSourceStatus(new_test_source._id(), (res ? "in_progress" : "error"), source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of(man_res.stream().map(
+				//return updateTestSourceStatus(new_test_source._id(), (res ? "in_progress" : "error"), source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of(man_res.stream().map(
+				return updateTestSourceStatus(new_test_source._id(), (res ? TestStatus.in_progress : TestStatus.error), source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of(man_res.stream().map(
 					msg -> {
 					return "[" + msg.date() + "] " + msg.source() + " (" + msg.command() + "): " + (msg.success() ? "INFO" : "ERROR") + ": " + msg.message();}
 				).collect(Collectors.joining("\n"))));	
 			});
 		}).exceptionally(t -> {
-			updateTestSourceStatus(new_test_source._id(), ("error"), source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of(ErrorUtils.getLongForm("Error during test_bucket: {0}", t)))
+			updateTestSourceStatus(new_test_source._id(), TestStatus.error, source_test_db, Optional.of(new Date()), Optional.empty(), Optional.of(ErrorUtils.getLongForm("Error during test_bucket: {0}", t)))
 			.thenCompose(x -> {
 				if ( !x )
 					_logger.error("Had an error trying to update status of test object after having an error during test bucket, somethings gone horribly wrong");
@@ -460,7 +463,7 @@ public class IkanowV1SyncService_TestBuckets {
 	 */
 	private CompletableFuture<Boolean> updateTestSourceStatus(
 			final String id, 
-			final String status, 			
+			final TestStatus status, 			
 			final ICrudService<TestQueueBean> source_test_db, 
 			Optional<Date> started_on,
 			Optional<String> output_collection,
@@ -490,17 +493,17 @@ public class IkanowV1SyncService_TestBuckets {
 	protected CompletableFuture<List<TestQueueBean>> getAllTestSources(final ICrudService<TestQueueBean> source_test_db) {
 		final QueryComponent<TestQueueBean> get_query =
 				CrudUtils.allOf(TestQueueBean.class)
-				.whenNot(TestQueueBean::status, "complete")
-				.whenNot(TestQueueBean::status, "error"); //can be complete | error | in_progress | submitted | {unset/anything else}
+				.whenNot(TestQueueBean::status, TestStatus.completed)
+				.whenNot(TestQueueBean::status, TestStatus.error); //can be complete | error | in_progress | submitted | {unset/anything else}
 				
 		final QueryComponent<TestQueueBean> update_query =
 				CrudUtils.allOf(TestQueueBean.class)
-				.whenNot(TestQueueBean::status, "in_progress")
-				.whenNot(TestQueueBean::status, "complete")
-				.whenNot(TestQueueBean::status, "error"); //can be complete | error | in_progress | submitted | {unset/anything else}
+				.whenNot(TestQueueBean::status, TestStatus.in_progress)
+				.whenNot(TestQueueBean::status, TestStatus.completed)
+				.whenNot(TestQueueBean::status, TestStatus.error); //can be complete | error | in_progress | submitted | {unset/anything else}
 
 		final UpdateComponent<TestQueueBean> update_command = CrudUtils.update(TestQueueBean.class)
-				.set(TestQueueBean::status, "in_progress")
+				.set(TestQueueBean::status, TestStatus.in_progress)
 				// (don't set started_processing_on - only set that once the job has been launched)
 				;		
 		

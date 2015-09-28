@@ -54,6 +54,7 @@ import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
 import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
 import com.ikanow.aleph2.management_db.mongodb.data_model.PurgeQueueBean;
+import com.ikanow.aleph2.management_db.mongodb.data_model.PurgeQueueBean.PurgeStatus;
 
 /** This service looks for changes to IKANOW test db entries and kicks off test jobs
  * @author cmb
@@ -142,7 +143,7 @@ public class IkanowV1SyncService_PurgeBuckets {
 				catch (Throwable e) {
 					_logger.error(ErrorUtils.getLongForm("{0}", e));
 				}
-				_logger.info("SourceTestMonitor: joined the leadership candidate cluster");
+				_logger.info("SourcePurgeMonitor: joined the leadership candidate cluster");
 			}			
 		}
 		public boolean isLeader() {
@@ -165,7 +166,7 @@ public class IkanowV1SyncService_PurgeBuckets {
 				return;
 			}
 			if (!_last_state) {
-				_logger.info("SourceTestMonitor: now the leader");
+				_logger.info("SourcePurgeMonitor: now the leader");
 				_num_leader_changes++;
 				_last_state = true;
 			}
@@ -262,8 +263,8 @@ public class IkanowV1SyncService_PurgeBuckets {
 	protected CompletableFuture<List<PurgeQueueBean>> getAllPurgeSources(final ICrudService<PurgeQueueBean> source_test_db) {
 		final QueryComponent<PurgeQueueBean> get_query =
 				CrudUtils.allOf(PurgeQueueBean.class)
-				.whenNot(PurgeQueueBean::status, "complete")
-				.whenNot(PurgeQueueBean::status, "error"); //can be complete | error | in_progress | submitted | {unset/anything else}
+				.whenNot(PurgeQueueBean::status, PurgeStatus.complete)
+				.whenNot(PurgeQueueBean::status, PurgeStatus.error); //can be complete | error | in_progress | submitted | {unset/anything else}
 		
 		final CompletableFuture<List<PurgeQueueBean>> get_command = 
 				source_test_db.getObjectsBySpec(get_query)
