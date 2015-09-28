@@ -59,6 +59,7 @@ import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
 import com.ikanow.aleph2.management_db.mongodb.data_model.TestQueueBean;
+import com.ikanow.aleph2.management_db.mongodb.data_model.TestQueueBean.TestStatus;
 import com.ikanow.aleph2.management_db.mongodb.module.MockMongoDbManagementDbModule;
 import com.ikanow.aleph2.management_db.mongodb.module.MongoDbManagementDbModule.BucketTestService;
 import com.typesafe.config.Config;
@@ -262,7 +263,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//ensure that object is in the db
 		Cursor<TestQueueBean> test_objects = v2_test_q.getObjectsBySpec(
 				CrudUtils.allOf(TestQueueBean.class)
-				.whenNot("status", "complete")).get(); //can be complete | in_progress | {unset/anything else}
+				.whenNot("status", TestStatus.completed)).get(); //can be complete | in_progress | {unset/anything else}
 		test_objects.forEach( test_object -> assertTrue(test_object._id().equals(test_entry_1._id())));
 		
 		//run test cycle, this should have:
@@ -274,7 +275,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 				v2_test_q, new SuccessBucketTestService()).get();				
 		
 		//ensure its status gets updated to in_progress
-		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), "in_progress"); //status should no longer be submitted		
+		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), TestStatus.in_progress); //status should no longer be submitted		
 
 		//lets throw some fake output in the db (more than the requested 10 items)
 		final DataBucketBean data_bucket = IkanowV1SyncService_TestBuckets.getBucketFromV1Source(test_entry_1.source());
@@ -296,7 +297,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//should have maxed out it's results, check it copied them into output dir
 		final TestQueueBean test_bean = v2_test_q.getObjectById(test_entry_1._id()).get().get();
 		_logger.info("TestBean: status:" + test_bean.status() + " result: " + test_bean.result());
-		assertEquals(test_bean.status(), "completed"); //status should no longer be submitted
+		assertEquals(test_bean.status(), TestStatus.completed); //status should no longer be submitted
 		final String output_collection = test_bean.result();
 		//check the output db
 		final ICrudService<TestQueueBean> v2_output_db = this._service_context.getCoreManagementDbService().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + output_collection)).get();
@@ -326,7 +327,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//ensure that object is in the db
 		Cursor<TestQueueBean> test_objects = v2_test_q.getObjectsBySpec(
 				CrudUtils.allOf(TestQueueBean.class)
-				.whenNot("status", "complete")).get(); //can be complete | in_progress | {unset/anything else}
+				.whenNot("status", TestStatus.completed)).get(); //can be complete | in_progress | {unset/anything else}
 		test_objects.forEach( test_object -> assertTrue(test_object._id().equals(test_entry_1._id())));
 		
 		//run test cycle, this should have:
@@ -338,7 +339,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 				v2_test_q, new SuccessBucketTestService()).get();				
 		
 		//ensure its status gets updated to in_progress
-		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), "in_progress"); //status should no longer be submitted		
+		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), TestStatus.in_progress); //status should no longer be submitted		
 
 		//lets throw some fake output in the db (less than the requested 10 items)
 		final DataBucketBean data_bucket = IkanowV1SyncService_TestBuckets.getBucketFromV1Source(test_entry_1.source());
@@ -360,7 +361,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//should have maxed out it's results, check it copied them into output dir
 		final TestQueueBean test_bean = v2_test_q.getObjectById(test_entry_1._id()).get().get();
 		_logger.info("TestBean: status:" + test_bean.status() + " result: " + test_bean.result());
-		assertEquals(test_bean.status(), "completed"); //status should no longer be submitted
+		assertEquals(test_bean.status(), TestStatus.completed); //status should no longer be submitted
 		final String output_collection = test_bean.result();
 		//check the output db
 		final ICrudService<TestQueueBean> v2_output_db = this._service_context.getCoreManagementDbService().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + output_collection)).get();
@@ -405,7 +406,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//ensure that object is in the db
 		Cursor<TestQueueBean> test_objects = v2_test_q.getObjectsBySpec(
 				CrudUtils.allOf(TestQueueBean.class)
-				.whenNot("status", "complete")).get(); //can be complete | in_progress | {unset/anything else}
+				.whenNot("status", TestStatus.completed)).get(); //can be complete | in_progress | {unset/anything else}
 		test_objects.forEach( test_object -> {
 			System.out.println(test_object.toString());
 			assertTrue(test_object._id().equals(test_entry_1._id()));
@@ -417,7 +418,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 				v2_test_q, new SuccessBucketTestService()).get();				
 		
 		//ensure its status gets updated to in_progress
-		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), "in_progress"); //status should no longer be submitted		
+		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), TestStatus.in_progress); //status should no longer be submitted		
 		System.out.println("here");
 		//run a second time, it should find the in_progress source and check its status
 		sync_service.synchronizeTestSources(sync_service._core_management_db.getDataBucketStore(), 
@@ -425,7 +426,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 				v2_test_q, new SuccessBucketTestService()).get();	
 		
 		//should have timed out, been marked as completed 
-		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), "completed"); //status should no longer be submitted
+		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), TestStatus.completed); //status should no longer be submitted
 		
 		//cleanup
 		v2_test_q.deleteDatastore().get();										
@@ -451,7 +452,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//ensure that object is in the db
 		Cursor<TestQueueBean> test_objects = v2_test_q.getObjectsBySpec(
 				CrudUtils.allOf(TestQueueBean.class)
-				.whenNot("status", "complete")).get(); //can be complete | in_progress | {unset/anything else}
+				.whenNot("status", TestStatus.completed)).get(); //can be complete | in_progress | {unset/anything else}
 		test_objects.forEach( test_object -> {
 			System.out.println(test_object.toString());
 			assertTrue(test_object._id().equals(test_entry_1._id()));
@@ -465,7 +466,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 				v2_test_q, new FailBucketTestService()).get();				
 		
 		//ensure its status gets updated to in_progress		
-		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), "error"); //status should no longer be submitted			
+		assertEquals(v2_test_q.getObjectById(test_entry_1._id()).get().get().status(), TestStatus.error); //status should no longer be submitted			
 		
 		//cleanup
 		v2_test_q.deleteDatastore().get();										
@@ -490,7 +491,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//ensure that object is in the db
 		Cursor<TestQueueBean> test_objects = v2_test_q.getObjectsBySpec(
 				CrudUtils.allOf(TestQueueBean.class)
-				.whenNot("status", "complete")).get(); //can be complete | in_progress | {unset/anything else}
+				.whenNot("status", TestStatus.completed)).get(); //can be complete | in_progress | {unset/anything else}
 		test_objects.forEach( test_object -> {
 			System.out.println(test_object.toString());
 			assertTrue(test_object._id().equals(test_entry_1._id()));
@@ -506,7 +507,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//ensure its status gets updated to in_progress		
 		TestQueueBean t = v2_test_q.getObjectById(test_entry_1._id()).get().get();
 		_logger.info("Got item: " + t._id());
-		assertEquals(t.status(), "error"); //status should no longer be submitted		
+		assertEquals(t.status(), TestStatus.error); //status should no longer be submitted		
 		
 		//as a bonus, run again, make sure this error source isn't attempted again?
 		sync_service.synchronizeTestSources(sync_service._core_management_db.getDataBucketStore(), 
@@ -536,7 +537,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//ensure that object is in the db
 		Cursor<TestQueueBean> test_objects = v2_test_q.getObjectsBySpec(
 				CrudUtils.allOf(TestQueueBean.class)
-				.whenNot("status", "complete")).get(); //can be complete | in_progress | {unset/anything else}
+				.whenNot("status", TestStatus.completed)).get(); //can be complete | in_progress | {unset/anything else}
 		test_objects.forEach( test_object -> {
 			System.out.println(test_object.toString());
 			assertTrue(test_object._id().equals(test_entry_1._id()));
@@ -550,7 +551,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//ensure its status gets updated to in_progress		
 		TestQueueBean t = v2_test_q.getObjectById(test_entry_1._id()).get().get();
 		_logger.info("Got item: " + t._id());
-		assertEquals(t.status(), "error"); //status should no longer be submitted		
+		assertEquals(t.status(), TestStatus.error); //status should no longer be submitted		
 		
 		//as a bonus, run again, make sure this error source isn't attempted again?
 		//NOTE: changed the BucketTestService to a passing one, so if it does get picked up it will run
@@ -561,7 +562,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 		//make sure its still set to error
 		TestQueueBean t1 = v2_test_q.getObjectById(test_entry_1._id()).get().get();
 		_logger.info("Got item: " + t1._id());
-		assertEquals(t1.status(), "error"); //status should no longer be submitted	
+		assertEquals(t1.status(), TestStatus.error); //status should no longer be submitted	
 		
 		//cleanup
 		v2_test_q.deleteDatastore().get();										
@@ -575,7 +576,7 @@ public class TestIkanowV1SyncService_TestBuckets {
 				.with(TestQueueBean::_id, new ObjectId().toString())
 				.with(TestQueueBean::source, v1_source)
 				.with(TestQueueBean::test_params, new ProcessingTestSpecBean(10L, max_secs_to_run))
-				.with(TestQueueBean::status, "submitted")
+				.with(TestQueueBean::status, TestStatus.submitted)
 				.done().get();
 	}
 	

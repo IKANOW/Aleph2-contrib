@@ -25,15 +25,19 @@ public class PurgeQueueBean implements Serializable{
 	private static final long serialVersionUID = 3701088331212606705L;
 	private String _id;
 	private JsonNode source;
-	private String status;
+	private PurgeStatus status;
 	private String message;
 	private Date started_processing_on;
 	private Date last_processed_on;
 
 	public String _id() { return _id; }
 	public JsonNode source() { return source; }
-	public String status() { return status; }
+	public PurgeStatus status() { return status; }
 	public String message() { return message; }
 	public Date started_processing_on() { return started_processing_on; }
 	public Date last_processed_on() { return last_processed_on; }
+	
+	public enum PurgeStatus {
+		submitted, error, complete
+	}
 }

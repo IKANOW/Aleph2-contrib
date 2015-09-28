@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bson.types.ObjectId;
@@ -47,6 +48,7 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.management_db.mongodb.data_model.MongoDbManagementDbConfigBean;
 import com.ikanow.aleph2.management_db.mongodb.data_model.PurgeQueueBean;
+import com.ikanow.aleph2.management_db.mongodb.data_model.PurgeQueueBean.PurgeStatus;
 import com.ikanow.aleph2.management_db.mongodb.module.MockMongoDbManagementDbModule;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
@@ -249,7 +251,7 @@ public class TestIkanowV1SyncService_PurgeBuckets {
 		//ensure that object is in the db
 		Cursor<PurgeQueueBean> test_objects = v2_purge_q.getObjectsBySpec(
 				CrudUtils.allOf(PurgeQueueBean.class)
-				.whenNot("status", "complete")).get(); //can be complete | in_progress | {unset/anything else}
+				.whenNot("status", PurgeStatus.complete)).get(); //can be complete | in_progress | {unset/anything else}
 		test_objects.forEach( test_object -> assertTrue(test_object._id().equals(test_entry_1._id())));
 		
 		//NOTE: we can't put in fake data, because this goes through underlying_core_db_man_service
@@ -307,7 +309,7 @@ public class TestIkanowV1SyncService_PurgeBuckets {
 		return BeanTemplateUtils.build(PurgeQueueBean.class)
 				.with(PurgeQueueBean::_id, new ObjectId().toString())
 				.with(PurgeQueueBean::source, v1_source)
-				.with(PurgeQueueBean::status, "submitted")
+				.with(PurgeQueueBean::status, PurgeStatus.submitted)
 				.done().get();
 	}
 }
