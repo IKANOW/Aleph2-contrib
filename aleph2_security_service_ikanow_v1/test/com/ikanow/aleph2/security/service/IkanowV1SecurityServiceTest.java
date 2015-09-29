@@ -219,7 +219,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	}
 
 	@Test
-	public void testCacheUserInvalidation(){
+	public void testInvalidateAuthenticationCache(){
 		ISubject subject = loginAsTestUser();
 		
 		securityService.runAs(subject,Arrays.asList(regularUserId));
@@ -242,7 +242,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	}
 
 	@Test
-	public void testCacheInvalidation(){
+	public void testInvalidateCache(){
 		ISubject subject = loginAsTestUser();
 		
 		securityService.runAs(subject,Arrays.asList(regularUserId));
@@ -258,7 +258,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 			assertEquals(true,securityService.isPermitted(subject,permission));			
 			ProfilingUtility.timeStopAndLog("TU-permisssion"+(i+1));
 			if(i==5){
-				((IkanowV1SecurityService)securityService).invalidateAuthenticationCache(Arrays.asList(regularUserId));	
+				((IkanowV1SecurityService)securityService).invalidateCache();	
 				//loginAsRegularUser();
 			}
 		}
