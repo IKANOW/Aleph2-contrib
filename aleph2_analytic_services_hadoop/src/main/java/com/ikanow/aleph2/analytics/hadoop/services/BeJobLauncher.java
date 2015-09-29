@@ -35,6 +35,9 @@ import com.ikanow.aleph2.analytics.hadoop.utils.HadoopAnalyticTechnologyUtils;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+
+import fj.data.Validation;
 
 /** Responsible for launching the hadoop job
  * @author jfreydank
@@ -79,12 +82,14 @@ public class BeJobLauncher implements IBeJobService{
 	 * @see com.ikanow.aleph2.analytics.hadoop.services.IBeJobService#runEnhancementJob(java.lang.String, java.lang.String, java.lang.String)
 	 */
 	@Override
-	public String runEnhancementJob(DataBucketBean bucket, String configElement){
+	public Validation<String, Job> runEnhancementJob(DataBucketBean bucket, String configElement){
 		
 		Configuration config = getHadoopConfig();
 		String jobName = null;
+		
+		final ClassLoader currentClassloader = Thread.currentThread().getContextClassLoader();
+		
 		try {
-			
 			BeJobBean beJob = _beJobLoader.loadBeJob(bucket, configElement);		
 
 			String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
@@ -118,11 +123,16 @@ public class BeJobLauncher implements IBeJobService{
 			FileInputFormat.addInputPath(job, inPath);
 			
 			launch(job);
+			return Validation.success(job);
 			
-		} catch (Exception e) {
-			logger.error("Caught Exception",e);
 		} 
-		return jobName;
+		catch (Throwable t) {
+			logger.error("Caught Exception",t);
+			return Validation.fail(ErrorUtils.getLongForm("{0}", t));
+		} 
+		finally {
+			Thread.currentThread().setContextClassLoader(currentClassloader);
+		}
 	     		
 	}
 	

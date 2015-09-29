@@ -20,7 +20,7 @@ import java.util.Arrays;
 import java.util.Optional;
 
 import org.apache.hadoop.fs.FileContext;
-import org.apache.hadoop.mapred.JobClient;
+import org.apache.hadoop.mapreduce.Job;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.junit.Before;
@@ -31,7 +31,6 @@ import com.google.inject.Injector;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJobLoader;
-import com.ikanow.aleph2.analytics.hadoop.utils.HadoopAnalyticTechnologyUtils;
 import com.ikanow.aleph2.core.shared.utils.DirUtils;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
@@ -41,10 +40,12 @@ import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
-import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
+
+import fj.Unit;
+import fj.data.Validation;
 
 public class TestBeJobService {
     private static final Logger logger = LogManager.getLogger(TestBeJobService.class);
@@ -105,25 +106,29 @@ public class TestBeJobService {
 			
 			final BeJobLauncher beJobService = new BeJobLauncher(_globals, new BeJobLoader(batch_context), batch_context);		
 
-			final String jobName = beJobService.runEnhancementJob(test_bucket, "simplemodule");
-			logger.info("Launched " + jobName);
+			final Validation<String, Job> result = beJobService.runEnhancementJob(test_bucket, "simplemodule");
+			
+			result.validation(
+					fail -> { logger.info("Launch FAIL " + fail); return Unit.unit(); }
+					,
+					success -> { logger.info("Launched " + success.getJobName()); return Unit.unit(); }
+					);
 
 			// Wait for job to finish:
 			//TODO: hmm this doesn't seem to work with local mode, might need to find some
 			// way of returning the actual job so you can check on it?
-			final SetOnce<Boolean> complete = new SetOnce<>();
-			for (int ii = 0; (ii < 60) && !complete.isSet(); ++ii) {
-				Thread.sleep(1000L);
-				JobClient jc = new JobClient(HadoopAnalyticTechnologyUtils.getHadoopConfig(_globals)); 
-				Arrays.stream(jc.getAllJobs()).forEach(job -> { 
-					if (jobName.equals(job.getJobName())) {
-						if (job.isJobComplete()) {
-							complete.set(true);
-						}
-					} 
-				});				
-			}			
-			logger.info("Stopping service");
+//			final SetOnce<Boolean> complete = new SetOnce<>();
+//			for (int ii = 0; (ii < 60) && !complete.isSet(); ++ii) {
+//				Thread.sleep(1000L);
+//				JobClient jc = new JobClient(HadoopAnalyticTechnologyUtils.getHadoopConfig(_globals)); 
+//				Arrays.stream(jc.getAllJobs()).forEach(job -> { 
+//					if (jobName.equals(job.getJobName())) {
+//						if (job.isJobComplete()) {
+//							complete.set(true);
+//						}
+//					} 
+//				});				
+//			}			
 			
 			//TODO: check output index
 			

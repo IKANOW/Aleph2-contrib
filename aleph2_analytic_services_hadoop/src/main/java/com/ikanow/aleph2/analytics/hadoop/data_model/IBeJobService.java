@@ -15,7 +15,11 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.data_model;
 
+import org.apache.hadoop.mapreduce.Job;
+
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+
+import fj.data.Validation;
 
 
 /** Interface for launching batch enrichment jobs
@@ -28,5 +32,5 @@ public interface IBeJobService {
 	 * @param config_element - the name of the config element
 	 * @return
 	 */
-	String runEnhancementJob(DataBucketBean bucket, String config_element);
+	Validation<String, Job> runEnhancementJob(DataBucketBean bucket, String config_element);
 }
