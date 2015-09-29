@@ -526,7 +526,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 				((String) bucket.data_schema().search_index_schema().technology_override_schema().get(SearchIndexSchemaDefaultBean.index_name_override_)));
 			
 			if (manual_index_name.isPresent()) { // (then must be admin)
-				final ISubject system_user = _service_context.getSecurityService().login(null, null); //TODO (ALEPH-31) needs to be login as system .. currently will fail in practice, which is fine
+				final ISubject system_user = _service_context.getSecurityService().loginAsSystem();
 				try {
 					_service_context.getSecurityService().runAs(system_user, Arrays.asList(bucket.owner_id())); // (Switch to bucket owner user)
 					if (!_service_context.getSecurityService().hasRole(system_user, "admin")) {
