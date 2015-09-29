@@ -205,14 +205,14 @@ public class BatchEnrichmentJob{
 	 */
 	public static void extractBeJobParameters(IBeJobConfigurable beJobConfigurable, Configuration configuration) throws Exception{
 		
-		String contextSignature = configuration.get(BE_CONTEXT_SIGNATURE);  
-		IEnrichmentModuleContext enrichmentContext = ContextUtils.getEnrichmentContext(contextSignature);
+		final String contextSignature = configuration.get(BE_CONTEXT_SIGNATURE);  
+		final IEnrichmentModuleContext enrichmentContext = ContextUtils.getEnrichmentContext(contextSignature);
 		beJobConfigurable.setEnrichmentContext(enrichmentContext);
-		DataBucketBean dataBucket = enrichmentContext.getBucket().get();
+		final DataBucketBean dataBucket = enrichmentContext.getBucket().get();
 		beJobConfigurable.setDataBucket(dataBucket);
-		SharedLibraryBean beSharedLibrary = enrichmentContext.getModuleConfig();
+		final SharedLibraryBean beSharedLibrary = enrichmentContext.getModuleConfig();
 		beJobConfigurable.setBeSharedLibrary(beSharedLibrary);		
-		beJobConfigurable.setEcMetadata(BeJobBean.extractEnrichmentControlMetadata(dataBucket, configuration.get(BE_META_BEAN_PARAM)).get());	
+		beJobConfigurable.setEcMetadata(BeJobBean.extractEnrichmentControlMetadata(dataBucket, configuration.get(BE_META_BEAN_PARAM)));
 		beJobConfigurable.setBatchSize(configuration.getInt(BATCH_SIZE_PARAM,100));	
 		beJobConfigurable.setEnrichmentBatchModule(
 				Optional.ofNullable(beSharedLibrary.batch_enrichment_entry_point())

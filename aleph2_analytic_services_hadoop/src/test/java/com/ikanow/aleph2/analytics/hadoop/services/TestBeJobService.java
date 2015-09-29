@@ -15,6 +15,9 @@
  *******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.services;
 
+import static org.junit.Assert.*;
+
+import java.io.File;
 import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.Optional;
@@ -26,15 +29,20 @@ import org.apache.logging.log4j.Logger;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJobLoader;
 import com.ikanow.aleph2.core.shared.utils.DirUtils;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -78,22 +86,37 @@ public class TestBeJobService {
 		}
 	} // setup dependencies
 
-	//TODO: this test is currently failing because of the guava/hadoop-2.6.x issue
-	
-	//@org.junit.Ignore
 	@Test
 	public void testBeJobService() throws Exception{
-		try {
+		// Only run this test on linux systems, Hadoop local mode not reliably working on Windows
+		if (File.separator.equals("\\")) { // windows mode!
+			logger.info("WINDOWS MODE SKIPPING THIS TEST");
+		}
+		else {
 			final MockAnalyticsContext analytics_context = new MockAnalyticsContext(_service_context);
 			final BatchEnrichmentContext batch_context = new BatchEnrichmentContext(analytics_context);
 			
 			// Set passthrough topology
+			final AnalyticThreadJobBean test_analytic = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+					.with(AnalyticThreadJobBean::name, "simplejob")
+				.done().get();
+			
 			final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
 													.with(DataBucketBean::full_name, "/test/simple/analytics")
+													.with(DataBucketBean::analytic_thread,
+															BeanTemplateUtils.build(AnalyticThreadBean.class)
+																.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
+															.done().get()
+															)
+													.with(DataBucketBean::data_schema,
+															BeanTemplateUtils.build(DataSchemaBean.class)
+																.with(DataSchemaBean::search_index_schema,
+																	BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class).done().get()
+																)
+															.done().get()
+															)
 												.done().get();
-			final AnalyticThreadJobBean test_analytic = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
-															.with(AnalyticThreadJobBean::name, "simplejob")
-														.done().get();
+			
 			final SharedLibraryBean technology = BeanTemplateUtils.build(SharedLibraryBean.class).with(SharedLibraryBean::path_name, "/tech/test").done().get();
 			final SharedLibraryBean passthrough = BeanTemplateUtils.build(SharedLibraryBean.class).with(SharedLibraryBean::path_name, "/module/test").done().get();
 			analytics_context.setTechnologyConfig(technology);
@@ -103,6 +126,14 @@ public class TestBeJobService {
 			
 			// Set up directory:
 			createFolderStructure(test_bucket);
+			assertTrue("File1 should exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.txt").exists());
+			assertTrue("File2 should exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.json").exists());
+			// (Clear ES index)
+			final IDataWriteService<JsonNode> es_index = 
+					_service_context.getSearchIndexService().get().getDataService().get().getWritableDataService(JsonNode.class, test_bucket, Optional.empty(), Optional.empty()).get();
+			es_index.deleteDatastore().get();
+			Thread.sleep(1000L);
+			assertEquals(0, es_index.countObjects().get().intValue());
 			
 			final BeJobLauncher beJobService = new BeJobLauncher(_globals, new BeJobLoader(batch_context), batch_context);		
 
@@ -114,29 +145,29 @@ public class TestBeJobService {
 					success -> { logger.info("Launched " + success.getJobName()); return Unit.unit(); }
 					);
 
-			// Wait for job to finish:
-			//TODO: hmm this doesn't seem to work with local mode, might need to find some
-			// way of returning the actual job so you can check on it?
-//			final SetOnce<Boolean> complete = new SetOnce<>();
-//			for (int ii = 0; (ii < 60) && !complete.isSet(); ++ii) {
-//				Thread.sleep(1000L);
-//				JobClient jc = new JobClient(HadoopAnalyticTechnologyUtils.getHadoopConfig(_globals)); 
-//				Arrays.stream(jc.getAllJobs()).forEach(job -> { 
-//					if (jobName.equals(job.getJobName())) {
-//						if (job.isJobComplete()) {
-//							complete.set(true);
-//						}
-//					} 
-//				});				
-//			}			
 			
-			//TODO: check output index
+			assertTrue("Job worked: " + result.f().toOption().orSome(""), result.isSuccess());
 			
-		} catch (Throwable t) {
-			logger.error("testBeJobService caught exception",t);
-			throw t;
+			for (int ii = 0; (ii < 60) && !result.success().isComplete(); ++ii) {
+				Thread.sleep(1000L);
+			}
+			logger.info("Job has finished: " + result.success().isSuccessful());
+			assertTrue("Job successful", result.success().isSuccessful());
+			
+			// Check the processed  file has vanished
+			
+			assertFalse("File1 shouldn't exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.txt").exists());
+			assertFalse("File2 shouldn't exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.json").exists());
+			
+			// Check the object got written into ES
+			for (int ii = 0; ii < 12; ++ii) {
+				Thread.sleep(500L);
+				if (es_index.countObjects().get().intValue() >= 2) {
+					break;
+				}
+			}			
+			assertEquals(2, es_index.countObjects().get().intValue());			
 		}
-		logger.info("Stopped service");		
 	}
 	
 	//////////////////////////////////////////////
