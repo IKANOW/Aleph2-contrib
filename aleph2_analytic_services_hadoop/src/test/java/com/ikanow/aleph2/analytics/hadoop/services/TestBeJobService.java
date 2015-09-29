@@ -31,6 +31,7 @@ import com.google.inject.Injector;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJobLoader;
+import com.ikanow.aleph2.analytics.hadoop.utils.HadoopAnalyticTechnologyUtils;
 import com.ikanow.aleph2.core.shared.utils.DirUtils;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
@@ -40,6 +41,7 @@ import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
+import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
@@ -59,7 +61,7 @@ public class TestBeJobService {
 			final String temp_dir = System.getProperty("java.io.tmpdir");
 
 			// OK we're going to use guice, it was too painful doing this by hand...				
-			Config config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_hadoop_services.properties")))
+			Config config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/context_local_test.properties")))
 					.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 					.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 					.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
@@ -77,11 +79,11 @@ public class TestBeJobService {
 
 	//TODO: this test is currently failing because of the guava/hadoop-2.6.x issue
 	
-	@org.junit.Ignore
+	//@org.junit.Ignore
 	@Test
 	public void testBeJobService() throws Exception{
 		try {
-			final MockAnalyticsContext analytics_context = new MockAnalyticsContext();
+			final MockAnalyticsContext analytics_context = new MockAnalyticsContext(_service_context);
 			final BatchEnrichmentContext batch_context = new BatchEnrichmentContext(analytics_context);
 			
 			// Set passthrough topology
@@ -91,7 +93,9 @@ public class TestBeJobService {
 			final AnalyticThreadJobBean test_analytic = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
 															.with(AnalyticThreadJobBean::name, "simplejob")
 														.done().get();
-			final SharedLibraryBean passthrough = BeanTemplateUtils.build(SharedLibraryBean.class).with(SharedLibraryBean::path_name, "/test").done().get();
+			final SharedLibraryBean technology = BeanTemplateUtils.build(SharedLibraryBean.class).with(SharedLibraryBean::path_name, "/tech/test").done().get();
+			final SharedLibraryBean passthrough = BeanTemplateUtils.build(SharedLibraryBean.class).with(SharedLibraryBean::path_name, "/module/test").done().get();
+			analytics_context.setTechnologyConfig(technology);
 			analytics_context.setModuleConfig(passthrough);
 			analytics_context.setBucket(test_bucket);
 			batch_context.setJob(test_analytic);
@@ -104,14 +108,21 @@ public class TestBeJobService {
 			final String jobName = beJobService.runEnhancementJob(test_bucket, "simplemodule");
 			logger.info("Launched " + jobName);
 
-			//TODO
-			JobClient jc = new JobClient(); //TODO get config
-			Arrays.stream(jc.getAllJobs()).forEach(job -> { 
-				if (jobName.equals(job.getJobName())) {
-					//TODO:
-				} 
-			});
-			
+			// Wait for job to finish:
+			//TODO: hmm this doesn't seem to work with local mode, might need to find some
+			// way of returning the actual job so you can check on it?
+			final SetOnce<Boolean> complete = new SetOnce<>();
+			for (int ii = 0; (ii < 60) && !complete.isSet(); ++ii) {
+				Thread.sleep(1000L);
+				JobClient jc = new JobClient(HadoopAnalyticTechnologyUtils.getHadoopConfig(_globals)); 
+				Arrays.stream(jc.getAllJobs()).forEach(job -> { 
+					if (jobName.equals(job.getJobName())) {
+						if (job.isJobComplete()) {
+							complete.set(true);
+						}
+					} 
+				});				
+			}			
 			logger.info("Stopping service");
 			
 			//TODO: check output index

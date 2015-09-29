@@ -15,7 +15,6 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.services;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Optional;
 
@@ -31,6 +30,8 @@ import com.ikanow.aleph2.analytics.hadoop.assets.BatchEnrichmentJob;
 import com.ikanow.aleph2.analytics.hadoop.assets.BeFileInputFormat;
 import com.ikanow.aleph2.analytics.hadoop.assets.BeFileOutputFormat;
 import com.ikanow.aleph2.analytics.hadoop.data_model.BeJobBean;
+import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobService;
+import com.ikanow.aleph2.analytics.hadoop.utils.HadoopAnalyticTechnologyUtils;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
@@ -67,23 +68,9 @@ public class BeJobLauncher implements IBeJobService{
 	 * Override this function with system specific configuration
 	 * @return
 	 */
-	public Configuration getConf(){
+	public Configuration getHadoopConfig(){
 		if(_configuration == null){
-			this._configuration = new Configuration(false);
-		
-			if (new File(_globals.local_yarn_config_dir()).exists()) {
-				_configuration.addResource(new Path(_globals.local_yarn_config_dir() +"/core-site.xml"));
-				_configuration.addResource(new Path(_globals.local_yarn_config_dir() +"/yarn-site.xml"));
-				_configuration.addResource(new Path(_globals.local_yarn_config_dir() +"/hdfs-site.xml"));
-				_configuration.addResource(new Path(_globals.local_yarn_config_dir() +"/hadoop-site.xml"));
-				_configuration.addResource(new Path(_globals.local_yarn_config_dir() +"/mapred-site.xml"));
-			}
-			// These are not added by Hortonworks, so add them manually
-			_configuration.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");									
-			_configuration.set("fs.AbstractFileSystem.hdfs.impl", "org.apache.hadoop.fs.Hdfs");
-			// Some other config defaults:
-			// (not sure if these are actually applied, or derived from the defaults - for some reason they don't appear in CDH's client config)
-			_configuration.set("mapred.reduce.tasks.speculative.execution", "false");
+			_configuration = HadoopAnalyticTechnologyUtils.getHadoopConfig(_globals);
 		}
 		return _configuration;
 	}
@@ -94,7 +81,7 @@ public class BeJobLauncher implements IBeJobService{
 	@Override
 	public String runEnhancementJob(DataBucketBean bucket, String configElement){
 		
-		Configuration config = getConf();
+		Configuration config = getHadoopConfig();
 		String jobName = null;
 		try {
 			

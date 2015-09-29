@@ -40,7 +40,7 @@ public class MiniClusterBeJobLauncher extends BeJobLauncher {
 
 
 	@Override
-	public Configuration getConf() {
+	public Configuration getHadoopConfig() {
 		if (_configuration == null) {
 
 			this._configuration = new Configuration(true);
