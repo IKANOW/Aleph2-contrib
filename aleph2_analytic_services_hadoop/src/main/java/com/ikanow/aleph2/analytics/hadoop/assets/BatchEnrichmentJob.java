@@ -71,7 +71,6 @@ public class BatchEnrichmentJob{
 	}
 	
 	/** Mapper implementation
-	 *  TODO: there seem to be 2 of these, this one and the one in BatchEnrichmentJob?
 	 * @author Alex
 	 */
 	public static class BatchEnrichmentMapper extends Mapper<String, Tuple2<Long, IBatchRecord>, String, Tuple2<Long, IBatchRecord>>		
@@ -101,20 +100,10 @@ public class BatchEnrichmentJob{
 		@Override
 		protected void setup(Mapper<String, Tuple2<Long, IBatchRecord>, String, Tuple2<Long, IBatchRecord>>.Context context) throws IOException, InterruptedException {
 			logger.debug("BatchEnrichmentJob setup");
-			try{
-				
-
-			//extractBeJobParameters(this,  context.getConfiguration());
 			
+			// Nothing to do here
 			
-			}
-			catch(Exception e){
-				logger.error("Caught Exception",e);
-			}
-
 		} // setup
-
-		
 
 		/* (non-Javadoc)
 		 * @see org.apache.hadoop.mapreduce.Mapper#map(KEYIN, VALUEIN, org.apache.hadoop.mapreduce.Mapper.Context)
@@ -125,7 +114,6 @@ public class BatchEnrichmentJob{
 			logger.debug("BatchEnrichmentJob map");
 			context.write(key, value); //(the writer is where the batch enrichment code is batched and written)
 		} // map
-
 
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setEcMetadata(com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean)
