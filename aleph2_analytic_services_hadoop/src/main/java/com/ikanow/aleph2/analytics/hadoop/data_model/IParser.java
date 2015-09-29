@@ -23,8 +23,18 @@ import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 
 public interface IParser {
 
-		// Returns null when done
+	/** Get the next record in a list
+	 *  Returns null when done
+	 * @param currentFileIndex
+	 * @param fileName
+	 * @param inStream
+	 * @return
+	 */
 	Tuple2<Long, IBatchRecord> getNextRecord(long currentFileIndex,String fileName,  InputStream inStream);
+	
+	/** Returns true if a file can contain multiple records 
+	 * @return
+	 */
 	default boolean multipleRecordsPerFile(){
 		return false;
 	}

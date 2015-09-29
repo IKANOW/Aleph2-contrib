@@ -85,28 +85,28 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	protected int _currFile = 0;
 	protected int _numFiles = 1;
 	
-	protected String currrentFileName = null;
+	protected String _currrentFileName = null;
 
 	private Tuple2<Long, IBatchRecord> _record;
 
-	protected IEnrichmentModuleContext enrichmentContext;
+	protected IEnrichmentModuleContext _enrichmentContext;
 
-	protected DataBucketBean dataBucket;
+	protected DataBucketBean _dataBucket;
 
-	protected SharedLibraryBean beSharedLibrary;
+	protected SharedLibraryBean _beSharedLibrary;
 
-	protected EnrichmentControlMetadataBean ecMetadata;
-	protected static Map<String, IParser> parsers = new HashMap<String, IParser>();
+	protected EnrichmentControlMetadataBean _ecMetadata;
+	protected static Map<String, IParser> _parsers = new HashMap<String, IParser>();
 	static{
-		parsers.put("JSON", new BeJsonParser());
-		parsers.put("BIN", new BeStreamParser());
+		_parsers.put("JSON", new BeJsonParser());
+		_parsers.put("BIN", new BeStreamParser());
 	}
 	
 	Date start = null;
 	@SuppressWarnings("unused")
 	private int batchSize;
 	@SuppressWarnings("unused")
-	private IEnrichmentBatchModule enrichmentBatchModule;
+	private IEnrichmentBatchModule _enrichmentBatchModule;
 	
 	/** User c'tor
 	 */
@@ -128,10 +128,10 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		this.start =  new Date();
 		String contextSignature = context.getConfiguration().get(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE);   
 		try {
-			this.enrichmentContext = ContextUtils.getEnrichmentContext(contextSignature);
-			this.dataBucket = enrichmentContext.getBucket().get();
-			this.beSharedLibrary = enrichmentContext.getModuleConfig();		
-			this.ecMetadata = BeJobBean.extractEnrichmentControlMetadata(dataBucket, context.getConfiguration().get(BatchEnrichmentJob.BE_META_BEAN_PARAM)).get();
+			this._enrichmentContext = ContextUtils.getEnrichmentContext(contextSignature);
+			this._dataBucket = _enrichmentContext.getBucket().get();
+			this._beSharedLibrary = _enrichmentContext.getModuleConfig();		
+			this._ecMetadata = BeJobBean.extractEnrichmentControlMetadata(_dataBucket, context.getConfiguration().get(BatchEnrichmentJob.BE_META_BEAN_PARAM)).get();
 		} catch (Exception e) {
 			logger.error(ErrorUtils.getLongForm("{0}", e),e);
 		}
@@ -169,9 +169,9 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 				}
 			}
 		}	 // instream = null		
-		this.currrentFileName = _fileSplit.getPath(_currFile).toString();
-		IParser parser = getParser(currrentFileName);
-		_record = parser.getNextRecord(_currFile,currrentFileName,_inStream);
+		this._currrentFileName = _fileSplit.getPath(_currFile).toString();
+		IParser parser = getParser(_currrentFileName);
+		_record = parser.getNextRecord(_currFile,_currrentFileName,_inStream);
 		if (null == _record) { // Finished this file - are there any others?
 			archiveOrDeleteFile();
 			_currFile++;
@@ -199,7 +199,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	 */
 	private void archiveOrDeleteFile() {
 		try {
-			if (dataBucket.data_schema()!=null && dataBucket.data_schema().storage_schema()!=null && dataBucket.data_schema().storage_schema().enabled()) {
+			if (_dataBucket.data_schema()!=null && _dataBucket.data_schema().storage_schema()!=null && _dataBucket.data_schema().storage_schema().enabled()) {
 				Path currentPath = _fileSplit.getPath(_currFile);
 				_fs.rename(currentPath, createArchivePath(currentPath));
 			} else {
@@ -217,7 +217,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 
 		ChronoUnit timeGroupingUnit = ChronoUnit.DAYS;
 		try {
-			timeGroupingUnit = TimeUtils.getTimePeriod(Optionals.of(() -> dataBucket.data_schema().storage_schema().processed().grouping_time_period()).orElse(DEFAULT_GROUPING)).success();			
+			timeGroupingUnit = TimeUtils.getTimePeriod(Optionals.of(() -> _dataBucket.data_schema().storage_schema().processed().grouping_time_period()).orElse(DEFAULT_GROUPING)).success();			
 		} catch (Throwable t) {			
 			logger.error(ErrorUtils.getLongForm(HadoopErrorUtils.VALIDATION_ERROR,t),t);
 		}
@@ -235,10 +235,10 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		if(fileName!=null){
 			 int dotPos =  fileName.lastIndexOf("."); 
 			String ext = fileName.substring(dotPos+1).toUpperCase();  
-			parser = parsers.get(ext);
+			parser = _parsers.get(ext);
 			// default to binary
 			if(parser == null){
-				parser = parsers.get("BIN");
+				parser = _parsers.get("BIN");
 			}
 		}
 		
@@ -247,7 +247,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 
 	@Override
 	public String getCurrentKey() throws IOException, InterruptedException {
-		return currrentFileName;
+		return _currrentFileName;
 	}
 
 	@Override
@@ -272,24 +272,24 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 
 	@Override
 	public void setEcMetadata(EnrichmentControlMetadataBean ecMetadata) {
-		this.ecMetadata = ecMetadata;
+		this._ecMetadata = ecMetadata;
 	}
 
 	@Override
 	public void setBeSharedLibrary(SharedLibraryBean beSharedLibrary) {
-		this.beSharedLibrary = beSharedLibrary;
+		this._beSharedLibrary = beSharedLibrary;
 	}
 
 	@Override
 	public void setDataBucket(DataBucketBean dataBucketBean) {
-		this.dataBucket = dataBucketBean;
+		this._dataBucket = dataBucketBean;
 		
 	}
 		
 	
 	@Override
 	public void setEnrichmentContext(IEnrichmentModuleContext enrichmentContext) {
-		this.enrichmentContext = enrichmentContext;
+		this._enrichmentContext = enrichmentContext;
 	}
 
 	@Override
@@ -300,7 +300,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 
 	@Override
 	public void setEnrichmentBatchModule(IEnrichmentBatchModule beModule) {
-		this.enrichmentBatchModule = beModule;
+		this._enrichmentBatchModule = beModule;
 		
 	}
 	

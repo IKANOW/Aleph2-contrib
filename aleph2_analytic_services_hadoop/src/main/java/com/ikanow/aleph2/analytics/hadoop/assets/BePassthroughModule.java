@@ -16,7 +16,6 @@
 package com.ikanow.aleph2.analytics.hadoop.assets;
 
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 import org.apache.logging.log4j.LogManager;
@@ -35,31 +34,22 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
  * @author jfreydank
  *
  */
-public class BatchEnrichmentModule implements IEnrichmentBatchModule {
+public class BePassthroughModule implements IEnrichmentBatchModule {
+	private static final Logger logger = LogManager.getLogger(BePassthroughModule.class);
 
-	protected IEnrichmentModuleContext context;
-	protected DataBucketBean bucket;
-	protected boolean final_stage;
-	private static final Logger logger = LogManager.getLogger(BatchEnrichmentModule.class);
-	private boolean mutable = true;
-	protected AtomicLong counter = new AtomicLong();
+	protected IEnrichmentModuleContext _context;
+	protected DataBucketBean _bucket;
+	protected boolean _finalStage;
 	
-	/** TODO
-	 * @param mutable
-	 */
-	public void setMutable(boolean mutable) {
-		this.mutable = mutable;
-	}
-
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule#onStageInitialize(com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, boolean)
 	 */
 	@Override
 	public void onStageInitialize(IEnrichmentModuleContext context, DataBucketBean bucket, boolean final_stage) {
 		logger.debug("BatchEnrichmentModule.onStageInitialize:"+ context+", DataBucketBean:"+ bucket+", final_stage"+final_stage);
-		this.context = context;
-		this.bucket = bucket;
-		this.final_stage = final_stage;
+		this._context = context;
+		this._bucket = bucket;
+		this._finalStage = final_stage;
 
 	}
 
@@ -70,30 +60,13 @@ public class BatchEnrichmentModule implements IEnrichmentBatchModule {
 	public void onObjectBatch(final Stream<Tuple2<Long, IBatchRecord>> batch, Optional<Integer> batch_size, Optional<JsonNode> grouping_key) {
 		if (logger.isDebugEnabled()) logger.debug("BatchEnrichmentModule.onObjectBatch:" + batch);
 		batch.forEach(t2 -> {
-			// if stream is not present data is inside the json object
-			if (!t2._2().getContent().isPresent()) {
-				if (mutable) {
-					ObjectNode mutableObject = context.convertToMutable(t2._2().getJson());
 
-					Long id = probeId(mutableObject);
-					if (id == 0) {
-						id = counter.addAndGet(1);
-					}
-					context.emitMutableObject(id, mutableObject, Optional.empty());
-				} else {
-					JsonNode originalJson = t2._2().getJson();
-					Long id = probeId(originalJson);
-					if (id == 0) {
-						id = counter.addAndGet(1);
-					}					
-					context.emitImmutableObject(id, originalJson, Optional.empty(), Optional.empty());
-				} // else mutable
-			} // t3!present, json
-			else{
-				// here for simplicity reasons we will just dump the stream into a string and emit it.
-				Long id = counter.addAndGet(1);				
-				context.emitImmutableObject(id, t2._2().getJson(), Optional.empty(), Optional.empty());				
-			}
+			// not sure what to do with streaming (probably binary) data - probably will have to just ignore it in default mode?
+			// (the alternative is to build Tika directly in? or maybe dump it directly in .. not sure how Jackson manages raw data?)
+			Optional<ObjectNode> streamBytes = Optional.empty();			
+			
+			_context.emitImmutableObject(t2._1(), t2._2().getJson(), streamBytes, Optional.empty());
+
 		}); // for 
 	}
 
@@ -105,31 +78,4 @@ public class BatchEnrichmentModule implements IEnrichmentBatchModule {
 		logger.debug("BatchEnrichmentModule.onStageComplete()");
 	}
 
-	/** TODO
-	 * @param mutableObject
-	 * @return
-	 */
-	protected static Long probeId(JsonNode mutableObject){
-		// probe for id field
-		JsonNode id1 = mutableObject.get("id");
-		if(id1==null){
-			id1 = mutableObject.get("ID");
-		}
-		if(id1==null){
-			id1 = mutableObject.get("Id");
-		}
-		if(id1==null){
-			id1 = mutableObject.get("_id");
-		}
-		if(id1==null){
-			id1 = mutableObject.get("_ID");
-		}
-		Long id = 0L;
-		// convert to long
-		if(id1!=null){
-			id = id1.asLong();							
-		}
-		return id;
-
-	}
 }

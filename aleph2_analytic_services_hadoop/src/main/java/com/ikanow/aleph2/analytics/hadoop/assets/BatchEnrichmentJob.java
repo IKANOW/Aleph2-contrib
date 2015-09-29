@@ -50,6 +50,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.ContextUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.analytics.hadoop.data_model.BeJobBean;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable;
 
@@ -82,10 +83,10 @@ public class BatchEnrichmentJob{
 		protected IEnrichmentModuleContext enrichmentContext = null;
 
 		@SuppressWarnings("unused")
-		private int batchSize = 100;
-		protected BeJobBean beJob = null;;
-		protected EnrichmentControlMetadataBean ecMetadata = null;
-		protected SharedLibraryBean beSharedLibrary = null;
+		private int _batchSize = 100;
+		protected BeJobBean _beJob = null;;
+		protected EnrichmentControlMetadataBean _ecMetadata = null;
+		protected SharedLibraryBean _beSharedLibrary = null;
 		
 		/** User c'tore
 		 */
@@ -131,7 +132,7 @@ public class BatchEnrichmentJob{
 		 */
 		@Override
 		public void setEcMetadata(EnrichmentControlMetadataBean ecMetadata) {
-			this.ecMetadata = ecMetadata;
+			this._ecMetadata = ecMetadata;
 		}
 
 		/* (non-Javadoc)
@@ -139,7 +140,7 @@ public class BatchEnrichmentJob{
 		 */
 		@Override
 		public void setBeSharedLibrary(SharedLibraryBean beSharedLibrary) {
-			this.beSharedLibrary = beSharedLibrary;
+			this._beSharedLibrary = beSharedLibrary;
 		}
 
 		/* (non-Javadoc)
@@ -174,7 +175,7 @@ public class BatchEnrichmentJob{
 		 */
 		@Override
 		public void setBatchSize(int bs) {
-			this.batchSize=bs;
+			this._batchSize=bs;
 			
 		}
 
@@ -213,7 +214,11 @@ public class BatchEnrichmentJob{
 		beJobConfigurable.setBeSharedLibrary(beSharedLibrary);		
 		beJobConfigurable.setEcMetadata(BeJobBean.extractEnrichmentControlMetadata(dataBucket, configuration.get(BE_META_BEAN_PARAM)).get());	
 		beJobConfigurable.setBatchSize(configuration.getInt(BATCH_SIZE_PARAM,100));	
-		beJobConfigurable.setEnrichmentBatchModule((IEnrichmentBatchModule)Class.forName(beSharedLibrary.batch_enrichment_entry_point()).newInstance());
+		beJobConfigurable.setEnrichmentBatchModule(
+				Optional.ofNullable(beSharedLibrary.batch_enrichment_entry_point())
+						.<IEnrichmentBatchModule>map(Lambdas.wrap_u(entry_point -> (IEnrichmentBatchModule)Class.forName(entry_point).newInstance()))
+						.orElseGet(() -> new BePassthroughModule())) //(default)
+				;
 	}
 
 }

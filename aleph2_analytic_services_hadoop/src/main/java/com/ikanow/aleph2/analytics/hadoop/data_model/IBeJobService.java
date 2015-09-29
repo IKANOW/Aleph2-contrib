@@ -13,7 +13,13 @@
 * You should have received a copy of the GNU Affero General Public License
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 ******************************************************************************/
-package com.ikanow.aleph2.analytics.hadoop.services;
+package com.ikanow.aleph2.analytics.hadoop.data_model;
+
+import org.apache.hadoop.mapreduce.Job;
+
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+
+import fj.data.Validation;
 
 
 /** Interface for launching batch enrichment jobs
@@ -22,10 +28,9 @@ package com.ikanow.aleph2.analytics.hadoop.services;
 public interface IBeJobService {
 
 	/** Launches a batch enrichment job
-	 * @param bucketFullName
-	 * @param bucketPathStr
-	 * @param ecMetadataBeanName
+	 * @param bucket - the enrichment bucket to launch
+	 * @param config_element - the name of the config element
 	 * @return
 	 */
-	String runEnhancementJob(String bucketFullName, String bucketPathStr, String ecMetadataBeanName);
+	Validation<String, Job> runEnhancementJob(DataBucketBean bucket, String config_element);
 }

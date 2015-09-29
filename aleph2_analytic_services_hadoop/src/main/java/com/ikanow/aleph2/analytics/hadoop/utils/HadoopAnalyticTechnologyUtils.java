@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.utils;
 
+import java.io.File;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -22,7 +23,11 @@ import java.util.stream.Collectors;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 
 /** A collection of utilities for Hadoop related validation etc
  * @author Alex
@@ -58,5 +63,25 @@ public class HadoopAnalyticTechnologyUtils {
 		//TODO here - check for unimplemented functions
 		//TOOD here - check for non batch operations
 		return null;
+	}
+	
+	public static Configuration getHadoopConfig(final GlobalPropertiesBean globals) {
+		final Configuration configuration = new Configuration(false);
+		
+		if (new File(globals.local_yarn_config_dir()).exists()) {
+			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/core-site.xml"));
+			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/yarn-site.xml"));
+			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/hdfs-site.xml"));
+			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/hadoop-site.xml"));
+			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/mapred-site.xml"));
+		}
+		// These are not added by Hortonworks, so add them manually
+		configuration.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");									
+		configuration.set("fs.AbstractFileSystem.hdfs.impl", "org.apache.hadoop.fs.Hdfs");
+		// Some other config defaults:
+		// (not sure if these are actually applied, or derived from the defaults - for some reason they don't appear in CDH's client config)
+		configuration.set("mapred.reduce.tasks.speculative.execution", "false");
+		
+		return configuration;
 	}
 }
