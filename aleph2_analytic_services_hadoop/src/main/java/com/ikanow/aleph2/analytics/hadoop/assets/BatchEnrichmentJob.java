@@ -31,6 +31,8 @@
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import org.apache.hadoop.conf.Configuration;
@@ -66,8 +68,7 @@ public class BatchEnrichmentJob{
 	private static final Logger logger = LogManager.getLogger(BatchEnrichmentJob.class);
 	
 	public BatchEnrichmentJob(){
-		logger.debug("BatchEnrichmentJob constructor");
-		
+		logger.debug("BatchEnrichmentJob constructor");		
 	}
 	
 	/** Mapper implementation
@@ -76,22 +77,22 @@ public class BatchEnrichmentJob{
 	public static class BatchEnrichmentMapper extends Mapper<String, Tuple2<Long, IBatchRecord>, String, Tuple2<Long, IBatchRecord>>		
 	implements IBeJobConfigurable {
 
-		protected DataBucketBean dataBucket = null;
-		protected IEnrichmentBatchModule enrichmentBatchModule = null;			
+		protected DataBucketBean _dataBucket = null;
+		protected IEnrichmentBatchModule _enrichmentBatchModule = null;			
+		protected IEnrichmentModuleContext _enrichmentContext = null;
 
-		protected IEnrichmentModuleContext enrichmentContext = null;
-
-		@SuppressWarnings("unused")
 		private int _batchSize = 100;
-		protected BeJobBean _beJob = null;;
+		protected BeJobBean _beJob = null;
 		protected EnrichmentControlMetadataBean _ecMetadata = null;
 		protected SharedLibraryBean _beSharedLibrary = null;
 		
-		/** User c'tore
+		protected List<Tuple2<Long, IBatchRecord>> _batch = new ArrayList<Tuple2<Long, IBatchRecord>>();
+				
+		/** User c'tor
 		 */
 		public BatchEnrichmentMapper(){
 			super();
-			System.out.println("BatchErichmentMapper constructor");
+			logger.debug("BatchErichmentMapper constructor");
 		}
 		
 		/* (non-Javadoc)
@@ -101,7 +102,15 @@ public class BatchEnrichmentJob{
 		protected void setup(Mapper<String, Tuple2<Long, IBatchRecord>, String, Tuple2<Long, IBatchRecord>>.Context context) throws IOException, InterruptedException {
 			logger.debug("BatchEnrichmentJob setup");
 			
-			// Nothing to do here
+			try {
+				BatchEnrichmentJob.extractBeJobParameters(this, context.getConfiguration());
+			} catch (Exception e) {
+				throw new IOException(e);
+			}			
+			
+			// TODO (ALEPH-12) check where final_stage is defined
+			final boolean final_stage = true;
+			_enrichmentBatchModule.onStageInitialize(_enrichmentContext, _dataBucket, final_stage);
 			
 		} // setup
 
@@ -112,7 +121,9 @@ public class BatchEnrichmentJob{
 		protected void map(String key, Tuple2<Long, IBatchRecord> value,
 				Mapper<String, Tuple2<Long, IBatchRecord>, String, Tuple2<Long, IBatchRecord>>.Context context) throws IOException, InterruptedException {
 			logger.debug("BatchEnrichmentJob map");
-			context.write(key, value); //(the writer is where the batch enrichment code is batched and written)
+			
+			_batch.add(value);
+			checkBatch(false);
 		} // map
 
 		/* (non-Javadoc)
@@ -136,17 +147,15 @@ public class BatchEnrichmentJob{
 		 */
 		@Override
 		public void setDataBucket(DataBucketBean dataBucketBean) {
-			this.dataBucket = dataBucketBean;
-			
+			this._dataBucket = dataBucketBean;			
 		}
-			
 		
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setEnrichmentContext(com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext)
 		 */
 		@Override
 		public void setEnrichmentContext(IEnrichmentModuleContext enrichmentContext) {
-			this.enrichmentContext = enrichmentContext;
+			this._enrichmentContext = enrichmentContext;
 		}
 		
 		/* (non-Javadoc)
@@ -156,6 +165,8 @@ public class BatchEnrichmentJob{
 		protected void cleanup(
 				Mapper<String, Tuple2<Long, IBatchRecord>, String, Tuple2<Long, IBatchRecord>>.Context context)
 				throws IOException, InterruptedException {
+			checkBatch(true);
+			_enrichmentBatchModule.onStageComplete(true);		
 		}
 
 		/* (non-Javadoc)
@@ -172,8 +183,18 @@ public class BatchEnrichmentJob{
 		 */
 		@Override
 		public void setEnrichmentBatchModule(IEnrichmentBatchModule ebm) {
-			this.enrichmentBatchModule = ebm;
+			this._enrichmentBatchModule = ebm;
 			
+		}
+		
+		/** Checks if we should send a batch of objects to the next stage in the pipeline
+		 * @param flush
+		 */
+		protected void checkBatch(boolean flush){
+			if((_batch.size()>= _batchSize) || flush){
+				_enrichmentBatchModule.onObjectBatch(_batch.stream(), Optional.of(_batch.size()), Optional.empty());
+				_batch.clear();
+			}		
 		}
 		
 	} //BatchErichmentMapper
@@ -208,5 +229,5 @@ public class BatchEnrichmentJob{
 						.orElseGet(() -> new BePassthroughModule())) //(default)
 				;
 	}
-
+	
 }
