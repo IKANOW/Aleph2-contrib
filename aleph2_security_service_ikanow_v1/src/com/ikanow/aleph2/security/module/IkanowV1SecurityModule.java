@@ -21,7 +21,6 @@ import com.google.inject.multibindings.Multibinder;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 import com.ikanow.aleph2.security.service.AccountStatusCredentialsMatcher;
 import com.ikanow.aleph2.security.service.IkanowV1AdminRoleProvider;
-import com.ikanow.aleph2.security.service.IkanowV1CommunityRoleProvider;
 import com.ikanow.aleph2.security.service.IkanowV1DataGroupRoleProvider;
 import com.ikanow.aleph2.security.service.IkanowV1Realm;
 import com.ikanow.aleph2.security.service.IkanowV1UserGroupRoleProvider;
@@ -34,15 +33,20 @@ public class IkanowV1SecurityModule extends CoreSecurityModule{
 	
 	@Override
 	protected void bindRealms() {
-		super.bindRealms();
-		
-		bind(CredentialsMatcher.class).to(AccountStatusCredentialsMatcher.class);
-		bind(IRoleProvider.class).to(IkanowV1CommunityRoleProvider.class);
-		bindRealm().to(IkanowV1Realm.class).asEagerSingleton();
-		
+		bindRealm().to(IkanowV1Realm.class).asEagerSingleton();		
+	}
+	
+
+	@Override
+    protected void bindRoleProviders(){
 		Multibinder<IRoleProvider> uriBinder = Multibinder.newSetBinder(binder(), IRoleProvider.class);
 	    uriBinder.addBinding().to(IkanowV1AdminRoleProvider.class);
 	    uriBinder.addBinding().to(IkanowV1UserGroupRoleProvider.class);
 	    uriBinder.addBinding().to(IkanowV1DataGroupRoleProvider.class);
+    }
+	
+	@Override
+	protected void bindCredentialsMatcher() {
+ 		bind(CredentialsMatcher.class).to(AccountStatusCredentialsMatcher.class);
 	}
 }
