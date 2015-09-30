@@ -40,25 +40,13 @@ import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
  */
 public class BeFileOutputFormat extends OutputFormat<String, Tuple2<Long, IBatchRecord>> implements IBeJobConfigurable{
 
-	private EnrichmentControlMetadataBean _ecMetadata;
-	private SharedLibraryBean _beSharedLibrary;
-	private DataBucketBean _dataBucket;
-	private IEnrichmentModuleContext _enrichmentContext;
-	private IEnrichmentBatchModule _enrichmentBatchModule = null;			
-
-
 	/* (non-Javadoc)
 	 * @see org.apache.hadoop.mapreduce.lib.output.FileOutputFormat#getRecordWriter(org.apache.hadoop.mapreduce.TaskAttemptContext)
 	 */
 	@Override
 	public RecordWriter<String, Tuple2<Long, IBatchRecord>> getRecordWriter(TaskAttemptContext jobContext)
 			throws IOException, InterruptedException {
-		try {
-			BatchEnrichmentJob.extractBeJobParameters(this, jobContext.getConfiguration());
-		} catch (Exception e) {
-			throw new IOException(e);
-		}
-		return new BeFileOutputWriter(jobContext.getConfiguration(), _enrichmentContext,_enrichmentBatchModule,_dataBucket,_beSharedLibrary,_ecMetadata);
+		return new BeFileOutputWriter();
 	}
 
 	/* (non-Javadoc)
@@ -66,7 +54,6 @@ public class BeFileOutputFormat extends OutputFormat<String, Tuple2<Long, IBatch
 	 */
 	@Override
 	public void setEcMetadata(EnrichmentControlMetadataBean ecMetadata) {
-		this._ecMetadata = ecMetadata;
 	}
 
 	/* (non-Javadoc)
@@ -74,7 +61,6 @@ public class BeFileOutputFormat extends OutputFormat<String, Tuple2<Long, IBatch
 	 */
 	@Override
 	public void setBeSharedLibrary(SharedLibraryBean beSharedLibrary) {
-		this._beSharedLibrary = beSharedLibrary;
 	}
 
 	/* (non-Javadoc)
@@ -82,8 +68,6 @@ public class BeFileOutputFormat extends OutputFormat<String, Tuple2<Long, IBatch
 	 */
 	@Override
 	public void setDataBucket(DataBucketBean dataBucketBean) {
-		this._dataBucket = dataBucketBean;
-		
 	}
 			
 	/* (non-Javadoc)
@@ -91,7 +75,6 @@ public class BeFileOutputFormat extends OutputFormat<String, Tuple2<Long, IBatch
 	 */
 	@Override
 	public void setEnrichmentContext(IEnrichmentModuleContext enrichmentContext) {
-		this._enrichmentContext = enrichmentContext;
 	}
 
 	/* (non-Javadoc)
@@ -99,8 +82,6 @@ public class BeFileOutputFormat extends OutputFormat<String, Tuple2<Long, IBatch
 	 */
 	@Override
 	public void setBatchSize(int int1) {
-		// TODO Auto-generated method stub
-		
 	}
 
 	/* (non-Javadoc)
@@ -108,8 +89,6 @@ public class BeFileOutputFormat extends OutputFormat<String, Tuple2<Long, IBatch
 	 */
 	@Override
 	public void setEnrichmentBatchModule(IEnrichmentBatchModule enrichmentBatchModule) {
-		this._enrichmentBatchModule = enrichmentBatchModule;
-		
 	}
 
 	/* (non-Javadoc)

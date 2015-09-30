@@ -119,24 +119,22 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	 * @see org.apache.hadoop.mapreduce.RecordReader#initialize(org.apache.hadoop.mapreduce.InputSplit, org.apache.hadoop.mapreduce.TaskAttemptContext)
 	 */
 	@Override
-	public void initialize(InputSplit inputSplit, TaskAttemptContext context) throws IOException, InterruptedException{
-		
-		
+	public void initialize(InputSplit inputSplit, TaskAttemptContext context) throws IOException, InterruptedException{				
 		_config = context.getConfiguration();
 		_fileSplit = (CombineFileSplit) inputSplit;
 		_numFiles = _fileSplit.getNumPaths();
 		this.start =  new Date();
-		String contextSignature = context.getConfiguration().get(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE);   
+		final String contextSignature = context.getConfiguration().get(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE);   
 		try {
 			this._enrichmentContext = ContextUtils.getEnrichmentContext(contextSignature);
 			this._dataBucket = _enrichmentContext.getBucket().get();
 			this._beSharedLibrary = _enrichmentContext.getModuleConfig();		
-			this._ecMetadata = BeJobBean.extractEnrichmentControlMetadata(_dataBucket, context.getConfiguration().get(BatchEnrichmentJob.BE_META_BEAN_PARAM)).get();
+			this._ecMetadata = BeJobBean.extractEnrichmentControlMetadata(_dataBucket, context.getConfiguration().get(BatchEnrichmentJob.BE_META_BEAN_PARAM));
 		} catch (Exception e) {
-			logger.error(ErrorUtils.getLongForm("{0}", e),e);
+			throw new IOException(e);
 		}
 
-		String jobName = _config.get("mapred.job.name", "unknown");
+		final String jobName = _config.get("mapred.job.name", "unknown");
 		logger.info(jobName + ": new split, contains " + _numFiles + " files, total size: " + _fileSplit.getLength());		
 		
 	}

@@ -15,11 +15,13 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.data_model;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 
 /** This class contains data objects for one batch entrichment bucket enhancement job. 
 */
@@ -77,8 +79,11 @@ public class BeJobBean {
 		return bucketInputPath;
 	}
 
-	public static Optional<EnrichmentControlMetadataBean> extractEnrichmentControlMetadata(DataBucketBean dataBucketBean,String enrichmentControlMetadataName){
-		Optional<EnrichmentControlMetadataBean> oecm = dataBucketBean.batch_enrichment_configs().stream().filter(ec -> ec.name().equals(enrichmentControlMetadataName)).findFirst();
-		return oecm;		
+	public static EnrichmentControlMetadataBean extractEnrichmentControlMetadata(DataBucketBean dataBucketBean,String enrichmentControlMetadataName){
+		final Optional<EnrichmentControlMetadataBean> oecm = Optional.ofNullable(dataBucketBean.batch_enrichment_configs())
+																.orElse(Collections.emptyList())
+																.stream().filter(ec -> ec.name().equals(enrichmentControlMetadataName))
+																.findFirst();
+		return oecm.orElse(BeanTemplateUtils.build(EnrichmentControlMetadataBean.class).done().get());		
 	}
 }

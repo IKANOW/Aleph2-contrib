@@ -63,8 +63,7 @@ public class BePassthroughModule implements IEnrichmentBatchModule {
 
 			// not sure what to do with streaming (probably binary) data - probably will have to just ignore it in default mode?
 			// (the alternative is to build Tika directly in? or maybe dump it directly in .. not sure how Jackson manages raw data?)
-			Optional<ObjectNode> streamBytes = Optional.empty();			
-			
+			Optional<ObjectNode> streamBytes = Optional.empty();						
 			_context.emitImmutableObject(t2._1(), t2._2().getJson(), streamBytes, Optional.empty());
 
 		}); // for 
