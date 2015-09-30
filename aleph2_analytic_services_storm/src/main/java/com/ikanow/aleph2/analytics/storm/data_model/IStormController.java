@@ -15,6 +15,7 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.storm.data_model;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -40,7 +41,7 @@ public interface IStormController {
 	 * @param config_override - the client set of overrides submitted to the topology
 	 * @throws Exception
 	 */
-	CompletableFuture<BasicMessageBean> submitJob(String job_name, String input_jar_location, StormTopology topology, Map<String, String> config_override);
+	CompletableFuture<BasicMessageBean> submitJob(String job_name, String input_jar_location, StormTopology topology, Map<String, Object> config_override);
 	/**
 	 * Should stop a job on the storm cluster given the job_name
 	 * 
@@ -56,4 +57,11 @@ public interface IStormController {
 	 * @throws Exception
 	 */
 	TopologyInfo getJobStats(String job_name) throws Exception;
+	
+	/** Returns the list of (Aleph2-side) names associated with a given bucket
+	 * @param bucket_path
+	 * @return
+	 */
+	List<String> getJobNamesForBucket(String bucket_path);
+
 }

@@ -19,7 +19,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.ObjectOutputStream;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
@@ -36,7 +38,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import scala.Tuple2;
-import storm.kafka.bolt.KafkaBolt;
 import backtype.storm.spout.ISpout;
 import backtype.storm.task.IBolt;
 
@@ -47,6 +48,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.analytics.storm.assets.OutputBolt;
+import com.ikanow.aleph2.analytics.storm.assets.TransientStreamingOutputBolt;
 import com.ikanow.aleph2.analytics.storm.services.StreamingEnrichmentContextService;
 import com.ikanow.aleph2.analytics.storm.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
@@ -127,7 +129,7 @@ public class TestStreamingEnrichmentContextService {
 	}
 	
 	@Test
-	public void test_basicContextCreation() {
+	public void test_basicContextCreation() throws Exception {
 		_logger.info("run test_basicContextCreation");
 		try {
 			assertTrue("Injector created", _app_injector != null);
@@ -216,16 +218,28 @@ public class TestStreamingEnrichmentContextService {
 			
 			// 1) Transient job => gets user topology
 			
-			context_pair._2().setJob(analytic_job1);			
-			final Object endpoint_1 = test_context.getTopologyStorageEndpoint(Object.class, Optional.empty());
-			assertTrue("This endpoint should be OutputBolt: " + endpoint_1.getClass(), endpoint_1 instanceof OutputBolt);
+			{
+				context_pair._2().setJob(analytic_job1);			
+				final Object endpoint_1 = test_context.getTopologyStorageEndpoint(Object.class, Optional.empty());
+				assertTrue("This endpoint should be OutputBolt: " + endpoint_1.getClass(), endpoint_1 instanceof OutputBolt);
+				
+				// (check it's serializable - ie that this doesn't exception)
+				ObjectOutputStream out_bolt1 = new ObjectOutputStream(new ByteArrayOutputStream());
+				out_bolt1.writeObject(endpoint_1);
+				out_bolt1.close(); 
+			}
 			
 			// 2) Non-transient, output topic exists (ie output is streaming)
-
-			context_pair._2().setJob(analytic_job2);			
-			final Object endpoint_2 = test_context.getTopologyStorageEndpoint(Object.class, Optional.empty());
-			assertTrue("This endpoint should be KafkaBolt: " + endpoint_2.getClass(), endpoint_2 instanceof KafkaBolt);
-			
+			{
+				context_pair._2().setJob(analytic_job2);			
+				final Object endpoint_2 = test_context.getTopologyStorageEndpoint(Object.class, Optional.empty());
+				assertTrue("This endpoint should be KafkaBolt: " + endpoint_2.getClass(), endpoint_2 instanceof TransientStreamingOutputBolt);
+				
+				// (check it's serializable - ie that this doesn't exception)
+				ObjectOutputStream out_bolt2 = new ObjectOutputStream(new ByteArrayOutputStream());
+				out_bolt2.writeObject(endpoint_2);
+				out_bolt2.close(); 
+			}
 			// 3) Non-transient, batch output
 			
 			context_pair._2().setJob(analytic_job3);			
@@ -286,7 +300,7 @@ public class TestStreamingEnrichmentContextService {
 			// Empty service set:
 			final String signature = test_context.getEnrichmentContextSignature(Optional.of(test_bucket), Optional.empty());
 						
-			final String expected_sig = "com.ikanow.aleph2.analytics.storm.services.StreamingEnrichmentContextService:analytic_job1:com.ikanow.aleph2.analytics.storm.services.MockAnalyticsContext:{\"3fdb4bfa-2024-11e5-b5f7-727283247c7e\":\"{\\\"_id\\\":\\\"test\\\",\\\"modified\\\":1436194933000,\\\"full_name\\\":\\\"/test/external-context/creation\\\",\\\"analytic_thread\\\":{\\\"jobs\\\":[{\\\"name\\\":\\\"analytic_job1\\\"}]},\\\"data_schema\\\":{\\\"search_index_schema\\\":{}}}\",\"3fdb4bfa-2024-11e5-b5f7-727283247c7f\":\"{\\\"path_name\\\":\\\"/test/tech\\\"}\",\"3fdb4bfa-2024-11e5-b5f7-727283247cff\":\"{\\\"path_name\\\":\\\"/test/module\\\"}\",\"CoreDistributedServices\":{},\"MongoDbManagementDbService\":{\"mongodb_connection\":\"localhost:9999\"},\"globals\":{\"local_cached_jar_dir\":\"file://temp/\"},\"service\":{\"CoreDistributedServices\":{\"interface\":\"com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices\",\"service\":\"com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices\"},\"CoreManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.services.CoreManagementDbService\"},\"ManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"SearchIndexService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService\",\"service\":\"com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService\"},\"SecurityService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService\",\"service\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService\"},\"StorageService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService\",\"service\":\"com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService\"}}}";			
+			final String expected_sig = "com.ikanow.aleph2.analytics.storm.services.StreamingEnrichmentContextService:analytic_job1:com.ikanow.aleph2.analytics.storm.services.MockAnalyticsContext:{\"3fdb4bfa-2024-11e5-b5f7-727283247c7e\":\"{\\\"_id\\\":\\\"test\\\",\\\"modified\\\":1436194933000,\\\"full_name\\\":\\\"/test/external-context/creation\\\",\\\"analytic_thread\\\":{\\\"jobs\\\":[{\\\"name\\\":\\\"analytic_job1\\\"}]},\\\"data_schema\\\":{\\\"search_index_schema\\\":{}}}\",\"3fdb4bfa-2024-11e5-b5f7-727283247c7f\":\"{\\\"path_name\\\":\\\"/test/tech\\\"}\",\"3fdb4bfa-2024-11e5-b5f7-727283247cff\":\"{\\\"path_name\\\":\\\"/test/module\\\"}\",\"CoreDistributedServices\":{},\"MongoDbManagementDbService\":{\"mongodb_connection\":\"localhost:9999\"},\"globals\":{\"local_cached_jar_dir\":\"file://temp/\"},\"service\":{\"CoreDistributedServices\":{\"interface\":\"com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices\",\"service\":\"com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices\"},\"CoreManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"ManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"SearchIndexService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService\",\"service\":\"com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService\"},\"SecurityService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService\",\"service\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService\"},\"StorageService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService\",\"service\":\"com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService\"}}}";			
 			assertEquals(expected_sig, signature);
 
 			// Check can't call multiple times
@@ -323,7 +337,7 @@ public class TestStreamingEnrichmentContextService {
 					);
 			
 			
-			final String expected_sig2 = "com.ikanow.aleph2.analytics.storm.services.StreamingEnrichmentContextService:analytic_job1:com.ikanow.aleph2.analytics.storm.services.MockAnalyticsContext:{\"3fdb4bfa-2024-11e5-b5f7-727283247c7e\":\"{\\\"_id\\\":\\\"test\\\",\\\"modified\\\":1436194933000,\\\"full_name\\\":\\\"/test/external-context/creation\\\",\\\"analytic_thread\\\":{\\\"jobs\\\":[{\\\"name\\\":\\\"analytic_job1\\\"}]},\\\"data_schema\\\":{\\\"search_index_schema\\\":{}}}\",\"3fdb4bfa-2024-11e5-b5f7-727283247c7f\":\"{\\\"path_name\\\":\\\"/test/tech\\\"}\",\"3fdb4bfa-2024-11e5-b5f7-727283247cff\":\"{\\\"path_name\\\":\\\"/test/module\\\"}\",\"CoreDistributedServices\":{},\"MongoDbManagementDbService\":{\"mongodb_connection\":\"localhost:9999\"},\"globals\":{\"local_cached_jar_dir\":\"file://temp/\"},\"service\":{\"CoreDistributedServices\":{\"interface\":\"com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices\",\"service\":\"com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices\"},\"CoreManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.services.CoreManagementDbService\"},\"ManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"SearchIndexService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService\",\"service\":\"com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService\"},\"SecurityService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService\",\"service\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService\"},\"StorageService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService\",\"service\":\"com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService\"},\"test\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"}}}"; 
+			final String expected_sig2 = "com.ikanow.aleph2.analytics.storm.services.StreamingEnrichmentContextService:analytic_job1:com.ikanow.aleph2.analytics.storm.services.MockAnalyticsContext:{\"3fdb4bfa-2024-11e5-b5f7-727283247c7e\":\"{\\\"_id\\\":\\\"test\\\",\\\"modified\\\":1436194933000,\\\"full_name\\\":\\\"/test/external-context/creation\\\",\\\"analytic_thread\\\":{\\\"jobs\\\":[{\\\"name\\\":\\\"analytic_job1\\\"}]},\\\"data_schema\\\":{\\\"search_index_schema\\\":{}}}\",\"3fdb4bfa-2024-11e5-b5f7-727283247c7f\":\"{\\\"path_name\\\":\\\"/test/tech\\\"}\",\"3fdb4bfa-2024-11e5-b5f7-727283247cff\":\"{\\\"path_name\\\":\\\"/test/module\\\"}\",\"CoreDistributedServices\":{},\"MongoDbManagementDbService\":{\"mongodb_connection\":\"localhost:9999\"},\"globals\":{\"local_cached_jar_dir\":\"file://temp/\"},\"service\":{\"CoreDistributedServices\":{\"interface\":\"com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices\",\"service\":\"com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices\"},\"CoreManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"ManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"SearchIndexService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService\",\"service\":\"com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService\"},\"SecurityService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService\",\"service\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService\"},\"StorageService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService\",\"service\":\"com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService\"},\"test\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"}}}"; 
 			assertEquals(expected_sig2, signature2);
 			
 			final IEnrichmentModuleContext test_external1a = ContextUtils.getEnrichmentContext(signature);		
@@ -443,7 +457,7 @@ public class TestStreamingEnrichmentContextService {
 		// Empty service set:
 		test_context.getEnrichmentContextSignature(Optional.of(test_bucket), Optional.empty());		
 		final Collection<Object> res1 = test_context.getUnderlyingArtefacts();
-		final String exp1 = "class com.ikanow.aleph2.analytics.storm.services.StreamingEnrichmentContextService:class com.ikanow.aleph2.analytics.storm.services.MockAnalyticsContext:class com.ikanow.aleph2.data_model.utils.ModuleUtils$ServiceContext:class com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices:class com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService:class com.ikanow.aleph2.shared.crud.mongodb.services.MockMongoDbCrudServiceFactory:class com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService:class com.ikanow.aleph2.shared.crud.elasticsearch.services.MockElasticsearchCrudServiceFactory:class com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService:class com.ikanow.aleph2.management_db.services.CoreManagementDbService:class com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService:class com.ikanow.aleph2.shared.crud.mongodb.services.MockMongoDbCrudServiceFactory";
+		final String exp1 = "class com.ikanow.aleph2.analytics.storm.services.StreamingEnrichmentContextService:class com.ikanow.aleph2.analytics.storm.services.MockAnalyticsContext:class com.ikanow.aleph2.data_model.utils.ModuleUtils$ServiceContext:class com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices:class com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService:class com.ikanow.aleph2.shared.crud.mongodb.services.MockMongoDbCrudServiceFactory:class com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService:class com.ikanow.aleph2.shared.crud.elasticsearch.services.MockElasticsearchCrudServiceFactory:class com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService:class com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService:class com.ikanow.aleph2.shared.crud.mongodb.services.MockMongoDbCrudServiceFactory";
 		assertEquals(exp1, res1.stream().map(o -> o.getClass().toString()).collect(Collectors.joining(":")));
 		
 		// Check can retrieve the analytics context:
@@ -566,9 +580,7 @@ public class TestStreamingEnrichmentContextService {
 		// Empty service set:
 		final String signature = test_context.getEnrichmentContextSignature(Optional.of(test_bucket), Optional.empty());
 
-		@SuppressWarnings("unchecked")
-		final ICrudService<DataBucketBean> raw_mock_db =
-				_core_management_db.getDataBucketStore().getUnderlyingPlatformDriver(ICrudService.class, Optional.empty()).get();
+		final ICrudService<DataBucketBean> raw_mock_db = _core_management_db.getDataBucketStore(); // (note this is actually the underlying db because we're in a test here)
 		raw_mock_db.deleteDatastore().get();
 		assertEquals(0L, (long)raw_mock_db.countObjects().get());
 		raw_mock_db.storeObject(test_bucket).get();		

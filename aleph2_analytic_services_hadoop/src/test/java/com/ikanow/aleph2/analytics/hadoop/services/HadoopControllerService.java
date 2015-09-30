@@ -58,10 +58,10 @@ import fj.Unit;
 import fj.data.Validation;
 
 /** Starts and stops hadoop jobs
+ *  CURRENTLY ON ICE WHILE I GET THE SIMPLER ENRICHMENT MODULE BASED SERVICE WORKING
  * @author alex
  */
 public class HadoopControllerService {
-	//TODO: logger
 	private static final ObjectMapper _json_mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 	
 	
@@ -327,7 +327,7 @@ public class HadoopControllerService {
 	}
 	
 	/** Get the general configuration object before job specific variables
-	 * @param context
+	 * @param _context
 	 * @return
 	 */
 	protected static Configuration getConfig(final GlobalPropertiesBean globals, final String context_signature){

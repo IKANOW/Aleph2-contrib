@@ -16,6 +16,8 @@
         <module>aleph2_search_index_service_elasticsearch</module>
         <module>aleph2_storage_service_hdfs</module>
         <module>aleph2_security_service_ikanow_v1</module>
+        <module>aleph2_storm_dependencies</module>
+        <module>aleph2_analytic_services_storm</module>
     </modules>
 
     <build>

@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.analytics.storm.services;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -31,7 +32,7 @@ import com.ikanow.aleph2.analytics.storm.modules.StormAnalyticTechnologyModule;
 import com.ikanow.aleph2.analytics.storm.utils.StormAnalyticTechnologyUtils;
 import com.ikanow.aleph2.analytics.storm.utils.StormControllerUtil;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
-import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyModule;
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyService;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentStreamingTopology;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
@@ -54,7 +55,7 @@ import scala.Tuple2;
 /** Storm analytic technology module - provides the interface between Storm and Aleph2
  * @author Alex
  */
-public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModule, IExtraDependencyLoader {
+public class StormAnalyticTechnologyService implements IAnalyticsTechnologyService, IExtraDependencyLoader {
 
 	////////////////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////
@@ -120,6 +121,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 												final Optional<BucketDiffBean> diff, 
 												final IAnalyticsContext context)
 	{
+		StormControllerUtil.stopAllJobsForBucket(_storm_controller, new_analytic_bucket); // (don't wait for this to finish)
 		return CompletableFuture.completedFuture(StormAnalyticTechnologyUtils.validateJobs(new_analytic_bucket, jobs));
 	}
 
@@ -132,7 +134,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 												final Collection<AnalyticThreadJobBean> jobs, 
 												final IAnalyticsContext context)
 	{
-		// Nothing to do here
+		StormControllerUtil.stopAllJobsForBucket(_storm_controller, to_delete_analytic_bucket); // (don't wait for this to finish)
 		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onDeleteThread", "(Noted)"));
 	}
 
@@ -237,15 +239,36 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 												final AnalyticThreadJobBean job_to_start, 
 												final IAnalyticsContext context)
 	{
+		return startOrRestartAnalyticJob(analytic_bucket, jobs, job_to_start, context, false);
+	}
+	
+	/** Utility to start or restart the job
+	 * @param analytic_bucket
+	 * @param jobs
+	 * @param job_to_start
+	 * @param context
+	 * @param restart
+	 * @return
+	 */
+	public CompletableFuture<BasicMessageBean> startOrRestartAnalyticJob(
+			final DataBucketBean analytic_bucket,
+			final Collection<AnalyticThreadJobBean> jobs,
+			final AnalyticThreadJobBean job_to_start, 
+			final IAnalyticsContext context,
+			final boolean is_restart
+			)
+	{
 		// (job already validated)
 		try {
 			final Collection<String> user_lib_paths = context.getAnalyticsLibraries(Optional.of(analytic_bucket), jobs).join().values();
 			
 			final String entry_point = Optional.ofNullable(job_to_start.entry_point()).orElse(PassthroughTopology.class.getName());
+			
 			//TODO (ALEPH-12): check built-in: eg javascript
 			// (other, future, cases: enrichment module format, harvest module format; related, built-in modules: javascript)
 			
-			final Class<?> module_type = Class.forName(entry_point);
+			//(note this only works because the analytic manager has set the thread classpath)
+			final Class<?> module_type = Class.forName(entry_point, true, Thread.currentThread().getContextClassLoader());
 			
 			if (IEnrichmentStreamingTopology.class.isAssignableFrom(module_type)) {
 				
@@ -260,16 +283,19 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 				//(it's set up this way for testability)
 				
 				// Create a pretend bucket that has this job as the (sole) enrichment topology...
-				final DataBucketBean converted_bucket = BeanTemplateUtils.clone(analytic_bucket)
-															.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.streaming)
-															.with(DataBucketBean::streaming_enrichment_topology, 
-																	BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
-																		.with(EnrichmentControlMetadataBean::enabled, true)
-																		.with(EnrichmentControlMetadataBean::name, job_to_start.name())
-																		.with(EnrichmentControlMetadataBean::config, job_to_start.config())
-																	.done().get()
-																	)
-															.done();
+				final DataBucketBean converted_bucket = 
+						(null != analytic_bucket.streaming_enrichment_topology()) 
+						? analytic_bucket
+						: BeanTemplateUtils.clone(analytic_bucket)
+											.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.streaming)
+											.with(DataBucketBean::streaming_enrichment_topology, 
+													BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
+														.with(EnrichmentControlMetadataBean::enabled, true)
+														.with(EnrichmentControlMetadataBean::name, job_to_start.name())
+														.with(EnrichmentControlMetadataBean::config, job_to_start.config())
+													.done().get()
+													)
+											.done();
 				
 				wrapped_context.setBucket(converted_bucket);
 				
@@ -280,24 +306,27 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 				final Collection<Object> underlying_artefacts = Lambdas.get(() -> {
 					// Check if the user has overridden the context, and set to the defaults if not
 					try {
-						return context.getUnderlyingArtefacts();
+						return wrapped_context.getUnderlyingArtefacts();
 					}
 					catch (Exception e) {
 						// This is OK, it just means that the top. developer hasn't overridden the services, so we just use the default ones:
 						context.getAnalyticsContextSignature(Optional.of(converted_bucket), Optional.empty());
-						return context.getUnderlyingArtefacts();
+						return wrapped_context.getUnderlyingArtefacts();
 					}			
 				});				
 				
 				//(generic topology submit):
-				return StormControllerUtil.startJob(_storm_controller, analytic_bucket, underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir);
+				return is_restart
+						? StormControllerUtil.restartJob(_storm_controller, analytic_bucket, Optional.of(job_to_start.name()), underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir)
+						: StormControllerUtil.startJob(_storm_controller, analytic_bucket, Optional.of(job_to_start.name()), underlying_artefacts, user_lib_paths, (StormTopology) storm_topology._1(), storm_topology._2(), cached_jars_dir)
+						;
 			}			
 			// (no other options -currently- possible because of validation that has taken place)
 			
 			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this, "startAnalyticJob", ErrorUtils.get("Bucket={0} Job={1} Error=Module_class_not_recognized: {2}", analytic_bucket.full_name(), job_to_start.name(), job_to_start.entry_point())));
 		}
 		catch (Throwable t) {
-			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this, "startAnalyticJob", ErrorUtils.getLongForm("Bucket={1} Job={2} Error={0}", t, analytic_bucket, job_to_start.name())));
+			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this, "startAnalyticJob", ErrorUtils.getLongForm("Bucket={1} Job={2} Error={0}", t, analytic_bucket.full_name(), job_to_start.name())));
 		}
 	}
 
@@ -311,7 +340,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 												final AnalyticThreadJobBean job_to_stop, 
 												final IAnalyticsContext context)
 	{
-		return StormControllerUtil.stopJob(_storm_controller, analytic_bucket);
+		return StormControllerUtil.stopJob(_storm_controller, analytic_bucket, Optional.of(job_to_stop.name()));
 	}
 
 	/* (non-Javadoc)
@@ -324,8 +353,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 												final AnalyticThreadJobBean job_to_resume, 
 												final IAnalyticsContext context)
 	{
-		// (no specific resume function, just use start)
-		return startAnalyticJob(analytic_bucket, jobs, job_to_resume, context);
+		return startOrRestartAnalyticJob(analytic_bucket, jobs, job_to_resume, context, true);
 	}
 
 	/* (non-Javadoc)
@@ -391,6 +419,23 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyModul
 	@Override
 	public void youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules() {
 		//(done see above)
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingArtefacts()
+	 */
+	@Override
+	public Collection<Object> getUnderlyingArtefacts() {
+		return Collections.emptyList();
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingPlatformDriver(java.lang.Class, java.util.Optional)
+	 */
+	@Override
+	public <T> Optional<T> getUnderlyingPlatformDriver(Class<T> driver_class,
+			Optional<String> driver_options) {
+		return Optional.empty();
 	}
 
 }

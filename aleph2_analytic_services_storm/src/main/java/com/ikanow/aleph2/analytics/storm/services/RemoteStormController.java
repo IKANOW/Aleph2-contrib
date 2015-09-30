@@ -17,6 +17,7 @@ package com.ikanow.aleph2.analytics.storm.services;
 
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -27,6 +28,7 @@ import org.apache.thrift7.TException;
 import org.json.simple.JSONValue;
 
 import com.ikanow.aleph2.analytics.storm.data_model.IStormController;
+import com.ikanow.aleph2.analytics.storm.utils.StormControllerUtil;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
@@ -100,20 +102,24 @@ public class RemoteStormController implements IStormController  {
 	 * 
 	 */
 	@Override
-	public CompletableFuture<BasicMessageBean> submitJob(String job_name, String input_jar_location, StormTopology topology, Map<String, String> config_override)
+	public CompletableFuture<BasicMessageBean> submitJob(String job_name, String input_jar_location, StormTopology topology, Map<String, Object> config_override)
 	{
-		CompletableFuture<BasicMessageBean> future = new CompletableFuture<BasicMessageBean>();
+		final CompletableFuture<BasicMessageBean> future = new CompletableFuture<BasicMessageBean>();
 		logger.info("Submitting job: " + job_name + " jar: " + input_jar_location);
 		logger.info("submitting jar");		
-		String remote_jar_location = StormSubmitter.submitJar(remote_config, input_jar_location);
-		String json_conf = JSONValue.toJSONString(ImmutableMap.<String, Object>builder().putAll(remote_config).putAll(config_override).build());
+		
+		final String remote_jar_location = StormSubmitter.submitJar(remote_config, input_jar_location);
+		final String json_conf = JSONValue.toJSONString(ImmutableMap.<String, Object>builder()
+					.putAll(remote_config)
+					.putAll(config_override)
+				.build());
 		logger.info("submitting topology");
 		try {
 			synchronized (client) {
 				client.submitTopology(job_name, remote_jar_location, json_conf, topology);
 			}
 			//verify job was assigned some executors
-			TopologyInfo info = getJobStats(job_name);
+			final TopologyInfo info = getJobStats(job_name);
 			logger.info("submitted job received: " + info.get_executors_size() + " executors");
 			if ( info.get_executors_size() == 0 ) {
 				logger.info("received 0 executors, killing job, reporting failure");
@@ -128,7 +134,7 @@ public class RemoteStormController implements IStormController  {
 			return FutureUtils.returnError(ex);
 		}
 		
-		future.complete(ErrorUtils.buildSuccessMessage(this, "submitJob", "Submitted job successfully"));
+		future.complete(ErrorUtils.buildSuccessMessage(this, "submitJob", "Submitted job successfully: " + job_name));
 		return future;
 	}
 
@@ -174,6 +180,21 @@ public class RemoteStormController implements IStormController  {
 			}
 		}
 		return null;
+	}
+	
+	/** Gets a list of (aleph2-side) names for a given bucket
+	 * @param bucket_path
+	 * @return
+	 */
+	@Override 
+	public List<String> getJobNamesForBucket(String bucket_path) {		
+		return StormControllerUtil.getJobNamesForBucket(bucket_path, 
+									Lambdas.wrap_u(() -> {
+										synchronized (client) {
+											return client.getClusterInfo();
+										}
+									}).get()
+				);		
 	}
 	
 	/**
