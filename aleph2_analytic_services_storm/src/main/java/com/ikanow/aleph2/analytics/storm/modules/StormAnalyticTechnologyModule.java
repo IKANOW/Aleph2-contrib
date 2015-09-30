@@ -45,6 +45,8 @@ import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
 public class StormAnalyticTechnologyModule extends AbstractModule {
 	private static final Logger _logger = LogManager.getLogger();	
 
+	private static IStormController _controller;
+	
 	/* (non-Javadoc)
 	 * @see com.google.inject.AbstractModule#configure()
 	 */
@@ -62,42 +64,47 @@ public class StormAnalyticTechnologyModule extends AbstractModule {
 	 */
 	@SuppressWarnings("unchecked")
 	public static IStormController getController() {
-		final GlobalPropertiesBean globals = Lambdas.get(() -> {
-			try {
-				return BeanTemplateUtils.from(PropertiesUtils.getSubConfig(ModuleUtils.getStaticConfig(), GlobalPropertiesBean.PROPERTIES_ROOT).orElse(null), GlobalPropertiesBean.class);
-			} catch (IOException e) {
-				_logger.error(ErrorUtils.getLongForm("Couldn't set globals property bean in storm harvest tech onInit: {0}", e));
-				return null;
+		synchronized (IStormController.class) {
+			if (null != _controller) {
+				return _controller;
 			}
-		});
-		if (null == globals) {
-			return new NoStormController();
+			final GlobalPropertiesBean globals = Lambdas.get(() -> {
+				try {
+					return BeanTemplateUtils.from(PropertiesUtils.getSubConfig(ModuleUtils.getStaticConfig(), GlobalPropertiesBean.PROPERTIES_ROOT).orElse(null), GlobalPropertiesBean.class);
+				} catch (IOException e) {
+					_logger.error(ErrorUtils.getLongForm("Couldn't set globals property bean in storm harvest tech onInit: {0}", e));
+					return null;
+				}
+			});
+			if (null == globals) {
+				return new NoStormController();
+			}
+			_logger.info("Loading storm config from: " + globals.local_yarn_config_dir() + File.separator + "storm.yaml");
+			Yaml yaml = new Yaml();
+			InputStream input;
+			Map<String, Object> object;
+			try {
+				input = new FileInputStream(new File(globals.local_yarn_config_dir() + File.separator + "storm.yaml"));
+				object = (Map<String, Object>) yaml.load(input);
+			} catch (FileNotFoundException e) {
+				_logger.error(ErrorUtils.getLongForm("Error reading storm.yaml in storm harvest tech onInit: {0}", e));
+				object = new HashMap<String, Object>();
+			}
+						
+			if ( object.containsKey(backtype.storm.Config.NIMBUS_HOST) ) {
+				_logger.info("starting in remote mode v5");
+				_logger.info(object.get(backtype.storm.Config.NIMBUS_HOST));
+				//run in distributed mode
+				IStormController storm_controller = StormControllerUtil.getRemoteStormController(
+						(String)object.get(backtype.storm.Config.NIMBUS_HOST), 
+						(int)object.get(backtype.storm.Config.NIMBUS_THRIFT_PORT), 
+						(String)object.get(backtype.storm.Config.STORM_THRIFT_TRANSPORT_PLUGIN));
+				
+				return (_controller = storm_controller);
+			}		
+			else {
+				return (_controller = new NoStormController());	
+			}		
 		}
-		_logger.info("Loading storm config from: " + globals.local_yarn_config_dir() + File.separator + "storm.yaml");
-		Yaml yaml = new Yaml();
-		InputStream input;
-		Map<String, Object> object;
-		try {
-			input = new FileInputStream(new File(globals.local_yarn_config_dir() + File.separator + "storm.yaml"));
-			object = (Map<String, Object>) yaml.load(input);
-		} catch (FileNotFoundException e) {
-			_logger.error(ErrorUtils.getLongForm("Error reading storm.yaml in storm harvest tech onInit: {0}", e));
-			object = new HashMap<String, Object>();
-		}
-					
-		if ( object.containsKey(backtype.storm.Config.NIMBUS_HOST) ) {
-			_logger.info("starting in remote mode v5");
-			_logger.info(object.get(backtype.storm.Config.NIMBUS_HOST));
-			//run in distributed mode
-			IStormController storm_controller = StormControllerUtil.getRemoteStormController(
-					(String)object.get(backtype.storm.Config.NIMBUS_HOST), 
-					(int)object.get(backtype.storm.Config.NIMBUS_THRIFT_PORT), 
-					(String)object.get(backtype.storm.Config.STORM_THRIFT_TRANSPORT_PLUGIN));
-			
-			return storm_controller;
-		}		
-		else {
-			return new NoStormController();			
-		}		
 	}
 }

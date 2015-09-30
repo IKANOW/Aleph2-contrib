@@ -15,6 +15,7 @@
  *******************************************************************************/
 package com.ikanow.aleph2.security.service;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -30,8 +31,11 @@ import org.apache.shiro.authc.credential.CredentialsMatcher;
 import org.apache.shiro.authz.AuthorizationException;
 import org.apache.shiro.authz.AuthorizationInfo;
 import org.apache.shiro.authz.SimpleAuthorizationInfo;
+import org.apache.shiro.cache.Cache;
+import org.apache.shiro.cache.CacheManager;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
+import org.apache.shiro.subject.SimplePrincipalCollection;
 import org.bson.types.ObjectId;
 
 import scala.Tuple2;
@@ -43,10 +47,11 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
+import com.ikanow.aleph2.security.interfaces.IClearableRealmCache;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 
 
-public class IkanowV1Realm extends AuthorizingRealm {
+public class IkanowV1Realm extends AuthorizingRealm implements IClearableRealmCache {
 	private static final Logger logger = LogManager.getLogger(IkanowV1Realm.class);
 
 	
@@ -64,10 +69,11 @@ public class IkanowV1Realm extends AuthorizingRealm {
 	private Set<IRoleProvider> roleProviders;
 	
 	@Inject
-	public IkanowV1Realm(final IServiceContext service_context,CredentialsMatcher matcher, Set<IRoleProvider> roleProviders) {		
-		super(matcher);
+	public IkanowV1Realm(final IServiceContext service_context,CacheManager cacheManager, CredentialsMatcher matcher, Set<IRoleProvider> roleProviders) {		
+		super(cacheManager,matcher);
 		_context = service_context;
 		this.roleProviders = roleProviders;
+		logger.debug("IkanowV1Realm name="+getName());
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -174,5 +180,27 @@ public class IkanowV1Realm extends AuthorizingRealm {
         return info;
     }
     
+    @Override
+    public void clearAuthorizationCached(Collection<String> principalNames){
+   	 logger.debug("clearCachedAuthorizationInfo for "+principalNames);
+   	 SimplePrincipalCollection principals = new SimplePrincipalCollection(principalNames, this.getClass().getName());
+   	 super.doClearCache(principals);   	 
+    }
 
+    @Override
+    public void clearAllCaches(){
+		 logger.debug("clearAllCaches");
+			
+
+		 Cache<Object, AuthenticationInfo> ac = getAuthenticationCache();
+			if(ac!=null){
+				ac.clear();
+			}
+			Cache<Object, AuthorizationInfo> ar = getAuthorizationCache();
+			if(ar!=null){
+				ar.clear();
+			}
+		
+    }
+     
 }

@@ -23,4 +23,5 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 public class SearchIndexErrorUtils extends ErrorUtils {
 
 	public static final String INVALID_MAX_INDEX_SIZE = "The max index size must be more than 25MB if set: attempted value={0} MB";
+	public static final String NON_ADMIN_BUCKET_NAME_OVERRIDE = "Only non-admins can override the default index name";
 }

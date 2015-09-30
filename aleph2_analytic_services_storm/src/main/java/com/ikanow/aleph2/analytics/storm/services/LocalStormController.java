@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.analytics.storm.services;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -24,6 +25,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.thrift7.TException;
 
 import com.ikanow.aleph2.analytics.storm.data_model.IStormController;
+import com.ikanow.aleph2.analytics.storm.utils.StormControllerUtil;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
@@ -61,7 +63,7 @@ public class LocalStormController implements IStormController {
 	 */
 	@Override
 	public CompletableFuture<BasicMessageBean> submitJob(String job_name, String input_jar_location,
-			StormTopology topology, Map<String, String> config_override) {
+			StormTopology topology, Map<String, Object> config_override) {
 		CompletableFuture<BasicMessageBean> future = new CompletableFuture<BasicMessageBean>();
 		logger.info("Submitting job: " + job_name);
 		Config config = new Config();
@@ -69,7 +71,7 @@ public class LocalStormController implements IStormController {
 		config_override.forEach((k, v) -> config.put(k, v));
 		local_cluster.submitTopology(job_name, config, topology);
 		
-		future.complete(ErrorUtils.buildSuccessMessage(this, "submitJob", "Submitted job successfully"));
+		future.complete(ErrorUtils.buildSuccessMessage(this, "submitJob", "Submitted job successfully: " + job_name));
 		return future;
 	}
 
@@ -109,6 +111,16 @@ public class LocalStormController implements IStormController {
 		return null;
 	}
 	
+	
+	/** Gets a list of (aleph2-side) names for a given bucket
+	 * @param bucket_path
+	 * @return
+	 */
+	@Override 
+	public List<String> getJobNamesForBucket(String bucket_path) {
+		return StormControllerUtil.getJobNamesForBucket(bucket_path, local_cluster.getClusterInfo());
+	}
+	
 	/**
 	 * Tries to find a job by its job_name.
 	 * 
@@ -121,8 +133,10 @@ public class LocalStormController implements IStormController {
 		Iterator<TopologySummary> iter = cluster_summary.get_topologies_iterator();
 		 while ( iter.hasNext() ) {
 			 TopologySummary summary = iter.next();
-			 System.out.println(summary.get_name() + summary.get_id() + summary.get_status());				 
-			 if ( summary.get_name().startsWith(job_prefix));
+			 
+			 //System.out.println(summary.get_name() + summary.get_id() + summary.get_status());				 
+			 
+			 if (summary.get_name().startsWith(job_prefix))
 			 	return summary;
 		 }	
 		 return null;

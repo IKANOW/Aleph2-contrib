@@ -43,7 +43,4 @@ public class ErrorUtils extends com.ikanow.aleph2.data_model.utils.ErrorUtils{
 	final public static String TEMP_INPUTS_MUST_BE_STREAMING = "Currently (will be fixed soon), only streaming inputs are supported (bucket={0}, job={1}, input type={2})";
 	
 	final public static String TEMP_TRANSIENT_OUTPUTS_MUST_BE_STREAMING = "Currently (will be fixed soon), transient outputs must be streaming (bucket={0}, job={1}, output type={2})";
-	
-	final public static String TEMP_MIXED_ANALYTICS_AND_ENRICHMENT = "Currently not possible to mix streaming enrichment topologies and streaming analytics (bucket={0})"; 
-	
 }
