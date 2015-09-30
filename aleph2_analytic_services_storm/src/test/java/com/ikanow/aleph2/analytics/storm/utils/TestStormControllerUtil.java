@@ -161,6 +161,7 @@ public class TestStormControllerUtil {
 				.with(SharedLibraryBean::path_name, "/test/lib")
 				.done().get();
 		final SharedLibraryBean library_mod = BeanTemplateUtils.build(SharedLibraryBean.class)
+				.with(SharedLibraryBean::_id, "_test_module")
 				.with(SharedLibraryBean::path_name, "/test/module")
 				.done().get();
 		
