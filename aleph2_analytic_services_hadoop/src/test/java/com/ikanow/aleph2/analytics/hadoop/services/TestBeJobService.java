@@ -26,6 +26,7 @@ import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.elasticsearch.common.collect.ImmutableMap;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -99,6 +100,7 @@ public class TestBeJobService {
 			// Set passthrough topology
 			final AnalyticThreadJobBean test_analytic = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
 					.with(AnalyticThreadJobBean::name, "simplejob")
+					.with(AnalyticThreadJobBean::module_name_or_id, "_module_test")
 				.done().get();
 			
 			final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
@@ -118,9 +120,16 @@ public class TestBeJobService {
 												.done().get();
 			
 			final SharedLibraryBean technology = BeanTemplateUtils.build(SharedLibraryBean.class).with(SharedLibraryBean::path_name, "/tech/test").done().get();
-			final SharedLibraryBean passthrough = BeanTemplateUtils.build(SharedLibraryBean.class).with(SharedLibraryBean::path_name, "/module/test").done().get();
+			final SharedLibraryBean passthrough = BeanTemplateUtils.build(SharedLibraryBean.class)
+														.with(SharedLibraryBean::_id, "_module_test")
+														.with(SharedLibraryBean::path_name, "/module/test")
+													.done().get();
 			analytics_context.setTechnologyConfig(technology);
-			analytics_context.setModuleConfig(passthrough);
+			analytics_context.resetLibraryConfigs(							
+					ImmutableMap.<String, SharedLibraryBean>builder()
+						.put(passthrough.path_name(), passthrough)
+						.put(passthrough._id(), passthrough)
+						.build());
 			analytics_context.setBucket(test_bucket);
 			batch_context.setJob(test_analytic);
 			

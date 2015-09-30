@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.elasticsearch.common.collect.ImmutableMap;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -103,6 +104,7 @@ public class TestStormControllerUtil {
 				.with(SharedLibraryBean::path_name, "/test/lib")
 				.done().get();
 		final SharedLibraryBean library_mod = BeanTemplateUtils.build(SharedLibraryBean.class)
+				.with(SharedLibraryBean::_id, "_test_module")
 				.with(SharedLibraryBean::path_name, "/test/module")
 				.done().get();
 		
@@ -110,7 +112,12 @@ public class TestStormControllerUtil {
 		final StreamingEnrichmentContextService context = new StreamingEnrichmentContextService(test_analytics_context);
 		test_analytics_context.setBucket(bucket);
 		test_analytics_context.setTechnologyConfig(library_tech);
-		test_analytics_context.setModuleConfig(library_mod);
+		test_analytics_context.resetLibraryConfigs(
+				ImmutableMap.<String, SharedLibraryBean>builder()
+					.put(library_mod.path_name(), library_mod)
+					.put(library_mod._id(), library_mod)
+					.build()
+		);
 		
 		final IEnrichmentStreamingTopology enrichment_topology = new SampleStormStreamTopology1();
 		final StormTopology storm_top = (StormTopology) enrichment_topology.getTopologyAndConfiguration(bucket, context)._1();
@@ -150,6 +157,7 @@ public class TestStormControllerUtil {
 											.with(DataBucketBean::full_name, "/test/stop/jobs")
 										.done();
 		final SharedLibraryBean library_tech = BeanTemplateUtils.build(SharedLibraryBean.class)
+				.with(SharedLibraryBean::_id, "_test_lib")
 				.with(SharedLibraryBean::path_name, "/test/lib")
 				.done().get();
 		final SharedLibraryBean library_mod = BeanTemplateUtils.build(SharedLibraryBean.class)
@@ -162,7 +170,12 @@ public class TestStormControllerUtil {
 		final StreamingEnrichmentContextService context = new StreamingEnrichmentContextService(test_analytics_context);
 		test_analytics_context.setBucket(bucket);
 		test_analytics_context.setTechnologyConfig(library_tech);
-		test_analytics_context.setModuleConfig(library_mod);
+		test_analytics_context.resetLibraryConfigs(
+				ImmutableMap.<String, SharedLibraryBean>builder()
+					.put(library_mod.path_name(), library_mod)
+					.put(library_mod._id(), library_mod)
+					.build()
+		);
 		
 		// Job1
 		{

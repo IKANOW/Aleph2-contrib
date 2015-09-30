@@ -15,9 +15,7 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.services;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 import java.io.File;
 import java.util.Arrays;
@@ -29,6 +27,7 @@ import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.elasticsearch.common.collect.ImmutableMap;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -89,7 +88,7 @@ public class TestBatchEnrichmentContext {
 	public void injectModules() throws Exception {
 		_logger.info("run injectModules");
 		
-		final Config config = ConfigFactory.parseFile(new File("./example_config_files/context_local_test.properties"));
+		final Config config = ConfigFactory.parseFile(new File("./src/test/resources/context_local_test.properties"));
 		
 		try {
 			_app_injector = ModuleUtils.createTestInjector(Arrays.asList(), Optional.of(config));
@@ -180,13 +179,18 @@ public class TestBatchEnrichmentContext {
 					.done().get();
 						
 			final SharedLibraryBean mod_library = BeanTemplateUtils.build(SharedLibraryBean.class)
+					.with(SharedLibraryBean::_id, "_test_module")
 					.with(SharedLibraryBean::path_name, "/test/module")
 					.done().get();
 			final SharedLibraryBean tech_library = BeanTemplateUtils.build(SharedLibraryBean.class)
 					.with(SharedLibraryBean::path_name, "/test/tech")
 					.done().get();
 			
-			context_pair._1().setModuleConfig(mod_library);
+			context_pair._1().resetLibraryConfigs(							
+					ImmutableMap.<String, SharedLibraryBean>builder()
+						.put(mod_library.path_name(), mod_library)
+						.put(mod_library._id(), mod_library)
+						.build());
 			context_pair._1().setTechnologyConfig(tech_library);
 			context_pair._1().setBucket(test_bucket);			
 			
@@ -279,13 +283,18 @@ public class TestBatchEnrichmentContext {
 													.done().get();						
 			
 			final SharedLibraryBean mod_library = BeanTemplateUtils.build(SharedLibraryBean.class)
+					.with(SharedLibraryBean::_id, "_test_module")
 					.with(SharedLibraryBean::path_name, "/test/module")
 					.done().get();
 			final SharedLibraryBean tech_library = BeanTemplateUtils.build(SharedLibraryBean.class)
 					.with(SharedLibraryBean::path_name, "/test/tech")
 					.done().get();
 
-			context_pair._1().setModuleConfig(mod_library);
+			context_pair._1().resetLibraryConfigs(							
+					ImmutableMap.<String, SharedLibraryBean>builder()
+						.put(mod_library.path_name(), mod_library)
+						.put(mod_library._id(), mod_library)
+						.build());
 			context_pair._1().setTechnologyConfig(tech_library);
 			context_pair._1().setBucket(test_bucket);
 			context_pair._2().setJob(analytic_job1);
@@ -293,7 +302,7 @@ public class TestBatchEnrichmentContext {
 			// Empty service set:
 			final String signature = test_context.getEnrichmentContextSignature(Optional.of(test_bucket), Optional.empty());
 						
-			final String expected_sig = "com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext:analytic_job1:com.ikanow.aleph2.analytics.hadoop.services.MockAnalyticsContext:{\"3fdb4bfa-2024-11e5-b5f7-727283247c7e\":\"{\\\"_id\\\":\\\"test\\\",\\\"modified\\\":1436194933000,\\\"full_name\\\":\\\"/test/external-context/creation\\\",\\\"analytic_thread\\\":{\\\"jobs\\\":[{\\\"name\\\":\\\"analytic_job1\\\"}]},\\\"data_schema\\\":{\\\"search_index_schema\\\":{}}}\",\"3fdb4bfa-2024-11e5-b5f7-727283247c7f\":\"{\\\"path_name\\\":\\\"/test/tech\\\"}\",\"3fdb4bfa-2024-11e5-b5f7-727283247cff\":\"{\\\"path_name\\\":\\\"/test/module\\\"}\",\"CoreDistributedServices\":{},\"MongoDbManagementDbService\":{\"mongodb_connection\":\"localhost:9999\"},\"globals\":{\"local_cached_jar_dir\":\"file://temp/\"},\"service\":{\"CoreDistributedServices\":{\"interface\":\"com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices\",\"service\":\"com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices\"},\"CoreManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"ManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"SearchIndexService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService\",\"service\":\"com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService\"},\"SecurityService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService\",\"service\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService\"},\"StorageService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService\",\"service\":\"com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService\"}}}";			
+			final String expected_sig = "com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext:analytic_job1:com.ikanow.aleph2.analytics.hadoop.services.MockAnalyticsContext:{\"3fdb4bfa-2024-11e5-b5f7-727283247c7e\":\"{\\\"_id\\\":\\\"test\\\",\\\"modified\\\":1436194933000,\\\"full_name\\\":\\\"/test/external-context/creation\\\",\\\"analytic_thread\\\":{\\\"jobs\\\":[{\\\"name\\\":\\\"analytic_job1\\\"}]},\\\"data_schema\\\":{\\\"search_index_schema\\\":{}}}\",\"3fdb4bfa-2024-11e5-b5f7-727283247c7f\":\"{\\\"path_name\\\":\\\"/test/tech\\\"}\",\"3fdb4bfa-2024-11e5-b5f7-727283247cff\":\"{\\\"libs\\\":[{\\\"_id\\\":\\\"_test_module\\\",\\\"path_name\\\":\\\"/test/module\\\"}]}\",\"CoreDistributedServices\":{},\"MongoDbManagementDbService\":{},\"service\":{\"CoreDistributedServices\":{\"interface\":\"com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices\",\"service\":\"com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices\"},\"CoreManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"ManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"SearchIndexService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService\",\"service\":\"com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService\"},\"SecurityService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService\",\"service\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService\"},\"StorageService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService\",\"service\":\"com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService\"}}}";			
 			assertEquals(expected_sig, signature);
 
 			// Check can't call multiple times
@@ -315,7 +324,12 @@ public class TestBatchEnrichmentContext {
 			// Create another injector:
 			Tuple2<MockAnalyticsContext, BatchEnrichmentContext> context_pair2 = getContextPair();
 			final BatchEnrichmentContext test_context2 = context_pair2._2();
-			context_pair2._1().setModuleConfig(mod_library);
+
+			context_pair2._1().resetLibraryConfigs(							
+					ImmutableMap.<String, SharedLibraryBean>builder()
+						.put(mod_library.path_name(), mod_library)
+						.put(mod_library._id(), mod_library)
+						.build());
 			context_pair2._1().setTechnologyConfig(tech_library);
 			context_pair2._1().setBucket(test_bucket);
 			context_pair2._2().setJob(analytic_job1);
@@ -330,7 +344,7 @@ public class TestBatchEnrichmentContext {
 					);
 			
 			
-			final String expected_sig2 = "com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext:analytic_job1:com.ikanow.aleph2.analytics.hadoop.services.MockAnalyticsContext:{\"3fdb4bfa-2024-11e5-b5f7-727283247c7e\":\"{\\\"_id\\\":\\\"test\\\",\\\"modified\\\":1436194933000,\\\"full_name\\\":\\\"/test/external-context/creation\\\",\\\"analytic_thread\\\":{\\\"jobs\\\":[{\\\"name\\\":\\\"analytic_job1\\\"}]},\\\"data_schema\\\":{\\\"search_index_schema\\\":{}}}\",\"3fdb4bfa-2024-11e5-b5f7-727283247c7f\":\"{\\\"path_name\\\":\\\"/test/tech\\\"}\",\"3fdb4bfa-2024-11e5-b5f7-727283247cff\":\"{\\\"path_name\\\":\\\"/test/module\\\"}\",\"CoreDistributedServices\":{},\"MongoDbManagementDbService\":{\"mongodb_connection\":\"localhost:9999\"},\"globals\":{\"local_cached_jar_dir\":\"file://temp/\"},\"service\":{\"CoreDistributedServices\":{\"interface\":\"com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices\",\"service\":\"com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices\"},\"CoreManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"ManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"SearchIndexService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService\",\"service\":\"com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService\"},\"SecurityService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService\",\"service\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService\"},\"StorageService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService\",\"service\":\"com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService\"},\"test\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"}}}"; 
+			final String expected_sig2 = "com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext:analytic_job1:com.ikanow.aleph2.analytics.hadoop.services.MockAnalyticsContext:{\"3fdb4bfa-2024-11e5-b5f7-727283247c7e\":\"{\\\"_id\\\":\\\"test\\\",\\\"modified\\\":1436194933000,\\\"full_name\\\":\\\"/test/external-context/creation\\\",\\\"analytic_thread\\\":{\\\"jobs\\\":[{\\\"name\\\":\\\"analytic_job1\\\"}]},\\\"data_schema\\\":{\\\"search_index_schema\\\":{}}}\",\"3fdb4bfa-2024-11e5-b5f7-727283247c7f\":\"{\\\"path_name\\\":\\\"/test/tech\\\"}\",\"3fdb4bfa-2024-11e5-b5f7-727283247cff\":\"{\\\"libs\\\":[{\\\"_id\\\":\\\"_test_module\\\",\\\"path_name\\\":\\\"/test/module\\\"}]}\",\"CoreDistributedServices\":{},\"MongoDbManagementDbService\":{},\"service\":{\"CoreDistributedServices\":{\"interface\":\"com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices\",\"service\":\"com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices\"},\"CoreManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"ManagementDbService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"},\"SearchIndexService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService\",\"service\":\"com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService\"},\"SecurityService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService\",\"service\":\"com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService\"},\"StorageService\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService\",\"service\":\"com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService\"},\"test\":{\"interface\":\"com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService\",\"service\":\"com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService\"}}}"; 
 			assertEquals(expected_sig2, signature2);
 			
 			final IEnrichmentModuleContext test_external1a = ContextUtils.getEnrichmentContext(signature);		
@@ -351,13 +365,17 @@ public class TestBatchEnrichmentContext {
 			
 			final BatchEnrichmentContext test_external2b = (BatchEnrichmentContext)test_external2a;
 			
-			assertEquals("/test/module", test_external2b.getModuleConfig().path_name());			
+			assertFalse("Module not located", test_external2b.getModuleConfig().isPresent());
+			test_external2b.setJob(BeanTemplateUtils.clone(analytic_job1).with(AnalyticThreadJobBean::module_name_or_id, "_test_module").done());
+			assertTrue("Module located", test_external2b.getModuleConfig().isPresent());
+			assertEquals("/test/module", test_external2b.getModuleConfig().get().path_name());			
 			
 			assertTrue("I can see my additonal services", null != test_external2b.getServiceContext().getService(IStorageService.class, Optional.empty()));
 			assertTrue("I can see my additonal services", null != test_external2b.getServiceContext().getService(IManagementDbService.class, Optional.of("test")));
 						
 			//Check some "won't work in module" calls:
 			test_external2b.setJob(analytic_job1);
+			assertFalse("Module not located", test_external2b.getModuleConfig().isPresent());
 			try {
 				test_external2b.getEnrichmentContextSignature(null, null);
 				fail("Should have errored");
@@ -437,13 +455,18 @@ public class TestBatchEnrichmentContext {
 												.done().get();
 		
 		final SharedLibraryBean mod_library = BeanTemplateUtils.build(SharedLibraryBean.class)
+				.with(SharedLibraryBean::_id, "_test_module")
 				.with(SharedLibraryBean::path_name, "/test/module")
 				.done().get();
 		final SharedLibraryBean tech_library = BeanTemplateUtils.build(SharedLibraryBean.class)
 				.with(SharedLibraryBean::path_name, "/test/tech")
 				.done().get();
 		
-		context_pair._1().setModuleConfig(mod_library);
+		context_pair._1().resetLibraryConfigs(							
+				ImmutableMap.<String, SharedLibraryBean>builder()
+					.put(mod_library.path_name(), mod_library)
+					.put(mod_library._id(), mod_library)
+					.build());
 		context_pair._1().setTechnologyConfig(tech_library);
 		context_pair._2().setJob(analytic_job1);
 		
@@ -555,13 +578,18 @@ public class TestBatchEnrichmentContext {
 				.done().get();
 
 		final SharedLibraryBean mod_library = BeanTemplateUtils.build(SharedLibraryBean.class)
+				.with(SharedLibraryBean::_id, "_test_module")
 				.with(SharedLibraryBean::path_name, "/test/module")
 				.done().get();
 		final SharedLibraryBean tech_library = BeanTemplateUtils.build(SharedLibraryBean.class)
 				.with(SharedLibraryBean::path_name, "/test/tech")
 				.done().get();
 		
-		context_pair._1().setModuleConfig(mod_library);
+		context_pair._1().resetLibraryConfigs(							
+				ImmutableMap.<String, SharedLibraryBean>builder()
+					.put(mod_library.path_name(), mod_library)
+					.put(mod_library._id(), mod_library)
+					.build());
 		context_pair._1().setTechnologyConfig(tech_library);
 		context_pair._1().setBucket(test_bucket);
 		context_pair._2().setJob(analytic_job1);
@@ -649,10 +677,17 @@ public class TestBatchEnrichmentContext {
 		
 		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class).with("full_name", "TEST_HARVEST_CONTEXT").done().get();
 
-		final SharedLibraryBean lib_bean = BeanTemplateUtils.build(SharedLibraryBean.class).with("path_name", "TEST_HARVEST_CONTEXT").done().get();
-		context_pair._1().setModuleConfig(lib_bean);
+		final SharedLibraryBean lib_bean = BeanTemplateUtils.build(SharedLibraryBean.class).with("path_name", "TEST_HARVEST_CONTEXT").with("_id", "_ID_TEST_HARVEST_CONTEXT").done().get();
+		context_pair._1().resetLibraryConfigs(							
+				ImmutableMap.<String, SharedLibraryBean>builder()
+					.put(lib_bean.path_name(), lib_bean)
+					.put(lib_bean._id(), lib_bean)
+					.build());
 		//(note deliberately don't set tech config library here to double check it accesses the right one...)
 		context_pair._2().setBucket(bucket);
+		
+		assertFalse("No module library store avaiable yet", test_context.getGlobalEnrichmentModuleObjectStore(TestBean.class, Optional.of("test")).isPresent());		
+		context_pair._2().setModule(lib_bean);
 		
 		ICrudService<AssetStateDirectoryBean> dir_a = _core_management_db.getStateDirectory(Optional.empty(), Optional.of(AssetStateDirectoryBean.StateDirectoryType.analytic_thread));
 		ICrudService<AssetStateDirectoryBean> dir_e = _core_management_db.getStateDirectory(Optional.empty(), Optional.of(AssetStateDirectoryBean.StateDirectoryType.enrichment));
@@ -669,7 +704,7 @@ public class TestBatchEnrichmentContext {
 		assertEquals(0, dir_s.countObjects().get().intValue());
 		
 		@SuppressWarnings("unused")
-		ICrudService<TestBean> s1 = test_context.getGlobalEnrichmentModuleObjectStore(TestBean.class, Optional.of("test"));
+		ICrudService<TestBean> s1 = test_context.getGlobalEnrichmentModuleObjectStore(TestBean.class, Optional.of("test")).get();
 		assertEquals(0, dir_a.countObjects().get().intValue());
 		assertEquals(0, dir_e.countObjects().get().intValue());
 		assertEquals(0, dir_h.countObjects().get().intValue());
@@ -709,12 +744,11 @@ public class TestBatchEnrichmentContext {
 		assertEquals(1, dir_s.countObjects().get().intValue());		
 		assertEquals(2, dir_e_2.countObjects().get().intValue());
 		
-		@SuppressWarnings("unused")
-		ICrudService<TestBean> s2 = test_context.getBucketObjectStore(TestBean.class, Optional.empty(), Optional.of("test_2"), Optional.of(AssetStateDirectoryBean.StateDirectoryType.library));
-		assertEquals(1, dir_a.countObjects().get().intValue());
-		assertEquals(2, dir_e.countObjects().get().intValue());
-		assertEquals(1, dir_h.countObjects().get().intValue());
-		assertEquals(2, dir_s.countObjects().get().intValue());
-		
+		try {
+			test_context.getBucketObjectStore(TestBean.class, Optional.empty(), Optional.of("test_2"), Optional.of(AssetStateDirectoryBean.StateDirectoryType.library));
+			fail("Should have thrown");
+		}
+		catch (Exception e) {
+		}
 	}
 }

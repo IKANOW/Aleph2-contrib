@@ -214,12 +214,14 @@ public class BatchEnrichmentJob{
 	 */
 	public static void extractBeJobParameters(IBeJobConfigurable beJobConfigurable, Configuration configuration) throws Exception{
 		
+		//TODO (ALEPH-12): this needs to change to use the analytics context instead...
+		
 		final String contextSignature = configuration.get(BE_CONTEXT_SIGNATURE);  
 		final IEnrichmentModuleContext enrichmentContext = ContextUtils.getEnrichmentContext(contextSignature);
 		beJobConfigurable.setEnrichmentContext(enrichmentContext);
 		final DataBucketBean dataBucket = enrichmentContext.getBucket().get();
 		beJobConfigurable.setDataBucket(dataBucket);
-		final SharedLibraryBean beSharedLibrary = enrichmentContext.getModuleConfig();
+		final SharedLibraryBean beSharedLibrary = enrichmentContext.getModuleConfig().get(); // (See above)
 		beJobConfigurable.setBeSharedLibrary(beSharedLibrary);		
 		beJobConfigurable.setEcMetadata(BeJobBean.extractEnrichmentControlMetadata(dataBucket, configuration.get(BE_META_BEAN_PARAM)));
 		beJobConfigurable.setBatchSize(configuration.getInt(BATCH_SIZE_PARAM,100));	

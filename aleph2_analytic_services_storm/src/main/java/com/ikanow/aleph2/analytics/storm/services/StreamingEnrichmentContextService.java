@@ -76,6 +76,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	protected final SetOnce<IAnalyticsContext> _delegate = new SetOnce<>();
 	protected final SetOnce<IEnrichmentStreamingTopology> _user_topology = new SetOnce<>();
 	protected final SetOnce<AnalyticThreadJobBean> _job = new SetOnce<>();
+	protected final SetOnce<SharedLibraryBean> _module = new SetOnce<>();
 	
 	/** User constructor - in technology
 	 * @param analytics_context - the context to wrap
@@ -136,7 +137,18 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 */
 	@SuppressWarnings("deprecation")
 	public void setJob(final AnalyticThreadJobBean job) {
-		_job.forceSet(job);		
+		_job.forceSet(job);
+		setModule(null); //unset first)
+		Optional.ofNullable(job.module_name_or_id()).map(name -> _delegate.get().getLibraryConfigs().get(name)).ifPresent(lib -> setModule(lib));
+	}
+	
+	/** Test function for setting the specific module being processed
+	 *  Auto set by setJob, this overrides it
+	 * @param _bucket
+	 */
+	@SuppressWarnings("deprecation")
+	public void setModule(final SharedLibraryBean module) {
+		_module.forceSet(module);		
 	}
 	
 	/** (FOR TESTING) returns the analytics context delegate
@@ -334,8 +346,11 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getLibraryConfig()
 	 */
 	@Override
-	public SharedLibraryBean getModuleConfig() {
-		return _delegate.get().getModuleConfig().get(); //(present by construction)
+	public Optional<SharedLibraryBean> getModuleConfig() {
+		return _module.isSet()
+				? Optional.ofNullable(_module.get())
+				: Optional.empty()
+				;
 	}
 
 	/* (non-Javadoc)
@@ -411,10 +426,12 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getGlobalEnrichmentModuleObjectStore(java.lang.Class, java.util.Optional)
 	 */
 	@Override
-	public <S> ICrudService<S> getGlobalEnrichmentModuleObjectStore(
+	public <S> Optional<ICrudService<S>> getGlobalEnrichmentModuleObjectStore(
 			final Class<S> clazz, final Optional<String> collection)
 	{
-		return _delegate.get().getGlobalModuleObjectStore(clazz, collection).get(); // (exists by construction)
+		return _module.isSet()
+				? _delegate.get().getLibraryObjectStore(clazz, _module.get().path_name(), collection)
+				: Optional.empty();
 	}
 
 	/* (non-Javadoc)
@@ -427,7 +444,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	{
 		// Translate default to enrichment, and handle bucket store being the module not the analytic technology
 		if (type.isPresent() && (StateDirectoryType.library == type.get())) {
-			return _delegate.get().getGlobalModuleObjectStore(clazz, collection).get(); // (exists by construction)			
+			throw new RuntimeException(ErrorUtils.get(ErrorUtils.INVALID_CONFIG_ERROR, "getBucketObjectStore", "library"));
 		}
 		else {
 			Optional<StateDirectoryType> translated_type = Optional.ofNullable(type.orElse(StateDirectoryType.enrichment));

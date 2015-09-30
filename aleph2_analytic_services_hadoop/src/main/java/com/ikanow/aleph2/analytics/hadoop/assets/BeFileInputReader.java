@@ -93,8 +93,6 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 
 	protected DataBucketBean _dataBucket;
 
-	protected SharedLibraryBean _beSharedLibrary;
-
 	protected EnrichmentControlMetadataBean _ecMetadata;
 	protected static Map<String, IParser> _parsers = new HashMap<String, IParser>();
 	static{
@@ -128,7 +126,6 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		try {
 			this._enrichmentContext = ContextUtils.getEnrichmentContext(contextSignature);
 			this._dataBucket = _enrichmentContext.getBucket().get();
-			this._beSharedLibrary = _enrichmentContext.getModuleConfig();		
 			this._ecMetadata = BeJobBean.extractEnrichmentControlMetadata(_dataBucket, context.getConfiguration().get(BatchEnrichmentJob.BE_META_BEAN_PARAM));
 		} catch (Exception e) {
 			throw new IOException(e);
@@ -275,7 +272,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 
 	@Override
 	public void setBeSharedLibrary(SharedLibraryBean beSharedLibrary) {
-		this._beSharedLibrary = beSharedLibrary;
+		//TODO (ALEPH-12): this shoudl go away i think?
 	}
 
 	@Override
