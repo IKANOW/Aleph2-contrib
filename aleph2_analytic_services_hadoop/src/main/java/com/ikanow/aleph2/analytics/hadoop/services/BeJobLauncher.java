@@ -97,9 +97,6 @@ public class BeJobLauncher implements IBeJobService{
 			
 			jobName = BucketUtils.getUniqueSignature(bucket.full_name(), Optional.of(configElement));
 			
-			// set metadata bean to job jik we need to have more config, bean is included in bucket data but needs to be identified
-			config.set(BatchEnrichmentJob.BE_META_BEAN_PARAM, configElement);
-
 		    // do not set anything into config past this line
 		    Job job = Job.getInstance( config ,jobName);
 		    job.setJarByClass(BatchEnrichmentJob.class);

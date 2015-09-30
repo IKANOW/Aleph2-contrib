@@ -32,8 +32,13 @@
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -45,16 +50,21 @@ import scala.Tuple2;
 import scala.Tuple3;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
-import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ContextUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.analytics.hadoop.data_model.BeJobBean;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable;
+import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
+
+import fj.data.Either;
 
 /** Encapsulates a Hadoop job intended for batch enrichment or analytics
  * @author jfreydank
@@ -62,7 +72,6 @@ import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable;
 public class BatchEnrichmentJob{
 
 	public static String BATCH_SIZE_PARAM = "batchSize";
-	public static String BE_META_BEAN_PARAM = "metadataName";
 	public static String BE_CONTEXT_SIGNATURE = "beContextSignature";
 
 	private static final Logger logger = LogManager.getLogger(BatchEnrichmentJob.class);
@@ -78,13 +87,11 @@ public class BatchEnrichmentJob{
 	implements IBeJobConfigurable {
 
 		protected DataBucketBean _dataBucket = null;
-		protected IEnrichmentBatchModule _enrichmentBatchModule = null;			
-		protected IEnrichmentModuleContext _enrichmentContext = null;
+		protected BatchEnrichmentContext _enrichmentContext = null;
 
 		private int _batchSize = 100;
 		protected BeJobBean _beJob = null;
-		protected EnrichmentControlMetadataBean _ecMetadata = null;
-		protected SharedLibraryBean _beSharedLibrary = null;
+		protected List<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> _ecMetadata = null;
 		
 		protected List<Tuple2<Long, IBatchRecord>> _batch = new ArrayList<Tuple2<Long, IBatchRecord>>();
 				
@@ -108,9 +115,11 @@ public class BatchEnrichmentJob{
 				throw new IOException(e);
 			}			
 			
-			// TODO (ALEPH-12) check where final_stage is defined
-			final boolean final_stage = true;
-			_enrichmentBatchModule.onStageInitialize(_enrichmentContext, _dataBucket, final_stage);
+			final Iterator<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> it = _ecMetadata.iterator();
+			while (it.hasNext()) {
+				final Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean> t3 = it.next();				
+				t3._1().onStageInitialize(t3._2(), _dataBucket, t3._3(), !it.hasNext());	
+			}
 			
 		} // setup
 
@@ -130,16 +139,20 @@ public class BatchEnrichmentJob{
 		 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setEcMetadata(com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean)
 		 */
 		@Override
-		public void setEcMetadata(EnrichmentControlMetadataBean ecMetadata) {
-			this._ecMetadata = ecMetadata;
-		}
-
-		/* (non-Javadoc)
-		 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setBeSharedLibrary(com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean)
-		 */
-		@Override
-		public void setBeSharedLibrary(SharedLibraryBean beSharedLibrary) {
-			this._beSharedLibrary = beSharedLibrary;
+		public void setEcMetadata(List<EnrichmentControlMetadataBean> ecMetadata) {
+			final Map<String, SharedLibraryBean> library_beans = _enrichmentContext.getAnalyticsContext().getLibraryConfigs();
+			this._ecMetadata = ecMetadata.stream()
+									.<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>>flatMap(ecm -> {
+										final Optional<String> entryPoint = BucketUtils.getBatchEntryPoint(library_beans, ecm);
+										return entryPoint.map(Stream::of).orElseGet(Stream::empty)
+												.flatMap(Lambdas.flatWrap_i(ep -> (IEnrichmentBatchModule)Class.forName(ep).newInstance()))
+												.map(mod -> {			
+													final BatchEnrichmentContext cloned_context = new BatchEnrichmentContext(_enrichmentContext, _batchSize);
+													Optional.ofNullable(library_beans.get(ecm.module_name_or_id())).ifPresent(lib -> cloned_context.setModule(lib));													
+													return Tuples._3T(mod, cloned_context, ecm);
+												});
+									})
+									.collect(Collectors.toList());
 		}
 
 		/* (non-Javadoc)
@@ -154,7 +167,7 @@ public class BatchEnrichmentJob{
 		 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setEnrichmentContext(com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext)
 		 */
 		@Override
-		public void setEnrichmentContext(IEnrichmentModuleContext enrichmentContext) {
+		public void setEnrichmentContext(BatchEnrichmentContext enrichmentContext) {
 			this._enrichmentContext = enrichmentContext;
 		}
 		
@@ -166,7 +179,8 @@ public class BatchEnrichmentJob{
 				Mapper<String, Tuple2<Long, IBatchRecord>, String, Tuple2<Long, IBatchRecord>>.Context context)
 				throws IOException, InterruptedException {
 			checkBatch(true);
-			_enrichmentBatchModule.onStageComplete(true);		
+			
+			_ecMetadata.stream().forEach(ecm -> ecm._1().onStageComplete(true));
 		}
 
 		/* (non-Javadoc)
@@ -174,29 +188,31 @@ public class BatchEnrichmentJob{
 		 */
 		@Override
 		public void setBatchSize(int bs) {
-			this._batchSize=bs;
-			
+			this._batchSize=bs;			
 		}
 
-		/* (non-Javadoc)
-		 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setEnrichmentBatchModule(com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule)
-		 */
-		@Override
-		public void setEnrichmentBatchModule(IEnrichmentBatchModule ebm) {
-			this._enrichmentBatchModule = ebm;
-			
-		}
-		
 		/** Checks if we should send a batch of objects to the next stage in the pipeline
 		 * @param flush
 		 */
 		protected void checkBatch(boolean flush){
 			if((_batch.size()>= _batchSize) || flush){
-				_enrichmentBatchModule.onObjectBatch(_batch.stream(), Optional.of(_batch.size()), Optional.empty());
+				final Iterator<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> it = _ecMetadata.iterator();
+				List<Tuple2<Long, IBatchRecord>> mutable_start = _batch;
+				while (it.hasNext()) {
+					final Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean> t3 = it.next();				
+					t3._1().onObjectBatch(mutable_start.stream(), Optional.of(mutable_start.size()), Optional.empty());
+					mutable_start = t3._2().getOutputRecords();
+					if (!it.hasNext()) { // final stage output anything we have here
+						final IAnalyticsContext analytics_context = _enrichmentContext.getAnalyticsContext();
+						mutable_start.forEach(record ->
+							analytics_context.emitObject(Optional.empty(), _enrichmentContext.getJob(), Either.left(record._2().getJson()), Optional.empty()));
+					}
+					t3._2().clearOutputRecords();
+				}				
 				_batch.clear();
 			}		
 		}
-		
+
 	} //BatchErichmentMapper
 
 	/** The reducer version
@@ -214,22 +230,14 @@ public class BatchEnrichmentJob{
 	 */
 	public static void extractBeJobParameters(IBeJobConfigurable beJobConfigurable, Configuration configuration) throws Exception{
 		
-		//TODO (ALEPH-12): this needs to change to use the analytics context instead...
-		
 		final String contextSignature = configuration.get(BE_CONTEXT_SIGNATURE);  
-		final IEnrichmentModuleContext enrichmentContext = ContextUtils.getEnrichmentContext(contextSignature);
+		final BatchEnrichmentContext enrichmentContext = (BatchEnrichmentContext) ContextUtils.getEnrichmentContext(contextSignature);
+		
 		beJobConfigurable.setEnrichmentContext(enrichmentContext);
 		final DataBucketBean dataBucket = enrichmentContext.getBucket().get();
 		beJobConfigurable.setDataBucket(dataBucket);
-		final SharedLibraryBean beSharedLibrary = enrichmentContext.getModuleConfig().get(); // (See above)
-		beJobConfigurable.setBeSharedLibrary(beSharedLibrary);		
-		beJobConfigurable.setEcMetadata(BeJobBean.extractEnrichmentControlMetadata(dataBucket, configuration.get(BE_META_BEAN_PARAM)));
+		beJobConfigurable.setEcMetadata(Optional.ofNullable(dataBucket.batch_enrichment_configs()).orElse(Collections.emptyList()));
 		beJobConfigurable.setBatchSize(configuration.getInt(BATCH_SIZE_PARAM,100));	
-		beJobConfigurable.setEnrichmentBatchModule(
-				Optional.ofNullable(beSharedLibrary.batch_enrichment_entry_point())
-						.<IEnrichmentBatchModule>map(Lambdas.wrap_u(entry_point -> (IEnrichmentBatchModule)Class.forName(entry_point).newInstance()))
-						.orElseGet(() -> new BePassthroughModule())) //(default)
-				;
 	}
 	
 }

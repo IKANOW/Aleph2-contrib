@@ -15,6 +15,7 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.services;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
@@ -23,6 +24,7 @@ import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -33,8 +35,10 @@ import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.ikanow.aleph2.analytics.hadoop.assets.BeFileInputReader;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
@@ -49,8 +53,7 @@ import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
-
-import fj.data.Either;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 
 /** The implementation of the batch  enrichment context
  * @author Joern
@@ -62,6 +65,10 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	protected final SetOnce<AnalyticThreadJobBean> _job = new SetOnce<>();
 	protected final SetOnce<SharedLibraryBean> _module = new SetOnce<>();
 	
+	//(list of records to emit)
+	protected final AtomicLong _mutable_1up = new AtomicLong(0);
+	protected ArrayList<Tuple2<Long, IBatchRecord>> _mutable_records = new ArrayList<>();
+	
 	/** User constructor - in technology
 	 * @param analytics_context - the context to wrap
 	 * @param _bucket - the bucket being processed
@@ -71,6 +78,16 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	{
 		_state_name = State.IN_TECHNOLOGY;
 		_delegate.trySet(analytics_context);
+	}
+	
+	/** Copy constructor - to clone and then override the _module
+	 * @param enrichment_context
+	 */
+	public BatchEnrichmentContext(final BatchEnrichmentContext enrichment_context, int batch_size) {		
+		_state_name = State.IN_MODULE;		
+		_delegate.set(enrichment_context._delegate.get());
+		_job.set(enrichment_context._job.get());
+		_mutable_records.ensureCapacity(batch_size);
 	}
 	
 	/** User constructor - in module
@@ -129,7 +146,7 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	/** (FOR TESTING) returns the analytics context delegate
 	 * @return
 	 */
-	IAnalyticsContext getAnalyticsContext() {
+	public IAnalyticsContext getAnalyticsContext() {
 		return _delegate.get();
 	}
 	
@@ -138,6 +155,19 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	 */
 	public AnalyticThreadJobBean getJob() {
 		return _job.get();
+	}
+	
+	/** Returns the last batch of outputs
+	 * @return
+	 */
+	public ArrayList<Tuple2<Long, IBatchRecord>> getOutputRecords() {
+		return _mutable_records;
+	}
+	
+	/** Clears the current set of output records
+	 */
+	public void clearOutputRecords() {
+		_mutable_records.clear();
 	}
 	
 	///////////////////////////////////////////////////////
@@ -229,7 +259,7 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	@Override
 	public void emitMutableObject(long id, ObjectNode mutated_json,
 			Optional<AnnotationBean> annotation) {
-		_delegate.get().emitObject(Optional.empty(), _job.get(), Either.left(mutated_json), annotation);
+		_mutable_records.add(Tuples._2T(_mutable_1up.incrementAndGet(), new BeFileInputReader.BatchRecord(mutated_json, null)));
 	}
 
 	/* (non-Javadoc)

@@ -23,6 +23,7 @@ import java.text.SimpleDateFormat;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -39,19 +40,17 @@ import org.apache.logging.log4j.Logger;
 import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.ikanow.aleph2.analytics.hadoop.data_model.BeJobBean;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IParser;
+import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJsonParser;
 import com.ikanow.aleph2.analytics.hadoop.services.BeStreamParser;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
-import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
-import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.ContextUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
@@ -93,7 +92,6 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 
 	protected DataBucketBean _dataBucket;
 
-	protected EnrichmentControlMetadataBean _ecMetadata;
 	protected static Map<String, IParser> _parsers = new HashMap<String, IParser>();
 	static{
 		_parsers.put("JSON", new BeJsonParser());
@@ -101,10 +99,9 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	}
 	
 	Date start = null;
+	
 	@SuppressWarnings("unused")
 	private int batchSize;
-	@SuppressWarnings("unused")
-	private IEnrichmentBatchModule _enrichmentBatchModule;
 	
 	/** User c'tor
 	 */
@@ -126,7 +123,6 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		try {
 			this._enrichmentContext = ContextUtils.getEnrichmentContext(contextSignature);
 			this._dataBucket = _enrichmentContext.getBucket().get();
-			this._ecMetadata = BeJobBean.extractEnrichmentControlMetadata(_dataBucket, context.getConfiguration().get(BatchEnrichmentJob.BE_META_BEAN_PARAM));
 		} catch (Exception e) {
 			throw new IOException(e);
 		}
@@ -208,7 +204,8 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	}
 
 	private Path createArchivePath(Path currentPath) throws Exception {
-		
+
+		//TODO (ALEPH-12): check this is correct, add test case
 
 		ChronoUnit timeGroupingUnit = ChronoUnit.DAYS;
 		try {
@@ -266,27 +263,11 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	}
 
 	@Override
-	public void setEcMetadata(EnrichmentControlMetadataBean ecMetadata) {
-		this._ecMetadata = ecMetadata;
-	}
-
-	@Override
-	public void setBeSharedLibrary(SharedLibraryBean beSharedLibrary) {
-		//TODO (ALEPH-12): this shoudl go away i think?
-	}
-
-	@Override
 	public void setDataBucket(DataBucketBean dataBucketBean) {
 		this._dataBucket = dataBucketBean;
 		
 	}
 		
-	
-	@Override
-	public void setEnrichmentContext(IEnrichmentModuleContext enrichmentContext) {
-		this._enrichmentContext = enrichmentContext;
-	}
-
 	@Override
 	public void setBatchSize(int size) {
 		this.batchSize = size;
@@ -294,11 +275,11 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	}
 
 	@Override
-	public void setEnrichmentBatchModule(IEnrichmentBatchModule beModule) {
-		this._enrichmentBatchModule = beModule;
-		
+	public void setEnrichmentContext(BatchEnrichmentContext enrichmentContext) {
 	}
-	
-	
+
+	@Override
+	public void setEcMetadata(List<EnrichmentControlMetadataBean> ecMetadata) {
+	}
 
 }

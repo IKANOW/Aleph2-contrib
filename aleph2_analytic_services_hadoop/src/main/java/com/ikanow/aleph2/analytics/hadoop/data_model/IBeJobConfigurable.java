@@ -15,31 +15,37 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.data_model;
 
-import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
-import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
+import java.util.List;
+
+import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
-import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 
 /** Interface for a batch enrichment job
  * @author Alex
  */
 public interface IBeJobConfigurable {
 
+	/** Configures the bucket
+	 * @param dataBucketBean
+	 */
 	public void setDataBucket(DataBucketBean dataBucketBean);
 
 
-	public void setEnrichmentContext(IEnrichmentModuleContext enrichmentContext);
+	/** Configures the enrichment context (note uses the concrete version not the generic one, need some implementation details)
+	 * @param enrichmentContext
+	 */
+	public void setEnrichmentContext(BatchEnrichmentContext enrichmentContext);
 
 
-	public void setBeSharedLibrary(SharedLibraryBean beSharedLibrary);
+	/** The set of modules + their control parameters
+	 * @param ecMetadata
+	 */
+	public void setEcMetadata(List<EnrichmentControlMetadataBean> ecMetadata);
 
 
-	public void setEcMetadata(EnrichmentControlMetadataBean ecMetadata);
-
-
+	/** Override the default batch size
+	 * @param size
+	 */
 	public void setBatchSize(int size);
-
-
-	public void setEnrichmentBatchModule(IEnrichmentBatchModule beModule);
 }

@@ -25,20 +25,14 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
 import scala.Tuple2;
 
-import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
-import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
-import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
-import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
-import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
-import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 
 /** Output Format specific to batch enrichment
  *  (Note it's actually in here that the calls to the batch enrichment module implementation live)
  *  TODO (ALEPH-12): not sure if we actually use any element of the FileOutputFormat here?
  * @author jfreydank
  */
-public class BeFileOutputFormat extends OutputFormat<String, Tuple2<Long, IBatchRecord>> implements IBeJobConfigurable{
+public class BeFileOutputFormat extends OutputFormat<String, Tuple2<Long, IBatchRecord>> {
 
 	/* (non-Javadoc)
 	 * @see org.apache.hadoop.mapreduce.lib.output.FileOutputFormat#getRecordWriter(org.apache.hadoop.mapreduce.TaskAttemptContext)
@@ -47,48 +41,6 @@ public class BeFileOutputFormat extends OutputFormat<String, Tuple2<Long, IBatch
 	public RecordWriter<String, Tuple2<Long, IBatchRecord>> getRecordWriter(TaskAttemptContext jobContext)
 			throws IOException, InterruptedException {
 		return new BeFileOutputWriter();
-	}
-
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setEcMetadata(com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean)
-	 */
-	@Override
-	public void setEcMetadata(EnrichmentControlMetadataBean ecMetadata) {
-	}
-
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setBeSharedLibrary(com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean)
-	 */
-	@Override
-	public void setBeSharedLibrary(SharedLibraryBean beSharedLibrary) {
-	}
-
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setDataBucket(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
-	 */
-	@Override
-	public void setDataBucket(DataBucketBean dataBucketBean) {
-	}
-			
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setEnrichmentContext(com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext)
-	 */
-	@Override
-	public void setEnrichmentContext(IEnrichmentModuleContext enrichmentContext) {
-	}
-
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setBatchSize(int)
-	 */
-	@Override
-	public void setBatchSize(int int1) {
-	}
-
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setEnrichmentBatchModule(com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule)
-	 */
-	@Override
-	public void setEnrichmentBatchModule(IEnrichmentBatchModule enrichmentBatchModule) {
 	}
 
 	/* (non-Javadoc)
