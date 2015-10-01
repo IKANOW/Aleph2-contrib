@@ -80,6 +80,10 @@ public class Aleph2MultiInputFormatBuilder {
 		return job;
 	}
 	
+	////////////////////////////////////////////////////////////////////////////////////////////////////////
+	
+	// INPUT FORMAT
+	
 	@SuppressWarnings("rawtypes")
 	public static class Aleph2MultiInputFormat extends InputFormat {
 		
@@ -87,23 +91,8 @@ public class Aleph2MultiInputFormatBuilder {
 		 * @see org.apache.hadoop.mapreduce.InputFormat#createRecordReader(org.apache.hadoop.mapreduce.InputSplit, org.apache.hadoop.mapreduce.TaskAttemptContext)
 		 */
 		@Override
-		public RecordReader createRecordReader(InputSplit split, TaskAttemptContext task_context) throws IOException, InterruptedException {
-			
-			// (NOTE: these are called from each actual mapper)
-			
-			final Aleph2MultiInputSplit input_split = (Aleph2MultiInputSplit) split;
-			
-			final Configuration config = Lambdas.get(Lambdas.wrap_u(() -> {
-				try (final Stringifier<Configuration> stringifier = new DefaultStringifier<Configuration>(task_context.getConfiguration(), Configuration.class)) {
-					return stringifier.fromString(task_context.getConfiguration().get(input_split.getName()));
-				}							
-			}));
-			config.addResource(task_context.getConfiguration()); //(ie add everything else)
-			
-			
-			InputFormat input_format = (InputFormat) ReflectionUtils.newInstance(input_split.getInputFormatClass(), task_context.getConfiguration());
-
-			return input_format.createRecordReader(input_split.getInputSplit(), createTaskContext(task_context, config));
+		public RecordReader createRecordReader(InputSplit split, TaskAttemptContext task_context) throws IOException, InterruptedException {			
+			return new Aleph2MultiRecordReader(split, task_context);			
 		}
 
 		/* (non-Javadoc)
@@ -137,6 +126,69 @@ public class Aleph2MultiInputFormatBuilder {
 	}	
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////
+	
+	// RECORD READER
+	
+	@SuppressWarnings("rawtypes")
+	public static class Aleph2MultiRecordReader extends RecordReader {
+
+		RecordReader _delegate;
+		
+		public Aleph2MultiRecordReader(InputSplit split, TaskAttemptContext task_context) throws IOException, InterruptedException {
+			// (NOTE: these are called from each actual mapper)
+			
+			final Aleph2MultiInputSplit input_split = (Aleph2MultiInputSplit) split;
+			
+			final Configuration config = Lambdas.get(Lambdas.wrap_u(() -> {
+				try (final Stringifier<Configuration> stringifier = new DefaultStringifier<Configuration>(task_context.getConfiguration(), Configuration.class)) {
+					return stringifier.fromString(task_context.getConfiguration().get(ALEPH2_MULTI_INPUT_FORMAT_PREFIX + input_split.getName()));
+				}							
+			}));
+			config.addResource(task_context.getConfiguration()); //(ie add everything else)
+			
+			
+			InputFormat input_format = (InputFormat) ReflectionUtils.newInstance(input_split.getInputFormatClass(), task_context.getConfiguration());
+
+			_delegate = input_format.createRecordReader(input_split.getInputSplit(), createTaskContext(task_context, config));						
+		}
+		
+		@Override
+		public void initialize(InputSplit split, TaskAttemptContext task_context) throws IOException, InterruptedException {
+			//(nothing to do here)
+		}
+
+		@Override
+		public boolean nextKeyValue() throws IOException, InterruptedException {
+			return _delegate.nextKeyValue();
+		}
+
+		@Override
+		public Object getCurrentKey() throws IOException, InterruptedException {
+			return _delegate.getCurrentKey();
+		}
+
+		@Override
+		public Object getCurrentValue() throws IOException,
+				InterruptedException {
+			return _delegate.getCurrentValue();
+		}
+
+		@Override
+		public float getProgress() throws IOException, InterruptedException {
+			return _delegate.getProgress();
+		}
+
+		@Override
+		public void close() throws IOException {
+			_delegate.close();
+		}
+		
+	}
+	
+	
+	////////////////////////////////////////////////////////////////////////////////////////////////////////
+	
+	// UTILS
 	
 	/** Proxy class for JobContext so that can override the configuration params
 	 * @param delegate
