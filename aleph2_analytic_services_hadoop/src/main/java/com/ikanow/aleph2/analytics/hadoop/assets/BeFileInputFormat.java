@@ -75,11 +75,11 @@ public class BeFileInputFormat extends UpdatedCombineFileInputFormat<String, Tup
 	public List<InputSplit> getSplits(JobContext context) throws IOException {
 		logger.debug("BeFileInputFormat.getSplits");
 		List<InputSplit> tmp = null;
-		try {
-			
+		try {			
 			tmp = super.getSplits(context);
 		} catch (Throwable t) {
 			logger.error(t);
+			throw new IOException(t);
 		}
 		
 		logger.debug("BeFileInputFormat.getSplits: " +((tmp!=null)? tmp.size():"null"));

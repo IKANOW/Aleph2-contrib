@@ -32,5 +32,5 @@ public interface IBeJobService {
 	 * @param config_element - the name of the config element
 	 * @return
 	 */
-	Validation<String, Job> runEnhancementJob(DataBucketBean bucket, String config_element);
+	Validation<String, Job> runEnhancementJob(DataBucketBean bucket);
 }

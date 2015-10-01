@@ -16,7 +16,9 @@
 package com.ikanow.aleph2.analytics.hadoop.services;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -37,6 +39,8 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
 
 import fj.data.Validation;
@@ -84,7 +88,7 @@ public class BeJobLauncher implements IBeJobService{
 	 * @see com.ikanow.aleph2.analytics.hadoop.services.IBeJobService#runEnhancementJob(java.lang.String, java.lang.String, java.lang.String)
 	 */
 	@Override
-	public Validation<String, Job> runEnhancementJob(DataBucketBean bucket, String configElement){
+	public Validation<String, Job> runEnhancementJob(DataBucketBean bucket){
 		
 		final Configuration config = getHadoopConfig();
 		
@@ -92,41 +96,51 @@ public class BeJobLauncher implements IBeJobService{
 		//(not currently used, but has proven useful in the past)
 		
 		try {
-			final BeJobBean beJob = _beJobLoader.loadBeJob(bucket, configElement);		
+			final BeJobBean beJob = _beJobLoader.loadBeJob(bucket, "TODO");		
 
 			final String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
 		    config.set(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE, contextSignature);
 			
-		    //TODO: loop over inputs, for each one get a new job + perform all the usual stuff
-		    
 		    final Aleph2MultiInputFormatBuilder inputBuilder = new Aleph2MultiInputFormatBuilder();
-		    {
+
+		    // All the hadoop paths, can put into a single format
+		    
+			final List<String> all_hdfs_paths = 
+					Optionals.ofNullable(_batchEnrichmentContext.getJob().inputs()).stream()
+						.flatMap(input -> _batchEnrichmentContext.getAnalyticsContext().getInputPaths(Optional.of(bucket), _batchEnrichmentContext.getJob(), input).stream())
+						.collect(Collectors.toList());
+					;
+		    
+			if (!all_hdfs_paths.isEmpty()) {
 			    final Job inputJob = Job.getInstance(config);
-			    inputJob.setInputFormatClass(BeFileInputFormat.class);
-			    final Path inPath = new Path(beJob.getBucketInputPath());
-			    logger.debug("Bucket Input Path:"+inPath.toString());
-				FileInputFormat.addInputPath(inputJob, inPath);
+			    inputJob.setInputFormatClass(BeFileInputFormat.class);				
+				all_hdfs_paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(beJob.getBucketInputPath()))));
 				inputBuilder.addInput(UuidUtils.get().getRandomUuid(), inputJob);
-		    }
-		    		    
-			final String jobName = BucketUtils.getUniqueSignature(bucket.full_name(), Optional.of(configElement));
+			}
+					
+			// (ALEPH-12): other input format types
 			
-		    // do not set anything into config past this line
+		    // Now do everything else
+		    
+			final String jobName = BucketUtils.getUniqueSignature(bucket.full_name(), Optional.ofNullable(_batchEnrichmentContext.getJob().name()));
+			
+		    // do not set anything into config past this line (can set job.getConfiguration() elements though - that is what the builder does)
 		    Job job = Job.getInstance(config, jobName);
 		    job.setJarByClass(BatchEnrichmentJob.class);
 
-		    //TODO: set the classpath...
+		    //TODO (ALEPH-12): set the classpath...
 
+		    // (generic mapper - the actual code is run using the classes in the shared libraries)
 		    job.setMapperClass(BatchEnrichmentJob.BatchEnrichmentMapper.class);
-		    job.setNumReduceTasks(0);
 		    
 		    //TODO: ALEPH-12 handle reducer scenarios
+		    job.setNumReduceTasks(0);
 		    //job.setReducerClass(BatchEnrichmentJob.BatchEnrichmentReducer.class);
 
 		    // Input format:
 		    inputBuilder.build(job);
 
-			// Output format:
+			// Output format (doesn't really do anything, all the actual output code is performed by the mapper via the enrichment context)
 		    job.setOutputFormatClass(BeFileOutputFormat.class);
 			
 			launch(job);

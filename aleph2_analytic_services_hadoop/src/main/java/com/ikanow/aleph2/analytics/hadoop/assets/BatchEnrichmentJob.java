@@ -73,8 +73,8 @@ import fj.data.Either;
  */
 public class BatchEnrichmentJob{
 
-	public static String BATCH_SIZE_PARAM = "batchSize";
-	public static String BE_CONTEXT_SIGNATURE = "beContextSignature";
+	public static String BATCH_SIZE_PARAM = "aleph2.batch.batchSize";
+	public static String BE_CONTEXT_SIGNATURE = "aleph2.batch.beContextSignature";
 
 	private static final Logger logger = LogManager.getLogger(BatchEnrichmentJob.class);
 	

@@ -202,7 +202,7 @@ public class TestBeJobService {
 		
 		final BeJobLauncher beJobService = new BeJobLauncher(_globals, new BeJobLoader(batch_context), batch_context);		
 
-		final Validation<String, Job> result = beJobService.runEnhancementJob(test_bucket, "simplemodule");
+		final Validation<String, Job> result = beJobService.runEnhancementJob(test_bucket);
 		
 		result.validation(
 				fail -> { logger.info("Launch FAIL " + fail); return Unit.unit(); }

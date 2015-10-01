@@ -63,7 +63,7 @@ import com.ikanow.aleph2.data_model.utils.TimeUtils;
 public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatchRecord>> implements IBeJobConfigurable{
 
 	/** Simple implementation of IBatchRecord
-	 * @author Alex
+	 * @author jfreydank
 	 */
 	public static class BatchRecord implements IBatchRecord {
 		public BatchRecord(final JsonNode json, final ByteArrayOutputStream content) {
@@ -98,10 +98,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		_parsers.put("BIN", new BeStreamParser());
 	}
 	
-	Date start = null;
-	
-	@SuppressWarnings("unused")
-	private int batchSize;
+	protected Date start = null;
 	
 	/** User c'tor
 	 */
@@ -185,11 +182,16 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		return true;
 	}
 
-	/**
-	 * 
+	/** For input files (pure enrichment, not when used for analytics), deletes or archives the files following completion
 	 */
 	private void archiveOrDeleteFile() {
 		try {
+			final Path currentPath = _fileSplit.getPath(_currFile);
+			// First check - if only want to do anything if this is an internal job:
+			if (!currentPath.toString().contains(IStorageService.TO_IMPORT_DATA_SUFFIX)) {
+				return; // (not your file to modify....)
+			}
+			
 			final boolean storage_enabled  = 
 					Optional.ofNullable(_dataBucket.data_schema()).map(ds -> ds.storage_schema())
 							.map(ss -> Optional.ofNullable(ss.enabled()).orElse(true))
@@ -203,14 +205,13 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 							;
 			
 			if (archive_enabled) {
-				Path currentPath = _fileSplit.getPath(_currFile);
 				Path newPath = createArchivePath(currentPath);
 				_fs.mkdirs(newPath);
 				
 				@SuppressWarnings("unused")
 				final boolean success = _fs.rename(currentPath, Path.mergePaths(newPath, new Path("/" + currentPath.getName())));
 			} else {
-				_fs.delete(_fileSplit.getPath(_currFile), false);
+				_fs.delete(currentPath, false);
 			}
 		} catch (Exception e) {
 			logger.error(ErrorUtils.getLongForm(HadoopErrorUtils.EXCEPTION_CAUGHT, e));
@@ -219,9 +220,12 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		}
 	}
 
+	/** Returns the temporal (or not) directory in which to place raw files
+	 * @param currentPath
+	 * @return
+	 * @throws Exception
+	 */
 	private Path createArchivePath(Path currentPath) throws Exception {
-
-		//TODO (ALEPH-12): check this is correct, add test case
 
 		final String timeGroupingFormat =
 				TimeUtils.getTimePeriod(Optionals.of(() -> _dataBucket.data_schema().storage_schema().processed().grouping_time_period()).orElse(""))
@@ -237,6 +241,10 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		return storedPath;
 	}
 
+	/** Returns the parser
+	 * @param fileName
+	 * @return
+	 */
 	protected  IParser getParser(String fileName) {
 		IParser parser = null;
 		
@@ -253,21 +261,33 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		return parser;
 	}
 
+	/* (non-Javadoc)
+	 * @see org.apache.hadoop.mapreduce.RecordReader#getCurrentKey()
+	 */
 	@Override
 	public String getCurrentKey() throws IOException, InterruptedException {
 		return _currrentFileName;
 	}
 
+	/* (non-Javadoc)
+	 * @see org.apache.hadoop.mapreduce.RecordReader#getCurrentValue()
+	 */
 	@Override
 	public Tuple2<Long, IBatchRecord> getCurrentValue() throws IOException, InterruptedException {
 		return _record;
 	}
 
+	/* (non-Javadoc)
+	 * @see org.apache.hadoop.mapreduce.RecordReader#getProgress()
+	 */
 	@Override
 	public float getProgress() throws IOException, InterruptedException {
 		return (float)_currFile/(float)_numFiles;
 	}
 
+	/* (non-Javadoc)
+	 * @see org.apache.hadoop.mapreduce.RecordReader#close()
+	 */
 	@Override
 	public void close() throws IOException {
 		if (null != _inStream) {
@@ -278,22 +298,32 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		}		
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setDataBucket(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
+	 */
 	@Override
 	public void setDataBucket(DataBucketBean dataBucketBean) {
 		this._dataBucket = dataBucketBean;
 		
 	}
 		
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setBatchSize(int)
+	 */
 	@Override
 	public void setBatchSize(int size) {
-		this.batchSize = size;
-		
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setEnrichmentContext(com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext)
+	 */
 	@Override
 	public void setEnrichmentContext(BatchEnrichmentContext enrichmentContext) {
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setEcMetadata(java.util.List)
+	 */
 	@Override
 	public void setEcMetadata(List<EnrichmentControlMetadataBean> ecMetadata) {
 	}
