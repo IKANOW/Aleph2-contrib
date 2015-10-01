@@ -56,6 +56,7 @@ import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModul
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ContextUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
@@ -64,6 +65,7 @@ import com.ikanow.aleph2.analytics.hadoop.data_model.BeJobBean;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
 
+import java.util.Arrays;
 import fj.data.Either;
 
 /** Encapsulates a Hadoop job intended for batch enrichment or analytics
@@ -144,7 +146,7 @@ public class BatchEnrichmentJob{
 			this._ecMetadata = ecMetadata.stream()
 									.<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>>flatMap(ecm -> {
 										final Optional<String> entryPoint = BucketUtils.getBatchEntryPoint(library_beans, ecm);
-										return entryPoint.map(Stream::of).orElseGet(Stream::empty)
+										return entryPoint.map(Stream::of).orElseGet(() -> Stream.of(BePassthroughModule.class.getName()))
 												.flatMap(Lambdas.flatWrap_i(ep -> (IEnrichmentBatchModule)Class.forName(ep).newInstance()))
 												.map(mod -> {			
 													final BatchEnrichmentContext cloned_context = new BatchEnrichmentContext(_enrichmentContext, _batchSize);
@@ -200,14 +202,16 @@ public class BatchEnrichmentJob{
 				List<Tuple2<Long, IBatchRecord>> mutable_start = _batch;
 				while (it.hasNext()) {
 					final Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean> t3 = it.next();				
+					
+					t3._2().clearOutputRecords();
 					t3._1().onObjectBatch(mutable_start.stream(), Optional.of(mutable_start.size()), Optional.empty());
 					mutable_start = t3._2().getOutputRecords();
+					
 					if (!it.hasNext()) { // final stage output anything we have here
 						final IAnalyticsContext analytics_context = _enrichmentContext.getAnalyticsContext();
 						mutable_start.forEach(record ->
 							analytics_context.emitObject(Optional.empty(), _enrichmentContext.getJob(), Either.left(record._2().getJson()), Optional.empty()));
 					}
-					t3._2().clearOutputRecords();
 				}				
 				_batch.clear();
 			}		
@@ -236,7 +240,11 @@ public class BatchEnrichmentJob{
 		beJobConfigurable.setEnrichmentContext(enrichmentContext);
 		final DataBucketBean dataBucket = enrichmentContext.getBucket().get();
 		beJobConfigurable.setDataBucket(dataBucket);
-		beJobConfigurable.setEcMetadata(Optional.ofNullable(dataBucket.batch_enrichment_configs()).orElse(Collections.emptyList()));
+		final List<EnrichmentControlMetadataBean> config = Optional.ofNullable(dataBucket.batch_enrichment_configs()).orElse(Collections.emptyList());
+		beJobConfigurable.setEcMetadata(config.isEmpty()
+											? Arrays.asList(BeanTemplateUtils.build(EnrichmentControlMetadataBean.class).done().get())
+											: config
+				);
 		beJobConfigurable.setBatchSize(configuration.getInt(BATCH_SIZE_PARAM,100));	
 	}
 	

@@ -59,7 +59,7 @@ public class BePassthroughModule implements IEnrichmentBatchModule {
 	 */
 	@Override
 	public void onObjectBatch(final Stream<Tuple2<Long, IBatchRecord>> batch, Optional<Integer> batch_size, Optional<JsonNode> grouping_key) {
-		if (logger.isDebugEnabled()) logger.debug("BatchEnrichmentModule.onObjectBatch:" + batch);
+		if (logger.isDebugEnabled()) logger.debug("BatchEnrichmentModule.onObjectBatch:" + batch_size);
 		batch.forEach(t2 -> {
 
 			// not sure what to do with streaming (probably binary) data - probably will have to just ignore it in default mode?

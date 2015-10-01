@@ -22,6 +22,7 @@ import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.Optional;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.logging.log4j.LogManager;
@@ -44,11 +45,13 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
+import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
+import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
@@ -88,106 +91,178 @@ public class TestBeJobService {
 	} // setup dependencies
 
 	@Test
-	public void testBeJobService() throws Exception{
+	public void testBeJobService_simple() throws Exception{
+		// Set passthrough topology
+		final AnalyticThreadJobBean test_analytic = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+				.with(AnalyticThreadJobBean::name, "simplejob")
+				.with(AnalyticThreadJobBean::module_name_or_id, "_module_test")
+			.done().get();
+		
+		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
+												.with(DataBucketBean::full_name, "/test/simple/analytics")
+												.with(DataBucketBean::analytic_thread,
+														BeanTemplateUtils.build(AnalyticThreadBean.class)
+															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
+														.done().get()
+														)
+												.with(DataBucketBean::data_schema,
+														BeanTemplateUtils.build(DataSchemaBean.class)
+															.with(DataSchemaBean::storage_schema,
+																BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.class)
+																	.with(DataSchemaBean.StorageSchemaBean::raw,
+																			BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.class)
+																			.done().get()
+																			)
+																.done().get()
+															)
+															.with(DataSchemaBean::search_index_schema,
+																BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class).done().get()
+															)
+														.done().get()
+														)
+											.done().get();
+	
+		
+		testBeJobService_thisBucket(test_bucket, true);
+	}
+	
+	@Test
+	public void testBeJobService_multiStage() throws Exception{
+		// Set passthrough topology
+		final AnalyticThreadJobBean test_analytic = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+				.with(AnalyticThreadJobBean::name, "simplejob")
+				.with(AnalyticThreadJobBean::module_name_or_id, "_module_test")
+			.done().get();
+		
+		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
+												.with(DataBucketBean::full_name, "/test/simple/analytics")
+												.with(DataBucketBean::analytic_thread,
+														BeanTemplateUtils.build(AnalyticThreadBean.class)
+															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
+														.done().get()
+														)
+												.with(DataBucketBean::batch_enrichment_configs, 
+														Arrays.asList(
+																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
+																.done().get()
+																,
+																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
+																.done().get()
+																))
+												.with(DataBucketBean::data_schema,
+														BeanTemplateUtils.build(DataSchemaBean.class)
+															.with(DataSchemaBean::search_index_schema,
+																BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class).done().get()
+															)
+														.done().get()
+														)
+											.done().get();
+	
+		
+		testBeJobService_thisBucket(test_bucket, false);
+	}
+	
+	//////////////////////////////////////////////
+	
+	// HIGH LEVEL UTILS:
+	
+	public void testBeJobService_thisBucket(DataBucketBean test_bucket, boolean expect_archive) throws Exception {
 		// Only run this test on linux systems, Hadoop local mode not reliably working on Windows
 		if (File.separator.equals("\\")) { // windows mode!
 			logger.info("WINDOWS MODE SKIPPING THIS TEST");
+			return;
+		}		
+		final MockAnalyticsContext analytics_context = new MockAnalyticsContext(_service_context);
+		final BatchEnrichmentContext batch_context = new BatchEnrichmentContext(analytics_context);
+		
+		final SharedLibraryBean technology = BeanTemplateUtils.build(SharedLibraryBean.class).with(SharedLibraryBean::path_name, "/tech/test").done().get();
+		final SharedLibraryBean passthrough = BeanTemplateUtils.build(SharedLibraryBean.class)
+													.with(SharedLibraryBean::_id, "_module_test")
+													.with(SharedLibraryBean::path_name, "/module/test")
+												.done().get();
+		analytics_context.setTechnologyConfig(technology);
+		analytics_context.resetLibraryConfigs(							
+				ImmutableMap.<String, SharedLibraryBean>builder()
+					.put(passthrough.path_name(), passthrough)
+					.put(passthrough._id(), passthrough)
+					.build());
+		analytics_context.setBucket(test_bucket);
+		batch_context.setJob(test_bucket.analytic_thread().jobs().get(0));
+		
+		// Set up directory:
+		createFolderStructure(test_bucket);
+		assertTrue("File1 should exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.txt").exists());
+		assertTrue("File2 should exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.json").exists());
+		// (Clear ES index)
+		final IDataWriteService<JsonNode> es_index = 
+				_service_context.getSearchIndexService().get().getDataService().get().getWritableDataService(JsonNode.class, test_bucket, Optional.empty(), Optional.empty()).get();
+		es_index.deleteDatastore().get();
+		Thread.sleep(1000L);
+		assertEquals(0, es_index.countObjects().get().intValue());
+		
+		final BeJobLauncher beJobService = new BeJobLauncher(_globals, new BeJobLoader(batch_context), batch_context);		
+
+		final Validation<String, Job> result = beJobService.runEnhancementJob(test_bucket, "simplemodule");
+		
+		result.validation(
+				fail -> { logger.info("Launch FAIL " + fail); return Unit.unit(); }
+				,
+				success -> { logger.info("Launched " + success.getJobName()); return Unit.unit(); }
+				);
+
+		
+		assertTrue("Job worked: " + result.f().toOption().orSome(""), result.isSuccess());
+		
+		for (int ii = 0; (ii < 60) && !result.success().isComplete(); ++ii) {
+			Thread.sleep(1000L);
+		}
+		logger.info("Job has finished: " + result.success().isSuccessful());
+		assertTrue("Job successful", result.success().isSuccessful());
+		
+		// Check the processed  file has vanished
+		
+		assertFalse("File1 shouldn't exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.txt").exists());
+		assertFalse("File2 shouldn't exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.json").exists());
+		
+		// Check the object got written into ES
+		for (int ii = 0; ii < 12; ++ii) {
+			Thread.sleep(500L);
+			if (es_index.countObjects().get().intValue() >= 2) {
+				break;
+			}
+		}			
+		assertEquals(2, es_index.countObjects().get().intValue());			
+		
+		String[] subpaths = new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW).list();
+		if (expect_archive) {
+			if (null == subpaths) {
+				fail("No subpaths of: " + new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW));
+			}
+			//(note all lengths are *2 because of .crc file)
+			if (2 == subpaths.length) {
+				//TODO (ALEPH-12): add check for files
+			}
+			else {
+				assertEquals(4, subpaths.length);
+				assertTrue("File1 should exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW + "bucket1data.txt").exists());
+				assertTrue("File2 should exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW + "bucket1data.json").exists());
+			}
 		}
 		else {
-			final MockAnalyticsContext analytics_context = new MockAnalyticsContext(_service_context);
-			final BatchEnrichmentContext batch_context = new BatchEnrichmentContext(analytics_context);
-			
-			// Set passthrough topology
-			final AnalyticThreadJobBean test_analytic = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
-					.with(AnalyticThreadJobBean::name, "simplejob")
-					.with(AnalyticThreadJobBean::module_name_or_id, "_module_test")
-				.done().get();
-			
-			final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
-													.with(DataBucketBean::full_name, "/test/simple/analytics")
-													.with(DataBucketBean::analytic_thread,
-															BeanTemplateUtils.build(AnalyticThreadBean.class)
-																.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
-															.done().get()
-															)
-													.with(DataBucketBean::data_schema,
-															BeanTemplateUtils.build(DataSchemaBean.class)
-																.with(DataSchemaBean::search_index_schema,
-																	BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class).done().get()
-																)
-															.done().get()
-															)
-												.done().get();
-			
-			final SharedLibraryBean technology = BeanTemplateUtils.build(SharedLibraryBean.class).with(SharedLibraryBean::path_name, "/tech/test").done().get();
-			final SharedLibraryBean passthrough = BeanTemplateUtils.build(SharedLibraryBean.class)
-														.with(SharedLibraryBean::_id, "_module_test")
-														.with(SharedLibraryBean::path_name, "/module/test")
-													.done().get();
-			analytics_context.setTechnologyConfig(technology);
-			analytics_context.resetLibraryConfigs(							
-					ImmutableMap.<String, SharedLibraryBean>builder()
-						.put(passthrough.path_name(), passthrough)
-						.put(passthrough._id(), passthrough)
-						.build());
-			analytics_context.setBucket(test_bucket);
-			batch_context.setJob(test_analytic);
-			
-			// Set up directory:
-			createFolderStructure(test_bucket);
-			assertTrue("File1 should exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.txt").exists());
-			assertTrue("File2 should exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.json").exists());
-			// (Clear ES index)
-			final IDataWriteService<JsonNode> es_index = 
-					_service_context.getSearchIndexService().get().getDataService().get().getWritableDataService(JsonNode.class, test_bucket, Optional.empty(), Optional.empty()).get();
-			es_index.deleteDatastore().get();
-			Thread.sleep(1000L);
-			assertEquals(0, es_index.countObjects().get().intValue());
-			
-			final BeJobLauncher beJobService = new BeJobLauncher(_globals, new BeJobLoader(batch_context), batch_context);		
-
-			final Validation<String, Job> result = beJobService.runEnhancementJob(test_bucket, "simplemodule");
-			
-			result.validation(
-					fail -> { logger.info("Launch FAIL " + fail); return Unit.unit(); }
-					,
-					success -> { logger.info("Launched " + success.getJobName()); return Unit.unit(); }
-					);
-
-			
-			assertTrue("Job worked: " + result.f().toOption().orSome(""), result.isSuccess());
-			
-			for (int ii = 0; (ii < 60) && !result.success().isComplete(); ++ii) {
-				Thread.sleep(1000L);
-			}
-			logger.info("Job has finished: " + result.success().isSuccessful());
-			assertTrue("Job successful", result.success().isSuccessful());
-			
-			// Check the processed  file has vanished
-			
-			assertFalse("File1 shouldn't exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.txt").exists());
-			assertFalse("File2 shouldn't exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.json").exists());
-			
-			// Check the object got written into ES
-			for (int ii = 0; ii < 12; ++ii) {
-				Thread.sleep(500L);
-				if (es_index.countObjects().get().intValue() >= 2) {
-					break;
-				}
-			}			
-			assertEquals(2, es_index.countObjects().get().intValue());			
+			assertEquals("Dir empty or doesn't exist", 0, Optionals.of(() -> subpaths.length).orElse(0).intValue());
 		}
 	}
 	
 	//////////////////////////////////////////////
 	
-	// UTILS:
+	// LOW LEVEL UTILS:
 	
 	protected void createFolderStructure(final DataBucketBean bucket){
 		// create folder structure if it does not exist for testing.		
 		final FileContext fileContext = _service_context.getStorageService().getUnderlyingPlatformDriver(FileContext.class,Optional.empty()).get();
 		logger.info("Root dir:"+_globals.distributed_root_dir());
 		final String bucketPath1 = _globals.distributed_root_dir() + bucket.full_name();
+		FileUtils.deleteQuietly(new File(bucketPath1)); // (cleanse the dir to start with)
 		final String bucketReadyPath1 = bucketPath1+"/managed_bucket/import/ready";
 		DirUtils.createDirectory(fileContext,bucketReadyPath1);
 		DirUtils.createDirectory(fileContext,_globals.distributed_root_dir()+"/data/misc/bucket2/managed_bucket/import/ready");

@@ -49,6 +49,7 @@ import com.ikanow.aleph2.analytics.hadoop.services.BeStreamParser;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 import com.ikanow.aleph2.data_model.utils.ContextUtils;
@@ -75,7 +76,6 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	}
 	
 	private static final Logger logger = LogManager.getLogger(BeJobLauncher.class);
-	public static String DEFAULT_GROUPING = "daily";
 
 	protected CombineFileSplit _fileSplit;
 	protected InputStream _inStream = null;
@@ -190,9 +190,25 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	 */
 	private void archiveOrDeleteFile() {
 		try {
-			if (_dataBucket.data_schema()!=null && _dataBucket.data_schema().storage_schema()!=null && _dataBucket.data_schema().storage_schema().enabled()) {
+			final boolean storage_enabled  = 
+					Optional.ofNullable(_dataBucket.data_schema()).map(ds -> ds.storage_schema())
+							.map(ss -> Optional.ofNullable(ss.enabled()).orElse(true))
+							.orElse(false)
+							;
+			
+			final boolean archive_enabled = storage_enabled && 
+					Optionals.of(() -> _dataBucket.data_schema().storage_schema().raw())
+							.map(raw -> Optional.ofNullable(raw.enabled()).orElse(true))
+							.orElse(false)
+							;
+			
+			if (archive_enabled) {
 				Path currentPath = _fileSplit.getPath(_currFile);
-				_fs.rename(currentPath, createArchivePath(currentPath));
+				Path newPath = createArchivePath(currentPath);
+				_fs.mkdirs(newPath);
+				
+				@SuppressWarnings("unused")
+				final boolean success = _fs.rename(currentPath, Path.mergePaths(newPath, new Path("/" + currentPath.getName())));
 			} else {
 				_fs.delete(_fileSplit.getPath(_currFile), false);
 			}
@@ -207,16 +223,16 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 
 		//TODO (ALEPH-12): check this is correct, add test case
 
-		ChronoUnit timeGroupingUnit = ChronoUnit.DAYS;
-		try {
-			timeGroupingUnit = TimeUtils.getTimePeriod(Optionals.of(() -> _dataBucket.data_schema().storage_schema().processed().grouping_time_period()).orElse(DEFAULT_GROUPING)).success();			
-		} catch (Throwable t) {			
-			logger.error(ErrorUtils.getLongForm(HadoopErrorUtils.VALIDATION_ERROR,t),t);
-		}
-		String timeGroupingFormat = TimeUtils.getTimeBasedSuffix(timeGroupingUnit,Optional.of(ChronoUnit.MINUTES));
-		SimpleDateFormat sdf = new SimpleDateFormat(timeGroupingFormat);
-		String timeGroup = sdf.format(start);
-		Path storedPath = Path.mergePaths(currentPath.getParent().getParent(),new Path("/stored/processed/"+timeGroup));
+		final String timeGroupingFormat =
+				TimeUtils.getTimePeriod(Optionals.of(() -> _dataBucket.data_schema().storage_schema().processed().grouping_time_period()).orElse(""))
+				.validation(fail -> "", success -> TimeUtils.getTimeBasedSuffix(success,Optional.of(ChronoUnit.MINUTES)));
+		
+		final String timeGroup = timeGroupingFormat.isEmpty()
+				? ""
+				: (new SimpleDateFormat(timeGroupingFormat)).format(start);
+		Path storedPath = Path.mergePaths(currentPath.getParent().getParent().getParent().getParent() // (ie up 3 to the root, ie managed_bucket==first subdir)
+								,
+								new Path(IStorageService.STORED_DATA_SUFFIX_RAW+timeGroup));
 
 		return storedPath;
 	}
