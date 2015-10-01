@@ -26,6 +26,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.google.inject.Inject;
+import com.ikanow.aleph2.analytics.hadoop.assets.Aleph2MultiInputFormatBuilder;
 import com.ikanow.aleph2.analytics.hadoop.assets.BatchEnrichmentJob;
 import com.ikanow.aleph2.analytics.hadoop.assets.BeFileInputFormat;
 import com.ikanow.aleph2.analytics.hadoop.assets.BeFileOutputFormat;
@@ -36,6 +37,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.UuidUtils;
 
 import fj.data.Validation;
 
@@ -84,21 +86,33 @@ public class BeJobLauncher implements IBeJobService{
 	@Override
 	public Validation<String, Job> runEnhancementJob(DataBucketBean bucket, String configElement){
 		
-		Configuration config = getHadoopConfig();
-		String jobName = null;
+		final Configuration config = getHadoopConfig();
 		
 		final ClassLoader currentClassloader = Thread.currentThread().getContextClassLoader();
+		//(not currently used, but has proven useful in the past)
 		
 		try {
-			BeJobBean beJob = _beJobLoader.loadBeJob(bucket, configElement);		
+			final BeJobBean beJob = _beJobLoader.loadBeJob(bucket, configElement);		
 
-			String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
+			final String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
 		    config.set(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE, contextSignature);
 			
-			jobName = BucketUtils.getUniqueSignature(bucket.full_name(), Optional.of(configElement));
+		    //TODO: loop over inputs, for each one get a new job + perform all the usual stuff
+		    
+		    final Aleph2MultiInputFormatBuilder inputBuilder = new Aleph2MultiInputFormatBuilder();
+		    {
+			    final Job inputJob = Job.getInstance(config);
+			    inputJob.setInputFormatClass(BeFileInputFormat.class);
+			    final Path inPath = new Path(beJob.getBucketInputPath());
+			    logger.debug("Bucket Input Path:"+inPath.toString());
+				FileInputFormat.addInputPath(inputJob, inPath);
+				inputBuilder.addInput(UuidUtils.get().getRandomUuid(), inputJob);
+		    }
+		    		    
+			final String jobName = BucketUtils.getUniqueSignature(bucket.full_name(), Optional.of(configElement));
 			
 		    // do not set anything into config past this line
-		    Job job = Job.getInstance( config ,jobName);
+		    Job job = Job.getInstance(config, jobName);
 		    job.setJarByClass(BatchEnrichmentJob.class);
 
 		    //TODO: set the classpath...
@@ -107,17 +121,13 @@ public class BeJobLauncher implements IBeJobService{
 		    job.setNumReduceTasks(0);
 		    
 		    //TODO: ALEPH-12 handle reducer scenarios
-		  //  job.setReducerClass(BatchEnrichmentJob.BatchEnrichmentReducer.class);
-		    
-		    job.setInputFormatClass(BeFileInputFormat.class);
+		    //job.setReducerClass(BatchEnrichmentJob.BatchEnrichmentReducer.class);
+
+		    // Input format:
+		    inputBuilder.build(job);
 
 			// Output format:
 		    job.setOutputFormatClass(BeFileOutputFormat.class);
-
-
-		    Path inPath = new Path(beJob.getBucketInputPath());
-		    logger.debug("Bucket Input Path:"+inPath.toString());
-			FileInputFormat.addInputPath(job, inPath);
 			
 			launch(job);
 			return Validation.success(job);

@@ -56,7 +56,7 @@ public class BeFileInputFormat extends UpdatedCombineFileInputFormat<String, Tup
 	 * @see org.apache.hadoop.mapreduce.lib.input.CombineFileInputFormat#createRecordReader(org.apache.hadoop.mapreduce.InputSplit, org.apache.hadoop.mapreduce.TaskAttemptContext)
 	 */
 	@Override
-	public RecordReader<String, Tuple2<Long, IBatchRecord>> createRecordReader(InputSplit inputSplit,	TaskAttemptContext context) throws IOException {
+	public RecordReader<String, Tuple2<Long, IBatchRecord>> createRecordReader(InputSplit inputSplit, TaskAttemptContext context) throws IOException {
 		logger.debug("BeFileInputFormat.createRecordReader");
 		BeFileInputReader reader = new BeFileInputReader();
 		try {

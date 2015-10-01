@@ -234,12 +234,12 @@ public class TestBeJobService {
 		assertEquals(2, es_index.countObjects().get().intValue());			
 		
 		String[] subpaths = new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW).list();
+		//(note all lengths are *2 because of .crc file)
 		if (expect_archive) {
 			if (null == subpaths) {
 				fail("No subpaths of: " + new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW));
 			}
-			//(note all lengths are *2 because of .crc file)
-			if (2 == subpaths.length) {
+			else if (2 == subpaths.length) {
 				//TODO (ALEPH-12): add check for files
 			}
 			else {
