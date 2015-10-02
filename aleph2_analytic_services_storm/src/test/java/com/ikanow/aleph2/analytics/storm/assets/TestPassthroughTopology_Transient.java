@@ -72,9 +72,9 @@ public class TestPassthroughTopology_Transient extends TestPassthroughBase {
 				.done().get();		
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
-				.with(DataBucketBean::_id, "test_passthroughtopology")
+				.with(DataBucketBean::_id, "test_passthroughtopology_transient")
 				.with(DataBucketBean::modified, new Date())
-				.with(DataBucketBean::full_name, "/test/passthrough")
+				.with(DataBucketBean::full_name, "/test/passthrough/transient")
 				.with(DataBucketBean::analytic_thread, analytic_thread)
 				.with("data_schema", BeanTemplateUtils.build(DataSchemaBean.class)
 						.with("search_index_schema", BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
