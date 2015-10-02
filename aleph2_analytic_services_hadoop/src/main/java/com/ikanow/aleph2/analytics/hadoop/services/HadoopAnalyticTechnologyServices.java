@@ -17,12 +17,13 @@ package com.ikanow.aleph2.analytics.hadoop.services;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopAnalyticTechnologyUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
-import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyModule;
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadTriggerBean.AnalyticThreadComplexTriggerBean;
@@ -37,12 +38,10 @@ import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 /** Hadoop analytic technology module - provides the interface between Hadoop and Aleph2
  * @author Alex
  */
-public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologyModule, IExtraDependencyLoader {
+public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologyService, IExtraDependencyLoader {
 
 	@Override
-	public void youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules() {
-		// TODO need to add the modules?
-		
+	public void youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules() {		
 	}
 
 	@Override
@@ -247,6 +246,23 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologyMod
 			AnalyticThreadJobBean job_to_check, IAnalyticsContext context) {
 		// TODO check the job id, which should be programmatically generated from the bucket
 		return null;
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingArtefacts()
+	 */
+	@Override
+	public Collection<Object> getUnderlyingArtefacts() {
+		return Collections.emptyList();
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingPlatformDriver(java.lang.Class, java.util.Optional)
+	 */
+	@Override
+	public <T> Optional<T> getUnderlyingPlatformDriver(Class<T> driver_class,
+			Optional<String> driver_options) {
+		return Optional.empty();
 	}
 
 }
