@@ -18,6 +18,7 @@
         <module>aleph2_security_service_ikanow_v1</module>
         <module>aleph2_storm_dependencies</module>
         <module>aleph2_analytic_services_storm</module>
+        <module>aleph2_analytic_services_hadoop</module>
     </modules>
 
     <build>
