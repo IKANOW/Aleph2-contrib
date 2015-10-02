@@ -91,7 +91,7 @@ public class TestPassthroughTopology extends TestPassthroughBase {
 		
 		//////////////////////////////////////////////////////
 		// PHASE 3: SUBMIT TO TESTING SERVICE
-		final BasicMessageBean res = new MockStormTestingService().testAnalyticModule(test_bucket, _service_context).get();		
+		final BasicMessageBean res = new MockStormTestingService(_service_context).testAnalyticModule(test_bucket).get();		
 		assertTrue("Storm starts", res.success());
 		
 		_logger.info("******** Submitted storm cluster: " + res.message());

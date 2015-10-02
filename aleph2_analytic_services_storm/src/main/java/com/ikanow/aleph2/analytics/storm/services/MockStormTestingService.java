@@ -32,11 +32,20 @@ import com.ikanow.aleph2.data_model.utils.Optionals;
  */
 public class MockStormTestingService {
 
+	protected final IServiceContext _service_context;
+
+	/** User c'tor
+	 * @param service_context
+	 */
+	public MockStormTestingService(IServiceContext service_context) {
+		_service_context = service_context;
+	}
+	
 	/** Submit a test bucket with exactly one analytic job
 	 * @param test_bucket
 	 * @param service_context
 	 */
-	public CompletableFuture<BasicMessageBean> testAnalyticModule(final DataBucketBean test_bucket, final IServiceContext service_context) {
+	public CompletableFuture<BasicMessageBean> testAnalyticModule(final DataBucketBean test_bucket) {
 		
 		final Optional<AnalyticThreadJobBean> job = Optionals.of(() -> test_bucket.analytic_thread().jobs().get(0));
 		if (!job.isPresent()) {
@@ -49,7 +58,7 @@ public class MockStormTestingService {
 		.done().get();
 								
 		// Context		
-		final MockAnalyticsContext test_analytics_context = new MockAnalyticsContext(service_context);
+		final MockAnalyticsContext test_analytics_context = new MockAnalyticsContext(_service_context);
 		test_analytics_context.setBucket(test_bucket);
 		test_analytics_context.setTechnologyConfig(library);
 				

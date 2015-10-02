@@ -85,18 +85,14 @@ public class TestPassthroughTopology_Transient extends TestPassthroughBase {
 		//////////////////////////////////////////////////////
 		// PHASE 2: SPECIFICALLY FOR THIS TEST
 		//(Also: register a listener on the output to generate a secondary queue)
-		//(Also: register a listener on the output to generate a secondary queue)
 		final ICoreDistributedServices cds = _service_context.getService(ICoreDistributedServices.class, Optional.empty()).get();		
 		final String inter_queue_topic = cds.generateTopicName(test_bucket.full_name(), Optional.of("analytic_job1"));
 		cds.createTopic(inter_queue_topic, Optional.of(Collections.emptyMap()));
 		
 		//////////////////////////////////////////////////////
 		// PHASE 3: SUBMIT TO TESTING SERVICE
-		final BasicMessageBean res = new MockStormTestingService().testAnalyticModule(test_bucket, _service_context).get();		
+		final BasicMessageBean res = new MockStormTestingService(_service_context).testAnalyticModule(test_bucket).get();		
 		assertTrue("Storm starts", res.success());
-		
-		_logger.info("******** Submitted storm cluster: " + res.message());
-		Thread.sleep(5000L);
 		
 		_logger.info("******** Submitted storm cluster: " + res.message());
 		Thread.sleep(5000L);
