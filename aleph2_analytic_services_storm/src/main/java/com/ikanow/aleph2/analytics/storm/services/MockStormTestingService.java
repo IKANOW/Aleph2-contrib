@@ -19,6 +19,7 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import com.ikanow.aleph2.analytics.storm.modules.MockStormAnalyticTechnologyModule;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
@@ -64,7 +65,7 @@ public class MockStormTestingService {
 				
 		//PHASE 2: CREATE TOPOLOGY AND SUBMit
 		
-		final StormAnalyticTechnologyService analytic_tech = new StormAnalyticTechnologyService(new LocalStormController());
+		final StormAnalyticTechnologyService analytic_tech = new StormAnalyticTechnologyService(MockStormAnalyticTechnologyModule.getController());
 		return analytic_tech.startAnalyticJob(test_bucket, Arrays.asList(job.get()), job.get(), test_analytics_context);
 	}
 	
