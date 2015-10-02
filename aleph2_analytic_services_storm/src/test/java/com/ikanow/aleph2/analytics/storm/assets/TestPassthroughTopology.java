@@ -29,9 +29,7 @@ import org.apache.logging.log4j.Logger;
 import org.junit.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.ikanow.aleph2.analytics.storm.services.LocalStormController;
-import com.ikanow.aleph2.analytics.storm.services.MockAnalyticsContext;
-import com.ikanow.aleph2.analytics.storm.services.StormAnalyticTechnologyService;
+import com.ikanow.aleph2.analytics.storm.services.MockStormTestingService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
@@ -40,7 +38,6 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
-import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
@@ -50,6 +47,7 @@ public class TestPassthroughTopology extends TestPassthroughBase {
 
 	@Test
 	public void test_passthroughTopology() throws InterruptedException, ExecutionException {
+		//////////////////////////////////////////////////////
 		// PHASE 1: GET AN IN-TECHNOLOGY CONTEXT
 		// Bucket
 		final AnalyticThreadJobBean.AnalyticThreadJobInputBean analytic_input = 
@@ -83,48 +81,25 @@ public class TestPassthroughTopology extends TestPassthroughBase {
 								.done().get())
 						.done().get())
 				.done().get();
-
-		final SharedLibraryBean library = BeanTemplateUtils.build(SharedLibraryBean.class)
-				.with(SharedLibraryBean::path_name, "/test/lib")
-				.done().get();
-				
-		// Context		
-		final MockAnalyticsContext test_analytics_context = new MockAnalyticsContext(_service_context);
-		test_analytics_context.setBucket(test_bucket);
-		test_analytics_context.setTechnologyConfig(library);
-				
-		//PHASE 2: CREATE TOPOLOGY AND SUBMit
 		
-		final ICoreDistributedServices cds = test_analytics_context.getServiceContext().getService(ICoreDistributedServices.class, Optional.empty()).get();
-		
+		//////////////////////////////////////////////////////
+		// PHASE 2: SPECIFICALLY FOR THIS TEST
 		//(Also: register a listener on the output to generate a secondary queue)
+		final ICoreDistributedServices cds = _service_context.getService(ICoreDistributedServices.class, Optional.empty()).get();
 		final String end_queue_topic = cds.generateTopicName(test_bucket.full_name(), ICoreDistributedServices.QUEUE_END_NAME);
 		cds.createTopic(end_queue_topic, Optional.of(Collections.emptyMap()));
 		
-		//METHOD A:
-		final StormAnalyticTechnologyService analytic_tech = new StormAnalyticTechnologyService(new LocalStormController());
-		final BasicMessageBean res = analytic_tech.startAnalyticJob(test_bucket, Arrays.asList(analytic_job1), analytic_job1, test_analytics_context).get();
+		//////////////////////////////////////////////////////
+		// PHASE 3: SUBMIT TO TESTING SERVICE
+		final BasicMessageBean res = new MockStormTestingService().testAnalyticModule(test_bucket, _service_context).get();		
 		assertTrue("Storm starts", res.success());
-		
-		//METHOD  B:
-		//(Just for debugging - method A is obv nicer and provides better test coverage)
-//		test_analytics_context.getAnalyticsContextSignature(Optional.empty(), Optional.empty());
-//		test_analytics_context.overrideSavedContext(); // (THIS + PREV LINE ARE NEEDED WHEN TO AVOID CREATING 2 ModuleUtils INSTANCES WHICH BREAKS EVERYTHING)
-//		final StreamingEnrichmentContextService test_context = new StreamingEnrichmentContextService(test_analytics_context);
-//		final PassthroughTopology generic_top = new PassthroughTopology();
-//		test_context.setUserTopology(generic_top);
-//		test_context.setJob(analytic_job1);
-//		final StormTopology storm_top = (StormTopology) generic_top.getTopologyAndConfiguration(test_bucket, test_context)._1();
-//		final BasicMessageBean res = ErrorUtils.buildSuccessMessage("test", "test", "no status");
-//		final backtype.storm.Config config = new backtype.storm.Config();
-//		config.setDebug(true);
-//		_local_cluster.submitTopology("test_passthroughTopology", config, storm_top);
 		
 		_logger.info("******** Submitted storm cluster: " + res.message());
 		Thread.sleep(5000L);
 		
-		//PHASE 3: CHECK INDEX
-		final ISearchIndexService index_service = test_analytics_context.getServiceContext().getService(ISearchIndexService.class, Optional.empty()).get();
+		//////////////////////////////////////////////////////
+		//PHASE 4: CHECK INDEX
+		final ISearchIndexService index_service = _service_context.getService(ISearchIndexService.class, Optional.empty()).get();
 		final ICrudService<JsonNode> crud_service = 
 				index_service.getDataService()
 					.flatMap(s -> s.getWritableDataService(JsonNode.class, test_bucket, Optional.empty(), Optional.empty()))
