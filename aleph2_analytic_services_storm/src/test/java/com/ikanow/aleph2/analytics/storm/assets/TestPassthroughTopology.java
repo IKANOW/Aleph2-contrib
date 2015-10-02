@@ -98,7 +98,10 @@ public class TestPassthroughTopology extends TestPassthroughBase {
 		Thread.sleep(5000L);
 		
 		//////////////////////////////////////////////////////
-		//PHASE 4: CHECK INDEX
+		//PHASE 4: PREPARE INPUT DATA
+		
+		// 4a: cleanse
+		
 		final ISearchIndexService index_service = _service_context.getService(ISearchIndexService.class, Optional.empty()).get();
 		final ICrudService<JsonNode> crud_service = 
 				index_service.getDataService()
@@ -110,11 +113,16 @@ public class TestPassthroughTopology extends TestPassthroughBase {
 		Thread.sleep(2000L);
 		assertEquals(0L, crud_service.countObjects().get().intValue());
 		
-		//PHASE4 : WRITE TO KAFKA
+		// 4b: write to kafka
 		
 		final String topic_name = cds.generateTopicName(test_bucket.full_name(), Optional.empty());
 		cds.produce(topic_name, "{\"test\":\"test1\"}");
 		_logger.info("******** Written to CDS: " + topic_name);
+		
+		//////////////////////////////////////////////////////
+		//PHASE 5: CHECK OUTPUT DATA		
+		
+		// 5a: check ES index
 		
 		for (int i = 0; i < 60; ++i) {
 			Thread.sleep(1000L);
@@ -126,7 +134,7 @@ public class TestPassthroughTopology extends TestPassthroughBase {
 		assertEquals("Should be 1 object in the repo", 1L, crud_service.countObjects().get().intValue());		
 		assertEquals("Object should be test:test1", 1L, crud_service.countObjectsBySpec(CrudUtils.allOf().when("test", "test1")).get().intValue());		
 		
-		//PHASE5: CHECK IF ALSO WROTE TO OUTPUT QUEUE
+		// 5b: check kafka queue
 		
 		Iterator<String> consumer = cds.consumeAs(end_queue_topic, Optional.empty());
 		int message_count = 0;
