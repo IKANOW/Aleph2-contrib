@@ -32,7 +32,6 @@ import com.ikanow.aleph2.analytics.hadoop.assets.Aleph2MultiInputFormatBuilder;
 import com.ikanow.aleph2.analytics.hadoop.assets.BatchEnrichmentJob;
 import com.ikanow.aleph2.analytics.hadoop.assets.BeFileInputFormat;
 import com.ikanow.aleph2.analytics.hadoop.assets.BeFileOutputFormat;
-import com.ikanow.aleph2.analytics.hadoop.data_model.BeJobBean;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobService;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopAnalyticTechnologyUtils;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
@@ -55,8 +54,6 @@ public class BeJobLauncher implements IBeJobService{
 	protected Configuration _configuration;
 	protected GlobalPropertiesBean _globals = null;
 
-	protected BeJobLoader _beJobLoader;
-
 	protected String _yarnConfig = null;
 
 	protected BatchEnrichmentContext _batchEnrichmentContext;
@@ -67,9 +64,8 @@ public class BeJobLauncher implements IBeJobService{
 	 * @param batchEnrichmentContext
 	 */
 	@Inject
-	public BeJobLauncher(GlobalPropertiesBean globals, BeJobLoader beJobLoader, BatchEnrichmentContext batchEnrichmentContext) {
+	public BeJobLauncher(GlobalPropertiesBean globals, BatchEnrichmentContext batchEnrichmentContext) {
 		_globals = globals;	
-		this._beJobLoader = beJobLoader;
 		this._batchEnrichmentContext = batchEnrichmentContext;
 	}
 	
@@ -96,25 +92,23 @@ public class BeJobLauncher implements IBeJobService{
 		//(not currently used, but has proven useful in the past)
 		
 		try {
-			final BeJobBean beJob = _beJobLoader.loadBeJob(bucket, "TODO");		
-
 			final String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
 		    config.set(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE, contextSignature);
 			
 		    final Aleph2MultiInputFormatBuilder inputBuilder = new Aleph2MultiInputFormatBuilder();
 
 		    // All the hadoop paths, can put into a single format
-		    
+
 			final List<String> all_hdfs_paths = 
 					Optionals.ofNullable(_batchEnrichmentContext.getJob().inputs()).stream()
 						.flatMap(input -> _batchEnrichmentContext.getAnalyticsContext().getInputPaths(Optional.of(bucket), _batchEnrichmentContext.getJob(), input).stream())
 						.collect(Collectors.toList());
 					;
-		    
+					
 			if (!all_hdfs_paths.isEmpty()) {
 			    final Job inputJob = Job.getInstance(config);
 			    inputJob.setInputFormatClass(BeFileInputFormat.class);				
-				all_hdfs_paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(beJob.getBucketInputPath()))));
+				all_hdfs_paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(path))));
 				inputBuilder.addInput(UuidUtils.get().getRandomUuid(), inputJob);
 			}
 					

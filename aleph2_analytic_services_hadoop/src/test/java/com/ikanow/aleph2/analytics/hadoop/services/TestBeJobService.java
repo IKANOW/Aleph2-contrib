@@ -36,13 +36,13 @@ import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher;
-import com.ikanow.aleph2.analytics.hadoop.services.BeJobLoader;
 import com.ikanow.aleph2.core.shared.utils.DirUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
@@ -92,10 +92,17 @@ public class TestBeJobService {
 
 	@Test
 	public void testBeJobService_simple() throws Exception{
+		final AnalyticThreadJobInputBean test_analytic_input = 
+				BeanTemplateUtils.build(AnalyticThreadJobInputBean.class)
+					.with(AnalyticThreadJobInputBean::data_service, "batch")
+					.with(AnalyticThreadJobInputBean::resource_name_or_id, "")
+				.done().get();
+		
 		// Set passthrough topology
 		final AnalyticThreadJobBean test_analytic = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
 				.with(AnalyticThreadJobBean::name, "simplejob")
 				.with(AnalyticThreadJobBean::module_name_or_id, "_module_test")
+				.with(AnalyticThreadJobBean::inputs, Arrays.asList(test_analytic_input))
 			.done().get();
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
@@ -128,10 +135,18 @@ public class TestBeJobService {
 	
 	@Test
 	public void testBeJobService_multiStage() throws Exception{
+		
+		final AnalyticThreadJobInputBean test_analytic_input = 
+				BeanTemplateUtils.build(AnalyticThreadJobInputBean.class)
+					.with(AnalyticThreadJobInputBean::data_service, "batch")
+					.with(AnalyticThreadJobInputBean::resource_name_or_id, "")
+				.done().get();
+		
 		// Set passthrough topology
 		final AnalyticThreadJobBean test_analytic = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
 				.with(AnalyticThreadJobBean::name, "simplejob")
 				.with(AnalyticThreadJobBean::module_name_or_id, "_module_test")
+				.with(AnalyticThreadJobBean::inputs, Arrays.asList(test_analytic_input))
 			.done().get();
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
@@ -191,8 +206,8 @@ public class TestBeJobService {
 		
 		// Set up directory:
 		createFolderStructure(test_bucket);
-		assertTrue("File1 should exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.txt").exists());
-		assertTrue("File2 should exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.json").exists());
+		assertTrue("File1 should exist", new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.txt").exists());
+		assertTrue("File2 should exist", new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.json").exists());
 		// (Clear ES index)
 		final IDataWriteService<JsonNode> es_index = 
 				_service_context.getSearchIndexService().get().getDataService().get().getWritableDataService(JsonNode.class, test_bucket, Optional.empty(), Optional.empty()).get();
@@ -200,7 +215,7 @@ public class TestBeJobService {
 		Thread.sleep(1000L);
 		assertEquals(0, es_index.countObjects().get().intValue());
 		
-		final BeJobLauncher beJobService = new BeJobLauncher(_globals, new BeJobLoader(batch_context), batch_context);		
+		final BeJobLauncher beJobService = new BeJobLauncher(_globals, batch_context);		
 
 		final Validation<String, Job> result = beJobService.runEnhancementJob(test_bucket);
 		
@@ -221,8 +236,8 @@ public class TestBeJobService {
 		
 		// Check the processed  file has vanished
 		
-		assertFalse("File1 shouldn't exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.txt").exists());
-		assertFalse("File2 shouldn't exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.json").exists());
+		assertFalse("File1 shouldn't exist", new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.txt").exists());
+		assertFalse("File2 shouldn't exist", new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.json").exists());
 		
 		// Check the object got written into ES
 		for (int ii = 0; ii < 12; ++ii) {
@@ -233,19 +248,19 @@ public class TestBeJobService {
 		}			
 		assertEquals(2, es_index.countObjects().get().intValue());			
 		
-		String[] subpaths = new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW).list();
+		String[] subpaths = new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW).list();
 		//(note all lengths are *2 because of .crc file)
 		if (expect_archive) {
 			if (null == subpaths) {
-				fail("No subpaths of: " + new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW));
+				fail("No subpaths of: " + new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW));
 			}
 			else if (2 == subpaths.length) {
 				//TODO (ALEPH-12): add check for files
 			}
 			else {
 				assertEquals(4, subpaths.length);
-				assertTrue("File1 should exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW + "bucket1data.txt").exists());
-				assertTrue("File2 should exist", new File(_globals.distributed_root_dir()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW + "bucket1data.json").exists());
+				assertTrue("File1 should exist", new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW + "bucket1data.txt").exists());
+				assertTrue("File2 should exist", new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW + "bucket1data.json").exists());
 			}
 		}
 		else {
@@ -260,13 +275,13 @@ public class TestBeJobService {
 	protected void createFolderStructure(final DataBucketBean bucket){
 		// create folder structure if it does not exist for testing.		
 		final FileContext fileContext = _service_context.getStorageService().getUnderlyingPlatformDriver(FileContext.class,Optional.empty()).get();
-		logger.info("Root dir:"+_globals.distributed_root_dir());
-		final String bucketPath1 = _globals.distributed_root_dir() + bucket.full_name();
+		logger.info("Root dir:"+_service_context.getStorageService().getBucketRootPath());
+		final String bucketPath1 = _service_context.getStorageService().getBucketRootPath() + bucket.full_name();
 		FileUtils.deleteQuietly(new File(bucketPath1)); // (cleanse the dir to start with)
 		final String bucketReadyPath1 = bucketPath1+"/managed_bucket/import/ready";
 		DirUtils.createDirectory(fileContext,bucketReadyPath1);
-		DirUtils.createDirectory(fileContext,_globals.distributed_root_dir()+"/data/misc/bucket2/managed_bucket/import/ready");
-		DirUtils.createDirectory(fileContext,_globals.distributed_root_dir()+"/data/misc/bucket3/managed_bucket/import/ready");
+		DirUtils.createDirectory(fileContext,_service_context.getStorageService().getBucketRootPath()+"/data/misc/bucket2/managed_bucket/import/ready");
+		DirUtils.createDirectory(fileContext,_service_context.getStorageService().getBucketRootPath()+"/data/misc/bucket3/managed_bucket/import/ready");
 		StringBuffer sb = new StringBuffer();
 		sb.append("bucket1data\r\n");
 		DirUtils.createUTF8File(fileContext,bucketReadyPath1+"/bucket1data.txt", sb);

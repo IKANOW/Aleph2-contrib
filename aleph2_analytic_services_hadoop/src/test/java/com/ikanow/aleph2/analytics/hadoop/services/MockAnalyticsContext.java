@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -88,6 +89,9 @@ import fj.data.Either;
 public class MockAnalyticsContext implements IAnalyticsContext {
 	protected static final Logger _logger = LogManager.getLogger();	
 
+	protected static final EnumSet<MasterEnrichmentType> _streaming_types = EnumSet.of(MasterEnrichmentType.streaming, MasterEnrichmentType.streaming_and_batch);	
+	protected static final EnumSet<MasterEnrichmentType> _batch_types = EnumSet.of(MasterEnrichmentType.batch, MasterEnrichmentType.streaming_and_batch);		
+	
 	////////////////////////////////////////////////////////////////
 	
 	// CONSTRUCTION
@@ -458,7 +462,9 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 			final Optional<DataBucketBean> bucket, final AnalyticThreadJobBean job,
 			final AnalyticThreadJobInputBean job_input)
 	{	
-		// (Note this is just the bare bones required for Storm streaming enrichment testing, nothing more functional than that)
+		// THIS IS TAKEN FROM THE LEGIT ANALYTIC CONTEXT BUT WITH ALL THE AUTHENTICATION TAKEN OUT
+		
+		//To reiterate: (Note this is just the bare bones required for Storm streaming enrichment testing, nothing more functional than that)
 		final DataBucketBean my_bucket = bucket.orElseGet(() -> _mutable_state.bucket.get());
 				
 		final String topic = _distributed_services.generateTopicName(my_bucket.full_name(), Optional.empty());
@@ -469,12 +475,83 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 		return Arrays.asList(topic);
 	}
 	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#getInputPaths(java.util.Optional, com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean, com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputBean)
+	 */
 	@Override
 	public List<String> getInputPaths(
 			final Optional<DataBucketBean> bucket, 
 			final AnalyticThreadJobBean job,
 			final AnalyticThreadJobInputBean job_input) {
-		throw new RuntimeException("Not part of mock analytics context for Storm");
+
+		// THIS IS TAKEN FROM THE LEGIT ANALYTIC CONTEXT BUT WITH ALL THE AUTHENTICATION TAKEN OUT
+		
+		final DataBucketBean my_bucket = bucket.orElseGet(() -> _mutable_state.bucket.get());
+		
+		return Optional.of(job_input)
+				.filter(i -> null != i.data_service())
+				.filter(i -> "batch".equalsIgnoreCase(i.data_service()) || "storage_service".equalsIgnoreCase(i.data_service()))
+				.map(Lambdas.wrap_u(i -> {					
+					if ("batch".equalsIgnoreCase(i.data_service())) {
+						if (null != i.filter()) {
+							//(actually not sure if i ever plan to implement this?)
+							throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED) + ": input.filter");
+						}						
+						
+						final String[] bucket_subchannel = Lambdas.<String, String[]> wrap_u(s -> {
+							
+							// 1) If the resource starts with "/" then must point to an intermediate batch result of an external bucket
+							// 2) If the resource is a pointer then
+
+							if (s.startsWith("/")) { //1.*
+								if (s.endsWith(":")) {
+									return new String[] { s.substring(0, s.length() - 1), "" }; // (1.2a)
+								}
+								else {
+									final String[] b_sc = s.split(":");
+									if (1 == b_sc.length) {
+										return new String[] { my_bucket.full_name(), "" };
+									}
+									else {
+										return b_sc; //(1.1)
+									}
+								}
+							}
+							else { //2.*
+								return new String[] { my_bucket.full_name(), s };
+							}
+						})
+						.apply(Optional.ofNullable(i.resource_name_or_id()).orElse(""));
+
+						return Lambdas.get(() -> {
+							if (!bucket_subchannel[0].equals(my_bucket.full_name()) || !bucket_subchannel[1].isEmpty())
+							{
+								return Arrays.asList(_storage_service.getBucketRootPath() + bucket_subchannel[0] + IStorageService.TRANSIENT_DATA_SUFFIX + bucket_subchannel[1]);
+							}
+							else { // This is my input directory
+								return Arrays.asList(_storage_service.getBucketRootPath() + my_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX);
+							}
+						});
+					}
+					else { // storage service ... 3 options :raw, :json, :processed (defaults to :processed)
+						
+						final String bucket_name = i.resource_name_or_id().split(":")[0];
+						final String sub_service = 
+										Patterns.match(i.resource_name_or_id()).<String>andReturn()
+													.when(s -> s.endsWith(":raw"), __ -> "raw/")
+													.when(s -> s.endsWith(":json"), __ -> "json/")
+													.otherwise(__ -> "processed/");
+						
+						//TODO: ALEPH-12 enable time-based filtering
+						if (null != i.filter()) {
+							throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED) + ": input.filter");
+						}
+						final String suffix = "**/*";
+						return Arrays.asList(_storage_service.getBucketRootPath() + bucket_name + IStorageService.STORED_DATA_SUFFIX + sub_service + suffix);
+					}
+				}))
+				.orElse(Collections.emptyList())
+				;		
 	}
 
 	/* (non-Javadoc)

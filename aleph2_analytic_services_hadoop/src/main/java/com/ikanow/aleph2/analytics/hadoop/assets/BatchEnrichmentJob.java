@@ -61,7 +61,6 @@ import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ContextUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Tuples;
-import com.ikanow.aleph2.analytics.hadoop.data_model.BeJobBean;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
 
@@ -92,7 +91,6 @@ public class BatchEnrichmentJob{
 		protected BatchEnrichmentContext _enrichmentContext = null;
 
 		private int _batchSize = 100;
-		protected BeJobBean _beJob = null;
 		protected List<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> _ecMetadata = null;
 		
 		protected List<Tuple2<Long, IBatchRecord>> _batch = new ArrayList<Tuple2<Long, IBatchRecord>>();

@@ -34,8 +34,8 @@ public class MiniClusterBeJobLauncher extends BeJobLauncher {
     private MiniMRYarnCluster mrCluster;
     
 	@Inject 
-	public MiniClusterBeJobLauncher(GlobalPropertiesBean globals,BeJobLoader beJobLoader,BatchEnrichmentContext batchEnrichmentContext) {
-		super(globals,beJobLoader,batchEnrichmentContext);
+	public MiniClusterBeJobLauncher(GlobalPropertiesBean globals, BatchEnrichmentContext batchEnrichmentContext) {
+		super(globals, batchEnrichmentContext);
 	}
 
 

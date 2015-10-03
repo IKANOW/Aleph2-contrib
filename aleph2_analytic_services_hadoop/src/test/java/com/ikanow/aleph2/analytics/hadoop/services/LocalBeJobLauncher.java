@@ -25,7 +25,6 @@ import org.apache.logging.log4j.Logger;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher;
-import com.ikanow.aleph2.analytics.hadoop.services.BeJobLoader;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 
 public class LocalBeJobLauncher extends BeJobLauncher {
@@ -35,8 +34,8 @@ public class LocalBeJobLauncher extends BeJobLauncher {
 
     
 	@Inject 
-	public LocalBeJobLauncher(GlobalPropertiesBean globals,BeJobLoader beJobLoader, BatchEnrichmentContext batchEnrichmentContext) {
-		super(globals,beJobLoader,batchEnrichmentContext);
+	public LocalBeJobLauncher(GlobalPropertiesBean globals, BatchEnrichmentContext batchEnrichmentContext) {
+		super(globals, batchEnrichmentContext);
 	}
 
 
