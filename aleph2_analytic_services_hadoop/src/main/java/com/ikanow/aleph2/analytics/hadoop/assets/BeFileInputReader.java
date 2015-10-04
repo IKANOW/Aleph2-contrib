@@ -83,8 +83,10 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	protected Configuration _config;
 	protected int _currFile = 0;
 	protected int _numFiles = 1;
+	protected int _numRecords = 0;
+	protected int _maxRecords = Integer.MAX_VALUE;
 	
-	protected String _currrentFileName = null;
+	protected String _currentFileName = null;
 
 	private Tuple2<Long, IBatchRecord> _record;
 
@@ -115,6 +117,9 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		_config = context.getConfiguration();
 		_fileSplit = (CombineFileSplit) inputSplit;
 		_numFiles = _fileSplit.getNumPaths();
+		
+		_maxRecords = _config.getInt(BatchEnrichmentJob.BE_DEBUG_MAX_SIZE, Integer.MAX_VALUE);
+		
 		this.start =  new Date();
 		final String contextSignature = context.getConfiguration().get(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE);   
 		try {
@@ -134,6 +139,13 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	 */
 	@Override
 	public boolean nextKeyValue() throws IOException, InterruptedException {
+		_numRecords++;
+		if (_numRecords > _maxRecords) {
+			if (null != _inStream) {
+				_inStream.close();
+			}
+			return false;
+		}
 		if (_currFile >= _numFiles) {
 			return false;
 		}
@@ -157,9 +169,9 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 				}
 			}
 		}	 // instream = null		
-		this._currrentFileName = _fileSplit.getPath(_currFile).toString();
-		IParser parser = getParser(_currrentFileName);
-		_record = parser.getNextRecord(_currFile,_currrentFileName,_inStream);
+		this._currentFileName = _fileSplit.getPath(_currFile).toString();
+		IParser parser = getParser(_currentFileName);
+		_record = parser.getNextRecord(_currFile,_currentFileName,_inStream);
 		if (null == _record) { // Finished this file - are there any others?
 			archiveOrDeleteFile();
 			_currFile++;
@@ -266,7 +278,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	 */
 	@Override
 	public String getCurrentKey() throws IOException, InterruptedException {
-		return _currrentFileName;
+		return _currentFileName;
 	}
 
 	/* (non-Javadoc)

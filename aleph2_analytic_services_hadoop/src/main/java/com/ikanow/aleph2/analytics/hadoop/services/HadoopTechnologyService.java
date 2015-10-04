@@ -27,7 +27,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.Cluster;
 import org.apache.hadoop.mapreduce.Job;
 
-import com.ikanow.aleph2.analytics.hadoop.utils.HadoopAnalyticTechnologyUtils;
+import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyService;
@@ -53,10 +53,8 @@ import fj.data.Validation;
 /** Hadoop analytic technology module - provides the interface between Hadoop and Aleph2
  * @author Alex
  */
-public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologyService, IExtraDependencyLoader {
+public class HadoopTechnologyService implements IAnalyticsTechnologyService, IExtraDependencyLoader {
 
-	//TODO (ALEPH-12): i like the idea of doing a mini cluster vs cluster created from a module class
-	//TODO (ALEPH-12): for testing need the option
 	//TODO (ALEPH-12): split up into hadoop_dependencies like i did for storm
 	
 	protected SetOnce<Configuration> _config = new SetOnce<>();
@@ -69,7 +67,7 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 	public void onInit(IAnalyticsContext context) {
 		try {
 			if(!_config.isSet()){
-				_config.trySet(HadoopAnalyticTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties()));
+				_config.trySet(HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties()));
 			}
 		}
 		catch (Throwable t) {}
@@ -101,7 +99,7 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 			DataBucketBean new_analytic_bucket,
 			Collection<AnalyticThreadJobBean> jobs, IAnalyticsContext context,
 			boolean enabled) {
-		return CompletableFuture.completedFuture(HadoopAnalyticTechnologyUtils.validateJobs(new_analytic_bucket, jobs));
+		return CompletableFuture.completedFuture(HadoopTechnologyUtils.validateJobs(new_analytic_bucket, jobs));
 	}
 
 	/* (non-Javadoc)
@@ -113,7 +111,7 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 			DataBucketBean new_analytic_bucket,
 			Collection<AnalyticThreadJobBean> jobs, boolean is_enabled,
 			Optional<BucketDiffBean> diff, IAnalyticsContext context) {
-		return CompletableFuture.completedFuture(HadoopAnalyticTechnologyUtils.validateJobs(new_analytic_bucket, jobs));
+		return CompletableFuture.completedFuture(HadoopTechnologyUtils.validateJobs(new_analytic_bucket, jobs));
 	}
 
 	/* (non-Javadoc)
@@ -198,20 +196,45 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 	public CompletableFuture<BasicMessageBean> onTestThread(
 			DataBucketBean test_bucket, Collection<AnalyticThreadJobBean> jobs,
 			ProcessingTestSpecBean test_spec, IAnalyticsContext context) {
-		return CompletableFuture.completedFuture(HadoopAnalyticTechnologyUtils.validateJobs(test_bucket, jobs));
+		return CompletableFuture.completedFuture(HadoopTechnologyUtils.validateJobs(test_bucket, jobs));
 	}
 
 	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyModule#startAnalyticJob(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Collection, com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean, com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyModule#onTestThread(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Collection, com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean, com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext)
 	 */
-	@SuppressWarnings("unchecked")
 	@Override
 	public CompletableFuture<BasicMessageBean> startAnalyticJob(
 			DataBucketBean analytic_bucket,
 			Collection<AnalyticThreadJobBean> jobs,
 			AnalyticThreadJobBean job_to_start, IAnalyticsContext context)
 	{
-		//TODO: check if it's actually a batch enrichment first
+		return CompletableFuture.completedFuture(
+				startAnalyticJobOrTest(analytic_bucket, jobs, job_to_start, context, Optional.empty()).validation(
+						fail -> ErrorUtils.buildErrorMessage
+											(this.getClass().getName(), "startAnalyticJob", fail)
+						,
+						success -> ErrorUtils.buildSuccessMessage
+												(this.getClass().getName(), "startAnalyticJob", success.getJobID().toString())
+						));
+	}
+	
+	@SuppressWarnings("unchecked")
+	/**
+	 * @param analytic_bucket
+	 * @param jobs
+	 * @param job_to_start
+	 * @param context
+	 * @param test_spec
+	 * @return
+	 */
+	public Validation<String, Job> startAnalyticJobOrTest(
+			DataBucketBean analytic_bucket,
+			Collection<AnalyticThreadJobBean> jobs,
+			AnalyticThreadJobBean job_to_start, IAnalyticsContext context,
+			Optional<ProcessingTestSpecBean> test_spec
+			)
+	{
+		//TODO (ALEPH-12): check if it's actually a batch enrichment first
 		
 		final BatchEnrichmentContext wrapped_context = new BatchEnrichmentContext(context);
 		wrapped_context.setJob(job_to_start);
@@ -242,17 +265,9 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 		wrapped_context.setBucket(converted_bucket);
 
 		final BeJobLauncher beJobService = new BeJobLauncher(wrapped_context.getServiceContext().getGlobalProperties(), wrapped_context);
-		final Validation<String, Job> result = beJobService.runEnhancementJob(converted_bucket);
-		
-		// TODO Auto-generated method stub
-		
-		result.validation(
-				fail -> { return null; }
-				,
-				success -> { return null; }
-				);
-		
-		return null;
+		final Validation<String, Job> result = beJobService.runEnhancementJob(converted_bucket, test_spec);
+
+		return result;
 	}
 
 	/* (non-Javadoc)
@@ -323,9 +338,14 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 			AnalyticThreadJobBean job_to_test,
 			ProcessingTestSpecBean test_spec, IAnalyticsContext context)
 	{
-		// TODO Actually will want to set something up here to explicitly indicate that should run using the local controller?
-		// (or start a thread that will check completion much more rapidly)
-		return startAnalyticJob(analytic_bucket, jobs, job_to_test, context);
+		return CompletableFuture.completedFuture(
+				startAnalyticJobOrTest(analytic_bucket, jobs, job_to_test, context, Optional.of(test_spec)).validation(
+						fail -> ErrorUtils.buildErrorMessage
+											(this.getClass().getName(), "startAnalyticJobTest", fail)
+						,
+						success -> ErrorUtils.buildSuccessMessage
+												(this.getClass().getName(), "startAnalyticJobTest", success.getJobID().toString())
+						));
 	}
 
 	/* (non-Javadoc)
@@ -345,6 +365,7 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 					.findFirst()
 					.map(job_status -> {
 						//TODO (ALEPH-12): create useful info in the side channel beans ... eg if it's an error?
+						// (need to get the job first, then get more info)
 						return FutureUtils.createManagementFuture(
 											CompletableFuture.completedFuture(job_status.isJobComplete())
 											,

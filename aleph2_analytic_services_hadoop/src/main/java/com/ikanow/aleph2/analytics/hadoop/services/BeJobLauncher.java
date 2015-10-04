@@ -16,9 +16,9 @@
 package com.ikanow.aleph2.analytics.hadoop.services;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -33,13 +33,13 @@ import com.ikanow.aleph2.analytics.hadoop.assets.BatchEnrichmentJob;
 import com.ikanow.aleph2.analytics.hadoop.assets.BeFileInputFormat;
 import com.ikanow.aleph2.analytics.hadoop.assets.BeFileOutputFormat;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobService;
-import com.ikanow.aleph2.analytics.hadoop.utils.HadoopAnalyticTechnologyUtils;
+import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
+import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
-import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
 
 import fj.data.Validation;
@@ -49,6 +49,8 @@ import fj.data.Validation;
  */
 public class BeJobLauncher implements IBeJobService{
 
+	//TODO (ALEPH-12): sort out test spec
+	
 	private static final Logger logger = LogManager.getLogger(BeJobLauncher.class);
 
 	protected Configuration _configuration;
@@ -75,7 +77,7 @@ public class BeJobLauncher implements IBeJobService{
 	 */
 	public Configuration getHadoopConfig(){
 		if(_configuration == null){
-			_configuration = HadoopAnalyticTechnologyUtils.getHadoopConfig(_globals);
+			_configuration = HadoopTechnologyUtils.getHadoopConfig(_globals);
 		}
 		return _configuration;
 	}
@@ -84,7 +86,7 @@ public class BeJobLauncher implements IBeJobService{
 	 * @see com.ikanow.aleph2.analytics.hadoop.services.IBeJobService#runEnhancementJob(java.lang.String, java.lang.String, java.lang.String)
 	 */
 	@Override
-	public Validation<String, Job> runEnhancementJob(DataBucketBean bucket){
+	public Validation<String, Job> runEnhancementJob(final DataBucketBean bucket, final Optional<ProcessingTestSpecBean> testSpec){
 		
 		final Configuration config = getHadoopConfig();
 		
@@ -95,22 +97,28 @@ public class BeJobLauncher implements IBeJobService{
 			final String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
 		    config.set(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE, contextSignature);
 			
+		    final Optional<Long> debug_max = 
+		    		testSpec.flatMap(testSpecVals -> 
+		    							Optional.ofNullable(testSpecVals.requested_num_objects()));
+		    
+		    //then gets applied to all the inputs:
+		    debug_max.ifPresent(val -> config.set(BatchEnrichmentJob.BE_DEBUG_MAX_SIZE, val.toString()));
+		    
 		    final Aleph2MultiInputFormatBuilder inputBuilder = new Aleph2MultiInputFormatBuilder();
 
-		    // All the hadoop paths, can put into a single format
-
-			final List<String> all_hdfs_paths = 
-					Optionals.ofNullable(_batchEnrichmentContext.getJob().inputs()).stream()
-						.flatMap(input -> _batchEnrichmentContext.getAnalyticsContext().getInputPaths(Optional.of(bucket), _batchEnrichmentContext.getJob(), input).stream())
-						.collect(Collectors.toList());
+		    // Create a separate InputFormat for every input (makes testing life easier)
+		    
+			Optional.ofNullable(_batchEnrichmentContext.getJob().inputs())
+						.orElse(Collections.emptyList())
+					.stream()
+					.forEach(Lambdas.wrap_consumer_u(input -> {
+						final List<String> paths = _batchEnrichmentContext.getAnalyticsContext().getInputPaths(Optional.of(bucket), _batchEnrichmentContext.getJob(), input);
+					    final Job inputJob = Job.getInstance(config);
+					    inputJob.setInputFormatClass(BeFileInputFormat.class);				
+						paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(path))));
+						inputBuilder.addInput(UuidUtils.get().getRandomUuid(), inputJob);
+					}));
 					;
-					
-			if (!all_hdfs_paths.isEmpty()) {
-			    final Job inputJob = Job.getInstance(config);
-			    inputJob.setInputFormatClass(BeFileInputFormat.class);				
-				all_hdfs_paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(path))));
-				inputBuilder.addInput(UuidUtils.get().getRandomUuid(), inputJob);
-			}
 					
 			// (ALEPH-12): other input format types
 			

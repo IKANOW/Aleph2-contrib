@@ -15,9 +15,12 @@
 ******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.data_model;
 
+import java.util.Optional;
+
 import org.apache.hadoop.mapreduce.Job;
 
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 
 import fj.data.Validation;
 
@@ -32,5 +35,5 @@ public interface IBeJobService {
 	 * @param config_element - the name of the config element
 	 * @return
 	 */
-	Validation<String, Job> runEnhancementJob(DataBucketBean bucket);
+	Validation<String, Job> runEnhancementJob(DataBucketBean bucket, final Optional<ProcessingTestSpecBean> testSpec);
 }

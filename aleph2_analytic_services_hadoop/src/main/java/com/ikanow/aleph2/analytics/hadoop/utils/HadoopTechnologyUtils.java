@@ -32,7 +32,7 @@ import org.apache.hadoop.fs.Path;
 /** A collection of utilities for Hadoop related validation etc
  * @author Alex
  */
-public class HadoopAnalyticTechnologyUtils {
+public class HadoopTechnologyUtils {
 
 	/** Validate a single job for this analytic technology in the context of the bucket/other jobs
 	 * @param analytic_bucket - the bucket (just for context)
@@ -49,7 +49,7 @@ public class HadoopAnalyticTechnologyUtils {
 
 		final String message = res.stream().map(msg -> msg.message()).collect(Collectors.joining("\n"));
 		
-		return ErrorUtils.buildMessage(success, HadoopAnalyticTechnologyUtils.class, "validateJobs", message);
+		return ErrorUtils.buildMessage(success, HadoopTechnologyUtils.class, "validateJobs", message);
 	}
 	
 	/** Validate a single job for this analytic technology in the context of the bucket/other jobs

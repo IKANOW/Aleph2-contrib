@@ -74,6 +74,7 @@ public class BatchEnrichmentJob{
 
 	public static String BATCH_SIZE_PARAM = "aleph2.batch.batchSize";
 	public static String BE_CONTEXT_SIGNATURE = "aleph2.batch.beContextSignature";
+	public static String BE_DEBUG_MAX_SIZE = "aleph2.batch.debugMaxSize";
 
 	private static final Logger logger = LogManager.getLogger(BatchEnrichmentJob.class);
 	
