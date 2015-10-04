@@ -15,13 +15,20 @@
  ******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.services;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.mapreduce.Cluster;
+import org.apache.hadoop.mapreduce.Job;
+
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopAnalyticTechnologyUtils;
+import com.ikanow.aleph2.analytics.hadoop.utils.HadoopErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
@@ -29,25 +36,43 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadTriggerBean.AnalyticThreadComplexTriggerBean;
 import com.ikanow.aleph2.data_model.objects.data_import.BucketDiffBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.SetOnce;
+
+import fj.data.Collectors;
+import fj.data.Validation;
 
 /** Hadoop analytic technology module - provides the interface between Hadoop and Aleph2
  * @author Alex
  */
 public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologyService, IExtraDependencyLoader {
 
+	//TODO (ALEPH-12): i like the idea of doing a mini cluster vs cluster created from a module class
+	//TODO (ALEPH-12): for testing need the option
+	//TODO (ALEPH-12): split up into hadoop_dependencies like i did for storm
+	
+	protected SetOnce<Configuration> _config = new SetOnce<>();
+	
 	@Override
 	public void youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules() {		
 	}
 
 	@Override
 	public void onInit(IAnalyticsContext context) {
-		//(nothing to do currently)		
-		
+		try {
+			if(!_config.isSet()){
+				_config.trySet(HadoopAnalyticTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties()));
+			}
+		}
+		catch (Throwable t) {}
 	}
 
 	/* (non-Javadoc)
@@ -56,9 +81,16 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 	@Override
 	public boolean canRunOnThisNode(DataBucketBean analytic_bucket,
 			Collection<AnalyticThreadJobBean> jobs, IAnalyticsContext context) {
-		// TODO (ALEPH-12): not sure, check if the files are present? v1 connects to the hadoop controller to check, but that might be too heavyweight here because
-		// currently it's a new interface every time (maybe i need to start thinking about changing that with a class + top level object cache)
-		return false;
+		
+		// Here's a simple check if someone's made a token effort to install Hadoop:
+		
+		try {
+			File hadoop_installed = new File(context.getServiceContext().getGlobalProperties().local_yarn_config_dir() + File.separator + "core-site.xml");
+			return hadoop_installed.exists();
+		}
+		catch (Throwable t) {
+			return false;
+		}
 	}
 
 	/* (non-Javadoc)
@@ -92,7 +124,7 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 			DataBucketBean to_delete_analytic_bucket,
 			Collection<AnalyticThreadJobBean> jobs, IAnalyticsContext context) {
 		// Nothing to do here
-		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onDeleteThread", "(Noted)"));
+		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onDeleteThread", ""));
 	}
 
 	/* (non-Javadoc)
@@ -123,7 +155,7 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 			Collection<AnalyticThreadComplexTriggerBean> matching_triggers,
 			IAnalyticsContext context) {
 		// Nothing to do here
-		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onThreadExecute", "(Noted)"));
+		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onThreadExecute", ""));
 	}
 
 	/* (non-Javadoc)
@@ -134,7 +166,7 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 			DataBucketBean completed_analytic_bucket,
 			Collection<AnalyticThreadJobBean> jobs, IAnalyticsContext context) {
 		// Nothing to do here
-		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onThreadComplete", "(Noted)"));
+		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onThreadComplete", ""));
 	}
 
 	/* (non-Javadoc)
@@ -145,7 +177,7 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 			DataBucketBean purged_analytic_bucket,
 			Collection<AnalyticThreadJobBean> jobs, IAnalyticsContext context) {
 		// Nothing to do here
-		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onPurge", "(Noted)"));
+		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onPurge", ""));
 	}
 
 	/* (non-Javadoc)
@@ -156,7 +188,7 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 			DataBucketBean polled_analytic_bucket,
 			Collection<AnalyticThreadJobBean> jobs, IAnalyticsContext context) {
 		// Nothing to do here
-		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onPeriodicPoll", "(Noted)"));
+		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onPeriodicPoll", ""));
 	}
 
 	/* (non-Javadoc)
@@ -172,13 +204,54 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyModule#startAnalyticJob(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Collection, com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean, com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext)
 	 */
+	@SuppressWarnings("unchecked")
 	@Override
 	public CompletableFuture<BasicMessageBean> startAnalyticJob(
 			DataBucketBean analytic_bucket,
 			Collection<AnalyticThreadJobBean> jobs,
 			AnalyticThreadJobBean job_to_start, IAnalyticsContext context)
 	{
+		//TODO: check if it's actually a batch enrichment first
+		
+		final BatchEnrichmentContext wrapped_context = new BatchEnrichmentContext(context);
+		wrapped_context.setJob(job_to_start);
+		
+		// Create a pretend bucket that has this job as the (sole) enrichment topology...
+		final DataBucketBean converted_bucket = 
+				(null != analytic_bucket.batch_enrichment_configs()) 
+				? analytic_bucket
+				: BeanTemplateUtils.clone(analytic_bucket)
+									.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.batch)
+									.with(DataBucketBean::batch_enrichment_configs, 
+											job_to_start.
+												config().entrySet().stream()
+												.filter(kv -> kv.getValue() instanceof Map)
+												.map(kv -> BeanTemplateUtils
+																.clone(
+																	BeanTemplateUtils
+																		.from((Map<String, Object>)kv.getValue(), EnrichmentControlMetadataBean.class)
+																		.get()
+																)
+																.with(EnrichmentControlMetadataBean::name, job_to_start.name() + "_" + kv.getKey())
+															.done()
+												)
+												.collect(Collectors.toList())
+											)
+									.done();
+		
+		wrapped_context.setBucket(converted_bucket);
+
+		final BeJobLauncher beJobService = new BeJobLauncher(wrapped_context.getServiceContext().getGlobalProperties(), wrapped_context);
+		final Validation<String, Job> result = beJobService.runEnhancementJob(converted_bucket);
+		
 		// TODO Auto-generated method stub
+		
+		result.validation(
+				fail -> { return null; }
+				,
+				success -> { return null; }
+				);
+		
 		return null;
 	}
 
@@ -191,8 +264,27 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 			Collection<AnalyticThreadJobBean> jobs,
 			AnalyticThreadJobBean job_to_stop, IAnalyticsContext context)
 	{
-		// TODO Auto-generated method stub
-		return null;
+		try {
+			final Cluster cluster = new Cluster(_config.get());
+			final String job_name = BucketUtils.getUniqueSignature(analytic_bucket.full_name(), Optional.ofNullable(job_to_stop.name()));
+			return Arrays.stream(cluster.getAllJobStatuses())
+					.filter(job_status -> job_status.getJobName().equals(job_name))
+					.findFirst()
+					.map(Lambdas.wrap_u(job_status -> {
+						final Job job = cluster.getJob(job_status.getJobID());
+						job.killJob();
+						return CompletableFuture.completedFuture(
+								ErrorUtils.buildSuccessMessage(this.getClass().getSimpleName(), "stopAnalyticJob", 
+										analytic_bucket.full_name() + ":" + job_to_stop.name()));
+					}))
+					.get() // (Will throw if not found falling through to catch below)
+					;		
+		}
+		catch (Throwable t) {
+			return CompletableFuture.completedFuture(
+					ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "stopAnalyticJob", 
+							HadoopErrorUtils.JOB_STOP_ERROR, job_to_stop.name(), analytic_bucket.full_name()));
+		}
 	}
 
 	/* (non-Javadoc)
@@ -244,8 +336,29 @@ public class HadoopAnalyticTechnologyServices implements IAnalyticsTechnologySer
 			DataBucketBean analytic_bucket,
 			Collection<AnalyticThreadJobBean> jobs,
 			AnalyticThreadJobBean job_to_check, IAnalyticsContext context) {
-		// TODO check the job id, which should be programmatically generated from the bucket
-		return null;
+		
+		try {
+			final Cluster cluster = new Cluster(_config.get());
+			final String job_name = BucketUtils.getUniqueSignature(analytic_bucket.full_name(), Optional.ofNullable(job_to_check.name()));
+			return Arrays.stream(cluster.getAllJobStatuses())
+					.filter(job_status -> job_status.getJobName().equals(job_name))
+					.findFirst()
+					.map(job_status -> {
+						//TODO (ALEPH-12): create useful info in the side channel beans ... eg if it's an error?
+						return FutureUtils.createManagementFuture(
+											CompletableFuture.completedFuture(job_status.isJobComplete())
+											,
+											CompletableFuture.completedFuture(Arrays.asList(
+												ErrorUtils.buildMessage(true, this.getClass().getSimpleName(), "checkAnalyticJobProgress", 
+														"TBD: more status")
+											)));
+					})
+					.get() // (Will throw if not found falling through to catch below)
+					;
+		}
+		catch (Throwable t) {
+			return FutureUtils.createManagementFuture(CompletableFuture.completedFuture(true));
+		}
 	}
 
 	/* (non-Javadoc)
