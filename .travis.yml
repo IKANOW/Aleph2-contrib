@@ -9,13 +9,14 @@ before_install:
 env:
  - TEST_DIR=aleph2_crud_service_mongodb
  - TEST_DIR=aleph2_crud_service_elasticsearch
+ - TEST_DIR=aleph2_hadoop_dependencies
  - TEST_DIR=aleph2_storage_service_hdfs
  - TEST_DIR=aleph2_management_db_service_mongodb
  - TEST_DIR=aleph2_search_index_service_elasticsearch
  - TEST_DIR=aleph2_security_service_ikanow_v1
  - TEST_DIR=aleph2_storm_dependencies
  - TEST_DIR=aleph2_analytic_services_storm
-
+ - TEST_DIR=aleph2_analytic_services_hadoop
 
 script: cd $TEST_DIR && mvn install -DskipTests=true && mvn test
 
