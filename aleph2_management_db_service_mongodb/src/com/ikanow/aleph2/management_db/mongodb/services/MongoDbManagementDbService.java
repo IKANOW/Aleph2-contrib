@@ -71,7 +71,8 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	public static final String DATA_BUCKET_STATUS_STORE = "aleph2_data_import.bucket_status";
 	public static final String RETRY_STORE_PREFIX = "aleph2_data_import.retry_store_";
 	public static final String BUCKET_DELETION_STORE = "aleph2_data_import.bucket_delete_store";	
-	public static final String BUCKET_TEST_STORE = "aleph2_data_import.bucket_test_store";	
+	public static final String BUCKET_TEST_STORE = "aleph2_data_import.bucket_test_store";
+	public static final String ANALYTICS_TRIGGER_STORE = "aleph2_data_analytics.trigger_store";
 	
 	final public static String BUCKET_STATE_HARVEST_DB_PREFIX = "aleph2_harvest_state";
 	final public static String BUCKET_STATE_ENRICH_DB_PREFIX = "aleph2_enrich_state";
@@ -90,6 +91,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	protected final SetOnce<ICrudService<?>> _bucket_deletion_q = new SetOnce<>();
 	protected final SetOnce<ICrudService<?>> _bucket_test_q = new SetOnce<>();
 	protected final SetOnce<ICrudService<?>> _bucket_retry_q = new SetOnce<>();
+	protected final SetOnce<ICrudService<?>> _analytics_triggers = new SetOnce<>();
 	protected final SetOnce<IManagementCrudService<DataBucketBean>> _bucket_crud = new SetOnce<>();
 	protected final SetOnce<IManagementCrudService<DataBucketStatusBean>> _bucket_status_crud = new SetOnce<>();
 	protected final SetOnce<IManagementCrudService<SharedLibraryBean>> _library_crud = new SetOnce<>();
@@ -430,6 +432,28 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 	}
 
 	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getAnalyticBucketTriggerState(java.lang.Class)
+	 */
+	@SuppressWarnings("unchecked")
+	@Override
+	public <T> ICrudService<T> getAnalyticBucketTriggerState(
+			Class<T> trigger_state_clazz) {
+		synchronized (this) {
+			if (!_analytics_triggers.isSet()) {
+				_analytics_triggers.set(
+						(ICrudService<T>) _crud_factory.getMongoDbCrudService(
+								trigger_state_clazz, String.class, 
+							_crud_factory.getMongoDbCollection(MongoDbManagementDbService.ANALYTICS_TRIGGER_STORE), 
+							Optional.empty(), Optional.empty(), Optional.empty()).readOnlyVersion(_read_only)
+						);
+			}
+		}
+		return (ICrudService<T>) _analytics_triggers.get();
+	}
+
+	
+	
+	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getStateDirectory(java.util.Optional)
 	 */
 	@Override
@@ -488,21 +512,29 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 		return new MongoDbManagementDbService(_crud_factory, _auth, _project, _properties, true);
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#purgeBucket(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Optional)
+	 */
 	@Override
 	public ManagementFuture<Boolean> purgeBucket(DataBucketBean to_purge,
 			Optional<Duration> in) {
 		throw new RuntimeException("This is implemented in the CoreManagementDbService not here");
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#testBucket(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean)
+	 */
 	@Override
 	public ManagementFuture<Boolean> testBucket(DataBucketBean to_test,
 			ProcessingTestSpecBean test_spec) {
 		throw new RuntimeException("This is implemented in the CoreManagementDbService not here");
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService#getSecuredDb(com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean)
+	 */
 	@Override
 	public IManagementDbService getSecuredDb(AuthorizationBean client_auth) {
-		// TODO verify if we don't want secured Wrapper here.
 		return new MongoDbManagementDbService(_crud_factory, _auth, _project, _properties, true);
 	}
 

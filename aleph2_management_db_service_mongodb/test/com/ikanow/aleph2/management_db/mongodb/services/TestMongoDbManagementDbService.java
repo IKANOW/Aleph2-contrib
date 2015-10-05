@@ -58,6 +58,9 @@ public class TestMongoDbManagementDbService {
 		assertEquals(MongoDbManagementDbService.BUCKET_DELETION_STORE,
 				management_db_service.getBucketDeletionQueue(String.class).getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
 		
+		assertEquals(MongoDbManagementDbService.ANALYTICS_TRIGGER_STORE,
+				management_db_service.getAnalyticBucketTriggerState(String.class).getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
+		
 		assertEquals(MongoDbManagementDbService.BUCKET_TEST_STORE,
 				management_db_service.getBucketTestQueue(String.class).getUnderlyingPlatformDriver(DBCollection.class, Optional.empty()).get().getFullName());
 		
