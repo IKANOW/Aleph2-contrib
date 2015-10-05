@@ -27,6 +27,9 @@ import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 
+/** NOT CURRENTLY USED - MIGHT GET PORTED ACROSS INTO A LocalHadoopController IF THAT MAKES SENSE LATER ON
+ * @author Alex
+ */
 public class LocalBeJobLauncher extends BeJobLauncher {
     @SuppressWarnings("unused")
 	private static final Logger logger = LogManager.getLogger(LocalBeJobLauncher.class);

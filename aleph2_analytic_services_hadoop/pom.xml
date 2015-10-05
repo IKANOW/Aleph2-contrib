@@ -133,24 +133,19 @@
   		<version>${aleph2.version}</version>
 		<scope>${aleph2.scope}</scope>
   	</dependency>
+ 	<dependency>
+  		<groupId>com.ikanow.aleph2</groupId>
+  		<artifactId>aleph2_hadoop_dependencies</artifactId>
+  		<version>${aleph2.version}</version>
+		<scope>${aleph2.scope}</scope>  		
+	</dependency>  	
 	<!-- Other external dependencies here -->
-  	<dependency>
-  		<groupId>org.apache.hadoop</groupId>
-  		<artifactId>hadoop-mapreduce-client-core</artifactId>
-  		<version>${aleph2.hadoop}</version>
-  	</dependency>
 	<dependency>
 		<groupId>org.apache.hadoop</groupId>
 		<artifactId>hadoop-minicluster</artifactId>
-  		<version>${aleph2.hadoop}</version>
+		<version>${aleph2.hadoop}</version>
 		<scope>test</scope>
-		</dependency>
-  	<dependency>
-  		<groupId>org.apache.hadoop</groupId>
-  		<artifactId>hadoop-client</artifactId>
-  		<version>${aleph2.hadoop}</version>
-  		<scope>provided</scope>
-  	</dependency>
+	</dependency>
 	<!-- Test deps -->
 	<dependency>
 		<groupId>com.ikanow.aleph2</groupId>

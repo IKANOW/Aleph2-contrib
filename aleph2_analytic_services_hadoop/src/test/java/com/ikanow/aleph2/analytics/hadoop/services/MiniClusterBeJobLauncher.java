@@ -28,6 +28,9 @@ import org.apache.logging.log4j.Logger;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 
+/** NOT CURRENTLY USED - MIGHT GET PORTED ACROSS INTO A SemiLocalHadoopController IF THAT MAKES SENSE LATER ON
+ * @author Alex
+ */
 public class MiniClusterBeJobLauncher extends BeJobLauncher {
     private static final Logger logger = LogManager.getLogger();
 
