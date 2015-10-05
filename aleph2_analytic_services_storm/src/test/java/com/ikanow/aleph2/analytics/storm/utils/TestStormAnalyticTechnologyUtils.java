@@ -204,7 +204,4 @@ public class TestStormAnalyticTechnologyUtils {
 			assertEquals("Correct error message 2: " + messages[1], ErrorUtils.get(ErrorUtils.TEMP_TRANSIENT_OUTPUTS_MUST_BE_STREAMING, "/test", "analytic_job_2", "batch"), messages[1]);
 		}
 	}
-
-	//TODO: (write!) then test the code to copy the streaming enrichment into the analytic thread
-
 }

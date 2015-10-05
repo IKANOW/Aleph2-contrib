@@ -50,10 +50,11 @@ import org.apache.hadoop.util.StringUtils;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
 
-/** 2.6.0 FileInputFormat but without breaking guava dependency
- * @author Alex
- */
 /** 
+ * NOTE: this is the vanilla 2.6 FileInputFormat but supporting Guava 18.0
+ * It has no test coverage therefore should be hand tested whenever modified
+ * In practice should never be modified and can be removed at 2.7
+ * 
  * A base class for file-based {@link InputFormat}s.
  * 
  * <p><code>FileInputFormat</code> is the base class for all file-based 

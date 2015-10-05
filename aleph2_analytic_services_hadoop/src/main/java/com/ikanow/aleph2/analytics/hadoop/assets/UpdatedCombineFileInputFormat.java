@@ -58,6 +58,10 @@ import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
 
 /**
+ * NOTE: this is the vanilla 2.6 CombineFileInputFormat but supporting Guava 18.0
+ * It has no test coverage therefore should be hand tested whenever modified
+ * In practice should never be modified and can be removed at 2.7
+ * 
  * An abstract {@link InputFormat} that returns {@link CombineFileSplit}'s in 
  * {@link InputFormat#getSplits(JobContext)} method. 
  * 

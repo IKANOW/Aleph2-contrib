@@ -19,7 +19,6 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -36,7 +35,6 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadTriggerBean.AnalyticThreadComplexTriggerBean;
 import com.ikanow.aleph2.data_model.objects.data_import.BucketDiffBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
-import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -47,7 +45,6 @@ import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 
-import fj.data.Collectors;
 import fj.data.Validation;
 
 /** Hadoop analytic technology module - provides the interface between Hadoop and Aleph2
@@ -218,7 +215,6 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 						));
 	}
 	
-	@SuppressWarnings("unchecked")
 	/**
 	 * @param analytic_bucket
 	 * @param jobs
@@ -244,22 +240,8 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 				(null != analytic_bucket.batch_enrichment_configs()) 
 				? analytic_bucket
 				: BeanTemplateUtils.clone(analytic_bucket)
-									.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.batch)
-									.with(DataBucketBean::batch_enrichment_configs, 
-											job_to_start.
-												config().entrySet().stream()
-												.filter(kv -> kv.getValue() instanceof Map)
-												.map(kv -> BeanTemplateUtils
-																.clone(
-																	BeanTemplateUtils
-																		.from((Map<String, Object>)kv.getValue(), EnrichmentControlMetadataBean.class)
-																		.get()
-																)
-																.with(EnrichmentControlMetadataBean::name, job_to_start.name() + "_" + kv.getKey())
-															.done()
-												)
-												.collect(Collectors.toList())
-											)
+										.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.batch)
+										.with(DataBucketBean::batch_enrichment_configs, HadoopTechnologyUtils.convertAnalyticJob(job_to_start.name(), job_to_start.config()))
 									.done();
 		
 		wrapped_context.setBucket(converted_bucket);
