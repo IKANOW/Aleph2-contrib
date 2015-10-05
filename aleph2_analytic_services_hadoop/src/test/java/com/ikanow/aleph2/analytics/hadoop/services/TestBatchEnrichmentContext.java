@@ -35,7 +35,6 @@ import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
@@ -46,7 +45,6 @@ import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbServic
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
@@ -60,7 +58,6 @@ import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ContextUtils;
-import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -605,20 +602,6 @@ public class TestBatchEnrichmentContext {
 		
 		final IEnrichmentModuleContext test_external1a = ContextUtils.getEnrichmentContext(signature);		
 
-		//(internal)
-//		ISearchIndexService check_index = test_context.getService(ISearchIndexService.class, Optional.empty()).get();
-		//(external)
-		final ISearchIndexService check_index = test_external1a.getServiceContext().getService(ISearchIndexService.class, Optional.empty()).get();		
-		final ICrudService<JsonNode> crud_check_index = 
-				check_index.getDataService()
-					.flatMap(s -> s.getWritableDataService(JsonNode.class, test_bucket, Optional.empty(), Optional.empty()))
-					.flatMap(IDataWriteService::getCrudService)
-					.get();
-		crud_check_index.deleteDatastore();
-		Thread.sleep(2000L); // (wait for datastore deletion to flush)
-		assertEquals(0, crud_check_index.countObjects().get().intValue());
-		
-		
 		final JsonNode jn1 = _mapper.createObjectNode().put("test", "test1");
 		final JsonNode jn2 = _mapper.createObjectNode().put("test", "test2");
 		
@@ -644,26 +627,11 @@ public class TestBatchEnrichmentContext {
 				Optional.of(_mapper.createObjectNode().put("extra", "test3_extra").put("test", "test3")), 
 				Optional.empty());
 		
-		for (int i = 0; i < 60; ++i) {
-			Thread.sleep(1000L);
-			if (crud_check_index.countObjects().get().intValue() >= 2) {
-				_logger.info("(Found objects after " + i + " seconds)");
-				break;
-			}
-		}
+		BatchEnrichmentContext test_peek_inside_external1 = (BatchEnrichmentContext)  test_external1a;
 		
-		//DEBUG
-		//System.out.println(crud_check_index.getUnderlyingPlatformDriver(ElasticsearchContext.class, Optional.empty()).get().indexContext().getReadableIndexList(Optional.empty()));
-		//System.out.println(crud_check_index.getUnderlyingPlatformDriver(ElasticsearchContext.class, Optional.empty()).get().typeContext().getReadableTypeList());
-		
-		assertEquals(3, crud_check_index.countObjects().get().intValue());
-		
-		/**/
-		crud_check_index.getObjectsBySpec(CrudUtils.allOf()).get().iterator().forEachRemaining(j -> System.out.println("??? + " + j.toString()));
-		
-		assertEquals("{\"test\":\"test3\",\"extra\":\"test3_extra\"}", ((ObjectNode)
-				crud_check_index.getObjectBySpec(CrudUtils.anyOf().when("test", "test3")).get().get()).remove(Arrays.asList("_id")).toString());
-		
+		assertEquals(3, test_peek_inside_external1.getOutputRecords().size());
+		test_peek_inside_external1.clearOutputRecords();
+		assertEquals(0, test_peek_inside_external1.getOutputRecords().size());
 	}
 
 	public static class TestBean {}	

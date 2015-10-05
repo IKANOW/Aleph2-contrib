@@ -259,6 +259,9 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	@Override
 	public void emitMutableObject(long id, ObjectNode mutated_json,
 			Optional<AnnotationBean> annotation) {
+		if (annotation.isPresent()) {
+			throw new RuntimeException(ErrorUtils.get(HadoopErrorUtils.NOT_YET_IMPLEMENTED, "annotations"));			
+		}
 		_mutable_records.add(Tuples._2T(_mutable_1up.incrementAndGet(), new BeFileInputReader.BatchRecord(mutated_json, null)));
 	}
 
