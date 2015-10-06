@@ -135,7 +135,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 												final IAnalyticsContext context)
 	{
 		StormControllerUtil.stopAllJobsForBucket(_storm_controller, to_delete_analytic_bucket); // (don't wait for this to finish)
-		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onDeleteThread", "(Noted)"));
+		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onDeleteThread", ""));
 	}
 
 	/* (non-Javadoc)
@@ -169,7 +169,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 												final IAnalyticsContext context)
 	{
 		// Nothing to do here
-		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onThreadExecute", "(Noted)"));
+		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onThreadExecute", ""));
 	}
 
 	/* (non-Javadoc)
@@ -182,7 +182,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 												final IAnalyticsContext context)
 	{
 		// Nothing to do here
-		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onThreadComplete", "(Noted)"));
+		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onThreadComplete", ""));
 	}
 
 	/* (non-Javadoc)
@@ -195,7 +195,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 												final IAnalyticsContext context)
 	{
 		// Nothing to do here
-		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onPurge", "(Noted)"));
+		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onPurge", ""));
 	}
 
 	/* (non-Javadoc)
@@ -208,7 +208,7 @@ public class StormAnalyticTechnologyService implements IAnalyticsTechnologyServi
 												final IAnalyticsContext context)
 	{
 		// Nothing to do here
-		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onPeriodicPoll", "(Noted)"));
+		return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this, "onPeriodicPoll", ""));
 	}
 
 	/* (non-Javadoc)

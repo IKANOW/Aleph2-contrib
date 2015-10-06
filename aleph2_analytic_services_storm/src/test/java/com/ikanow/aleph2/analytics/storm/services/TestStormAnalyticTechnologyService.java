@@ -65,7 +65,7 @@ public class TestStormAnalyticTechnologyService {
 		{
 			final CompletableFuture<BasicMessageBean> res = tech_service.onDeleteThread(test_bucket, jobs, test_context);
 			assertTrue("Trivial service returned true", res.get().success());
-			assertEquals("(Noted)", res.get().message());
+			assertEquals("", res.get().message());
 		}
 		{
 			final ManagementFuture<Boolean> res = tech_service.checkCustomTrigger(test_bucket, null, test_context);
@@ -78,17 +78,17 @@ public class TestStormAnalyticTechnologyService {
 		{
 			final CompletableFuture<BasicMessageBean> res = tech_service.onThreadExecute(test_bucket, jobs, Collections.emptyList(), test_context);
 			assertTrue("Trivial service returned true", res.get().success());
-			assertEquals("(Noted)", res.get().message());
+			assertEquals("", res.get().message());
 		}
 		{
 			final CompletableFuture<BasicMessageBean> res = tech_service.onPurge(test_bucket, jobs, test_context);
 			assertTrue("Trivial service returned true", res.get().success());
-			assertEquals("(Noted)", res.get().message());
+			assertEquals("", res.get().message());
 		}
 		{
 			final CompletableFuture<BasicMessageBean> res = tech_service.onPeriodicPoll(test_bucket, jobs, test_context);
 			assertTrue("Trivial service returned true", res.get().success());
-			assertEquals("(Noted)", res.get().message());
+			assertEquals("", res.get().message());
 		}
 		{
 			final CompletableFuture<BasicMessageBean> res = tech_service.onTestThread(test_bucket, jobs, null, test_context);

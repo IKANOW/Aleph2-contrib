@@ -279,7 +279,7 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 		}
 		catch (Throwable t) {
 			return CompletableFuture.completedFuture(
-					ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "stopAnalyticJob", 
+					ErrorUtils.buildSuccessMessage(this.getClass().getSimpleName(), "stopAnalyticJob", 
 							HadoopErrorUtils.JOB_STOP_ERROR, job_to_stop.name(), analytic_bucket.full_name()));
 		}
 	}
