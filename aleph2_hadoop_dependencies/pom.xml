@@ -136,5 +136,11 @@
 			<version>${aleph2.hadoop}</version>
 			<scope>${aleph2.scope}</scope>
 		</dependency>
+		<dependency>
+			<groupId>org.apache.hadoop</groupId>
+			<artifactId>hadoop-hdfs</artifactId>
+			<version>${aleph2.hadoop}</version>
+			<scope>provided</scope>
+		</dependency>		
 	</dependencies>
 </project>
