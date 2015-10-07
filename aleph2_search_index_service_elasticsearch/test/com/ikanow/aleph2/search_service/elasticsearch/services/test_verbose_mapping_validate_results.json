@@ -12,6 +12,10 @@
 	},    
     "mappings": {
         "_default_": {
+	       "_meta": {
+	       	   "bucket_path":"/test/validate/success",
+	           "secondary_buffer": ""
+	       },
             "_all": {
                 "enabled": false
             },

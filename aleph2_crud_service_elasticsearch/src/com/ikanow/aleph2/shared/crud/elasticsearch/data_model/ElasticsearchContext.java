@@ -275,6 +275,8 @@ public abstract class ElasticsearchContext {
 						                    .execute()								
 										,
 										stats -> {
+											//TODO (IKANOW/Aleph2#28): I think I need to check here if I've been switched?
+											
 											final int suffix_index = Lambdas.get(() -> {
 												final IndexStats index_stats = stats.getIndex(getName(base_index, last_suffix));
 												
@@ -363,9 +365,6 @@ public abstract class ElasticsearchContext {
 				 * @param index - the base index name
 				 * @param target_max_index_size_mb - the target max index size
 				 */
-				public FixedRwIndexContext(final String index, Optional<Long> target_max_index_size_mb) {
-					this(index, target_max_index_size_mb, true);
-				}
 				protected final String _index;
 				
 				/* (non-Javadoc)
@@ -416,9 +415,6 @@ public abstract class ElasticsearchContext {
 				 * @param time_field - the field to use, will just use "now" if left blank
 				 * @param target_max_index_size_mb - the target max index size
 				 */
-				public TimedRwIndexContext(final String index, final Optional<String> time_field, Optional<Long> target_max_index_size_mb) {
-					this(index, time_field, target_max_index_size_mb, true);					
-				}
 				final String _index;
 				final Optional<String> _time_field;
 				final Tuple2<String, String> _index_split;

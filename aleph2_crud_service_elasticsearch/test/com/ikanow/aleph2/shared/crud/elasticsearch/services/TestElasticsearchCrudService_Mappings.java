@@ -93,7 +93,7 @@ public class TestElasticsearchCrudService_Mappings {
 				
 		return getTestService(test_name_case, bean_clazz,
 				new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
-						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(test_name, Optional.empty()),
+						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(test_name, Optional.empty(), true),
 						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext("test"))
 				);
 	}
@@ -115,7 +115,7 @@ public class TestElasticsearchCrudService_Mappings {
 		{
 			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_1", TestBean.class,				
 					new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
-							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_1".toLowerCase(), Optional.empty()),
+							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_1".toLowerCase(), Optional.empty(), true),
 							new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext("type1")));
 	
 			TestBean test_long = new TestBean();
@@ -150,7 +150,7 @@ public class TestElasticsearchCrudService_Mappings {
 		{
 			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_2", TestBean.class,				
 					new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
-							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_2".toLowerCase(), Optional.empty()),
+							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_2".toLowerCase(), Optional.empty(), true),
 							new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), Optional.empty(), new HashSet<String>(Arrays.asList("fixed_field_ignore")))));
 	
 			TestBean test_long = new TestBean();
@@ -206,7 +206,7 @@ public class TestElasticsearchCrudService_Mappings {
 		{
 			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_3", TestBean.class,				
 					new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
-							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_3".toLowerCase(), Optional.empty()),
+							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_3".toLowerCase(), Optional.empty(), true),
 							new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), Optional.empty(), new HashSet<String>(Arrays.asList("test_map.test_map")))));
 	
 			TestBean test_long = new TestBean();
@@ -245,7 +245,7 @@ public class TestElasticsearchCrudService_Mappings {
 		{
 			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_multi1", TestBean.class,				
 					new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
-							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi1".toLowerCase(), Optional.empty()),
+							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi1".toLowerCase(), Optional.empty(), true),
 							new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext("type1")));
 	
 			// Set up the mapping
@@ -289,7 +289,7 @@ public class TestElasticsearchCrudService_Mappings {
 		
 		ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_multi2", TestBean.class,				
 				new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
-						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi2".toLowerCase(), Optional.empty()),
+						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi2".toLowerCase(), Optional.empty(), true),
 						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.of(Arrays.asList("type_1", "type_2", "type_3")), Optional.of("type_"), new HashSet<String>(Arrays.asList("test_random_field")))));		
 		{
 	
@@ -363,7 +363,7 @@ public class TestElasticsearchCrudService_Mappings {
 		{
 			ElasticsearchCrudService<TestBean> service_2 = getTestService("testMultipleMappingsPerIndex_multi3", TestBean.class,				
 				new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
-						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi3".toLowerCase(), Optional.empty()),
+						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi3".toLowerCase(), Optional.empty(), true),
 						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.of(Arrays.asList("type_1", "type_2", "type_3")), Optional.of("type_"), new HashSet<>(Arrays.asList("test_map.test_map")))));		
 	
 			// Set up the mapping
@@ -413,7 +413,7 @@ public class TestElasticsearchCrudService_Mappings {
 		{
 			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_multi1", TestBean.class,				
 					new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
-							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi1".toLowerCase(), Optional.empty()),
+							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi1".toLowerCase(), Optional.empty(), true),
 							new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext("type1")));
 	
 			@SuppressWarnings("unchecked")
@@ -462,7 +462,7 @@ public class TestElasticsearchCrudService_Mappings {
 		
 		ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_multi2", TestBean.class,				
 				new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
-						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi2".toLowerCase(), Optional.empty()),
+						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi2".toLowerCase(), Optional.empty(), true),
 						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.of(Arrays.asList("type_1", "type_2", "type_3")), Optional.of("type_"), new HashSet<String>(Arrays.asList("test_map")))));
 		//(not test_map.test_map)
 		
@@ -542,7 +542,7 @@ public class TestElasticsearchCrudService_Mappings {
 		{
 			ElasticsearchCrudService<TestBean> service_2 = getTestService("testMultipleMappingsPerIndex_multi3", TestBean.class,				
 				new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
-						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi3".toLowerCase(), Optional.empty()),
+						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi3".toLowerCase(), Optional.empty(), true),
 						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.of(Arrays.asList("type_1", "type_2", "type_3")), Optional.of("type_"), new HashSet<>(Arrays.asList("test_map.test_map")))));		
 	
 			final IBatchSubservice<TestBean> batch_service_2 = service_2.getBatchCrudSubservice().get();			

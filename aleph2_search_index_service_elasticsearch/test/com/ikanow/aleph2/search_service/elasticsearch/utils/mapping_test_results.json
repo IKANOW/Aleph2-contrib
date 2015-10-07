@@ -5,6 +5,10 @@
   },
   "mappings" : {
     "_default_" : {
+       "_meta": {
+       	   "bucket_path":"/test/full/mapping",
+           "secondary_buffer": ""
+       },
 	   "_all":{"enabled":false},
 	   "_source":{"enabled":true},
        "properties" : {

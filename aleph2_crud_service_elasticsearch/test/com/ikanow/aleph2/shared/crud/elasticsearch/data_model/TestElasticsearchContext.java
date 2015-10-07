@@ -64,13 +64,13 @@ public class TestElasticsearchContext {
 		// Some timestamp testing
 		{
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext index_context_2 = 
-					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test1_{yyyy}", Optional.of("@timestamp"), Optional.empty());
+					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test1_{yyyy}", Optional.of("@timestamp"), Optional.empty(), true);
 			
 			assertTrue("timestamp field present", index_context_2.timeField().isPresent());
 			assertEquals("@timestamp", index_context_2.timeField().get());
 			
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext index_context_3 = 
-					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test_2_{yyyy.MM}", Optional.empty(), Optional.empty());		
+					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test_2_{yyyy.MM}", Optional.empty(), Optional.empty(), true);		
 
 			assertFalse("no timestamp field", index_context_3.timeField().isPresent());
 			
@@ -110,22 +110,22 @@ public class TestElasticsearchContext {
 		
 		{
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext index_context_1 = 
-					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test1", Optional.empty());
+					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test1", Optional.empty(), true);
 			
 			assertEquals(Arrays.asList("test1"), index_context_1.getReadableIndexList(Optional.empty()));
 			
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext index_context_2 = 
-					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test2", Optional.of(-1L));
+					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test2", Optional.of(-1L), true);
 			
 			assertEquals(Arrays.asList("test2"), index_context_2.getReadableIndexList(Optional.empty()));
 			
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext index_context_3 = 
-					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test3", Optional.of(0L));
+					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test3", Optional.of(0L), true);
 			
 			assertEquals(Arrays.asList("test3*"), index_context_3.getReadableIndexList(Optional.empty()));
 			
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext index_context_4 = 
-					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test4", Optional.of(10L));
+					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test4", Optional.of(10L), true);
 			
 			assertEquals(Arrays.asList("test4*"), index_context_4.getReadableIndexList(Optional.empty()));
 		}

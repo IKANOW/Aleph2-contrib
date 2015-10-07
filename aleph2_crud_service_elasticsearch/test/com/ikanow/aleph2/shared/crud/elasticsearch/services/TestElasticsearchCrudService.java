@@ -135,7 +135,7 @@ public class TestElasticsearchCrudService {
 		final ElasticsearchCrudService<O> service = _factory.getElasticsearchCrudService(bean_clazz,
 				new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
 						create_aliases
-						?  new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(test_name, max_index_size)
+						?  new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(test_name, max_index_size, true)
 						: new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexSecondaryContext(test_name, max_index_size)
 						,
 						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext("test")),

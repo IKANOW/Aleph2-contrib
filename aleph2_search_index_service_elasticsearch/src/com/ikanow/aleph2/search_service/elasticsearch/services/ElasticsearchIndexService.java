@@ -117,6 +117,8 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		_config = configuration;
 	}
 		
+	//TODO: get _meta from default mapping
+	
 	/** Checks if an index/set-of-indexes spawned from a bucket
 	 * @param bucket
 	 */
@@ -226,9 +228,6 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		public <O> Optional<IDataWriteService<O>> getWritableDataService(
 				Class<O> clazz, DataBucketBean bucket,
 				Optional<String> options, Optional<String> secondary_buffer) {
-			if (secondary_buffer.isPresent()) {
-				throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "ElasticsearchDataService.getWritableDataService, secondary_buffer != Optional.empty()"));
-			}
 			// There's two different cases
 			// 1) Multi-bucket - equivalent to the other version of getCrudService
 			// 2) Single bucket - a read/write bucket
@@ -270,10 +269,10 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			// Index
 			final String index_base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, secondary_buffer);
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext index_context = time_period.validation(
-					fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name, target_max_index_size_mb)
+					fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name, target_max_index_size_mb, !secondary_buffer.isPresent())
 					, 
 					success -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext(index_base_name + ElasticsearchContextUtils.getIndexSuffix(success), 
-										Optional.ofNullable(schema_config.temporal_technology_override().time_field()), target_max_index_size_mb)
+										Optional.ofNullable(schema_config.temporal_technology_override().time_field()), target_max_index_size_mb, !secondary_buffer.isPresent())
 					);			
 			
 			final boolean auto_type = 
@@ -318,6 +317,12 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		 */
 		@Override
 		public Set<String> getSecondaryBuffers(DataBucketBean bucket) {
+			
+			//TODO: get all the indexes ... get the first mapping in each, convert to map via Jackson, get the _meta.secondary_buffer and dedup
+			//System.out.println("???? " + new String(gtr2.getIndexTemplates().get(0).getMappings().get("_default_").uncompressed()));
+			
+
+			
 			// TODO (#28): support secondary buffers
 			return Collections.emptySet();
 		}
@@ -335,6 +340,8 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 
 		@Override
 		public Optional<String> getPrimaryBufferName(DataBucketBean bucket) {
+			//TODO: get this by looking at the alias, getting the mapping, getting the meta as per getSecondaryBuffers
+			
 			// TODO (#28): support secondary buffers
 			return Optional.empty();
 		}

@@ -610,6 +610,7 @@ public class ElasticsearchIndexUtils {
 	 * @throws IOException 
 	 */
 	public static XContentBuilder getSearchServiceMapping(final DataBucketBean bucket,
+															final Optional<String> secondary_buffer,
 															final ElasticsearchIndexServiceConfigBean schema_config,
 															final Optional<XContentBuilder> to_embed,
 															final ObjectMapper mapper)
@@ -655,6 +656,14 @@ public class ElasticsearchIndexUtils {
 			}))
 			// Mappings and overrides
 			.andThen(Lambdas.wrap_u(json -> json.startObject("mappings").startObject(type_key)))
+			// Add the secondary buffer name to the metadata:
+			.andThen(Lambdas.wrap_u(json -> {
+				return json.startObject("_meta")
+							.field("bucket_path", bucket.full_name())
+							.field("secondary_buffer", secondary_buffer.orElse(""))
+						.endObject()
+						;
+			}))
 			// More mapping overrides
 			.andThen(Lambdas.wrap_u(json -> {
 				
@@ -718,7 +727,7 @@ public class ElasticsearchIndexUtils {
 			final ObjectMapper mapper, final String index_type)
 	{
 		return Lambdas.wrap_u(__ -> getTemplateMapping(bucket, secondary_buffer))
-				.andThen(json -> getSearchServiceMapping(bucket, schema_config, Optional.of(json), mapper))
+				.andThen(json -> getSearchServiceMapping(bucket, secondary_buffer, schema_config, Optional.of(json), mapper))
 				.andThen(json -> getColumnarMapping(bucket, Optional.of(json), field_lookups, enabled_not_analyzed, enabled_analyzed, default_not_analyzed, default_analyzed, mapper, index_type))
 				.andThen(Lambdas.wrap_u(json -> json.endObject().endObject())) // (close the objects from the search service mapping)
 				.andThen(json -> getTemporalMapping(bucket, Optional.of(json)))
