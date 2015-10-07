@@ -327,12 +327,17 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		 */
 		@Override
 		public CompletableFuture<BasicMessageBean> switchCrudServiceToPrimaryBuffer(
-				DataBucketBean bucket, Optional<String> secondary_buffer) {
+				DataBucketBean bucket, Optional<String> secondary_buffer, Optional<String> new_name_for_ex_primary) {
 			// TODO (#28): support secondary buffers
 			//TODO what does this actually do? 1) updates the aliases, 2) update the data location				
 			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", ErrorUtils.NOT_YET_IMPLEMENTED, "switchCrudServiceToPrimaryBuffer"));
 		}
 
+		@Override
+		public Optional<String> getPrimaryBufferName(DataBucketBean bucket) {
+			// TODO (#28): support secondary buffers
+			return Optional.empty();
+		}
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#handleAgeOutRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 		 */
@@ -465,7 +470,6 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 				return combined_future;
 			}
 		}
-		
 	}
 	private final Optional<IDataServiceProvider.IGenericDataService> _data_service = Optional.of(new ElasticsearchDataService());
 	

@@ -248,19 +248,19 @@ public class TestBeJobService {
 		}			
 		assertEquals(2, es_index.countObjects().get().intValue());			
 		
-		String[] subpaths = new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW).list();
+		String[] subpaths = new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW + IStorageService.NO_TIME_SUFFIX).list();
 		//(note all lengths are *2 because of .crc file)
 		if (expect_archive) {
 			if (null == subpaths) {
-				fail("No subpaths of: " + new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW));
+				fail("No subpaths of: " + new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW + IStorageService.NO_TIME_SUFFIX));
 			}
 			else if (2 == subpaths.length) {
 				//TODO (ALEPH-12): add check for files
 			}
 			else {
 				assertEquals(4, subpaths.length);
-				assertTrue("File1 should exist", new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW + "bucket1data.txt").exists());
-				assertTrue("File2 should exist", new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW + "bucket1data.json").exists());
+				assertTrue("File1 should exist", new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW + IStorageService.NO_TIME_SUFFIX + "bucket1data.txt").exists());
+				assertTrue("File2 should exist", new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW + IStorageService.NO_TIME_SUFFIX + "bucket1data.json").exists());
 			}
 		}
 		else {

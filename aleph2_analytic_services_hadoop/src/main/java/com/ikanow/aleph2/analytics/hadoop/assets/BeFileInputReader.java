@@ -244,11 +244,12 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 				.validation(fail -> "", success -> TimeUtils.getTimeBasedSuffix(success,Optional.of(ChronoUnit.MINUTES)));
 		
 		final String timeGroup = timeGroupingFormat.isEmpty()
-				? ""
+				? IStorageService.NO_TIME_SUFFIX
 				: (new SimpleDateFormat(timeGroupingFormat)).format(start);
+		
 		Path storedPath = Path.mergePaths(currentPath.getParent().getParent().getParent().getParent() // (ie up 3 to the root, ie managed_bucket==first subdir)
 								,
-								new Path(IStorageService.STORED_DATA_SUFFIX_RAW+timeGroup));
+								new Path(IStorageService.STORED_DATA_SUFFIX_RAW + timeGroup));
 
 		return storedPath;
 	}

@@ -50,6 +50,8 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
 
+import fj.data.Either;
+
 public class TestHadoopTechnologyService {
 
     private static final Logger logger = LogManager.getLogger(TestBeJobService.class);
@@ -147,8 +149,8 @@ public class TestHadoopTechnologyService {
 		test_service.clearAllDataForBucket(test_bucket);
 		assertEquals(0L, test_service.getNumRecordsInSearchIndex(test_bucket));
 		assertEquals(0L, test_service.numFilesInInputDirectory(test_bucket));
-		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_RAW, Optional.empty()));
-		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Optional.empty()));
+		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_RAW, Either.left(Optional.empty())));
+		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Either.left(Optional.empty())));
 		
 		final InputStream test_file = new ByteArrayInputStream("{\"testField\":\"test1\"}".getBytes(StandardCharsets.UTF_8));
 		test_service.addFileToInputDirectory(test_file, test_bucket);
@@ -176,8 +178,8 @@ public class TestHadoopTechnologyService {
 		// (file removed from input)
 		assertEquals(0L, test_service.numFilesInInputDirectory(test_bucket));
 		// (file added to output)
-		assertEquals(1L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_RAW, Optional.empty()));
-		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Optional.empty()));
+		assertEquals(1L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_RAW, Either.left(Optional.empty())));
+		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Either.left(Optional.empty())));
 	}
 	
 	@Test
@@ -237,8 +239,8 @@ public class TestHadoopTechnologyService {
 		test_service.clearAllDataForBucket(test_bucket);
 		assertEquals(0L, test_service.getNumRecordsInSearchIndex(test_bucket));
 		assertEquals(0L, test_service.numFilesInInputDirectory(test_bucket));
-		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_RAW, Optional.empty()));
-		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Optional.empty()));
+		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_RAW, Either.left(Optional.empty())));
+		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Either.left(Optional.empty())));
 		
 		final InputStream test_file = new ByteArrayInputStream("{\"testField\":\"test1\"}".getBytes(StandardCharsets.UTF_8));
 		test_service.addFileToInputDirectory(test_file, test_bucket);
@@ -266,8 +268,8 @@ public class TestHadoopTechnologyService {
 		// (file removed from input)
 		assertEquals(0L, test_service.numFilesInInputDirectory(test_bucket));
 		// (file added to output)
-		assertEquals(1L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_RAW, Optional.empty()));
-		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Optional.empty()));
+		assertEquals(1L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_RAW, Either.left(Optional.empty())));
+		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Either.left(Optional.empty())));
 	}
 
 	@Test

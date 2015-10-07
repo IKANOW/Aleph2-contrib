@@ -131,9 +131,9 @@ public class TestHdfsDataWriteService {
 				.with(DataBucketBean::full_name, "/test/static")
 			.done().get();
 
-		assertEquals("/root/test/static/managed_bucket/import/stored/raw/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.raw));
-		assertEquals("/root/test/static/managed_bucket/import/stored/json/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.json));
-		assertEquals("/root/test/static/managed_bucket/import/stored/processed/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.processed));
+		assertEquals("/root/test/static/managed_bucket/import/stored/raw/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.raw));
+		assertEquals("/root/test/static/managed_bucket/import/stored/json/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.json));
+		assertEquals("/root/test/static/managed_bucket/import/stored/processed/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.processed));
 		
 	}
 		
@@ -450,7 +450,7 @@ public class TestHdfsDataWriteService {
 			worker.new_segment();
 			
 			File f = new File(
-					(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/.spooldir/" + worker.getFilename())
+					(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/current/.spooldir/" + worker.getFilename())
 					.replace("/", File.separator)
 					);
 			assertTrue("File should exist: " + f, f.exists());
@@ -461,7 +461,7 @@ public class TestHdfsDataWriteService {
 			assertTrue("File should not have moved: " + f, f.exists());
 	
 			File f2 = new File(
-					(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/all_time/" + worker.getFilename())
+					(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/current/all_time/" + worker.getFilename())
 					.replace("/", File.separator)
 					);
 			assertTrue("File should not exist: " + f2, !f2.exists());
@@ -474,7 +474,7 @@ public class TestHdfsDataWriteService {
 			worker.new_segment();
 			
 			File f = new File(
-					(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/.spooldir/" + worker.getFilename())
+					(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/current/.spooldir/" + worker.getFilename())
 					.replace("/", File.separator)
 					);
 			assertTrue("File should exist: " + f, f.exists());
@@ -492,7 +492,7 @@ public class TestHdfsDataWriteService {
 			assertTrue("File should have moved: " + f, !f.exists());
 	
 			File f2 = new File(
-					(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/all_time/" + f.getName())
+					(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/current/all_time/" + f.getName())
 					.replace("/", File.separator)
 					);
 			assertTrue("File should exist: " + f2, f2.exists());
@@ -508,7 +508,7 @@ public class TestHdfsDataWriteService {
 			worker.new_segment();
 			
 			File f = new File(
-					(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/.spooldir/" + worker.getFilename())
+					(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/current/.spooldir/" + worker.getFilename())
 					.replace("/", File.separator)
 					);
 			assertTrue("File should exist: " + f, f.exists());
@@ -524,7 +524,7 @@ public class TestHdfsDataWriteService {
 			assertTrue("File should have moved: " + f, !f.exists());
 	
 			File f2 = new File(
-					(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/all_time/" + f.getName())
+					(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/current/all_time/" + f.getName())
 					.replace("/", File.separator)
 					);
 			assertTrue("File should exist: " + f2, f2.exists());
@@ -612,11 +612,11 @@ public class TestHdfsDataWriteService {
 		Thread.sleep(500L);
 		// Check that initially the files are stored locally
 		File init_dir = new File(
-				(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/.spooldir/")
+				(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/current/.spooldir/")
 				.replace("/", File.separator)
 				);
 		File final_dir = new File(
-				(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/all_time/")
+				(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/current/all_time/")
 				.replace("/", File.separator)
 				);
 		assertEquals("Needs to have 6 files, including 3x .crc: " + Arrays.toString(init_dir.list()), 6, init_dir.list().length); //*2 because CRC

@@ -42,6 +42,9 @@ import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 
+import fj.Unit;
+import fj.data.Either;
+
 /** Harness service for easily running Hadoop tests
  * @author alex
  */
@@ -111,10 +114,11 @@ public class MockHadoopTestingService {
 	 * @param date
 	 * @throws IOException
 	 */
-	public void addFileToBucketStorage(final InputStream local_stream, final DataBucketBean bucket, String subservice_suffix, Optional<Date> date) throws IOException {
+	public void addFileToBucketStorage(final InputStream local_stream, final DataBucketBean bucket, String subservice_suffix, Either<Optional<Date>, Unit> date) throws IOException {
 		final FileContext fileContext = _service_context.getStorageService().getUnderlyingPlatformDriver(FileContext.class,Optional.empty()).get();
 		final String bucketPath1 = _service_context.getStorageService().getBucketRootPath() + bucket.full_name();
-		final String bucketReadyPath1 = bucketPath1 + subservice_suffix + date.map(d -> DateTimeFormatter.ofPattern("yyyy-MM-dd").format(d.toInstant())).orElse("");
+		final String bucketReadyPath1 = bucketPath1 + subservice_suffix + date
+				.either(left -> left.map(d -> DateTimeFormatter.ofPattern("yyyy-MM-dd").format(d.toInstant())).orElse(IStorageService.NO_TIME_SUFFIX), right -> "");
 		DirUtils.createDirectory(fileContext,bucketReadyPath1);
 		DirUtils.createUTF8File(fileContext,bucketReadyPath1+"/data.json", new StringBuffer(IOUtils.toString(local_stream)));
 	}
@@ -125,7 +129,7 @@ public class MockHadoopTestingService {
 	 * @throws IOException
 	 */
 	public void addFileToInputDirectory(final InputStream local_stream, final DataBucketBean bucket) throws IOException {
-		addFileToBucketStorage(local_stream, bucket, IStorageService.TO_IMPORT_DATA_SUFFIX, Optional.empty());
+		addFileToBucketStorage(local_stream, bucket, IStorageService.TO_IMPORT_DATA_SUFFIX, Either.right(Unit.unit()));
 	}
 	
 	/** Adds the contents of the InputStream to a file in the bucket's transient batch job output
@@ -135,7 +139,7 @@ public class MockHadoopTestingService {
 	 * @throws IOException
 	 */
 	public void addFileToTransientJobOutput(final InputStream local_stream, final DataBucketBean bucket, String job) throws IOException {
-		addFileToBucketStorage(local_stream, bucket, IStorageService.TRANSIENT_DATA_SUFFIX + job, Optional.empty());
+		addFileToBucketStorage(local_stream, bucket, IStorageService.TRANSIENT_DATA_SUFFIX + job, Either.right(Unit.unit()));
 	}
 
 	/** Clears all data for the bucket
@@ -159,9 +163,10 @@ public class MockHadoopTestingService {
 	 * @param date
 	 * @return
 	 */
-	public int numFilesInBucketStorage(final DataBucketBean bucket, final String subservice_suffix, Optional<Date> date) {
+	public int numFilesInBucketStorage(final DataBucketBean bucket, final String subservice_suffix, Either<Optional<Date>, Unit> date) {
 		final String bucketPath1 = _service_context.getStorageService().getBucketRootPath() + bucket.full_name();
-		final String bucketReadyPath1 = bucketPath1 + subservice_suffix + date.map(d -> DateTimeFormatter.ofPattern("yyyy-MM-dd").format(d.toInstant())).orElse("");
+		final String bucketReadyPath1 = bucketPath1 + subservice_suffix + date 
+				.either(left -> left.map(d -> DateTimeFormatter.ofPattern("yyyy-MM-dd").format(d.toInstant())).orElse(IStorageService.NO_TIME_SUFFIX), right -> "");
 		
 		return Optional.ofNullable(new File(bucketReadyPath1).listFiles()).orElseGet(() -> new File[0]).length/2;
 			//(/2 because of .crc file)
@@ -172,7 +177,7 @@ public class MockHadoopTestingService {
 	 * @return
 	 */
 	public int numFilesInInputDirectory(final DataBucketBean bucket) {
-		return numFilesInBucketStorage(bucket, IStorageService.TO_IMPORT_DATA_SUFFIX, Optional.empty());
+		return numFilesInBucketStorage(bucket, IStorageService.TO_IMPORT_DATA_SUFFIX, Either.right(Unit.unit()));
 	}
 	
 	/** Returns the number of files in the designated bucket's transient batch job output
@@ -181,7 +186,7 @@ public class MockHadoopTestingService {
 	 * @return
 	 */
 	public int isFileInTransientJobOutput(final DataBucketBean bucket, final String job) {
-		return numFilesInBucketStorage(bucket, IStorageService.TRANSIENT_DATA_SUFFIX + job, Optional.empty());
+		return numFilesInBucketStorage(bucket, IStorageService.TRANSIENT_DATA_SUFFIX + job, Either.right(Unit.unit()));
 	}
 	
 	/** Returns the number of records in the bucket's storage service
