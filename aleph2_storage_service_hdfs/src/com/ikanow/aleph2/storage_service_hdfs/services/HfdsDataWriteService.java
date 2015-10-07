@@ -74,6 +74,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	protected final IStorageService.StorageStage _stage;
 	protected final FileContext _dfs;
 	protected final IStorageService _storage_service;
+	protected final String _buffer_name; 
 	
 	// (currently just share on of these across all users of this service, basically across the process/classloader)
 	protected final SetOnce<BatchHdfsWriteService> _writer = new SetOnce<>();
@@ -83,9 +84,10 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	/** User constructor
 	 * @param bucket
 	 */
-	public HfdsDataWriteService(final DataBucketBean bucket, final IStorageService.StorageStage stage, final IStorageService storage_service) {
+	public HfdsDataWriteService(final DataBucketBean bucket, final IStorageService.StorageStage stage, final IStorageService storage_service, final Optional<String> secondary_buffer) {
 		_bucket = bucket;
 		_stage = stage;
+		_buffer_name = secondary_buffer.orElse(IStorageService.PRIMARY_BUFFER_SUFFIX);
 		_storage_service = storage_service;
 		_dfs = storage_service.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 	}
@@ -149,7 +151,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 */
 	@Override
 	public IDataWriteService<JsonNode> getRawService() {
-		return new HfdsDataWriteService<JsonNode>(_bucket, _stage, _storage_service);
+		return new HfdsDataWriteService<JsonNode>(_bucket, _stage, _storage_service, Optional.of(_buffer_name));
 	}
 
 	/* (non-Javadoc)
@@ -414,7 +416,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				_state.curr_objects = 0;
 				_state.codec = getCanonicalCodec(_bucket.data_schema().storage_schema(), _stage); // (recheck the codec)			
 				
-				_state.curr_path = new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage) + "/" + SPOOL_DIR + "/" + getFilename());
+				_state.curr_path = new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _buffer_name) + "/" + SPOOL_DIR + "/" + getFilename());
 				try { _dfs.mkdir(_state.curr_path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {}
 				
 				_state.out = wrapOutputInCodec(_state.codec, _dfs.create(_state.curr_path, EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE)));
@@ -431,7 +433,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				_state.segment++;
 				
 				final Date now = new Date();
-				final Path path =  new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage) + "/" + getSuffix(now, _bucket, _stage) + "/" + _state.curr_path.getName());
+				final Path path =  new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _buffer_name) + "/" + getSuffix(now, _bucket, _stage) + "/" + _state.curr_path.getName());
 				try { _dfs.mkdir(path.getParent(), FsPermission.getDefault(), true); } catch (Exception e) {} // (fails if already exists?)
 				_dfs.rename(_state.curr_path, path);
 				try { _dfs.rename(getCrc(_state.curr_path), getCrc(path)); } catch (Exception e) {} // (don't care what the error is)				
@@ -524,11 +526,11 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 * @param stage
 	 * @return
 	 */
-	public static String getBasePath(final String root_path, final DataBucketBean bucket, final IStorageService.StorageStage stage) {
+	public static String getBasePath(final String root_path, final DataBucketBean bucket, final IStorageService.StorageStage stage, final String buffer) {
 		return Optional.of(Patterns.match().<String>andReturn()
-								.when(__ -> stage == IStorageService.StorageStage.raw, __ -> IStorageService.STORED_DATA_SUFFIX_RAW)
-								.when(__ -> stage == IStorageService.StorageStage.json, __ -> IStorageService.STORED_DATA_SUFFIX_JSON)
-								.when(__ -> stage == IStorageService.StorageStage.processed, __ -> IStorageService.STORED_DATA_SUFFIX_PROCESSED)
+								.when(__ -> stage == IStorageService.StorageStage.raw, __ -> IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + buffer)
+								.when(__ -> stage == IStorageService.StorageStage.json, __ -> IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + buffer)
+								.when(__ -> stage == IStorageService.StorageStage.processed, __ -> IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY  + buffer)
 								.otherwiseAssert()
 							)
 						.map(s -> root_path + bucket.full_name() + s)

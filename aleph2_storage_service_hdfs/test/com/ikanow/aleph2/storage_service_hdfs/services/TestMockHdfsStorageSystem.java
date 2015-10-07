@@ -425,6 +425,29 @@ public class TestMockHdfsStorageSystem {
 				);
 	}
 	
+	@Test
+	public void test_secondaryBuffers() {
+		// 0) Setup
+		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
+		
+		final GlobalPropertiesBean globals = BeanTemplateUtils.build(GlobalPropertiesBean.class)
+				.with(GlobalPropertiesBean::local_yarn_config_dir, temp_dir)
+				.with(GlobalPropertiesBean::distributed_root_dir, temp_dir)
+				.with(GlobalPropertiesBean::local_root_dir, temp_dir)
+				.with(GlobalPropertiesBean::distributed_root_dir, temp_dir)
+				.done().get();
+		
+		final MockHdfsStorageService storage_service = new MockHdfsStorageService(globals);
+		
+		// Some buckets
+		
+		// Get primary buffer doesn't work:
+		
+		assertFalse(storage_service.getDataService().get().getPrimaryBufferName(null).isPresent());		
+		
+		//TODO (Ikanow/Aleph2#28)
+	}
+	
 	/////////////////////////////////////////////////////////////////
 	
 	// UTILS

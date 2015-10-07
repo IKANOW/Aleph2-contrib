@@ -327,7 +327,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		 */
 		@Override
 		public CompletableFuture<BasicMessageBean> switchCrudServiceToPrimaryBuffer(
-				DataBucketBean bucket, Optional<String> secondary_buffer, Optional<String> new_name_for_ex_primary) {
+				DataBucketBean bucket, String secondary_buffer, Optional<String> new_name_for_ex_primary) {
 			// TODO (#28): support secondary buffers
 			//TODO what does this actually do? 1) updates the aliases, 2) update the data location				
 			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", ErrorUtils.NOT_YET_IMPLEMENTED, "switchCrudServiceToPrimaryBuffer"));

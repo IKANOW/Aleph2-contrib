@@ -29,7 +29,11 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import com.codepoetics.protonpack.StreamUtils;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
@@ -53,6 +57,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.Options.Rename;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.apache.hadoop.fs.RemoteIterator;
@@ -264,7 +270,7 @@ public class HdfsStorageService implements IStorageService {
 								.filter(substore -> 
 												Optional.ofNullable(substore.enabled()).orElse(true))
 								.map(__ -> 
-										new HfdsDataWriteService<O>(bucket, stage, HdfsStorageService.this))
+										new HfdsDataWriteService<O>(bucket, stage, HdfsStorageService.this, secondary_buffer))
 								;
 		}
 
@@ -284,8 +290,33 @@ public class HdfsStorageService implements IStorageService {
 		 */
 		@Override
 		public Collection<String> getSecondaryBufferList(DataBucketBean bucket) {
-			// TODO (#28): support secondary buffers
-			return Collections.emptyList();
+			final FileContext fc = HdfsStorageService.this.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
+			
+			final Function<Path, Stream<String>> getSubdirs = path -> {
+				try {
+					RemoteIterator<LocatedFileStatus> it = fc.util().listFiles(path, false);
+					return StreamUtils
+								.takeWhile(Stream.generate(() -> it), Lambdas.wrap_filter_u(ii -> ii.hasNext()))
+								.map(Lambdas.wrap_u(ii -> ii.next()))
+								.filter(fs -> fs.isDirectory())
+								.map(fs -> fs.getPath().getName())
+								.filter(name -> !name.equals("current"))
+								;
+				}
+				catch (Exception e) {
+					return Stream.empty();
+				}				
+			};
+			final Path raw_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY);
+			Stream<String> s1 = getSubdirs.apply(raw_top_level);
+			
+			final Path json_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY);
+			Stream<String> s2 = getSubdirs.apply(json_top_level);
+			
+			final Path px_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY);
+			Stream<String> s3 = getSubdirs.apply(px_top_level);
+			
+			return Stream.of(s1, s2, s3).flatMap(s -> s).collect(Collectors.toSet());
 		}
 
 		/* (non-Javadoc)
@@ -293,14 +324,62 @@ public class HdfsStorageService implements IStorageService {
 		 */
 		@Override
 		public CompletableFuture<BasicMessageBean> switchCrudServiceToPrimaryBuffer(
-				DataBucketBean bucket, Optional<String> secondary_buffer, final Optional<String> new_name_for_ex_primary) {
-			// TODO (#28): support secondary buffers
-			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("HdfsDataService", "switchCrudServiceToPrimaryBuffer", ErrorUtils.NOT_YET_IMPLEMENTED, "switchCrudServiceToPrimaryBuffer"));
+				DataBucketBean bucket, String secondary_buffer, final Optional<String> new_name_for_ex_primary)
+		{
+			final FileContext fc = HdfsStorageService.this.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
+			
+			// OK this is slightly unpleasant because of the lack of support for symlinks
+			
+			//  Basically we're going to remove or rename "current" and then move the secondary buffer across as quickly as we can (that's 2 atomic operations if you're counting!)
+			
+			final Path raw_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY);
+			final Path json_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY);
+			final Path px_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY);
+			
+			final Function<Path, Validation<Throwable, Path>> moveOrDeleteDir = path -> {
+				return new_name_for_ex_primary.map(Lambdas.wrap_e((name -> {
+					fc.rename(path.suffix(IStorageService.PRIMARY_BUFFER_SUFFIX), path.suffix(name), Rename.OVERWRITE);					
+					return path;
+				})))
+				.orElseGet(Lambdas.wrap_e(() -> { // just delete it
+					fc.delete(path, true);					
+					return path;
+				}));
+			};
+			final Function<Path, Validation<Throwable, Path>> moveToPrimary = Lambdas.wrap_e(path -> {
+
+				try {
+					fc.rename(path.suffix(secondary_buffer), path.suffix(IStorageService.PRIMARY_BUFFER_SUFFIX), Rename.OVERWRITE);
+				}
+				catch (FileNotFoundException e) { // this one's OK, just create the end dir
+					fc.mkdir(path.suffix(secondary_buffer), FsPermission.getDirDefault(), true);
+				}
+				return path;
+			});			
+			
+			final Validation<Throwable, Path> err1a = moveOrDeleteDir.apply(raw_top_level);
+			final Validation<Throwable, Path> err1b = moveToPrimary.apply(raw_top_level);
+			final Validation<Throwable, Path> err2a = moveOrDeleteDir.apply(json_top_level);
+			final Validation<Throwable, Path> err2b = moveToPrimary.apply(json_top_level);
+			final Validation<Throwable, Path> err3a = moveOrDeleteDir.apply(px_top_level);
+			final Validation<Throwable, Path> err3b = moveToPrimary.apply(px_top_level);
+			
+			final Stream<Throwable> errs = Stream.of(err1a, err1b, err2a, err2b, err3a, err3b)
+													.flatMap(err -> err.validation(fail -> Stream.of(fail), success -> Stream.empty()));
+			
+			final Stream<Throwable> critical_errs = Stream.of(err1b, err2b, err3b).flatMap(err -> err.validation(fail -> Stream.of(fail), success -> Stream.empty()));
+			
+			return CompletableFuture.completedFuture(ErrorUtils.buildMessage(
+					critical_errs.findFirst().isPresent(), this.getClass().getName(), "switchCrudServiceToPrimaryBuffer", 
+						errs.map(t -> ErrorUtils.getLongForm("{0}", t)).collect(Collectors.joining(";"))));
 		}
 
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getPrimaryBufferName(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
+		 */
 		@Override
 		public Optional<String> getPrimaryBufferName(DataBucketBean bucket) {
-			// TODO (#28): support secondary buffers
+			// We can't infer the primary buffer name for HDFS
 			return Optional.empty();
 		}		
 		
@@ -309,8 +388,6 @@ public class HdfsStorageService implements IStorageService {
 		 */
 		@Override
 		public CompletableFuture<BasicMessageBean> handleAgeOutRequest(final DataBucketBean bucket) {
-			
-			//TODO (ALEPH-40) make these 3 calls async
 			
 			final Optional<BasicMessageBean> raw_result =
 					Optionals.of(() -> bucket.data_schema().storage_schema().raw().exist_age_max())
