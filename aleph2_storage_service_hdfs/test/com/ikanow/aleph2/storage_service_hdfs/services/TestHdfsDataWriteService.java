@@ -368,6 +368,9 @@ public class TestHdfsDataWriteService {
 	}
 	
 	protected HfdsDataWriteService<TestBean> getWriter(String name) {
+		return getWriter(name, Optional.empty());
+	}
+	protected HfdsDataWriteService<TestBean> getWriter(String name, Optional<String> secondary) {
 		
 		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 		
@@ -393,7 +396,7 @@ public class TestHdfsDataWriteService {
 						.done().get())
 				.done().get();
 		
-		HfdsDataWriteService<TestBean> write_service = new HfdsDataWriteService<>(test_bucket, IStorageService.StorageStage.processed, storage_service, Optional.empty());
+		HfdsDataWriteService<TestBean> write_service = new HfdsDataWriteService<>(test_bucket, IStorageService.StorageStage.processed, storage_service, secondary);
 		
 		return write_service;
 	}
@@ -568,9 +571,17 @@ public class TestHdfsDataWriteService {
 	}	
 	
 	@Test
-	public void test_writerService_end2end() throws InterruptedException, ExecutionException {
+	public void test_writerService_end2end_primary() throws InterruptedException, ExecutionException {
+		test_writerService_end2end(Optional.empty());
+	}
+	@Test
+	public void test_writerService_end2end_secondary() throws InterruptedException, ExecutionException {
+		test_writerService_end2end(Optional.of("secondary_test"));
+	}
+	
+	public void test_writerService_end2end(Optional<String> secondary) throws InterruptedException, ExecutionException {
 		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;		
-		HfdsDataWriteService<TestBean> write_service = getWriter("/test/writer/end2end");
+		HfdsDataWriteService<TestBean> write_service = getWriter("/test/writer/end2end", secondary);
 
 		//(Tidy up)
 		try { FileUtils.deleteDirectory(new File(temp_dir + "/data/" + write_service._bucket.full_name())); } catch (Exception e) {}
@@ -615,11 +626,11 @@ public class TestHdfsDataWriteService {
 		Thread.sleep(500L);
 		// Check that initially the files are stored locally
 		File init_dir = new File(
-				(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/current/.spooldir/")
+				(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/"+secondary.orElse("current")+"/.spooldir/")
 				.replace("/", File.separator)
 				);
 		File final_dir = new File(
-				(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/current/all_time/")
+				(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/"+secondary.orElse("current")+"/all_time/")
 				.replace("/", File.separator)
 				);
 		assertEquals("Needs to have 6 files, including 3x .crc: " + Arrays.toString(init_dir.list()), 6, init_dir.list().length); //*2 because CRC

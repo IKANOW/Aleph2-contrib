@@ -57,7 +57,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Options.Rename;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RawLocalFileSystem;
@@ -294,7 +293,7 @@ public class HdfsStorageService implements IStorageService {
 			
 			final Function<Path, Stream<String>> getSubdirs = path -> {
 				try {
-					RemoteIterator<LocatedFileStatus> it = fc.util().listFiles(path, false);
+					RemoteIterator<FileStatus> it = fc.listStatus(path);
 					return StreamUtils
 								.takeWhile(Stream.generate(() -> it), Lambdas.wrap_filter_u(ii -> ii.hasNext()))
 								.map(Lambdas.wrap_u(ii -> ii.next()))
@@ -337,22 +336,25 @@ public class HdfsStorageService implements IStorageService {
 			final Path px_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY);
 			
 			final Function<Path, Validation<Throwable, Path>> moveOrDeleteDir = path -> {
+				final Path path_to_move = Path.mergePaths(path, new Path(IStorageService.PRIMARY_BUFFER_SUFFIX));
 				return new_name_for_ex_primary.map(Lambdas.wrap_e((name -> {
-					fc.rename(path.suffix(IStorageService.PRIMARY_BUFFER_SUFFIX), path.suffix(name), Rename.OVERWRITE);					
+					fc.rename(path_to_move, Path.mergePaths(path, new Path("/" + name)), Rename.OVERWRITE);					
 					return path;
 				})))
 				.orElseGet(Lambdas.wrap_e(() -> { // just delete it
-					fc.delete(path, true);					
+					fc.delete(path_to_move, true);					
 					return path;
 				}));
 			};
 			final Function<Path, Validation<Throwable, Path>> moveToPrimary = Lambdas.wrap_e(path -> {
 
+				final Path src_path = Path.mergePaths(path, new Path("/" + secondary_buffer));
+				final Path dst_path = Path.mergePaths(path, new Path(IStorageService.PRIMARY_BUFFER_SUFFIX));
 				try {
-					fc.rename(path.suffix(secondary_buffer), path.suffix(IStorageService.PRIMARY_BUFFER_SUFFIX), Rename.OVERWRITE);
+					fc.rename(src_path, dst_path, Rename.OVERWRITE);
 				}
 				catch (FileNotFoundException e) { // this one's OK, just create the end dir
-					fc.mkdir(path.suffix(secondary_buffer), FsPermission.getDirDefault(), true);
+					fc.mkdir(dst_path, FsPermission.getDirDefault(), true);
 				}
 				return path;
 			});			
@@ -370,7 +372,7 @@ public class HdfsStorageService implements IStorageService {
 			final Stream<Throwable> critical_errs = Stream.of(err1b, err2b, err3b).flatMap(err -> err.validation(fail -> Stream.of(fail), success -> Stream.empty()));
 			
 			return CompletableFuture.completedFuture(ErrorUtils.buildMessage(
-					critical_errs.findFirst().isPresent(), this.getClass().getName(), "switchCrudServiceToPrimaryBuffer", 
+					!critical_errs.findFirst().isPresent(), this.getClass().getName(), "switchCrudServiceToPrimaryBuffer", 
 						errs.map(t -> ErrorUtils.getLongForm("{0}", t)).collect(Collectors.joining(";"))));
 		}
 

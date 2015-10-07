@@ -18,10 +18,12 @@ package com.ikanow.aleph2.storage_service_hdfs.services;
 import static org.junit.Assert.*;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -34,10 +36,15 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.DirectoryFileFilter;
 import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.apache.hadoop.fs.AbstractFileSystem;
+import org.apache.hadoop.fs.CreateFlag;
+import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileContext;
+import org.apache.hadoop.fs.ParentNotDirectoryException;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RawLocalFileSystem;
+import org.apache.hadoop.fs.UnsupportedFileSystemException;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.security.AccessControlException;
 import org.apache.http.impl.cookie.DateUtils;
 import org.junit.Test;
 
@@ -426,7 +433,7 @@ public class TestMockHdfsStorageSystem {
 	}
 	
 	@Test
-	public void test_secondaryBuffers() {
+	public void test_basic_secondaryBuffers() throws AccessControlException, FileAlreadyExistsException, FileNotFoundException, ParentNotDirectoryException, UnsupportedFileSystemException, IllegalArgumentException, IOException {
 		// 0) Setup
 		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 		
@@ -441,21 +448,137 @@ public class TestMockHdfsStorageSystem {
 		
 		// Some buckets
 		
+		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class)
+				.with(DataBucketBean::full_name, "/test/storage/bucket")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+					.done().get())
+				.done().get();		
+		
+		setup_bucket(storage_service, bucket, Collections.emptyList());
+		
 		// Get primary buffer doesn't work:
 		
-		assertFalse(storage_service.getDataService().get().getPrimaryBufferName(null).isPresent());		
+		assertFalse(storage_service.getDataService().get().getPrimaryBufferName(bucket).isPresent());		
 		
-		//TODO (Ikanow/Aleph2#28)
+		// Add some secondary buffers and check they get picked up
+		
+		final FileContext dfs = storage_service.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
+		final String bucket_root = storage_service.getBucketRootPath() + "/" + bucket.full_name();		
+		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + "test1"), FsPermission.getDirDefault(), true);
+		//(skip the current dir once just to check it doesn't cause problems)
+		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "test2"), FsPermission.getDirDefault(), true);
+		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON), FsPermission.getDirDefault(), true);
+		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "test3"), FsPermission.getDirDefault(), true);
+		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED), FsPermission.getDirDefault(), true);
+		
+		assertEquals(Arrays.asList("test1", "test2", "test3"), storage_service.getDataService().get().getSecondaryBufferList(bucket).stream().sorted().collect(Collectors.toList()));
+
+		//(check dedups)
+		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "test1"), FsPermission.getDirDefault(), true);
+		
+		assertEquals(Arrays.asList("test1", "test2", "test3"), storage_service.getDataService().get().getSecondaryBufferList(bucket).stream().sorted().collect(Collectors.toList()));
+		
+		try {
+			dfs.delete(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "test3"), true);
+		}
+		catch (Exception e) {}
+		
+		assertEquals(Arrays.asList("test1", "test2"), storage_service.getDataService().get().getSecondaryBufferList(bucket).stream().sorted().collect(Collectors.toList()));
+		
+		try {
+			dfs.delete(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + "test1"), true);
+		}
+		catch (Exception e) {}
+		
+		assertEquals(Arrays.asList("test1", "test2"), storage_service.getDataService().get().getSecondaryBufferList(bucket).stream().sorted().collect(Collectors.toList()));
+	}
+	
+	@Test
+	public void test_switching_secondaryBuffers() throws AccessControlException, FileAlreadyExistsException, FileNotFoundException, ParentNotDirectoryException, UnsupportedFileSystemException, IllegalArgumentException, IOException, InterruptedException, ExecutionException {
+		// 0) Setup
+		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
+		
+		final GlobalPropertiesBean globals = BeanTemplateUtils.build(GlobalPropertiesBean.class)
+				.with(GlobalPropertiesBean::local_yarn_config_dir, temp_dir)
+				.with(GlobalPropertiesBean::distributed_root_dir, temp_dir)
+				.with(GlobalPropertiesBean::local_root_dir, temp_dir)
+				.with(GlobalPropertiesBean::distributed_root_dir, temp_dir)
+				.done().get();
+		
+		final MockHdfsStorageService storage_service = new MockHdfsStorageService(globals);
+		
+		// Some buckets
+		
+		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class)
+				.with(DataBucketBean::full_name, "/test/storage/bucket")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+					.done().get())
+				.done().get();		
+		
+		setup_bucket(storage_service, bucket, Collections.emptyList());
+		
+		final FileContext dfs = storage_service.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
+		final String bucket_root = storage_service.getBucketRootPath() + "/" + bucket.full_name();		
+		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + "test1"), FsPermission.getDirDefault(), true);
+		//(skip the current dir once just to check it doesn't cause problems)
+		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "test2"), FsPermission.getDirDefault(), true);
+		dfs.create(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "test2/test2.json"), EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE)).close();
+		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON), FsPermission.getDirDefault(), true);
+		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "test3"), FsPermission.getDirDefault(), true);
+		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED), FsPermission.getDirDefault(), true);
+		
+		// (delete the primary, copy test2 across)
+		BasicMessageBean res1 = storage_service.getDataService().get().switchCrudServiceToPrimaryBuffer(bucket, "test2", Optional.empty()).get();
+		System.out.println("(res1 = " + res1.message() + ")");
+		assertTrue("Request returns: " + res1.message(), res1.success());
+		
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON)));
+		assertTrue(doesFileExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON + "test2.json")));
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW)));
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED)));
+		assertFalse(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "test2")));
+		assertFalse(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + "test2")));
+		assertFalse(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "test2")));
+		
+		BasicMessageBean res2 = storage_service.getDataService().get().switchCrudServiceToPrimaryBuffer(bucket, "test3", Optional.of("ex_primary")).get();
+		System.out.println("(res2 = " + res2.message() + ")");
+		assertTrue("Request returns: " + res2.message(), res2.success());
+		
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "ex_primary")));
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + "ex_primary")));
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "ex_primary")));
+		assertTrue(doesFileExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "ex_primary/test2.json")));
 	}
 	
 	/////////////////////////////////////////////////////////////////
 	
 	// UTILS
 	
+	protected boolean doesDirExist(FileContext fc, Path p) {
+		try {
+			return fc.getFileStatus(p).isDirectory();
+		}
+		catch (Exception e) { return false; }
+	}
+	protected boolean doesFileExist(FileContext fc, Path p) {
+		try {
+			return fc.getFileStatus(p).isFile();
+		}
+		catch (Exception e) { return false; }
+	}
+	
 	protected void setup_bucket(MockHdfsStorageService storage_service, final DataBucketBean bucket, List<String> extra_suffixes) {
 		final FileContext dfs = storage_service.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
-		
+				
 		final String bucket_root = storage_service.getBucketRootPath() + "/" + bucket.full_name();		
+
+		//(first delete root path)
+		try {
+			dfs.delete(new Path(bucket_root), true);
+		}
+		catch (Exception e) {}
 		
 		Stream.concat(
 			Arrays.asList(
