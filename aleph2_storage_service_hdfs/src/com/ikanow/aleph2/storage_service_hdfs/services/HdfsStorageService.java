@@ -26,6 +26,7 @@ import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -288,7 +289,7 @@ public class HdfsStorageService implements IStorageService {
 		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getSecondaryBufferList(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 		 */
 		@Override
-		public Collection<String> getSecondaryBufferList(DataBucketBean bucket) {
+		public Set<String> getSecondaryBuffers(DataBucketBean bucket) {
 			final FileContext fc = HdfsStorageService.this.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 			
 			final Function<Path, Stream<String>> getSubdirs = path -> {

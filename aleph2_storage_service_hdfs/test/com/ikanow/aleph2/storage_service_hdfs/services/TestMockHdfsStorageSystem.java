@@ -472,26 +472,26 @@ public class TestMockHdfsStorageSystem {
 		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "test3"), FsPermission.getDirDefault(), true);
 		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED), FsPermission.getDirDefault(), true);
 		
-		assertEquals(Arrays.asList("test1", "test2", "test3"), storage_service.getDataService().get().getSecondaryBufferList(bucket).stream().sorted().collect(Collectors.toList()));
+		assertEquals(Arrays.asList("test1", "test2", "test3"), storage_service.getDataService().get().getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));
 
 		//(check dedups)
 		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "test1"), FsPermission.getDirDefault(), true);
 		
-		assertEquals(Arrays.asList("test1", "test2", "test3"), storage_service.getDataService().get().getSecondaryBufferList(bucket).stream().sorted().collect(Collectors.toList()));
+		assertEquals(Arrays.asList("test1", "test2", "test3"), storage_service.getDataService().get().getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));
 		
 		try {
 			dfs.delete(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "test3"), true);
 		}
 		catch (Exception e) {}
 		
-		assertEquals(Arrays.asList("test1", "test2"), storage_service.getDataService().get().getSecondaryBufferList(bucket).stream().sorted().collect(Collectors.toList()));
+		assertEquals(Arrays.asList("test1", "test2"), storage_service.getDataService().get().getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));
 		
 		try {
 			dfs.delete(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + "test1"), true);
 		}
 		catch (Exception e) {}
 		
-		assertEquals(Arrays.asList("test1", "test2"), storage_service.getDataService().get().getSecondaryBufferList(bucket).stream().sorted().collect(Collectors.toList()));
+		assertEquals(Arrays.asList("test1", "test2"), storage_service.getDataService().get().getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));
 	}
 	
 	@Test

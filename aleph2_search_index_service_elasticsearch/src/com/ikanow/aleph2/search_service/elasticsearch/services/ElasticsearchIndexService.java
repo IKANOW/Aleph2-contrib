@@ -137,7 +137,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 						!mappingsAreEquivalent(gtr.getIndexTemplates().get(0), user_mapping, _mapper))
 					{
 						// If no template, or it's changed, then update
-						final String base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+						final String base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, secondary_buffer);
 						_crud_factory.getClient().admin().indices().preparePutTemplate(base_name).setSource(mapping).execute().actionGet();
 						
 						_logger.info(ErrorUtils.get("Updated mapping for bucket={0}, base_index={1}", bucket.full_name(), base_name));
@@ -268,7 +268,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			final Optional<Long> target_max_index_size_mb = Optionals.of(() -> schema_config.search_technology_override().target_index_size_mb());
 			
 			// Index
-			final String index_base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+			final String index_base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, secondary_buffer);
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext index_context = time_period.validation(
 					fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name, target_max_index_size_mb)
 					, 
@@ -317,9 +317,9 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getSecondaryBufferList(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 		 */
 		@Override
-		public Collection<String> getSecondaryBufferList(DataBucketBean bucket) {
+		public Set<String> getSecondaryBuffers(DataBucketBean bucket) {
 			// TODO (#28): support secondary buffers
-			return Collections.emptyList();
+			return Collections.emptySet();
 		}
 
 		/* (non-Javadoc)
@@ -343,6 +343,13 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		 */
 		@Override
 		public CompletableFuture<BasicMessageBean> handleAgeOutRequest(final DataBucketBean bucket) {
+			// (Age out the secondary buffers)
+			_data_service.get().getSecondaryBuffers(bucket).stream().forEach(Lambdas.wrap_consumer_i(secondary -> handleAgeOutRequest(bucket, Optional.of(secondary))));
+			
+			// Only return the final value for this:
+			return handleAgeOutRequest(bucket, Optional.empty());
+		}
+		public CompletableFuture<BasicMessageBean> handleAgeOutRequest(final DataBucketBean bucket, Optional<String> secondaryBuffer) {
 
 			// Step 0: get the deletion time
 			
@@ -366,7 +373,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			
 			// Step 1: grab all the indexes
 			
-			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(bucket, secondaryBuffer);
 			final long lower_bound = new Date().getTime() - deletion_bound.get();
 			
 			//(we'll use the stats since a) the alias code didn't seem to work for some reason b) i'm calling that from other places so might be more likely to be cached somewhere?!)
@@ -449,7 +456,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					if (bucket_getting_deleted) {
 						final CompletableFuture<DeleteIndexTemplateResponse> cf = ElasticsearchFutureUtils.
 								<DeleteIndexTemplateResponse, DeleteIndexTemplateResponse>
-									wrap(_crud_factory.getClient().admin().indices().prepareDeleteTemplate(ElasticsearchIndexUtils.getBaseIndexName(bucket)).execute(),								
+									wrap(_crud_factory.getClient().admin().indices().prepareDeleteTemplate(ElasticsearchIndexUtils.getBaseIndexName(bucket, secondary_buffer)).execute(),								
 											x -> x);
 						
 						return data_deletion_future.thenCombine(cf, (Boolean b, DeleteIndexTemplateResponse ditr) -> {
@@ -542,7 +549,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 				}
 			}
 			
-			final String index_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+			final String index_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty());
 			boolean error = false; // (Warning mutable code)
 			final boolean is_verbose = is_verbose(schema);
 			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);

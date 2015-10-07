@@ -349,7 +349,7 @@ public class TestElasticsearchIndexService {
 		final String mapping_str = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_verbose_mapping_validate_results.json"), Charsets.UTF_8);
 		final JsonNode mapping_json = _mapper.readTree(mapping_str.getBytes());		
 		
-		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket); 
+		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()); 
 		
 		try {
 			_crud_factory.getClient().admin().indices().prepareDeleteTemplate(template_name).execute().actionGet();
@@ -491,7 +491,7 @@ public class TestElasticsearchIndexService {
 													.with("modified", time_setter.getTime())
 												.done().get();
 
-		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty());
 		
 		// Check starting from clean
 		
@@ -611,7 +611,7 @@ public class TestElasticsearchIndexService {
 													.with("modified", time_setter.getTime())
 												.done().get();
 
-		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty());
 		
 		// Check starting from clean
 		
@@ -736,7 +736,7 @@ public class TestElasticsearchIndexService {
 												)
 										.done().get();
 	
-		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket);
+		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty());
 		
 		test_endToEnd_autoTime(false);
 
@@ -816,7 +816,7 @@ public class TestElasticsearchIndexService {
 	public void test_handleDeleteOrPurge(final DataBucketBean to_handle, boolean delete_not_purge) throws InterruptedException, ExecutionException {
 		System.out.println("****** Checking delete/purge");
 		
-		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(to_handle);
+		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(to_handle, Optional.empty());
 		final ICrudService<JsonNode> index_service_crud = 
 				_index_service.getDataService()
 					.flatMap(s -> s.getWritableDataService(JsonNode.class, to_handle, Optional.empty(), Optional.empty()))

@@ -72,15 +72,15 @@ public class TestElasticsearchIndexUtils {
 		
 		// Index stuff
 		{
-			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1").done().get());
+			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1").done().get(), Optional.empty());
 			
 			assertEquals("test_1_1__514e7056b0d8", base_index);
 			
-			final String base_index2 = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1/another__test").done().get());
+			final String base_index2 = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1/another__test").done().get(), Optional.empty());
 			
 			assertEquals("test_1_1_another_test__f73d191c0424", base_index2);
 			
-			final String base_index3 = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1/another__test/VERY/long/string").done().get());
+			final String base_index3 = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1/another__test/VERY/long/string").done().get(), Optional.empty());
 			
 			assertEquals("test_1_1_long_string__2711e659d5a6", base_index3);
 		}

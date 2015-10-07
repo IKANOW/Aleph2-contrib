@@ -206,7 +206,7 @@ public class TestElasticsearchIndexConfigUtils {
 			
 			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);
 			
-			assertEquals("test_index_override", ElasticsearchIndexUtils.getBaseIndexName(bucket));
+			assertEquals("test_index_override", ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()));
 			assertEquals("test_index_override", schema_config.search_technology_override().index_name_override());
 		}
 	}
