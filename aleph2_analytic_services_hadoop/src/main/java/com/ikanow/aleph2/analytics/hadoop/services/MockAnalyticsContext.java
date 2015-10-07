@@ -568,7 +568,7 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	@Override
 	public List<String> getAnalyticsContextLibraries(
 			final Optional<Set<Tuple2<Class<? extends IUnderlyingService>, Optional<String>>>> services) {
-		throw new RuntimeException("Not part of mock analytics context for Storm");
+		return Collections.emptyList();
 	}
 
 	/* (non-Javadoc)

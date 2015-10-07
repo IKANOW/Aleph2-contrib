@@ -21,7 +21,6 @@ import java.io.InputStream;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -38,6 +37,7 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
@@ -49,13 +49,15 @@ public class MockHadoopTestingService {
 
 	protected final IServiceContext _service_context;
 
-	protected final HashSet<String> _cleared_dirs = new HashSet<>();
+	protected final MockHadoopTechnologyService _service = new MockHadoopTechnologyService();
+	protected final MockAnalyticsContext _analytics_context;
 	
 	/** User c'tor
 	 * @param service_context
 	 */
 	public MockHadoopTestingService(IServiceContext service_context) {
 		_service_context = service_context;
+		_analytics_context = new MockAnalyticsContext(_service_context);
 	}
 	
 	/** Submit a test bucket with exactly one analytic job
@@ -64,12 +66,7 @@ public class MockHadoopTestingService {
 	 * @throws ExecutionException 
 	 * @throws InterruptedException 
 	 */
-	public CompletableFuture<BasicMessageBean> testAnalyticModule(final DataBucketBean test_bucket) throws InterruptedException, ExecutionException {
-
-		// (Clear ES index)
-		final IDataWriteService<JsonNode> es_index = 
-				_service_context.getSearchIndexService().get().getDataService().get().getWritableDataService(JsonNode.class, test_bucket, Optional.empty(), Optional.empty()).get();
-		es_index.deleteDatastore().get();
+	public CompletableFuture<BasicMessageBean> testAnalyticModule(final DataBucketBean test_bucket, Optional<Integer> test_max_records) throws InterruptedException, ExecutionException {
 
 		final Optional<AnalyticThreadJobBean> job = Optionals.of(() -> test_bucket.analytic_thread().jobs().get(0));
 		if (!job.isPresent()) {
@@ -82,14 +79,29 @@ public class MockHadoopTestingService {
 		.done().get();
 								
 		// Context		
-		final MockAnalyticsContext test_analytics_context = new MockAnalyticsContext(_service_context);
-		test_analytics_context.setBucket(test_bucket);
-		test_analytics_context.setTechnologyConfig(library);
+		_analytics_context.setBucket(test_bucket);
+		_analytics_context.setTechnologyConfig(library);
 				
 		//PHASE 2: CREATE TOPOLOGY AND SUBMit
-		
-		final MockHadoopTechnologyService analytic_tech = new MockHadoopTechnologyService();
-		return analytic_tech.startAnalyticJob(test_bucket, Arrays.asList(job.get()), job.get(), test_analytics_context);
+		return test_max_records.isPresent()
+				?
+				_service.startAnalyticJobTest(
+							test_bucket, Arrays.asList(job.get()), job.get(), 
+							BeanTemplateUtils.build(ProcessingTestSpecBean.class)
+								.with(ProcessingTestSpecBean::requested_num_objects, (long) test_max_records.get())
+							.done().get(),
+							_analytics_context)
+				: 
+				_service.startAnalyticJob(test_bucket, Arrays.asList(job.get()), job.get(), _analytics_context);
+	}
+	
+	/** Did the job complete?
+	 * @param test_bucket
+	 * @return
+	 */
+	boolean isJobComplete(DataBucketBean test_bucket) {
+		final Optional<AnalyticThreadJobBean> job = Optionals.of(() -> test_bucket.analytic_thread().jobs().get(0));
+		return _service.checkAnalyticJobProgress(test_bucket, Arrays.asList(job.get()), job.get(), _analytics_context).join();
 	}
 	
 	/** Adds the contents of the InputStream to a file in the bucket's storage service
@@ -102,12 +114,6 @@ public class MockHadoopTestingService {
 	public void addFileToBucketStorage(final InputStream local_stream, final DataBucketBean bucket, String subservice_suffix, Optional<Date> date) throws IOException {
 		final FileContext fileContext = _service_context.getStorageService().getUnderlyingPlatformDriver(FileContext.class,Optional.empty()).get();
 		final String bucketPath1 = _service_context.getStorageService().getBucketRootPath() + bucket.full_name();
-		
-		if (!_cleared_dirs.contains(bucketPath1)) {
-			FileUtils.deleteQuietly(new File(bucketPath1)); // (cleanse the dir to start with)
-			_cleared_dirs.add(bucketPath1);
-		}
-		
 		final String bucketReadyPath1 = bucketPath1 + subservice_suffix + date.map(d -> DateTimeFormatter.ofPattern("yyyy-MM-dd").format(d.toInstant())).orElse("");
 		DirUtils.createDirectory(fileContext,bucketReadyPath1);
 		DirUtils.createUTF8File(fileContext,bucketReadyPath1+"/data.json", new StringBuffer(IOUtils.toString(local_stream)));
@@ -132,6 +138,21 @@ public class MockHadoopTestingService {
 		addFileToBucketStorage(local_stream, bucket, IStorageService.TRANSIENT_DATA_SUFFIX + job, Optional.empty());
 	}
 
+	/** Clears all data for the bucket
+	 * @param bucket
+	 * @throws ExecutionException 
+	 * @throws InterruptedException 
+	 */
+	public void clearAllDataForBucket(final DataBucketBean bucket) throws InterruptedException, ExecutionException {
+		// (Clear ES index)
+		final IDataWriteService<JsonNode> es_index = 
+				_service_context.getSearchIndexService().get().getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.empty()).get();
+		es_index.deleteDatastore().get();
+		
+		final String bucketPath1 = _service_context.getStorageService().getBucketRootPath() + bucket.full_name();
+		FileUtils.deleteQuietly(new File(bucketPath1)); // (cleanse the dir to start with)		
+	}
+	
 	/** Returns the number of files in the designated bucket's storage service
 	 * @param bucket
 	 * @param subservice_suffix
@@ -141,7 +162,9 @@ public class MockHadoopTestingService {
 	public int numFilesInBucketStorage(final DataBucketBean bucket, final String subservice_suffix, Optional<Date> date) {
 		final String bucketPath1 = _service_context.getStorageService().getBucketRootPath() + bucket.full_name();
 		final String bucketReadyPath1 = bucketPath1 + subservice_suffix + date.map(d -> DateTimeFormatter.ofPattern("yyyy-MM-dd").format(d.toInstant())).orElse("");
-		return Optional.ofNullable(new File(bucketReadyPath1).listFiles()).orElseGet(() -> new File[0]).length;
+		
+		return Optional.ofNullable(new File(bucketReadyPath1).listFiles()).orElseGet(() -> new File[0]).length/2;
+			//(/2 because of .crc file)
 	}
 
 	/** Returns the number of files in the designated bucket's batch input path

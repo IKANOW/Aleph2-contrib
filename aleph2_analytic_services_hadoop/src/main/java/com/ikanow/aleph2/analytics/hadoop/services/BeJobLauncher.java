@@ -16,11 +16,15 @@
 package com.ikanow.aleph2.analytics.hadoop.services;
 
 import java.io.IOException;
+import java.io.File;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileContext;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
@@ -34,12 +38,14 @@ import com.ikanow.aleph2.analytics.hadoop.assets.BeFileInputFormat;
 import com.ikanow.aleph2.analytics.hadoop.assets.BeFileOutputFormat;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobService;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
 
 import fj.data.Validation;
@@ -130,8 +136,10 @@ public class BeJobLauncher implements IBeJobService{
 		    Job job = Job.getInstance(config, jobName);
 		    job.setJarByClass(BatchEnrichmentJob.class);
 
-		    //TODO (ALEPH-12): set the classpath...
-
+		    // Set the classpath
+		    
+		    cacheJars(job, bucket, _batchEnrichmentContext.getAnalyticsContext());
+		    
 		    // (generic mapper - the actual code is run using the classes in the shared libraries)
 		    job.setMapperClass(BatchEnrichmentJob.BatchEnrichmentMapper.class);
 		    
@@ -157,6 +165,54 @@ public class BeJobLauncher implements IBeJobService{
 			Thread.currentThread().setContextClassLoader(currentClassloader);
 		}
 	     		
+	}
+	
+	/** Cache the system and user classpaths
+	 * @param job
+	 * @param context
+	 * @throws IOException 
+	 * @throws ExecutionException 
+	 * @throws InterruptedException 
+	 * @throws IllegalArgumentException 
+	 */
+	protected static void cacheJars(final Job job, final DataBucketBean bucket, final IAnalyticsContext context) throws IllegalArgumentException, InterruptedException, ExecutionException, IOException {
+	    final FileContext fc = context.getServiceContext().getStorageService().getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
+	    final String rootPath = context.getServiceContext().getStorageService().getRootPath();
+	    
+	    // Aleph2 libraries: need to cache them
+	    context
+	    	.getAnalyticsContextLibraries(Optional.empty())
+	    	.stream()
+	    	.map(f -> new File(f))
+	    	.map(f -> Tuples._2T(f, new Path(rootPath + "/" + f.getName())))
+	    	.map(Lambdas.wrap_u(f_p -> {
+	    		final FileStatus fs = Lambdas.get(() -> {
+		    		try {
+		    			return fc.getFileStatus(f_p._2());
+		    		}
+		    		catch (Exception e) { return null; }
+	    		});
+	    		if (null == fs) { //cache doesn't exist
+	    			// Local version
+	    			Path srcPath = FileContext.getLocalFSFileContext().makeQualified(new Path(f_p._1().toString()));
+	    			fc.util().copy(srcPath, f_p._2());
+	    		}
+	    		return f_p._2();
+	    	}))
+	    	.forEach(Lambdas.wrap_consumer_u(path -> job.addFileToClassPath(path)));
+	    	;
+	    
+	    // User libraries: this is slightly easier since one of the 2 keys
+	    // is the HDFS path (the other is the _id)
+	    context
+			.getAnalyticsLibraries(Optional.of(bucket), bucket.analytic_thread().jobs())
+			.get()
+			.entrySet()
+			.stream()
+			.map(kv -> kv.getKey())
+			.filter(path -> path.startsWith(rootPath))
+			.forEach(Lambdas.wrap_consumer_u(path -> job.addFileToClassPath(new Path(path))));
+			;	    		
 	}
 	
 	/** Launches the job

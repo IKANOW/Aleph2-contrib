@@ -205,7 +205,7 @@ public class BatchEnrichmentJob{
 					t3._2().clearOutputRecords();
 					t3._1().onObjectBatch(mutable_start.stream(), Optional.of(mutable_start.size()), Optional.empty());
 					mutable_start = t3._2().getOutputRecords();
-					
+	
 					if (!it.hasNext()) { // final stage output anything we have here
 						final IAnalyticsContext analytics_context = _enrichmentContext.getAnalyticsContext();
 						mutable_start.forEach(record ->

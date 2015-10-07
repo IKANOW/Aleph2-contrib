@@ -18,7 +18,6 @@ package com.ikanow.aleph2.analytics.hadoop.services;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -52,8 +51,6 @@ import fj.data.Validation;
  */
 public class HadoopTechnologyService implements IAnalyticsTechnologyService, IExtraDependencyLoader {
 
-	//TODO (ALEPH-12): split up into hadoop_dependencies like i did for storm
-	
 	protected SetOnce<Configuration> _config = new SetOnce<>();
 	
 	@Override
@@ -369,7 +366,7 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 	 */
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
-		return Collections.emptyList();
+		return Arrays.asList(this);
 	}
 
 	/* (non-Javadoc)
