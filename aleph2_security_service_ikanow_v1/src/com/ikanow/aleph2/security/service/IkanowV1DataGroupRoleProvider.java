@@ -183,7 +183,7 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 	private Set<String> convertPathtoPermissions(Set<String> bucketPaths) {
 		Set<String> bucketPathPermissions = new HashSet<String>();
 		for (String bucketPath : bucketPaths) {
-			String bucketPermission = bucketPath.replaceAll("/", ":");
+			String bucketPermission = bucketPath.replace("/", ":");
 			if(bucketPermission.startsWith(":")){
 				bucketPermission = bucketPermission.substring(1);
 			}
