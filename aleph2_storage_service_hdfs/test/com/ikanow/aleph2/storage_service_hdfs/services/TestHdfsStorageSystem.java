@@ -37,7 +37,7 @@ public class TestHdfsStorageSystem {
 			HdfsStorageService storageService = new HdfsStorageService(globals);
 			
 			assertEquals(globals.distributed_root_dir(), storageService.getRootPath());
-			assertEquals(1, storageService.getUnderlyingArtefacts().size());
+			assertEquals(2, storageService.getUnderlyingArtefacts().size());
 						
 			FileContext fs1 = storageService.getUnderlyingPlatformDriver(FileContext.class, Optional.<String>empty()).get();
 			assertNotNull(fs1);
