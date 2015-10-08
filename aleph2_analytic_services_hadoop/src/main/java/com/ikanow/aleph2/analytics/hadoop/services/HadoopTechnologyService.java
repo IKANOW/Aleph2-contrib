@@ -18,6 +18,8 @@ package com.ikanow.aleph2.analytics.hadoop.services;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -25,6 +27,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.Cluster;
 import org.apache.hadoop.mapreduce.Job;
 
+import com.google.inject.Module;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
@@ -53,8 +56,16 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 
 	protected SetOnce<Configuration> _config = new SetOnce<>();
 	
+	/** This service needs to load some additional classes via Guice. Here's the module that defines the bindings
+	 * @return
+	 */
+	public static List<Module> getExtraDependencyModules() {
+		return Collections.emptyList();
+	}
+	
 	@Override
-	public void youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules() {		
+	public void youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules() {
+		//(done see above)
 	}
 
 	@Override
