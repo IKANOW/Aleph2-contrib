@@ -231,6 +231,13 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 					}
 					else if (old_write_threads > _state.write_threads) { // this is a bit ugly, nuke the existing worker queue
 						_state._workers.shutdownNow();
+						try {
+							boolean completed = _state._workers.awaitTermination(5, TimeUnit.SECONDS);
+							if (!completed) {
+								_logger.warn("(workers not completed before timeout expired: " + _state._workers.toString() + ")");
+							}
+						}
+						catch (Exception e) {}
 						fillUpEmptyQueue();
 					}
 				}

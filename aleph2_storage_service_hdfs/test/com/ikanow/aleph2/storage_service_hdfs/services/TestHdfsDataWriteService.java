@@ -656,11 +656,15 @@ public class TestHdfsDataWriteService {
 		batch.storeObjects(l1);
 		Thread.sleep(750L);
 		assertEquals(6, final_dir.list().length); //*2 because CRC		
-		System.out.println("Found: 6 files" + Arrays.stream(final_dir.list()).collect(Collectors.joining(";")));		
+		System.out.println("Found: 6 files: " + Arrays.stream(final_dir.list()).collect(Collectors.joining(";")));		
 		
 		batch.storeObjects(l2);
-		System.out.println("Added 2 more objects");
-		Thread.sleep(1500L);
-		assertEquals("Should have 8: " + Arrays.stream(final_dir.list()).collect(Collectors.joining(";")), 8, final_dir.list().length); //*2 because CRC		
+		System.out.println("Added 7 more objects at " + new Date());
+		for (int jj = 0; jj < 5; ++jj) {
+			Thread.sleep(1500L);
+			if (final_dir.list().length > 6) break;
+		}
+		System.out.println("(Check init dir cleared: " + Arrays.stream(init_dir.list()).collect(Collectors.joining(";")) + ")");
+		assertEquals("Should have 8 files: " + Arrays.stream(final_dir.list()).collect(Collectors.joining(";")), 8, final_dir.list().length); //*2 because CRC		
 	}
 }
