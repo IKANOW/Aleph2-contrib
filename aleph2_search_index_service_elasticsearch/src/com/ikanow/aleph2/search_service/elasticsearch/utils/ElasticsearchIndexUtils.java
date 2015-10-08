@@ -57,7 +57,11 @@ import fj.data.Either;
  */
 public class ElasticsearchIndexUtils {
 
-
+	public static final String CUSTOM_META = "_meta";
+	public static final String CUSTOM_META_SECONDARY = "secondary_buffer";
+	public static final String CUSTOM_META_BUCKET = "bucket_path";
+	public static final String CUSTOM_IS_PRIMARY = "is_primary"; //"1" or "0" .. note this isn't managed at this level, it's added/removed before being actually written into ES
+	
 	/////////////////////////////////////////////////////////////////////
 	
 	// INDEX NAMES
@@ -658,9 +662,9 @@ public class ElasticsearchIndexUtils {
 			.andThen(Lambdas.wrap_u(json -> json.startObject("mappings").startObject(type_key)))
 			// Add the secondary buffer name to the metadata:
 			.andThen(Lambdas.wrap_u(json -> {
-				return json.startObject("_meta")
-							.field("bucket_path", bucket.full_name())
-							.field("secondary_buffer", secondary_buffer.orElse(""))
+				return json.startObject(CUSTOM_META)
+							.field(CUSTOM_META_BUCKET, bucket.full_name())
+							.field(CUSTOM_META_SECONDARY, secondary_buffer.orElse(""))
 						.endObject()
 						;
 			}))

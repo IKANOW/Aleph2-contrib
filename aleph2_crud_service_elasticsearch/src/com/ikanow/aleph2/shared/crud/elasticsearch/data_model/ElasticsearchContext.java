@@ -82,6 +82,10 @@ public abstract class ElasticsearchContext {
 	 */
 	public abstract TypeContext typeContext(); 
 	
+	/** This is pre-prended to index names to form an alias that is always safe to read
+	 */
+	public static final String READ_PREFIX = "r__";	
+	
 	/** Elasticsearch context that one can read from but not write to (eg because it has multiple indexes)
 	 * @author Alex
 	 */
@@ -204,7 +208,6 @@ public abstract class ElasticsearchContext {
 			
 			// READ-ONLY ALIAS CREATION:
 			
-			private static String READ_PREFIX = "r__";
 			private final ScheduledExecutorService _scheduler = Executors.newScheduledThreadPool(1);			
 			
 			/** Checks to see if the read only version of this alias has been assigned, and assigns it if not

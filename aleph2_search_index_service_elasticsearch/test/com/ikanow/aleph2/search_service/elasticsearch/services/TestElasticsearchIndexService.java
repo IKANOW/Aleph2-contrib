@@ -23,6 +23,7 @@ import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
 import java.util.GregorianCalendar;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -48,6 +49,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.IBatchSubservice;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
@@ -55,6 +57,7 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityServi
 import com.ikanow.aleph2.data_model.interfaces.shared_services.MockServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchIndexSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -886,4 +889,111 @@ public class TestElasticsearchIndexService {
 		final BasicMessageBean result = _index_service.getDataService().get().handleBucketDeletionRequest(bucket, Optional.empty(), true).get();
 		assertEquals("Deletion should succeed: " + result.message(), true, result.success());
 	}
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	// TEST SECONDARY BUFFERS
+
+	@Test
+	public void test_getSecondaryBuffers() throws InterruptedException, ExecutionException {
+		
+		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("full_name", "/test/secondary/buffers")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();
+				
+		final IGenericDataService index_data_service = _index_service.getDataService().get();		
+		
+		// 1) Check that doesn't die horribly on a bucket that doesn't exist
+		
+		assertEquals(new HashSet<String>(), index_data_service.getSecondaryBuffers(bucket));
+		
+		// 2) Ditto on one with no secondary buffers
+		
+		assertTrue(_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.empty()).isPresent());
+		assertEquals(new HashSet<String>(), index_data_service.getSecondaryBuffers(bucket));
+		
+		// 3) OK let's add some secondary buffers
+
+		assertTrue(_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.of("test1")).isPresent());
+		assertTrue(_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.of("test2")).isPresent());
+		assertTrue(_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.of("test3")).isPresent());
+		assertEquals(Arrays.asList("test1", "test2", "test3"), index_data_service.getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));		
+		
+		// 4) Test deletion of secondary buffers
+		{
+			final BasicMessageBean delete_res = _index_service.getDataService().get().handleBucketDeletionRequest(bucket, Optional.of("test2"), true).get();
+			assertTrue("Failed to delete secondary buffer: " + delete_res.message(), delete_res.success());
+			Thread.sleep(1250L);//(since the handleBucketDeletionRequest is async)
+		}
+		assertEquals(Arrays.asList("test1", "test3"), index_data_service.getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));		
+		
+		// 5) Check bucket deletion also deletes the secondaries
+		{
+			final BasicMessageBean delete_res2 = _index_service.getDataService().get().handleBucketDeletionRequest(bucket, Optional.empty(), true).get();
+			assertTrue("Failed to delete primary buffer + secondaries: " + delete_res2.message(), delete_res2.success());
+			Thread.sleep(1250L);//(since the handleBucketDeletionRequest is async)
+		}		
+		assertEquals(new HashSet<String>(), index_data_service.getSecondaryBuffers(bucket));
+	}
+	
+	
+	@org.junit.Ignore
+	@Test
+	public void test_primaryBuffers() {
+		
+		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("full_name", "/test/buffer/switching")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();
+				
+		final IGenericDataService index_data_service = _index_service.getDataService().get();				
+		
+		// 1) Check doesn't return anything interesting if the bucket doesn't exist
+		
+		assertEquals(Optional.empty(), index_data_service.getPrimaryBufferName(bucket));		
+		
+		// 2) Check doens't return anything until a buffer has been made primary
+		
+		assertTrue(_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.empty()).isPresent());
+		assertEquals(Optional.empty(), index_data_service.getPrimaryBufferName(bucket));				
+		
+		// 3) Switch a buffer to primary, check - when there's no data
+
+		assertTrue(_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.of("sec_test_1")).isPresent());
+		assertTrue(_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.of("sec_test_2")).isPresent());
+		assertTrue(_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.of("sec_test_3")).isPresent());
+		
+		//(check they got created)
+		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));		
+		
+		BasicMessageBean res1 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, "sec_test_1", Optional.empty()).join();
+		
+		assertTrue("Switch worked: " + res1.message(), res1.success());
+		
+		//TODO (IKANOW/Aleph2#28): this doesn't currently work...
+		//assertEquals(Optional.of("sec_test_1"), index_data_service.getPrimaryBufferName(bucket));				
+		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));		
+				
+		// 4) Change to a different buffer - when there is some data (also add some data to a secondary index at the same time) - check the data swaps
+		
+		// 5) Switch original back again
+		
+		//TODO (IKANOW/Aleph2#28):  will need a test where the outgoing aliases don't existing but the incoming ones do, to check that even though you'll prob get an IndexMissingException it will still apply the other tests
+	}
+
 }
