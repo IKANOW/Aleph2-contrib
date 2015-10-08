@@ -321,7 +321,7 @@ public class TestMockHdfsStorageSystem {
 										.done().get();
 		
 		FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket.full_name()));		
-		setup_bucket(storage_service, bucket, Collections.emptyList());
+		setup_bucket(storage_service, bucket, Arrays.asList("$sec_test"));
 		final String bucket_path = System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket.full_name();
 		assertTrue("The file path has been created", new File(bucket_path + "/managed_bucket").exists());
 
@@ -334,12 +334,14 @@ public class TestMockHdfsStorageSystem {
 				FileUtils.forceMkdir(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_RAW + "/" + dir));
 				FileUtils.forceMkdir(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_JSON + "/" + dir));
 				FileUtils.forceMkdir(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_PROCESSED + "/" + dir));
+				FileUtils.forceMkdir(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "/sec_test/" + dir)); // (mini test for secondary)
 			}));
 		
 		// (7 cos includes root)
 		assertEquals(7, FileUtils.listFilesAndDirs(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_RAW), DirectoryFileFilter.DIRECTORY, TrueFileFilter.INSTANCE).size());
 		assertEquals(7, FileUtils.listFilesAndDirs(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_JSON), DirectoryFileFilter.DIRECTORY, TrueFileFilter.INSTANCE).size());
 		assertEquals(7, FileUtils.listFilesAndDirs(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_PROCESSED), DirectoryFileFilter.DIRECTORY, TrueFileFilter.INSTANCE).size());
+		assertEquals(7, FileUtils.listFilesAndDirs(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "/sec_test/"), DirectoryFileFilter.DIRECTORY, TrueFileFilter.INSTANCE).size());
 		
 		// 1) Normal run:
 		
@@ -360,6 +362,7 @@ public class TestMockHdfsStorageSystem {
 		assertEquals(6, FileUtils.listFilesAndDirs(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_RAW), DirectoryFileFilter.DIRECTORY, TrueFileFilter.INSTANCE).size());
 		assertEquals(3, FileUtils.listFilesAndDirs(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_JSON), DirectoryFileFilter.DIRECTORY, TrueFileFilter.INSTANCE).size());
 		assertEquals(4, FileUtils.listFilesAndDirs(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_PROCESSED), DirectoryFileFilter.DIRECTORY, TrueFileFilter.INSTANCE).size());
+		assertEquals(4, FileUtils.listFilesAndDirs(new File(bucket_path + "/" + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "/sec_test/"), DirectoryFileFilter.DIRECTORY, TrueFileFilter.INSTANCE).size());
 		
 		// 2) Run it again, returns success but not loggable:
 		

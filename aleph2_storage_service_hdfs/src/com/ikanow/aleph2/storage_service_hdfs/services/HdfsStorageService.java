@@ -76,8 +76,6 @@ import scala.Tuple2;
 public class HdfsStorageService implements IStorageService {
 	private static final Logger _logger = LogManager.getLogger();	
 	
-	//TODO: add buffer support to handleBucketDeletion and handleBucketAgeOut requests
-	
 	final protected GlobalPropertiesBean _globals;
 	final protected ConcurrentHashMap<Tuple2<String, Optional<String>>, Optional<Object>> _obj_cache = new ConcurrentHashMap<>();
 	
@@ -394,18 +392,31 @@ public class HdfsStorageService implements IStorageService {
 		 */
 		@Override
 		public CompletableFuture<BasicMessageBean> handleAgeOutRequest(final DataBucketBean bucket) {
+			// Loop over secondary buffers:
+			this.getSecondaryBuffers(bucket).stream().forEach(sec -> handleAgeOutRequest(bucket, Optional.of(sec)));
+			
+			// Only return the results from the main bucket:
+			return handleAgeOutRequest(bucket, Optional.empty());
+		}		
+		/** handleAgeOutRequest that can be applied to secondaries as well as primaries
+		 * @param bucket
+		 * @param secondary_buffer
+		 * @return
+		 */
+		public CompletableFuture<BasicMessageBean> handleAgeOutRequest(final DataBucketBean bucket, final Optional<String> secondary_buffer) {
+			final String buffer_name = secondary_buffer.orElse(IStorageService.PRIMARY_BUFFER_SUFFIX);
 			
 			final Optional<BasicMessageBean> raw_result =
 					Optionals.of(() -> bucket.data_schema().storage_schema().raw().exist_age_max())
-					.map(bound -> handleAgeOutRequest_Worker(IStorageService.StorageStage.raw, bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW, bound));
+					.map(bound -> handleAgeOutRequest_Worker(IStorageService.StorageStage.raw, bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + buffer_name, bound));
 			
 			final Optional<BasicMessageBean> json_result =
 					Optionals.of(() -> bucket.data_schema().storage_schema().json().exist_age_max())
-					.map(bound -> handleAgeOutRequest_Worker(IStorageService.StorageStage.json, bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON, bound));
+					.map(bound -> handleAgeOutRequest_Worker(IStorageService.StorageStage.json, bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + buffer_name, bound));
 			
 			final Optional<BasicMessageBean> processed_result =
 					Optionals.of(() -> bucket.data_schema().storage_schema().processed().exist_age_max())
-					.map(bound -> handleAgeOutRequest_Worker(IStorageService.StorageStage.processed, bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED, bound));
+					.map(bound -> handleAgeOutRequest_Worker(IStorageService.StorageStage.processed, bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + buffer_name, bound));
 			
 			return Arrays.asList(raw_result, json_result, processed_result)
 					.stream()
