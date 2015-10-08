@@ -581,7 +581,7 @@ public class TestHdfsDataWriteService {
 	
 	public void test_writerService_end2end(Optional<String> secondary) throws InterruptedException, ExecutionException {
 		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;		
-		HfdsDataWriteService<TestBean> write_service = getWriter("/test/writer/end2end", secondary);
+		HfdsDataWriteService<TestBean> write_service = getWriter("/test/writer/end2end/" + secondary.orElse("current") + "/", secondary);
 
 		//(Tidy up)
 		try { FileUtils.deleteDirectory(new File(temp_dir + "/data/" + write_service._bucket.full_name())); } catch (Exception e) {}
@@ -656,9 +656,11 @@ public class TestHdfsDataWriteService {
 		batch.storeObjects(l1);
 		Thread.sleep(750L);
 		assertEquals(6, final_dir.list().length); //*2 because CRC		
-				
+		System.out.println("Found: 6 files" + Arrays.stream(final_dir.list()).collect(Collectors.joining(";")));		
+		
 		batch.storeObjects(l2);
-		Thread.sleep(750L);
-		assertEquals(8, final_dir.list().length); //*2 because CRC		
+		System.out.println("Added 2 more objects");
+		Thread.sleep(1500L);
+		assertEquals("Should have 8: " + Arrays.stream(final_dir.list()).collect(Collectors.joining(";")), 8, final_dir.list().length); //*2 because CRC		
 	}
 }
