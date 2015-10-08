@@ -169,36 +169,117 @@ public class TestMockHdfsStorageSystem {
 		
 		// 1) Set up bucket (code taken from management_db_service)
 		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test/delete/bucket").done().get();
-		FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket.full_name()));		
-		setup_bucket(storage_service, bucket, Collections.emptyList());
-		final String bucket_path = System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket.full_name();
-		assertTrue("The file path has been created", new File(bucket_path + "/managed_bucket").exists());
-		FileUtils.writeStringToFile(new File(bucket_path + IStorageService.STORED_DATA_SUFFIX + "/test"), "");
-		assertTrue("The extra file path has been created", new File(bucket_path + IStorageService.STORED_DATA_SUFFIX + "/test").exists());		
-		
-		final CompletableFuture<BasicMessageBean> res1 = storage_service.getDataService().get().handleBucketDeletionRequest(bucket, Optional.empty(), false);
-		assertEquals(true, res1.get().success());
-		
-		// Test:
-		
-		// Full filesystem exists
-		assertTrue("The file path has *not* been deleted", new File(System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket.full_name() + "/managed_bucket").exists());
-		
-		// Data directories no longer exist
-		assertFalse("The data path has been deleted", new File(System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX + "/test").exists());
-				
+		final String bucket_path = System.getProperty("java.io.tmpdir") + "/data/" + bucket.full_name();
+		try {
+			FileUtils.deleteDirectory(new File(bucket_path));
+		}
+		catch (Exception e) {}
+		setup_bucket(storage_service, bucket, 
+				Arrays.asList( //(create some secondary buffers also)
+						"$sec_test1",
+						"$sec_test2",
+						"$sec_test3"
+						));
+						
 		// Check nothing goes wrong when bucket doesn't exist
 		final DataBucketBean bucket2 = BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test/delete/bucket_not_exist").done().get();
-		FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket2.full_name()));
-		assertFalse("The file path for bucket2 does not exist", new File(System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket2.full_name()).exists());
+		final String bucket_path2 = System.getProperty("java.io.tmpdir") + "/data/" + bucket2.full_name();
+		FileUtils.deleteDirectory(new File(bucket_path2));
+		assertFalse("The file path for bucket2 does not exist", new File(bucket_path2).exists());
 		
 		final CompletableFuture<BasicMessageBean> res2 = storage_service.getDataService().get().handleBucketDeletionRequest(bucket2, Optional.empty(), false);
 		assertEquals(true, res2.get().success());
 		
 		//(check didn't create anything)
 		
+		assertFalse("No bucket2 paths were created", new File(bucket_path2).exists());		
+
+		// Check main bucket deletion:						
+						
+		check_handleBucketDeletion_preChecks(storage_service, bucket, "current", true);
+		check_handleBucketDeletion_preChecks(storage_service, bucket, "sec_test1", true);
+		check_handleBucketDeletion_preChecks(storage_service, bucket, "sec_test2", true);
+		check_handleBucketDeletion_preChecks(storage_service, bucket, "sec_test3", true);
+		{
+			final CompletableFuture<BasicMessageBean> res1 = storage_service.getDataService().get().handleBucketDeletionRequest(bucket, Optional.empty(), false);
+			assertEquals("Handle deletion bucket requesed should have worked:" + res1.get().message(), true, res1.get().success());		
+			System.out.println("handleDeletion output: " + res1.get().message());
+		}		
+		check_handleBucketDeletion_postChecks(storage_service, bucket, "current", false);
+		check_handleBucketDeletion_preChecks(storage_service, bucket, "sec_test1", false);
+		check_handleBucketDeletion_preChecks(storage_service, bucket, "sec_test2", false);
+		check_handleBucketDeletion_preChecks(storage_service, bucket, "sec_test3", false);
+		
+		// OK now delete a secondary buffer		
+		{
+			final CompletableFuture<BasicMessageBean> res1 = storage_service.getDataService().get().handleBucketDeletionRequest(bucket, Optional.of("sec_test2"), false);
+			assertEquals("Handle deletion bucket requesed should have worked:" + res1.get().message(), true, res1.get().success());		
+			System.out.println("handleDeletion output: " + res1.get().message());
+		}		
+		check_handleBucketDeletion_preChecks(storage_service, bucket, "sec_test1", false);
+		check_handleBucketDeletion_postChecks(storage_service, bucket, "sec_test2", false);
+		check_handleBucketDeletion_preChecks(storage_service, bucket, "sec_test3", false);
+		
+		// OK now delete a secondary buffer with prejudice
+		 {
+			final CompletableFuture<BasicMessageBean> res1 = storage_service.getDataService().get().handleBucketDeletionRequest(bucket, Optional.of("sec_test1"), true);
+			assertEquals("Handle deletion bucket requesed should have worked:" + res1.get().message(), true, res1.get().success());		
+			System.out.println("handleDeletion output: " + res1.get().message());
+		}		
+		check_handleBucketDeletion_postChecks(storage_service, bucket, "sec_test1", true);
+		
+		// Finally: check that deleting a bucket deletes everything:
+		{
+			final CompletableFuture<BasicMessageBean> res1 = storage_service.getDataService().get().handleBucketDeletionRequest(bucket, Optional.empty(), true);
+			assertEquals("Handle deletion bucket requesed should have worked:" + res1.get().message(), true, res1.get().success());		
+			System.out.println("handleDeletion output: " + res1.get().message());
+		}		
+		check_handleBucketDeletion_postChecks(storage_service, bucket, "sec_test3", true);
+		 
+	}
+	
+	protected void check_handleBucketDeletion_preChecks(final MockHdfsStorageService storage_service, DataBucketBean bucket, String buffer_name, boolean create) throws IOException, InterruptedException, ExecutionException {
+		final String bucket_path = System.getProperty("java.io.tmpdir") + "/data/" + bucket.full_name();
+		assertTrue("The file path has been created", new File(bucket_path + "/managed_bucket").exists());
+		assertTrue("The raw data path has been created", new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + buffer_name).exists());
+		assertTrue("The json data path has been created", new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + buffer_name).exists());
+		assertTrue("The processed data path has been created", new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + buffer_name).exists());
+		assertTrue("The transient data path has been created", new File(bucket_path + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + buffer_name).exists());
+		if (create) {
+			FileUtils.writeStringToFile(new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + buffer_name + "/test"), "");
+			FileUtils.writeStringToFile(new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + buffer_name + "/test"), "");
+			FileUtils.writeStringToFile(new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + buffer_name + "/test"), "");
+			FileUtils.writeStringToFile(new File(bucket_path + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + buffer_name + "/test"), "");
+		}
+		assertTrue("The raw data path extra file has been created", new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + buffer_name + "/test").exists());
+		assertTrue("The json data path extra file has been created", new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + buffer_name + "/test").exists());
+		assertTrue("The processed data path extra file has been created", new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + buffer_name + "/test").exists());
+		assertTrue("The transient data path extra file has been created", new File(bucket_path + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + buffer_name + "/test").exists());
+	}	
+
+	protected void check_handleBucketDeletion_postChecks(final MockHdfsStorageService storage_service, DataBucketBean bucket, String buffer_name, boolean full_delete) throws IOException, InterruptedException, ExecutionException {
+		final String bucket_path = System.getProperty("java.io.tmpdir") + "/data/" + bucket.full_name();
+
+		// Test:
+		
 		// Full filesystem exists
-		assertFalse("No bucket2 paths were created", new File(System.getProperty("java.io.tmpdir") + File.separator + "/data/" + File.separator + bucket2.full_name()).exists());		
+		assertEquals("The raw data path still present", !full_delete, new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + buffer_name).exists());
+		assertEquals("The json data path still present", !full_delete, new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + buffer_name).exists());
+		assertEquals("The processed data path still present", !full_delete, new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + buffer_name).exists());
+		assertEquals("The transient data path still present", !full_delete, new File(bucket_path + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + buffer_name).exists());
+		
+		if (full_delete) {
+			//(the main path still exists)
+			assertTrue("Tha main bucket path still present", new File(bucket_path + IStorageService.STORED_DATA_SUFFIX).exists());
+		}
+		
+		// Data directories no longer exist
+		if (!full_delete) {
+			assertFalse("The raw data path has been deleted (and re-created)", new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + buffer_name + "/test").exists());
+			assertFalse("The json data path has been deleted (and re-created)", new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + buffer_name + "/test").exists());
+			assertFalse("The processed data path has been deleted (and re-created)", new File(bucket_path + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + buffer_name + "/test").exists());
+			assertFalse("The transient data path has been deleted (and re-created)", new File(bucket_path + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + buffer_name + "/test").exists());
+		}				
 	}
 	
 	@Test
@@ -569,6 +650,11 @@ public class TestMockHdfsStorageSystem {
 		catch (Exception e) { return false; }
 	}
 	
+	/**
+	 * @param storage_service
+	 * @param bucket
+	 * @param extra_suffixes - start with $ to indicate a new secondary buffer, else is a normal suffix 
+	 */
 	protected void setup_bucket(MockHdfsStorageService storage_service, final DataBucketBean bucket, List<String> extra_suffixes) {
 		final FileContext dfs = storage_service.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 				
@@ -581,27 +667,37 @@ public class TestMockHdfsStorageSystem {
 		catch (Exception e) {}
 		
 		Stream.concat(
-			Arrays.asList(
-					bucket_root + "/managed_bucket",
-					bucket_root + "/managed_bucket/logs",
-					bucket_root + "/managed_bucket/logs/harvest",
-					bucket_root + "/managed_bucket/logs/enrichment",
-					bucket_root + "/managed_bucket/logs/storage",
-					bucket_root + "/managed_bucket/assets",
-					bucket_root + "/managed_bucket/import",
-					bucket_root + "/managed_bucket/temp",
-					bucket_root + "/managed_bucket/stored",
-					bucket_root + "/managed_bucket/stored/raw",
-					bucket_root + "/managed_bucket/stored/json",
-					bucket_root + "/managed_bucket/stored/processed",
-					bucket_root + "/managed_bucket/ready"
+				Arrays.asList(
+					"/managed_bucket",
+					"/managed_bucket/logs",
+					"/managed_bucket/logs/harvest",
+					"/managed_bucket/logs/enrichment",
+					"/managed_bucket/logs/storage",
+					"/managed_bucket/assets",
+					"/managed_bucket/import",
+					"/managed_bucket/import/stored",
+					"/managed_bucket/import/stored/raw/current",
+					"/managed_bucket/import/stored/json/current",
+					"/managed_bucket/import/stored/processed/current",
+					"/managed_bucket/import/transient/current",
+					"/managed_bucket/import/ready",
+					"/managed_bucket/import/temp"
+				)
+				.stream()
+				,
+				extra_suffixes.stream()
+					.flatMap(s -> s.startsWith("$")
+									? Stream.of(
+										"/managed_bucket/import/stored/raw/" + s.substring(1),
+										"/managed_bucket/import/stored/json/" + s.substring(1),
+										"/managed_bucket/import/stored/processed/" + s.substring(1),
+										"/managed_bucket/import/transient/" + s.substring(1)
+									)
+									: Stream.of(s)
 					)
-					.stream()
-			,
-			extra_suffixes.stream())
-				.map(s -> new Path(s))
-				.forEach(Lambdas.wrap_consumer_u(p -> dfs.mkdir(p, FsPermission.getDefault(), true)));
-		
+				)
+				.map(s -> new Path(bucket_root + s))
+				.forEach(Lambdas.wrap_consumer_u(p -> dfs.mkdir(p, FsPermission.getDefault(), true)));		
 	}
 	
 }

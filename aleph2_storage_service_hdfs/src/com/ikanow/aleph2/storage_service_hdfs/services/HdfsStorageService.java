@@ -76,6 +76,8 @@ import scala.Tuple2;
 public class HdfsStorageService implements IStorageService {
 	private static final Logger _logger = LogManager.getLogger();	
 	
+	//TODO: add buffer support to handleBucketDeletion and handleBucketAgeOut requests
+	
 	final protected GlobalPropertiesBean _globals;
 	final protected ConcurrentHashMap<Tuple2<String, Optional<String>>, Optional<Object>> _obj_cache = new ConcurrentHashMap<>();
 	
@@ -506,31 +508,50 @@ public class HdfsStorageService implements IStorageService {
 		 */
 		@Override
 		public CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(
-				DataBucketBean bucket, Optional<String> secondary_buffer,
-				boolean bucket_getting_deleted) {
+				final DataBucketBean bucket, 
+				final Optional<String> secondary_buffer,
+				final boolean bucket_or_buffer_getting_deleted) {
 			
-			if (secondary_buffer.isPresent()) {
-				return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage("HdfsDataService", "handleBucketDeletionRequest", ErrorUtils.NOT_YET_IMPLEMENTED, "secondary_buffer != Optional.empty()"));				
+			if (bucket_or_buffer_getting_deleted && !secondary_buffer.isPresent()) { // if we're deleting the bucket and nothing else is present then
+				// delete all the secondary buffers
+				getSecondaryBuffers(bucket).stream().parallel().forEach(buffer -> handleBucketDeletionRequest(bucket, Optional.of(buffer), true));				
 			}
 			
 			final FileContext dfs = getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 			final String bucket_root = getBucketRootPath() + "/" + bucket.full_name();
 			try {			
-				final Path p = new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX);
+				final String buffer_suffix = secondary_buffer.orElse(IStorageService.PRIMARY_BUFFER_SUFFIX);
+				final Path p_raw = new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + buffer_suffix);
+				final Path p_json = new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + buffer_suffix);
+				final Path p_px = new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + buffer_suffix);
 				
-				if (doesPathExist(dfs, p)) {			
-					dfs.delete(p, true);			
-					dfs.mkdir(p, FsPermission.getDefault(), true);
-					
-					return CompletableFuture.completedFuture(
-							ErrorUtils.buildSuccessMessage("HdfsDataService", "handleBucketDeletionRequest", ErrorUtils.get("Deleted data from bucket = {0}", bucket.full_name()))
-							);
-				}
-				else {
-					return CompletableFuture.completedFuture(
-							ErrorUtils.buildSuccessMessage("HdfsDataService", "handleBucketDeletionRequest", ErrorUtils.get("(No storage for bucket {0})", bucket.full_name()))
-							);
-				}
+				// Also some transient paths:
+				final Path p_transients = new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + buffer_suffix);
+				
+				final List<BasicMessageBean> results = Stream.of(p_raw, p_json, p_px, p_transients).map(p -> {
+					try {
+						if (doesPathExist(dfs, p)) {			
+							dfs.delete(p, true);			
+							if (!secondary_buffer.isPresent() || !bucket_or_buffer_getting_deleted) {
+								dfs.mkdir(p, FsPermission.getDefault(), true); //(deletes then re-creates ... for secondaries may not re-create)
+							}
+							
+							return ErrorUtils.buildSuccessMessage("HdfsDataService", "handleBucketDeletionRequest", ErrorUtils.get("Deleted data from bucket = {0} (path={1})", bucket.full_name(), p.toString()));
+						}
+						else {
+							return ErrorUtils.buildSuccessMessage("HdfsDataService", "handleBucketDeletionRequest", ErrorUtils.get("(No storage for bucket {0} (path={1}))", bucket.full_name()), p);
+						}
+					}
+					catch (Throwable t) { // (carry on here since we have multiple paths to check)
+						return ErrorUtils.buildErrorMessage("HdfsDataService", "handleBucketDeletionRequest", ErrorUtils.getLongForm("Unknown error for bucket {1}  (path={2}): {0})", t, bucket.full_name(), p));
+					}
+				})
+				.collect(Collectors.toList())
+				;				
+				return CompletableFuture.completedFuture(
+						ErrorUtils.buildMessage(results.stream().allMatch(msg -> msg.success()), 
+							"HdfsDataService", "handleBucketDeletionRequest",
+							results.stream().map(msg -> msg.message()).collect(Collectors.joining(" ; "))));
 			}
 			catch (Throwable t) {			
 				return CompletableFuture.completedFuture(

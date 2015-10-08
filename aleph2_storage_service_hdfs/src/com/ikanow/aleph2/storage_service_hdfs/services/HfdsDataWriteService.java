@@ -66,6 +66,10 @@ import fj.Unit;
 public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	protected static final Logger _logger = LogManager.getLogger();	
 
+	//TODO (ALEPH-12): doesn't seem to be working with processed (netflow/sample)
+	
+	//TODO (ALEPH-12): sort out transient output directories...
+	
 	/////////////////////////////////////////////////////////////
 	
 	// TOP LEVEL SERVICE
