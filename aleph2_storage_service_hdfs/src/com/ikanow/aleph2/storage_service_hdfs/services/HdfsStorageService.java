@@ -230,7 +230,8 @@ public class HdfsStorageService implements IStorageService {
 	 */
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
-		return Arrays.asList(this);
+		// myself and whereever the FileContext lives
+		return Arrays.asList(this, this.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get());
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
