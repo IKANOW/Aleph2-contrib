@@ -272,14 +272,19 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 																	.map(t -> t.grouping_time_period()).orElse(""));
 
 			final Optional<Long> target_max_index_size_mb = Optionals.of(() -> schema_config.search_technology_override().target_index_size_mb());
-			
+
+			///I think it's fine to decide up front whether we're aliasing this or not (but don't do it based on !secondary
+			// ... it's !secondary || secondary==primary (Which should never happen?), since the write context should only persist 
+			// for the duration of a secondary->primary allocation anyway
+			final boolean create_aliases = !secondary_buffer.isPresent() || _data_service.get().getPrimaryBufferName(bucket).equals(secondary_buffer);
+
 			// Index
 			final String index_base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, secondary_buffer);
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext index_context = time_period.validation(
-					fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name, target_max_index_size_mb, !secondary_buffer.isPresent())
+					fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name, target_max_index_size_mb, create_aliases)
 					, 
 					success -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext(index_base_name + ElasticsearchContextUtils.getIndexSuffix(success), 
-										Optional.ofNullable(schema_config.temporal_technology_override().time_field()), target_max_index_size_mb, !secondary_buffer.isPresent())
+										Optional.ofNullable(schema_config.temporal_technology_override().time_field()), target_max_index_size_mb, create_aliases)
 					);			
 			
 			final boolean auto_type = 
@@ -375,14 +380,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		 * @param add_not_remove
 		 */
 		protected void updateTemplate(final DataBucketBean bucket, final Optional<String> buffer_name, final boolean add_not_remove) {
-			final Stream<JsonNode> stream = getMatchingTemplatesWithMeta(bucket, buffer_name, _crud_factory.getClient());
-			if (add_not_remove) {
-				//TODO: hmm a preferable way to do this might be to just update the template again and just have an extra flag
-				// that will solve lots of faffing about partially rebuilding mappings etc etc 
-			}
-			else {
-				
-			}
+			//TODO: use bucket to re-generate mapping, just add one extra flag that will set the "_meta.is_primary" flag
 		}
 		
 		/* (non-Javadoc)
@@ -399,8 +397,6 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			// 3) Update existing aliases
 			
 			// Delete all the existing aliases and set the new ones as transactionally as possible!
-			
-			//TODO (IKANOW/Aleph2#28): need to handle the case where I only have a template, no indexes
 			
 			final Optional<String> curr_primary = getPrimaryBufferName(bucket);
 			
@@ -430,7 +426,8 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		@Override
 		public Optional<String> getPrimaryBufferName(DataBucketBean bucket) {
 			
-			//TODO (IKANOW/Aleph2#28): work out which template has is_primary set...
+			//TODO (IKANOW/Aleph2#28): work out which template has is_primary set...instead of this, which is completely wrong..
+			// just use getMatchingTemplatesWithMeta...
 			
 			// Get a big block of metadata
 			final MetaData alias_meta = _crud_factory.getClient()
