@@ -605,19 +605,21 @@ public class TestMockHdfsStorageSystem {
 		
 		final FileContext dfs = storage_service.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 		final String bucket_root = storage_service.getBucketRootPath() + "/" + bucket.full_name();		
+		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW + "test_exdir"), FsPermission.getDirDefault(), true);
 		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + "test1"), FsPermission.getDirDefault(), true);
 		//(skip the current dir once just to check it doesn't cause problems)
 		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "test2"), FsPermission.getDirDefault(), true);
 		dfs.create(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "test2/test2.json"), EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE)).close();
-		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON), FsPermission.getDirDefault(), true);
+		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON + "test_exdir"), FsPermission.getDirDefault(), true);
 		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "test3"), FsPermission.getDirDefault(), true);
-		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED), FsPermission.getDirDefault(), true);
+		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED + "test_exdir"), FsPermission.getDirDefault(), true);
 		
-		// (delete the primary, copy test2 across)
-		BasicMessageBean res1 = storage_service.getDataService().get().switchCrudServiceToPrimaryBuffer(bucket, "test2", Optional.empty()).get();
-		System.out.println("(res1 = " + res1.message() + ")");
-		assertTrue("Request returns: " + res1.message(), res1.success());
-		
+		// (retire the primary, copy test2 across)
+		{
+			BasicMessageBean res1 = storage_service.getDataService().get().switchCrudServiceToPrimaryBuffer(bucket, Optional.of("test2"), Optional.empty()).get();
+			System.out.println("(res1 = " + res1.message() + ")");
+			assertTrue("Request returns: " + res1.message(), res1.success());
+		}		
 		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON)));
 		assertTrue(doesFileExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON + "test2.json")));
 		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW)));
@@ -625,15 +627,28 @@ public class TestMockHdfsStorageSystem {
 		assertFalse(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "test2")));
 		assertFalse(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + "test2")));
 		assertFalse(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "test2")));
-		
-		BasicMessageBean res2 = storage_service.getDataService().get().switchCrudServiceToPrimaryBuffer(bucket, "test3", Optional.of("ex_primary")).get();
-		System.out.println("(res2 = " + res2.message() + ")");
-		assertTrue("Request returns: " + res2.message(), res2.success());
-		
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "former_current/test_exdir")));
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + "former_current/test_exdir")));
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "former_current/test_exdir")));
+		{
+			BasicMessageBean res2 = storage_service.getDataService().get().switchCrudServiceToPrimaryBuffer(bucket, Optional.of("test3"), Optional.of("ex_primary")).get();
+			System.out.println("(res2 = " + res2.message() + ")");
+			assertTrue("Request returns: " + res2.message(), res2.success());
+		}		
 		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "ex_primary")));
 		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + "ex_primary")));
 		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "ex_primary")));
 		assertTrue(doesFileExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "ex_primary/test2.json")));
+		
+		// return to the primary, delete the current
+		{
+			BasicMessageBean res3 = storage_service.getDataService().get().switchCrudServiceToPrimaryBuffer(bucket, Optional.of("former_current"), Optional.of("")).get();
+			System.out.println("(res3 = " + res3.message() + ")");
+			assertTrue("Request returns: " + res3.message(), res3.success());
+			assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON + "/test_exdir")));
+			assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW + "/test_exdir")));
+			assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED + "/test_exdir")));
+		}		
 	}
 	
 	/////////////////////////////////////////////////////////////////

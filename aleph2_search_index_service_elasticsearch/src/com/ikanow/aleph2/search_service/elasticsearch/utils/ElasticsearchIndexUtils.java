@@ -60,7 +60,7 @@ public class ElasticsearchIndexUtils {
 	public static final String CUSTOM_META = "_meta";
 	public static final String CUSTOM_META_SECONDARY = "secondary_buffer";
 	public static final String CUSTOM_META_BUCKET = "bucket_path";
-	public static final String CUSTOM_IS_PRIMARY = "is_primary"; //"1" or "0" .. note this isn't managed at this level, it's added/removed before being actually written into ES
+	public static final String CUSTOM_META_IS_PRIMARY = "is_primary"; //"true" or "false" 
 	
 	/////////////////////////////////////////////////////////////////////
 	
@@ -615,7 +615,8 @@ public class ElasticsearchIndexUtils {
 	 */
 	public static XContentBuilder getSearchServiceMapping(final DataBucketBean bucket,
 															final Optional<String> secondary_buffer,
-															final ElasticsearchIndexServiceConfigBean schema_config,
+															final boolean is_primary,
+															final ElasticsearchIndexServiceConfigBean schema_config,															
 															final Optional<XContentBuilder> to_embed,
 															final ObjectMapper mapper)
 	{
@@ -664,6 +665,7 @@ public class ElasticsearchIndexUtils {
 			.andThen(Lambdas.wrap_u(json -> {
 				return json.startObject(CUSTOM_META)
 							.field(CUSTOM_META_BUCKET, bucket.full_name())
+							.field(CUSTOM_META_IS_PRIMARY, Boolean.toString(is_primary))
 							.field(CUSTOM_META_SECONDARY, secondary_buffer.orElse(""))
 						.endObject()
 						;
@@ -723,7 +725,7 @@ public class ElasticsearchIndexUtils {
 	 * @return
 	 */
 	protected static XContentBuilder getFullMapping(final DataBucketBean bucket, 
-			final Optional<String> secondary_buffer,
+			final Optional<String> secondary_buffer, boolean is_primary,
 			final ElasticsearchIndexServiceConfigBean schema_config,
 			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups,
 			final JsonNode enabled_not_analyzed, final JsonNode enabled_analyzed,
@@ -731,7 +733,7 @@ public class ElasticsearchIndexUtils {
 			final ObjectMapper mapper, final String index_type)
 	{
 		return Lambdas.wrap_u(__ -> getTemplateMapping(bucket, secondary_buffer))
-				.andThen(json -> getSearchServiceMapping(bucket, secondary_buffer, schema_config, Optional.of(json), mapper))
+				.andThen(json -> getSearchServiceMapping(bucket, secondary_buffer, is_primary, schema_config, Optional.of(json), mapper))
 				.andThen(json -> getColumnarMapping(bucket, Optional.of(json), field_lookups, enabled_not_analyzed, enabled_analyzed, default_not_analyzed, default_analyzed, mapper, index_type))
 				.andThen(Lambdas.wrap_u(json -> json.endObject().endObject())) // (close the objects from the search service mapping)
 				.andThen(json -> getTemporalMapping(bucket, Optional.of(json)))
@@ -744,9 +746,10 @@ public class ElasticsearchIndexUtils {
 	 * @return
 	 */
 	public static XContentBuilder createIndexMapping(final DataBucketBean bucket, 
-			final Optional<String> secondary_buffer,
-			final ElasticsearchIndexServiceConfigBean schema_config, final ObjectMapper mapper, final String index_type) {
-		
+			final Optional<String> secondary_buffer, final boolean is_primary,
+			final ElasticsearchIndexServiceConfigBean schema_config, final ObjectMapper mapper, final String index_type
+			)
+	{	
 		final JsonNode default_mapping = mapper.convertValue(schema_config.search_technology_override(), JsonNode.class);
 		
 		// Also get JsonNodes for the default field config bit
@@ -764,8 +767,7 @@ public class ElasticsearchIndexUtils {
 					(CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override().collide_policy()).orElse(CollidePolicy.new_type))
 							? Optional.empty()
 							: Optional.ofNullable(schema_config.search_technology_override().type_name_or_prefix())
-						);
-		
+						);		
 		
 		// If a time field is present then adding the default mapping for it (overwrite @timestamp if that's the specified field):
 		
@@ -785,7 +787,7 @@ public class ElasticsearchIndexUtils {
 		});
 				
 		final XContentBuilder test_result = getFullMapping(
-				bucket, secondary_buffer, schema_config, field_lookups, 
+				bucket, secondary_buffer, is_primary, schema_config, field_lookups, 
 				enabled_not_analyzed_field, enabled_analyzed_field, 
 				default_not_analyzed_field, default_analyzed_field,  
 				mapper, index_type);		

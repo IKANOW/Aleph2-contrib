@@ -23,31 +23,33 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
 import org.elasticsearch.action.admin.indices.template.delete.DeleteIndexTemplateResponse;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesRequest;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.metadata.IndexTemplateMetaData;
-import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.indices.IndexMissingException;
 
 import scala.Tuple2;
+import scala.Tuple3;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -105,7 +107,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	
 	protected final static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 	
-	protected final ConcurrentHashMap<String, Date> _bucket_template_cache = new ConcurrentHashMap<>();
+	protected final Cache<String, Date> _bucket_template_cache = CacheBuilder.newBuilder().expireAfterAccess(2, TimeUnit.HOURS).build();
 	
 	/** Guice generated constructor
 	 * @param crud_factory
@@ -124,17 +126,19 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	/** Checks if an index/set-of-indexes spawned from a bucket
 	 * @param bucket
 	 */
-	protected Optional<JsonNode> handlePotentiallyNewIndex(final DataBucketBean bucket, final Optional<String> secondary_buffer, final ElasticsearchIndexServiceConfigBean schema_config, final String index_type) {
+	protected Optional<JsonNode> handlePotentiallyNewIndex(
+			final DataBucketBean bucket, 
+			final Optional<String> secondary_buffer, final boolean is_primary, 
+			final ElasticsearchIndexServiceConfigBean schema_config, 
+			final String index_type)
+	{
 		try {
 			// Will need the current mapping regardless (this is just some JSON parsing so should be pretty quick):
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, secondary_buffer, schema_config, _mapper, index_type);
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, secondary_buffer, is_primary, schema_config, _mapper, index_type);
 			final JsonNode user_mapping = _mapper.readTree(mapping.bytes().toUtf8());
 			
-			//TODO (IKANOW/Aleph2#28): when updating the mapping, need to check if my primary/secondary status has changed 
-			// if so then set the metadata here
-			
-			final String cache_key = bucket._id() + secondary_buffer.map(s -> ":" + s).orElse("");
-			final Date current_template_time = _bucket_template_cache.get(cache_key);
+			final String cache_key = bucket._id() + secondary_buffer.map(s -> ":" + s).orElse("") + ":" + Boolean.toString(is_primary);
+			final Date current_template_time = _bucket_template_cache.getIfPresent(cache_key);
 			if ((null == current_template_time) || current_template_time.before(Optional.ofNullable(bucket.modified()).orElse(new Date()))) {			
 				try {
 					final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(ElasticsearchIndexUtils.getBaseIndexName(bucket, secondary_buffer));
@@ -196,17 +200,6 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		
 		final JsonNode new_json_aliases = Optional.ofNullable(new_mapping.get("aliases")).orElse(mapper.createObjectNode());
 		
-		//DEBUG
-//		System.out.println("1a: " + stored_json_mappings);
-//		System.out.println("1b: " + new_json_mappings);
-//		System.out.println(" 1: " + stored_json_mappings.equals(new_json_mappings));
-//		System.out.println("2a: " + stored_json_settings);
-//		System.out.println("2b: " + new_json_settings);
-//		System.out.println(" 2: " + stored_json_settings.equals(new_json_settings));
-//		System.out.println("3a: " + stored_json_aliases);
-//		System.out.println("3b: " + new_json_aliases);
-//		System.out.println(" 3: " + stored_json_aliases.equals(new_json_aliases));
-		
 		return stored_json_mappings.equals(new_json_mappings) && stored_json_settings.equals(new_json_settings) && stored_json_aliases.equals(new_json_aliases);		
 	}
 	
@@ -222,6 +215,56 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		return _data_service;
 	}
 
+	/** Low level utility - Performs some initializations used in a few different places
+	 * @return
+	 */
+	protected static Tuple3<ElasticsearchIndexServiceConfigBean, String, Optional<String>> getSchemaConfigAndIndexAndType(final DataBucketBean bucket, final ElasticsearchIndexServiceConfigBean config)
+	{
+		final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, config, _mapper);
+		
+		final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
+		final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+									.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
+										? "_default_"
+										: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
+		
+		return Tuples._3T(schema_config, index_type, type);
+	}
+	
+	/** Low level utility - grab a stream of JsonNodes of template mappings
+	 * @param bucket
+	 * @param buffer_name
+	 * @return
+	 */
+	protected static Stream<JsonNode> getMatchingTemplatesWithMeta(final DataBucketBean bucket, final Optional<String> buffer_name, Client client) {
+		
+		final String base_index = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty());
+		final String index_glob = buffer_name
+				.map(name -> ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.of(name)))
+				.orElseGet(() -> {
+					final String random_string = Stream.generate(() -> (long)(Math.random()*1000000L)).map(l -> Long.toString(l)).filter(s -> !base_index.contains(s)).findAny().get();						
+					return ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.of(random_string)).replace(random_string, "*");
+				});
+		
+		final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(index_glob);
+		final GetIndexTemplatesResponse gtr = client.admin().indices().getTemplates(gt).actionGet();
+		
+		// OK for each template, grab the first element's "_meta" (requires converting to a string) and check if it has a secondary buffer
+		return gtr.getIndexTemplates()
+					.stream()
+					.map(index -> index.getMappings())
+					.filter(map -> !map.isEmpty())
+					.map(map -> map.valuesIt().next()) // get the first type, will typically be _default_
+					.map(comp_string -> new String(comp_string.uncompressed()))
+					.flatMap(Lambdas.flatWrap_i(mapstr -> _mapper.readValue(mapstr, JsonNode.class)))
+					.map(json -> json.iterator())
+					.filter(json_it -> json_it.hasNext())
+					.map(json_it -> json_it.next())
+					.map(json -> json.get(ElasticsearchIndexUtils.CUSTOM_META))
+					.filter(json -> (null != json) && json.isObject())
+					;
+	}
+	
 	/** Implementation of GenericDataService
 	 * @author alex
 	 */
@@ -254,29 +297,24 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			
 			// OK so it's a legit single bucket ... first question ... does this already exist?
 			
-			//TODO: move this into another util function so it can be easily called
-			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);
+			final Tuple3<ElasticsearchIndexServiceConfigBean, String, Optional<String>> schema_index_type = getSchemaConfigAndIndexAndType(bucket, _config);
+						
+			final boolean is_primary =  _data_service.get().getPrimaryBufferName(bucket).equals(secondary_buffer);
 			
-			final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
-			final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
-										.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
-											? "_default_"
-											: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
-			
-			final Optional<JsonNode> user_mapping = handlePotentiallyNewIndex(bucket, secondary_buffer, schema_config, index_type);
+			final Optional<JsonNode> user_mapping = handlePotentiallyNewIndex(bucket, secondary_buffer, is_primary, schema_index_type._1(), schema_index_type._2());
 			
 			// Need to decide a) if it's a time based index b) an auto type index
 			// And then build the context from there
 			
-			final Validation<String, ChronoUnit> time_period = TimeUtils.getTimePeriod(Optional.ofNullable(schema_config.temporal_technology_override())
+			final Validation<String, ChronoUnit> time_period = TimeUtils.getTimePeriod(Optional.ofNullable(schema_index_type._1().temporal_technology_override())
 																	.map(t -> t.grouping_time_period()).orElse(""));
 
-			final Optional<Long> target_max_index_size_mb = Optionals.of(() -> schema_config.search_technology_override().target_index_size_mb());
+			final Optional<Long> target_max_index_size_mb = Optionals.of(() -> schema_index_type._1().search_technology_override().target_index_size_mb());
 
 			///I think it's fine to decide up front whether we're aliasing this or not (but don't do it based on !secondary
 			// ... it's !secondary || secondary==primary (Which should never happen?), since the write context should only persist 
 			// for the duration of a secondary->primary allocation anyway
-			final boolean create_aliases = !secondary_buffer.isPresent() || _data_service.get().getPrimaryBufferName(bucket).equals(secondary_buffer);
+			final boolean create_aliases = !secondary_buffer.isPresent() || is_primary;
 
 			// Index
 			final String index_base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, secondary_buffer);
@@ -284,11 +322,11 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name, target_max_index_size_mb, create_aliases)
 					, 
 					success -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext(index_base_name + ElasticsearchContextUtils.getIndexSuffix(success), 
-										Optional.ofNullable(schema_config.temporal_technology_override().time_field()), target_max_index_size_mb, create_aliases)
+										Optional.ofNullable(schema_index_type._1().temporal_technology_override().time_field()), target_max_index_size_mb, create_aliases)
 					);			
 			
 			final boolean auto_type = 
-					CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+					CollidePolicy.new_type == Optional.ofNullable(schema_index_type._1().search_technology_override())
 						.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type);
 			
 			final Set<String> fixed_type_fields = Lambdas.get(() -> {
@@ -303,8 +341,8 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			// Type
 			final ElasticsearchContext.TypeContext.ReadWriteTypeContext type_context =
 					(auto_type && user_mapping.isPresent())
-						? new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), type, fixed_type_fields)
-						: new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext(type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME));
+						? new ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext(Optional.empty(), schema_index_type._3(), fixed_type_fields)
+						: new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext(schema_index_type._3().orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME));
 			
 			final Optional<DataSchemaBean.WriteSettings> write_settings = Optionals.of(() -> bucket.data_schema().search_index_schema().target_write_settings());
 			return Optional.of(_crud_factory.getElasticsearchCrudService(clazz,
@@ -338,49 +376,24 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					;
 		}
 
-		/** Low level utility to grab a stream of JsonNodes of templates 
-		 * @param bucket
-		 * @param buffer_name
-		 * @return
-		 */
-		protected Stream<JsonNode> getMatchingTemplatesWithMeta(final DataBucketBean bucket, final Optional<String> buffer_name, Client client) {
-			
-			//TODO: move this somewhere static at some point
-			
-			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty());
-			final String index_glob = buffer_name
-					.map(name -> ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.of(name)))
-					.orElseGet(() -> {
-						final String random_string = Stream.generate(() -> (long)(Math.random()*1000000L)).map(l -> Long.toString(l)).filter(s -> !base_index.contains(s)).findAny().get();						
-						return ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.of(random_string)).replace(random_string, "*");
-					});
-			
-			final GetIndexTemplatesRequest gt = new GetIndexTemplatesRequest().names(index_glob);
-			final GetIndexTemplatesResponse gtr = client.admin().indices().getTemplates(gt).actionGet();
-			
-			// OK for each template, grab the first element's "_meta" (requires converting to a string) and check if it has a secondary buffer
-			return gtr.getIndexTemplates()
-						.stream()
-						.map(index -> index.getMappings())
-						.filter(map -> !map.isEmpty())
-						.map(map -> map.valuesIt().next()) // get the first type, will typically be _default_
-						.map(comp_string -> new String(comp_string.uncompressed()))
-						.flatMap(Lambdas.flatWrap_i(mapstr -> _mapper.readValue(mapstr, JsonNode.class)))
-						.map(json -> json.iterator())
-						.filter(json_it -> json_it.hasNext())
-						.map(json_it -> json_it.next())
-						.map(json -> json.get(ElasticsearchIndexUtils.CUSTOM_META))
-						.filter(json -> (null != json) && json.isObject())
-						;
-		}
-		
-		/** Either updates all templates corresponding to a bucket to remove the "is_primary" flag, or a single one to add the flag 
+		/** Updates all templates corresponding to a bucket to remove the "is_primary" flag, and optionally to add it to the new primary (else add to the "default primary")
 		 * @param bucket
 		 * @param buffer_name
 		 * @param add_not_remove
 		 */
-		protected void updateTemplate(final DataBucketBean bucket, final Optional<String> buffer_name, final boolean add_not_remove) {
-			//TODO: use bucket to re-generate mapping, just add one extra flag that will set the "_meta.is_primary" flag
+		protected void updateTemplates(final DataBucketBean bucket, final Optional<String> new_primary_buffer) {
+			final Tuple3<ElasticsearchIndexServiceConfigBean, String, Optional<String>> schema_index_type = getSchemaConfigAndIndexAndType(bucket, _config);
+			
+			// Remove it for all the other buffers
+			Stream.concat(Stream.of(""), getSecondaryBuffers(bucket).stream()).parallel()
+				.<Optional<String>>map(buffer -> buffer.isEmpty() ? Optional.empty() : Optional.of(buffer))
+				.forEach(buffer -> {
+					final boolean is_primary = new_primary_buffer.equals(new_primary_buffer);
+					final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, buffer, is_primary, schema_index_type._1(), _mapper, schema_index_type._2());
+					final String base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, buffer);
+					_crud_factory.getClient().admin().indices().preparePutTemplate(base_name).setSource(mapping).execute().actionGet();					
+				})
+				;
 		}
 		
 		/* (non-Javadoc)
@@ -388,36 +401,52 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		 */
 		@Override
 		public CompletableFuture<BasicMessageBean> switchCrudServiceToPrimaryBuffer(
-				DataBucketBean bucket, String secondary_buffer, Optional<String> new_name_for_ex_primary)
+				DataBucketBean bucket, Optional<String> secondary_buffer, Optional<String> new_name_for_ex_primary)
 		{
-			// 1) Update the template of the outgoing index set so future elements don't alias themselves
+			// 1) Update the templates of the aliases - all but the new primary get "is_primary" set 
+			updateTemplates(bucket, secondary_buffer);
 			
-			// 2) Update the template of the incoming index set so new elements do alias themselves
-			
-			// 3) Update existing aliases
-			
-			// Delete all the existing aliases and set the new ones as transactionally as possible!
+			// 2) Delete all the existing aliases and set the new ones as transactionally as possible!
 			
 			final Optional<String> curr_primary = getPrimaryBufferName(bucket);
 			
 			final String base_index_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty());
-			
-			//TODO (IKANOW/Aleph2#28): you can't add aliases like this because they need to be timestamped as well
-			// you need to do it index by index ugh
+			final String new_primary_index_base = ElasticsearchIndexUtils.getBaseIndexName(bucket, secondary_buffer);
 			
 			return ElasticsearchFutureUtils.wrap(
-				_crud_factory.getClient().admin().indices().prepareAliases()
-					.removeAlias(ElasticsearchIndexUtils.getBaseIndexName(bucket, curr_primary) + "*", ElasticsearchContext.READ_PREFIX + base_index_name)
-					.addAlias(ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.of(secondary_buffer)) + "*", ElasticsearchContext.READ_PREFIX + base_index_name)
-					.execute()
+					_crud_factory.getClient().admin().indices().prepareStats()
+	                    .clear()
+	                    .setIndices(new_primary_index_base + "*")
+	                    .setStore(true)
+	                    .execute()								
 					,
-					iar -> ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", "Bucket {0} Added {1} Removed {2}", bucket.full_name(), secondary_buffer, curr_primary.orElse("(none)")))
-					.exceptionally(t -> 
-						(t instanceof IndexMissingException)
-							? ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", "Bucket {0} Added {1} Removed {2} (no indexes to switch)", bucket.full_name(), secondary_buffer, curr_primary.orElse("(none)"))
-							: ErrorUtils.buildErrorMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", ErrorUtils.getLongForm("Unknown error bucket {1}: {0}", t, bucket.full_name()))											
-					)
-					;			
+					stats -> {						
+						// Step 2: delete any indexes that are two far off:
+						
+						// (format is <base-index-signature>_<date>[_<fragment>])						
+						return stats.getIndices().keySet();
+					})
+					.exceptionally(__ -> Collections.emptySet())
+					.thenCompose(indexes -> {
+						
+						final IndicesAliasesRequestBuilder iarb = 
+								_crud_factory.getClient().admin().indices().prepareAliases()
+								.removeAlias(ElasticsearchIndexUtils.getBaseIndexName(bucket, curr_primary) + "*", ElasticsearchContext.READ_PREFIX + base_index_name);
+
+						// Add the timestamped aliases
+						indexes.stream().reduce(iarb, (acc,  v) -> acc.addAlias(v, ElasticsearchContext.READ_PREFIX + base_index_name), (acc1, acc2) -> acc1);
+						
+						return ElasticsearchFutureUtils.wrap(iarb.execute(),
+								iar -> 
+									ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", "Bucket {0} Added {1} Removed {2}", bucket.full_name(), secondary_buffer, curr_primary.orElse("(none)"))
+								)
+								.exceptionally(t -> 
+									(t instanceof IndexMissingException)
+										? ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", "Bucket {0} Added {1} Removed {2} (no indexes to switch)", bucket.full_name(), secondary_buffer, curr_primary.orElse("(none)"))
+										: ErrorUtils.buildErrorMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", ErrorUtils.getLongForm("Unknown error bucket {1}: {0}", t, bucket.full_name()))											
+								)
+								;			
+					});
 		}
 
 		/* (non-Javadoc)
@@ -425,36 +454,23 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		 */
 		@Override
 		public Optional<String> getPrimaryBufferName(DataBucketBean bucket) {
-			
-			//TODO (IKANOW/Aleph2#28): work out which template has is_primary set...instead of this, which is completely wrong..
-			// just use getMatchingTemplatesWithMeta...
-			
-			// Get a big block of metadata
-			final MetaData alias_meta = _crud_factory.getClient()
-				.admin().cluster()
-				.prepareState()
-				.setIndices(ElasticsearchContext.READ_PREFIX + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()))
-				.setMetaData(true)
-				.execute()
-				.actionGet()
-				.getState()
-				.getMetaData()
-				;			
-			
-			return Optional.of(alias_meta)
-					.filter(meta -> !meta.getAliases().isEmpty())
-					.map(meta -> meta.getAliases().keysIt().next())
-					.map(index_name -> alias_meta.getIndices().get(index_name).getMappings())
-					.filter(mapping -> !mapping.isEmpty())
-					.map(Lambdas.wrap_u(mapping -> mapping.valuesIt().next().getSourceAsMap()))
-					.map(map -> map.get(ElasticsearchIndexUtils.CUSTOM_META))
-					.filter(map-> (map instanceof Map))
-					.map(map -> ((Map<?,?>)map).get(ElasticsearchIndexUtils.CUSTOM_META_SECONDARY))
-					.filter(val-> (val instanceof String))
-					.map(val -> (String)val)
-					.filter(buffer_name -> !buffer_name.isEmpty())
-					;
+			// This call gives us the mappings, which includes CUSTOM_META_PRIMARY == if is primary and CUSTOM_META_SECONDARY, ie the string to return
+			return getMatchingTemplatesWithMeta(bucket, Optional.empty(), _crud_factory.getClient())
+				.filter(json -> {
+					final JsonNode is_primary_json = json.get(ElasticsearchIndexUtils.CUSTOM_META_IS_PRIMARY);
+					return Optional.ofNullable(is_primary_json)
+							.filter(is_pri_json -> is_pri_json.isTextual())
+							.map(is_pri_json -> is_pri_json.asText().equalsIgnoreCase("true"))
+							.orElse(false);
+				})
+				.map(json -> json.get(ElasticsearchIndexUtils.CUSTOM_META_SECONDARY))
+				.filter(json -> null != json)
+				.filter(json -> json.isTextual())
+				.map(json -> json.asText())
+				.findFirst()
+				;
 		}
+		
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#handleAgeOutRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 		 */
@@ -688,7 +704,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 												? "_default_"
 												: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 				
-				final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, Optional.empty(), schema_config, _mapper, index_type);
+				final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, Optional.empty(), true, schema_config, _mapper, index_type);
 				if (is_verbose) {
 					errors.add(ErrorUtils.buildSuccessMessage(bucket.full_name(), "validateSchema", mapping.bytes().toUtf8()));
 				}
@@ -750,16 +766,6 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
 		return Arrays.asList(this, _crud_factory);
-	}
-
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService#handleAgeOutRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
-	 */
-	@Override
-	public CompletableFuture<BasicMessageBean> handleAgeOutRequest(
-			DataBucketBean bucket) {
-		// TODO (ALEPH-14): handle age out
-		return null;
 	}
 
 }

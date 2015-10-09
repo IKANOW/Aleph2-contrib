@@ -325,7 +325,7 @@ public class HdfsStorageService implements IStorageService {
 		 */
 		@Override
 		public CompletableFuture<BasicMessageBean> switchCrudServiceToPrimaryBuffer(
-				DataBucketBean bucket, String secondary_buffer, final Optional<String> new_name_for_ex_primary)
+				DataBucketBean bucket, Optional<String> secondary_buffer, final Optional<String> new_name_for_ex_primary)
 		{
 			final FileContext fc = HdfsStorageService.this.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 			
@@ -338,19 +338,23 @@ public class HdfsStorageService implements IStorageService {
 			final Path px_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY);
 			
 			final Function<Path, Validation<Throwable, Path>> moveOrDeleteDir = path -> {
-				final Path path_to_move = Path.mergePaths(path, new Path(IStorageService.PRIMARY_BUFFER_SUFFIX));
-				return new_name_for_ex_primary.map(Lambdas.wrap_e((name -> {
-					fc.rename(path_to_move, Path.mergePaths(path, new Path("/" + name)), Rename.OVERWRITE);					
-					return path;
-				})))
-				.orElseGet(Lambdas.wrap_e(() -> { // just delete it
-					fc.delete(path_to_move, true);					
-					return path;
-				}));
+				final Path path_to_move = Path.mergePaths(path, new Path(IStorageService.PRIMARY_BUFFER_SUFFIX));				
+				return Optional.of(new_name_for_ex_primary.orElse(IStorageService.EX_PRIMARY_BUFFER_SUFFIX))
+						.filter(name -> !name.isEmpty())
+						.map(Lambdas.wrap_e((name -> {
+							//(NOTE ABOUT MERGE PATHS - IF STARTS WITH // THEN ASSUMES IS FS PROTOCOL AND IGNORES) 
+							fc.rename(path_to_move, Path.mergePaths(path, new Path(name.startsWith("/") ? name : "/" + name)), Rename.OVERWRITE);					
+							return path;
+						})))
+						.orElseGet(Lambdas.wrap_e(() -> { // just delete it
+							fc.delete(path_to_move, true);					
+							return path;
+						}));
 			};
 			final Function<Path, Validation<Throwable, Path>> moveToPrimary = Lambdas.wrap_e(path -> {
 
-				final Path src_path = Path.mergePaths(path, new Path("/" + secondary_buffer));
+				//(NOTE ABOUT MERGE PATHS - IF STARTS WITH // THEN ASSUMES IS FS PROTOCOL AND IGNORES) 
+				final Path src_path = Path.mergePaths(path, new Path(secondary_buffer.map(s -> s.startsWith("/") ? s : "/" + s).orElse(IStorageService.EX_PRIMARY_BUFFER_SUFFIX)));
 				final Path dst_path = Path.mergePaths(path, new Path(IStorageService.PRIMARY_BUFFER_SUFFIX));
 				try {
 					fc.rename(src_path, dst_path, Rename.OVERWRITE);

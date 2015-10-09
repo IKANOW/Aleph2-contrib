@@ -624,15 +624,15 @@ public class TestElasticsearchIndexUtils {
 					.done().get();
 			
 			// Nothing at all:
-			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0a, Optional.empty(), config_bean, Optional.of(XContentFactory.jsonBuilder().startObject()), _mapper).bytes().toUtf8());
-			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0b, Optional.empty(), config_bean, Optional.empty(), _mapper).bytes().toUtf8());
-			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0c, Optional.empty(), config_bean, Optional.empty(), _mapper).bytes().toUtf8());
-			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0d, Optional.empty(), config_bean, Optional.empty(), _mapper).bytes().toUtf8());
-			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0e, Optional.empty(), config_bean, Optional.empty(), _mapper).bytes().toUtf8());
+			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0a, Optional.empty(), true, config_bean, Optional.of(XContentFactory.jsonBuilder().startObject()), _mapper).bytes().toUtf8());
+			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0b, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
+			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0c, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
+			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0d, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
+			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0e, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
 			
 			// Not even config
 			final ElasticsearchIndexServiceConfigBean config_bean2 = BeanTemplateUtils.build(ElasticsearchIndexServiceConfigBean.class).done().get();
-			assertEquals("{\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":null,\"secondary_buffer\":\"\"}}}}", ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0a, Optional.empty(), config_bean2, Optional.of(XContentFactory.jsonBuilder().startObject()), _mapper).bytes().toUtf8());
+			assertEquals("{\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":null,\"secondary_buffer\":\"\"}}}}", ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0a, Optional.empty(), true, config_bean2, Optional.of(XContentFactory.jsonBuilder().startObject()), _mapper).bytes().toUtf8());
 		}		
 		
 		// TEST with settings specified in mapping
@@ -659,7 +659,7 @@ public class TestElasticsearchIndexUtils {
 
 			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(test_bucket_1, config_bean, _mapper);
 			
-			assertEquals(user_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_1, Optional.empty(), schema_config, Optional.empty(), _mapper).bytes().toUtf8());			
+			assertEquals(user_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_1, Optional.empty(), true, schema_config, Optional.empty(), _mapper).bytes().toUtf8());			
 		}
 		
 		// TEST with mapping overrides
@@ -692,7 +692,7 @@ public class TestElasticsearchIndexUtils {
 			
 			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(test_bucket_1, config_bean, _mapper);
 			
-			assertEquals(user_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_1, Optional.empty(), schema_config, Optional.empty(), _mapper).bytes().toUtf8());						
+			assertEquals(user_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_1, Optional.empty(), true, schema_config, Optional.empty(), _mapper).bytes().toUtf8());						
 		}
 	}
 
@@ -756,7 +756,7 @@ public class TestElasticsearchIndexUtils {
 			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty());
 			
 			final XContentBuilder test_result = ElasticsearchIndexUtils.getFullMapping(
-					test_bucket, Optional.empty(), schema_config, field_lookups, 
+					test_bucket, Optional.empty(), true, schema_config, field_lookups, 
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
@@ -768,7 +768,7 @@ public class TestElasticsearchIndexUtils {
 		
 		// Final method
 		{ 
-			final XContentBuilder test_result = ElasticsearchIndexUtils.createIndexMapping(test_bucket, Optional.empty(), schema_config, _mapper, "_default_");			
+			final XContentBuilder test_result = ElasticsearchIndexUtils.createIndexMapping(test_bucket, Optional.empty(), true, schema_config, _mapper, "_default_");			
 			assertEquals(expected_json.toString(), test_result.bytes().toUtf8());
 		}
 	}
@@ -801,7 +801,7 @@ public class TestElasticsearchIndexUtils {
 						? "_default_"
 						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(search_index_test, Optional.empty(), schema_config, _mapper, index_type);
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(search_index_test, Optional.empty(), true, schema_config, _mapper, index_type);
 	
 			assertEquals("Get expected search_index_test schema", expected, mapping.bytes().toUtf8());
 		}
@@ -825,7 +825,7 @@ public class TestElasticsearchIndexUtils {
 						? "_default_"
 						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_test, Optional.empty(), schema_config, _mapper, index_type);
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_test, Optional.empty(), true, schema_config, _mapper, index_type);
 	
 			assertEquals("Get expected search_index_test schema", expected, mapping.bytes().toUtf8());
 		}
@@ -856,7 +856,7 @@ public class TestElasticsearchIndexUtils {
 						? "_default_"
 						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_test, Optional.empty(), schema_config, _mapper, index_type);
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_test, Optional.empty(), true, schema_config, _mapper, index_type);
 	
 			assertEquals("Get expected search_index_test schema", expected2, mapping.bytes().toUtf8());
 		}
@@ -880,7 +880,7 @@ public class TestElasticsearchIndexUtils {
 						? "_default_"
 						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(columnar_test, Optional.empty(), schema_config, _mapper, index_type);
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(columnar_test, Optional.empty(), true, schema_config, _mapper, index_type);
 	
 			assertEquals("Get expected search_index_test schema", expected, mapping.bytes().toUtf8());
 		}
@@ -907,7 +907,7 @@ public class TestElasticsearchIndexUtils {
 						? "_default_"
 						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_columnar_test, Optional.empty(), schema_config, _mapper, index_type);
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_columnar_test, Optional.empty(), true, schema_config, _mapper, index_type);
 	
 			assertEquals("Get expected search_index_test schema", expected, mapping.bytes().toUtf8());
 		}
