@@ -164,7 +164,7 @@ public class TestHadoopTechnologyService {
 				break;
 			}
 		}
-		for (int ii = 0; ii < 10; ++ii) {
+		for (int ii = 0; ii < 20; ++ii) {
 			Thread.sleep(500L);
 			if (test_service.getNumRecordsInSearchIndex(test_bucket) > 0) {
 				break;
@@ -254,7 +254,8 @@ public class TestHadoopTechnologyService {
 				break;
 			}
 		}
-		for (int ii = 0; ii < 10; ++ii) {
+		System.out.println("Completed job");
+		for (int ii = 0; ii < 20; ++ii) {
 			Thread.sleep(500L);
 			if (test_service.getNumRecordsInSearchIndex(test_bucket) > 0) {
 				break;

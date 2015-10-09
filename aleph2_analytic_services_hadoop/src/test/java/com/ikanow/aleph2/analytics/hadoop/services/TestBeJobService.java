@@ -240,7 +240,7 @@ public class TestBeJobService {
 		assertFalse("File2 shouldn't exist", new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX + "bucket1data.json").exists());
 		
 		// Check the object got written into ES
-		for (int ii = 0; ii < 12; ++ii) {
+		for (int ii = 0; ii < 20; ++ii) {
 			Thread.sleep(500L);
 			if (es_index.countObjects().get().intValue() >= 2) {
 				break;
