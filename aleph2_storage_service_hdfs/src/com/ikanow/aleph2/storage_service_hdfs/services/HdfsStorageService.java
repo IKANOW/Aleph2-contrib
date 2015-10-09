@@ -271,7 +271,7 @@ public class HdfsStorageService implements IStorageService {
 								.filter(substore -> 
 												Optional.ofNullable(substore.enabled()).orElse(true))
 								.map(__ -> 
-										new HfdsDataWriteService<O>(bucket, stage, HdfsStorageService.this, secondary_buffer))
+										new HfdsDataWriteService<O>(bucket, stage, Optional.empty(), HdfsStorageService.this, secondary_buffer))
 								;
 		}
 

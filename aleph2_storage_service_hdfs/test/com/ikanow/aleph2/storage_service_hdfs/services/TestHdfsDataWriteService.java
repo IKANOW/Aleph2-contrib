@@ -131,15 +131,18 @@ public class TestHdfsDataWriteService {
 				.with(DataBucketBean::full_name, "/test/static")
 			.done().get();
 
-		assertEquals("/root/test/static/managed_bucket/import/stored/raw/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.raw, "current/"));
-		assertEquals("/root/test/static/managed_bucket/import/stored/raw/ping", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.raw, "ping"));
-		assertEquals("/root/test/static/managed_bucket/import/stored/json/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.json, "current/"));
-		assertEquals("/root/test/static/managed_bucket/import/stored/json/pong", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.json, "pong"));
-		assertEquals("/root/test/static/managed_bucket/import/stored/processed/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.processed, "current/"));
-		assertEquals("/root/test/static/managed_bucket/import/stored/processed/other", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.processed, "other"));
-		
+		assertEquals("/root/test/static/managed_bucket/import/stored/raw/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.raw, Optional.empty(), "current/"));
+		assertEquals("/root/test/static/managed_bucket/import/stored/raw/ping", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.raw, Optional.empty(), "ping"));
+		assertEquals("/root/test/static/managed_bucket/import/stored/json/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.json, Optional.empty(), "current/"));
+		assertEquals("/root/test/static/managed_bucket/import/stored/json/pong", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.json, Optional.empty(), "pong"));
+		assertEquals("/root/test/static/managed_bucket/import/stored/processed/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.processed, Optional.empty(), "current/"));
+		assertEquals("/root/test/static/managed_bucket/import/stored/processed/other", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.processed, Optional.empty(), "other"));
+	
+		//TODO (ALEPH-12): transient output
 	}
 		
+	//TODO (ALEPH-12): simple duplicate of end-end for transient output
+	
 	/** Get some easy testing out the way
 	 * 		HfdsDataWriteService.getExtension
 	 */
@@ -396,7 +399,7 @@ public class TestHdfsDataWriteService {
 						.done().get())
 				.done().get();
 		
-		HfdsDataWriteService<TestBean> write_service = new HfdsDataWriteService<>(test_bucket, IStorageService.StorageStage.processed, storage_service, secondary);
+		HfdsDataWriteService<TestBean> write_service = new HfdsDataWriteService<>(test_bucket, IStorageService.StorageStage.processed, Optional.empty(), storage_service, secondary);
 		
 		return write_service;
 	}
