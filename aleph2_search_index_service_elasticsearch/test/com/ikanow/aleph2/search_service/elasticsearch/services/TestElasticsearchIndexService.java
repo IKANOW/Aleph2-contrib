@@ -398,7 +398,7 @@ public class TestElasticsearchIndexService {
 			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
 			assertEquals(1, _index_service._bucket_template_cache.size());
-			assertEquals(next_time, _index_service._bucket_template_cache.getIfPresent(bucket._id()));
+			assertEquals(next_time, _index_service._bucket_template_cache.getIfPresent(bucket._id() + ":true"));
 			assertEquals(1, gtr2.getIndexTemplates().size());
 		}
 		
@@ -413,7 +413,7 @@ public class TestElasticsearchIndexService {
 			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
 			assertEquals(1, _index_service._bucket_template_cache.size());
-			assertEquals(time_setter.getTime(), _index_service._bucket_template_cache.getIfPresent(bucket._id()));
+			assertEquals(time_setter.getTime(), _index_service._bucket_template_cache.getIfPresent(bucket._id() + ":true"));
 			assertEquals(1, gtr2.getIndexTemplates().size());
 			
 			assertFalse(ElasticsearchIndexService.mappingsAreEquivalent(gtr2.getIndexTemplates().get(0), mapping_json, _mapper)); // has changed
