@@ -27,6 +27,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -91,6 +92,7 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudSe
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchFutureUtils;
 
+import fj.data.Either;
 import fj.data.Java8;
 import fj.data.Validation;
 
@@ -299,7 +301,12 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			
 			final Tuple3<ElasticsearchIndexServiceConfigBean, String, Optional<String>> schema_index_type = getSchemaConfigAndIndexAndType(bucket, _config);
 						
-			final boolean is_primary =  _data_service.get().getPrimaryBufferName(bucket).equals(secondary_buffer);
+			// only create aliases within ES context if there is no primary (ie secondary buffers), or if the secondary currently points at the primary
+			final boolean is_primary =  getPrimaryBufferName(bucket)
+											.map(primary -> Optional.of(primary).equals(secondary_buffer))
+											.orElseGet(() -> { // (no primary buffer, just return true if i'm the default current 
+												return !secondary_buffer.isPresent();
+											});					
 			
 			final Optional<JsonNode> user_mapping = handlePotentiallyNewIndex(bucket, secondary_buffer, is_primary, schema_index_type._1(), schema_index_type._2());
 			
@@ -311,18 +318,36 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 
 			final Optional<Long> target_max_index_size_mb = Optionals.of(() -> schema_index_type._1().search_technology_override().target_index_size_mb());
 
-			///I think it's fine to decide up front whether we're aliasing this or not (but don't do it based on !secondary
-			// ... it's !secondary || secondary==primary (Which should never happen?), since the write context should only persist 
-			// for the duration of a secondary->primary allocation anyway
-			final boolean create_aliases = !secondary_buffer.isPresent() || is_primary;
-
+			// LAMBDA util to pass into the ElasticsearchContext - determines dynamically if the alias should be generated
+			// (ElasticsearchContext is responsible for calling it efficiently)
+			final Function<String, Optional<String>> aliasCheck = index_name -> {
+				final Optional<String> base_index = Optional.of(ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()));
+				final Optional<String> primary_buffer = 
+						getPrimaryBufferName(bucket)
+							.<Optional<String>> map(name -> {
+								String primary_index = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.of(name));
+								return primary_index.equals(index_name)
+										? base_index
+										: Optional.empty()
+										;
+							})
+							.orElseGet(() -> { // (no primary buffer, just return true if i'm the default current 
+								return secondary_buffer.isPresent()
+										? Optional.empty()
+										: base_index
+										;
+							})					
+							;
+				return primary_buffer;
+			};
+			
 			// Index
 			final String index_base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, secondary_buffer);
 			final ElasticsearchContext.IndexContext.ReadWriteIndexContext index_context = time_period.validation(
-					fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name, target_max_index_size_mb, create_aliases)
+					fail -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext(index_base_name, target_max_index_size_mb, Either.right(aliasCheck))
 					, 
 					success -> new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext(index_base_name + ElasticsearchContextUtils.getIndexSuffix(success), 
-										Optional.ofNullable(schema_index_type._1().temporal_technology_override().time_field()), target_max_index_size_mb, create_aliases)
+										Optional.ofNullable(schema_index_type._1().temporal_technology_override().time_field()), target_max_index_size_mb, Either.right(aliasCheck))
 					);			
 			
 			final boolean auto_type = 
@@ -388,8 +413,8 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			Stream.concat(Stream.of(""), getSecondaryBuffers(bucket).stream()).parallel()
 				.<Optional<String>>map(buffer -> buffer.isEmpty() ? Optional.empty() : Optional.of(buffer))
 				.forEach(buffer -> {
-					final boolean is_primary = new_primary_buffer.equals(new_primary_buffer);
-					final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, buffer, is_primary, schema_index_type._1(), _mapper, schema_index_type._2());
+					final boolean is_primary = buffer.equals(new_primary_buffer);
+					final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(bucket, buffer, is_primary, schema_index_type._1(), _mapper, schema_index_type._2());					
 					final String base_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, buffer);
 					_crud_factory.getClient().admin().indices().preparePutTemplate(base_name).setSource(mapping).execute().actionGet();					
 				})

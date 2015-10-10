@@ -33,6 +33,8 @@ import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.client.Client;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -40,7 +42,10 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConte
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchFutureUtils;
 
+import fj.data.Either;
+
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 import scala.Tuple2;
@@ -84,7 +89,7 @@ public abstract class ElasticsearchContext {
 	
 	/** This is pre-prended to index names to form an alias that is always safe to read
 	 */
-	public static final String READ_PREFIX = "r__";	
+	public static final String READ_PREFIX = "r__";		
 	
 	/** Elasticsearch context that one can read from but not write to (eg because it has multiple indexes)
 	 * @author Alex
@@ -198,29 +203,49 @@ public abstract class ElasticsearchContext {
 		 * @author Alex
 		 */
 		public static abstract class ReadWriteIndexContext extends IndexContext {
-			private ReadWriteIndexContext(Optional<Long> target_max_index_size_mb, boolean create_aliases) {
+			private ReadWriteIndexContext(Optional<Long> target_max_index_size_mb, final Either<Boolean, Function<String, Optional<String>>> create_aliases) {
 				_target_max_index_size_mb = target_max_index_size_mb.filter(i -> i >= 0); // (negative means no limit)
 				_create_aliases = create_aliases;
 			}			
 			public final Optional<Long> target_max_index_size_mb() { return _target_max_index_size_mb; }
 			protected final Optional<Long> _target_max_index_size_mb;
-			protected final boolean _create_aliases;
+			protected final Either<Boolean, Function<String, Optional<String>>> _create_aliases;
+			
+			protected final static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());			
 			
 			// READ-ONLY ALIAS CREATION:
 			
 			private final ScheduledExecutorService _scheduler = Executors.newScheduledThreadPool(1);			
+
+			// READ-ONLY ALIAS UTILS:
+
+			/** If we're performing expensive checks for aliases
+			 * @return
+			 */
+			protected boolean mayCreateAliasesForThisIndex() {
+				return _create_aliases.isRight() || _create_aliases.left().value();
+			}
 			
 			/** Checks to see if the read only version of this alias has been assigned, and assigns it if not
 			 *  (At some point, ES should allow this function to be built into the mapping, or discovered in the callback to the store function)
 			 * @param index_name
 			 */
-			protected void checkForAliases(final String index_name) {
-				_scheduler.schedule(() -> {
-					this.client().admin().indices().prepareAliases().addAlias(index_name + "*", READ_PREFIX + index_name).execute();
-				}
-				,
-				2, TimeUnit.SECONDS // need to give the index time to write or the alias won't exist...
-				);
+			protected boolean checkForAliases(final String index_name) {				
+				final Optional<String> alias_to_create = 
+						_create_aliases.either(
+								left -> left ? Optional.of(index_name) : Optional.empty()
+								, 
+								right -> right.apply(index_name));
+				
+				alias_to_create.ifPresent(base_index -> {
+					_scheduler.schedule(() -> {
+						this.client().admin().indices().prepareAliases().addAlias(index_name + "*", READ_PREFIX + base_index).execute();
+					}
+					,
+					2, TimeUnit.SECONDS // need to give the index time to write or the alias won't exist...
+					);												
+				});				
+				return alias_to_create.isPresent();
 			}
 			
 			// INDEX SIZING UTILITY:
@@ -243,15 +268,15 @@ public abstract class ElasticsearchContext {
 				final Tuple3<Long, String, Integer> last_suffix = _mutable_state._base_index_states.computeIfAbsent(base_index, __ -> Tuples._3T(null, "", 0));
 				final Long last_checked = last_suffix._1();
 				final boolean checked_for_aliases = Lambdas.get(() -> {
-					if (_create_aliases) { // alias checking logic, first time through only... (And then for index splitting, whenever an index is split)
-						if (null == last_checked) {
+					if (mayCreateAliasesForThisIndex()) {
+						if (null == last_checked) { // alias checking logic, first time through only... (And then for index splitting, whenever an index is split)
 							checkForAliases(base_index);
 							if (!_target_max_index_size_mb.isPresent()) { // (update the concurrent hash map here since not going any further)
 								_mutable_state._base_index_states.put(base_index, Tuples._3T(now, "", 0)); // (current time + defaults - 2/3 not used)
 							}
 							return true;
 						}
-					}				
+					}
 					return false;
 				});
 				
@@ -278,8 +303,6 @@ public abstract class ElasticsearchContext {
 						                    .execute()								
 										,
 										stats -> {
-											//TODO (IKANOW/Aleph2#28): I think I need to check here if I've been switched?
-											
 											final int suffix_index = Lambdas.get(() -> {
 												final IndexStats index_stats = stats.getIndex(getName(base_index, last_suffix));
 												
@@ -302,7 +325,7 @@ public abstract class ElasticsearchContext {
 													return last_suffix._3();
 												}
 											});			
-											if (_create_aliases && !checked_for_aliases && (suffix_index != last_suffix._3())) {
+											if (mayCreateAliasesForThisIndex() && !checked_for_aliases && (suffix_index != last_suffix._3())) {
 												checkForAliases(base_index);
 											}
 											final Tuple3<Long, String, Integer> new_suffix = Tuples._3T(now, BAR + suffix_index, suffix_index);
@@ -360,7 +383,7 @@ public abstract class ElasticsearchContext {
 				 * @param target_max_index_size_mb - the target max index size
 				 * @param create_aliases - if true tries to maintain a read-only alias across the different indexes comprising this context
 				 */
-				public FixedRwIndexContext(final String index, Optional<Long> target_max_index_size_mb, boolean create_aliases) {
+				public FixedRwIndexContext(final String index, final Optional<Long> target_max_index_size_mb, final Either<Boolean, Function<String, Optional<String>>> create_aliases) {
 					super(target_max_index_size_mb, create_aliases);
 					_index = index;
 				}
@@ -391,7 +414,7 @@ public abstract class ElasticsearchContext {
 			 */
 			public static class FixedRwIndexSecondaryContext extends FixedRwIndexContext {
 				public FixedRwIndexSecondaryContext(final String index, Optional<Long> target_max_index_size_mb) {
-					super(index, target_max_index_size_mb, false);
+					super(index, target_max_index_size_mb, Either.left(false));
 				}
 			}
 			
@@ -405,7 +428,7 @@ public abstract class ElasticsearchContext {
 				 * @param target_max_index_size_mb - the target max index size
 				 * @param create_aliases - if true tries to maintain a read-only alias across the different indexes comprising this context
 				 */
-				public TimedRwIndexContext(final String index, final Optional<String> time_field, Optional<Long> target_max_index_size_mb, boolean create_aliases) {
+				public TimedRwIndexContext(final String index, final Optional<String> time_field, final Optional<Long> target_max_index_size_mb, final Either<Boolean, Function<String, Optional<String>>> create_aliases) {
 					super(target_max_index_size_mb, create_aliases);
 					_index = index;
 					_time_field = time_field;
@@ -462,7 +485,7 @@ public abstract class ElasticsearchContext {
 		 */
 		public static class TimedRwIndexSecondaryContext extends TimedRwIndexContext {
 			public TimedRwIndexSecondaryContext(final String index, final Optional<String> time_field, Optional<Long> target_max_index_size_mb) {
-				super(index, time_field, target_max_index_size_mb, false);
+				super(index, time_field, target_max_index_size_mb, Either.left(false));
 			}
 		}
 	}

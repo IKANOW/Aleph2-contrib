@@ -945,9 +945,8 @@ public class TestElasticsearchIndexService {
 	}
 	
 	
-	@org.junit.Ignore
 	@Test
-	public void test_primaryBuffers() {
+	public void test_primaryBuffers() throws InterruptedException {
 		
 		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class)
 				.with("full_name", "/test/buffer/switching")
@@ -985,15 +984,47 @@ public class TestElasticsearchIndexService {
 		
 		assertTrue("Switch worked: " + res1.message(), res1.success());
 		
-		//TODO (IKANOW/Aleph2#28): this doesn't currently work...
-		//assertEquals(Optional.of("sec_test_1"), index_data_service.getPrimaryBufferName(bucket));				
+		assertEquals(Optional.of("sec_test_1"), index_data_service.getPrimaryBufferName(bucket));				
 		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));		
 				
 		// 4) Change to a different buffer - when there is some data (also add some data to a secondary index at the same time) - check the data swaps
 		
+		addRecordToSecondaryBuffer(bucket, Optional.empty()); 
+		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_1")); 
+		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_2")); 
+		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_3"));
+		System.out.println("Waiting for indices and aliases to be generated....");
+		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
+		
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket));
+		
 		// 5) Switch original back again
+		
+		//TODO
 		
 		//TODO (IKANOW/Aleph2#28):  will need a test where the outgoing aliases don't existing but the incoming ones do, to check that even though you'll prob get an IndexMissingException it will still apply the other tests
 	}
 
+	///////////////////////////////////
+	
+	// UTILITIES
+	
+	public void addRecordToSecondaryBuffer(final DataBucketBean bucket, Optional<String> buffer_name) {
+		final ICrudService<JsonNode> buffer_crud = 
+				_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), buffer_name).get()
+								.getCrudService().get();
+		
+		buffer_crud.storeObject(_mapper.createObjectNode().put("name", buffer_name.orElse("current")));
+	}
+
+	
+	public List<String> getAliasedBuffers(final DataBucketBean bucket) {
+		return _crud_factory.getClient().admin().indices().prepareStats()
+                    .clear()
+                    .setIndices("r__" + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()) + "*")
+                    .setStore(true)
+                    .get()
+					.getIndices().keySet().stream().sorted().collect(Collectors.toList())
+                    ;
+	}
 }
