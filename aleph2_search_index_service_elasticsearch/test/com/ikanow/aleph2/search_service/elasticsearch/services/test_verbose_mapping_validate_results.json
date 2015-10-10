@@ -14,6 +14,7 @@
         "_default_": {
 	       "_meta": {
 	       	   "bucket_path":"/test/validate/success",
+               "is_primary": "true",
 	           "secondary_buffer": ""
 	       },
             "_all": {
