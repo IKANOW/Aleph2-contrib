@@ -232,7 +232,7 @@ public abstract class ElasticsearchContext {
 			 */
 			protected boolean checkForAliases(final String index_name) {				
 				final Optional<String> alias_to_create = 
-						_create_aliases.either(
+						_create_aliases.<Optional<String>>either(
 								left -> left ? Optional.of(index_name) : Optional.empty()
 								, 
 								right -> right.apply(index_name));
