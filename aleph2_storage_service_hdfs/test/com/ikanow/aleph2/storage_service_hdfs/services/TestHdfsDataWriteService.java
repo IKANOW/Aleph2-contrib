@@ -137,12 +137,16 @@ public class TestHdfsDataWriteService {
 		assertEquals("/root/test/static/managed_bucket/import/stored/json/pong", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.json, Optional.empty(), "pong"));
 		assertEquals("/root/test/static/managed_bucket/import/stored/processed/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.processed, Optional.empty(), "current/"));
 		assertEquals("/root/test/static/managed_bucket/import/stored/processed/other", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.processed, Optional.empty(), "other"));
-	
-		//TODO (ALEPH-12): transient output
+
+		// Transient output:
+		try {
+			HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.transient_output, Optional.empty(), "current/");
+			fail("Should have thrown");
+		}
+		catch (Exception e) {}
+		assertEquals("/root/test/static/managed_bucket/import/transient/current/testj-testm", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.transient_output, Optional.of("testj-testm"), "current"));
 	}
 		
-	//TODO (ALEPH-12): simple duplicate of end-end for transient output
-	
 	/** Get some easy testing out the way
 	 * 		HfdsDataWriteService.getExtension
 	 */
@@ -151,6 +155,7 @@ public class TestHdfsDataWriteService {
 		assertEquals("", HfdsDataWriteService.getExtension(IStorageService.StorageStage.raw));
 		assertEquals(".json", HfdsDataWriteService.getExtension(IStorageService.StorageStage.json));
 		assertEquals(".json", HfdsDataWriteService.getExtension(IStorageService.StorageStage.processed));
+		assertEquals(".json", HfdsDataWriteService.getExtension(IStorageService.StorageStage.transient_output));
 	}	
 	
 	/** Get some easy testing out the way
@@ -371,9 +376,9 @@ public class TestHdfsDataWriteService {
 	}
 	
 	protected HfdsDataWriteService<TestBean> getWriter(String name) {
-		return getWriter(name, Optional.empty());
+		return getWriter(name, Optional.empty(), false);
 	}
-	protected HfdsDataWriteService<TestBean> getWriter(String name, Optional<String> secondary) {
+	protected HfdsDataWriteService<TestBean> getWriter(String name, Optional<String> secondary, boolean is_transient) {
 		
 		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 		
@@ -399,7 +404,10 @@ public class TestHdfsDataWriteService {
 						.done().get())
 				.done().get();
 		
-		HfdsDataWriteService<TestBean> write_service = new HfdsDataWriteService<>(test_bucket, IStorageService.StorageStage.processed, Optional.empty(), storage_service, secondary);
+		HfdsDataWriteService<TestBean> write_service = new HfdsDataWriteService<TestBean>(test_bucket, 
+				is_transient ? IStorageService.StorageStage.transient_output : IStorageService.StorageStage.processed, 
+				is_transient ? Optional.of("testj-testm") : Optional.empty(), 
+				storage_service, secondary);
 		
 		return write_service;
 	}
@@ -575,16 +583,20 @@ public class TestHdfsDataWriteService {
 	
 	@Test
 	public void test_writerService_end2end_primary() throws InterruptedException, ExecutionException {
-		test_writerService_end2end(Optional.empty());
+		test_writerService_end2end(Optional.empty(), false);
 	}
 	@Test
 	public void test_writerService_end2end_secondary() throws InterruptedException, ExecutionException {
-		test_writerService_end2end(Optional.of("secondary_test"));
+		test_writerService_end2end(Optional.of("secondary_test"), false);
+	}
+	@Test
+	public void test_writerService_end2end_transient() throws InterruptedException, ExecutionException {
+		test_writerService_end2end(Optional.of("ping"), true);
 	}
 	
-	public void test_writerService_end2end(Optional<String> secondary) throws InterruptedException, ExecutionException {
+	public void test_writerService_end2end(Optional<String> secondary, boolean is_transient) throws InterruptedException, ExecutionException {
 		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;		
-		HfdsDataWriteService<TestBean> write_service = getWriter("/test/writer/end2end/" + secondary.orElse("current") + "/", secondary);
+		HfdsDataWriteService<TestBean> write_service = getWriter("/test/writer/end2end/" + secondary.orElse("current") + "/", secondary, is_transient);
 
 		//(Tidy up)
 		try { FileUtils.deleteDirectory(new File(temp_dir + "/data/" + write_service._bucket.full_name())); } catch (Exception e) {}
@@ -627,13 +639,17 @@ public class TestHdfsDataWriteService {
 			}
 		}
 		Thread.sleep(500L);
+		
+		final String infix = is_transient ? IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY : IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY;
+		final String infix_name = is_transient ? "testj-testm" : "";
+		
 		// Check that initially the files are stored locally
 		File init_dir = new File(
-				(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/"+secondary.orElse("current")+"/.spooldir/")
+				(temp_dir + "/data/" + write_service._bucket.full_name() + infix + secondary.orElse("current") + "/" + infix_name + "/.spooldir/")
 				.replace("/", File.separator)
 				);
 		File final_dir = new File(
-				(temp_dir + "/data/" + write_service._bucket.full_name() + "/managed_bucket/import/stored/processed/"+secondary.orElse("current")+"/all_time/")
+				(temp_dir + "/data/" + write_service._bucket.full_name() + infix + secondary.orElse("current") + "/" + infix_name + "/all_time/")
 				.replace("/", File.separator)
 				);
 		assertEquals("Needs to have 6 files, including 3x .crc: " + Arrays.toString(init_dir.list()), 6, init_dir.list().length); //*2 because CRC
