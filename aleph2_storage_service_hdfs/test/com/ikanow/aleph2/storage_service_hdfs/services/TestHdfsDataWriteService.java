@@ -404,7 +404,7 @@ public class TestHdfsDataWriteService {
 						.done().get())
 				.done().get();
 		
-		HfdsDataWriteService<TestBean> write_service = new HfdsDataWriteService<TestBean>(test_bucket, 
+		HfdsDataWriteService<TestBean> write_service = new HfdsDataWriteService<TestBean>(test_bucket, storage_service._data_service.get(),
 				is_transient ? IStorageService.StorageStage.transient_output : IStorageService.StorageStage.processed, 
 				is_transient ? Optional.of("testj-testm") : Optional.empty(), 
 				storage_service, secondary);
@@ -419,12 +419,6 @@ public class TestHdfsDataWriteService {
 		
 		// First off a bunch of top level trivial calls
 		{			
-			try {
-				write_service.deleteDatastore();
-				fail("Should have errored on deleteDatastore");
-			}
-			catch (Exception e) {}
-			
 			try {
 				write_service.getCrudService();
 				fail("Should have errored on getCrudService");
@@ -684,6 +678,11 @@ public class TestHdfsDataWriteService {
 			if (final_dir.list().length > 6) break;
 		}
 		System.out.println("(Check init dir cleared: " + Arrays.stream(init_dir.list()).collect(Collectors.joining(";")) + ")");
-		assertEquals("Should have 8 files: " + Arrays.stream(final_dir.list()).collect(Collectors.joining(";")), 8, final_dir.list().length); //*2 because CRC		
+		assertEquals("Should have 8 files: " + Arrays.stream(final_dir.list()).collect(Collectors.joining(";")), 8, final_dir.list().length); //*2 because CRC	
+		
+		System.out.println("(Deleting datastore and checking it's empty)");
+		assertTrue("Deleted datastore: ", write_service.deleteDatastore().get()); // (just quick test since this uses handleBucketDeletion which is tested elsewhere...)
+		String[] final_dir_list = Optional.ofNullable(final_dir.list()).orElse(new String[0]);
+		assertEquals("Should have 0 files: " + Arrays.stream(final_dir_list).collect(Collectors.joining(";")), 0, final_dir_list.length); //*2 because CRC	
 	}
 }

@@ -42,6 +42,7 @@ import scala.Tuple2;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
@@ -78,6 +79,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	protected final IStorageService _storage_service;
 	protected final String _buffer_name; 
 	protected final Optional<String> _job_name;
+	protected final IGenericDataService _parent;
 	
 	// (currently just share on of these across all users of this service, basically across the process/classloader)
 	protected final SetOnce<BatchHdfsWriteService> _writer = new SetOnce<>();
@@ -87,13 +89,14 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	/** User constructor
 	 * @param bucket
 	 */
-	public HfdsDataWriteService(final DataBucketBean bucket, final IStorageService.StorageStage stage, final Optional<String> job_name, final IStorageService storage_service, final Optional<String> secondary_buffer) {
+	public HfdsDataWriteService(final DataBucketBean bucket, final IGenericDataService parent, final IStorageService.StorageStage stage, final Optional<String> job_name, final IStorageService storage_service, final Optional<String> secondary_buffer) {
 		_bucket = bucket;
 		_stage = stage;
 		_buffer_name = secondary_buffer.orElse(IStorageService.PRIMARY_BUFFER_SUFFIX);
 		_storage_service = storage_service;
 		_job_name = job_name;
 		_dfs = storage_service.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
+		_parent = parent;
 	}
 	
 	/** Lazy initialization for batch writer
@@ -139,7 +142,9 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 */
 	@Override
 	public CompletableFuture<Boolean> deleteDatastore() {
-		throw new RuntimeException(ErrorUtils.get(HdfsErrorUtils.OPERATION_NOT_SUPPORTED, "deleteDatastore"));
+		return _parent.handleBucketDeletionRequest(_bucket, Optional.of(_buffer_name).filter(name -> !name.equals(IStorageService.PRIMARY_BUFFER_SUFFIX)), false)
+				.thenApply(res -> res.success())
+				;
 	}
 
 	/* (non-Javadoc)
@@ -155,7 +160,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 */
 	@Override
 	public IDataWriteService<JsonNode> getRawService() {
-		return new HfdsDataWriteService<JsonNode>(_bucket, _stage, _job_name, _storage_service, Optional.of(_buffer_name));
+		return new HfdsDataWriteService<JsonNode>(_bucket, _parent, _stage, _job_name, _storage_service, Optional.of(_buffer_name));
 	}
 
 	/* (non-Javadoc)
