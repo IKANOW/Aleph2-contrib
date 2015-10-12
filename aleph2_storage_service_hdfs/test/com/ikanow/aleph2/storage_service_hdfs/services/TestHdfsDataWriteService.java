@@ -631,9 +631,7 @@ public class TestHdfsDataWriteService {
 					assertEquals(1L, cf.get()._2().get().longValue());
 				}
 			}
-		}
-		Thread.sleep(500L);
-		
+		}		
 		final String infix = is_transient ? IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY : IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY;
 		final String infix_name = is_transient ? "testj-testm" : "";
 		
@@ -646,18 +644,32 @@ public class TestHdfsDataWriteService {
 				(temp_dir + "/data/" + write_service._bucket.full_name() + infix + secondary.orElse("current") + "/" + infix_name + "/all_time/")
 				.replace("/", File.separator)
 				);
+		
+		{
+			int ii = 1;
+			for (; ii <= 50; ++ii) {
+				Thread.sleep(250L);
+				if (6 == init_dir.list().length) {
+					break;
+				}
+			}
+			System.out.println("(exited from file system check after " + ii*2.5 + " s)");
+		}		
+		
 		assertEquals("Needs to have 6 files, including 3x .crc: " + Arrays.toString(init_dir.list()), 6, init_dir.list().length); //*2 because CRC
 		assertTrue("Nothing in final dir: " + (final_dir.exists()?Arrays.toString(final_dir.list()):"(non-exist)"), !final_dir.exists()|| final_dir.list().length == 0);
 
-		int ii = 1;
-		for (; ii <= 50; ++ii) {
-			Thread.sleep(2500L);
-			if (0 == init_dir.list().length) {
-				break;
+		{
+			int ii = 1;
+			for (; ii <= 50; ++ii) {
+				Thread.sleep(2500L);
+				if (0 == init_dir.list().length) {
+					break;
+				}
 			}
+			System.out.println("(exited from file system check after " + ii*2.5 + " s)");
 		}
-		System.out.println("(exited from file system check after " + ii*2.5 + " s)");
-
+		
 		assertEquals(0, init_dir.list().length); //*2 because CRC
 		assertEquals(6, final_dir.list().length); //*2 because CRC		
 		
