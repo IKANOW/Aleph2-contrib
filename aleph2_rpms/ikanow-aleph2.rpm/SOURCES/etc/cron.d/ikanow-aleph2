@@ -1,1 +1,1 @@
-@hourly /bin/find /opt/aleph2-home/cached-jars/ -maxdepth 1 -name "aleph2_storm_jar_*.jar" -mtime -5|xargs rm -rf
+@hourly /bin/find /opt/aleph2-home/cached-jars/ -maxdepth 1 -name "aleph2_storm_jar_*.jar" -mtime +5|xargs rm -rf
