@@ -16,8 +16,11 @@
 package com.ikanow.aleph2.security.service;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -105,4 +108,14 @@ public class IkanowV1SecurityService extends SecurityService implements ISecurit
 		return IkanowV1Realm.class.getName();
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.security.service.SecurityService#getUnderlyingArtefacts()
+	 */
+	@Override
+	public Collection<Object> getUnderlyingArtefacts() {
+		return Stream.concat(
+				super.getUnderlyingArtefacts().stream(),
+				Stream.of(this))
+				.collect(Collectors.toList());
+	}
 }
