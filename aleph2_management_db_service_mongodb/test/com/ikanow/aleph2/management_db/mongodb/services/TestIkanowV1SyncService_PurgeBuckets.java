@@ -124,9 +124,9 @@ public class TestIkanowV1SyncService_PurgeBuckets {
 		final ObjectMapper mapper = BeanTemplateUtils.configureMapper(Optional.empty());		
 		final JsonNode v1_source = mapper.readTree(this.getClass().getResourceAsStream("test_v1_sync_sample_source.json"));
 		
-		final DataBucketBean bucket = IkanowV1SyncService_PurgeBuckets.getBucketFromV1Source(v1_source);
+		final DataBucketBean bucket = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source);
 		
-		assertEquals("506dc16dfbf042893dd6b8f2aleph...bucket.Template_V2_data_bucket.;", bucket._id());
+		assertEquals("aleph...bucket.Template_V2_data_bucket.;", bucket._id());
 		assertEquals(Collections.unmodifiableSet(new HashSet<String>()), bucket.aliases());
 		assertEquals(1, bucket.batch_enrichment_configs().size());
 		assertEquals(false, bucket.batch_enrichment_configs().get(0).enabled());
@@ -172,10 +172,10 @@ public class TestIkanowV1SyncService_PurgeBuckets {
 		
 		{
 			final JsonNode v1_source = mapper.readTree(this.getClass().getResourceAsStream("test_scripting_1.json"));
-			final DataBucketBean bucket = IkanowV1SyncService_PurgeBuckets.getBucketFromV1Source(v1_source);
+			final DataBucketBean bucket = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source);
 			
 			// (all the existing stuff)
-			assertEquals("506dc16dfbf042893dd6b8f2aleph...bucket.Template_V2_data_bucket.;", bucket._id());
+			assertEquals("aleph...bucket.Template_V2_data_bucket.;", bucket._id());
 			assertEquals("21 May 2015 02:37:23 GMT", bucket.created().toGMTString());
 			assertEquals(null, bucket.data_locations());
 			assertEquals("DESCRIPTION HERE.", bucket.description());
@@ -202,10 +202,10 @@ public class TestIkanowV1SyncService_PurgeBuckets {
 		
 		{
 			final JsonNode v1_source = mapper.readTree(this.getClass().getResourceAsStream("test_scripting_2.json"));
-			final DataBucketBean bucket = IkanowV1SyncService_PurgeBuckets.getBucketFromV1Source(v1_source);
+			final DataBucketBean bucket = IkanowV1SyncService_Buckets.getBucketFromV1Source(v1_source);
 			
 			// (all the existing stuff)
-			assertEquals("506dc16dfbf042893dd6b8f2aleph...bucket.Template_V2_data_bucket.;", bucket._id());
+			assertEquals("aleph...bucket.Template_V2_data_bucket.;", bucket._id());
 			assertEquals("21 May 2015 02:37:23 GMT", bucket.created().toGMTString());
 			assertEquals(null, bucket.data_locations());
 			assertEquals("DESCRIPTION HERE.", bucket.description());
