@@ -15,8 +15,6 @@
  *******************************************************************************/
 package com.ikanow.aleph2.management_db.mongodb.services;
 
-import java.io.IOException;
-import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -34,9 +32,6 @@ import org.apache.curator.framework.recipes.leader.LeaderLatch;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
@@ -223,7 +218,7 @@ public class IkanowV1SyncService_PurgeBuckets {
 			purge_sources.forEach(Lambdas.wrap_consumer_u(purge_source -> {		
 				_logger.debug("Looking at purge source: " + purge_source._id());
 
-				final DataBucketBean to_purge = Lambdas.wrap_u(() -> getBucketFromV1Source(purge_source.source())).get();
+				final DataBucketBean to_purge = Lambdas.wrap_u(() -> IkanowV1SyncService_Buckets.getBucketFromV1Source(purge_source.source())).get();
 				//always try to purge the source we pulled
 				purge_results.add(handlePurgeSource(to_purge, purge_source));				
 			}));
@@ -275,20 +270,4 @@ public class IkanowV1SyncService_PurgeBuckets {
 		})
 		.thenApply(__ -> get_command.join()); // (ie return the original command but only once the update has completed)
 	}
-	
-	/** Builds a V2 bucket out of a V1 source
-	 * @param src_json
-	 * @return
-	 * @throws JsonParseException
-	 * @throws JsonMappingException
-	 * @throws IOException
-	 * @throws ParseException
-	 */
-	public static DataBucketBean getBucketFromV1Source(final JsonNode src_json) throws JsonParseException, JsonMappingException, IOException, ParseException {
-
-		final DataBucketBean not_test_version = IkanowV1SyncService_Buckets.getBucketFromV1Source(src_json);
-		return BeanTemplateUtils.clone(not_test_version)
-					.with(DataBucketBean::_id, not_test_version.owner_id() + not_test_version._id())
-				.done();
-	}	
 }
