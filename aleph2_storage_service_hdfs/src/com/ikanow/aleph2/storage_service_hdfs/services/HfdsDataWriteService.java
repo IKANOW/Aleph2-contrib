@@ -203,9 +203,24 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		protected void setup() {
 			if (!_initialized.isSet()) {
 				_initialized.trySet(Unit.unit());
-				
+
 				// Launch the executor service
 				fillUpEmptyQueue();
+				
+				// This is ugly but safest, now apply the batch
+				Optionals.of(() -> _bucket.data_schema().storage_schema())
+					.map(store -> getStorageSubSchema(store, _stage))
+					.map(subschema -> subschema.target_write_settings())
+					.ifPresent(writer -> {
+						setBatchProperties(
+								Optional.<Integer>ofNullable(writer.batch_max_objects()),
+								Optional.<Long>ofNullable(writer.batch_max_size_kb()),
+								Optional.ofNullable(writer.batch_flush_interval())
+										.map(secs -> Duration.ofSeconds(secs))
+								,
+								Optional.<Integer>ofNullable(writer.target_write_concurrency())
+								);
+					});
 			}
 		}
 		
