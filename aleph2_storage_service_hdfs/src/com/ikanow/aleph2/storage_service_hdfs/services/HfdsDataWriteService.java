@@ -67,8 +67,6 @@ import fj.Unit;
 public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	protected static final Logger _logger = LogManager.getLogger();	
 
-	//TODO (ALEPH-12): doesn't seem to be working with processed (netflow/sample)
-	
 	public static final FsPermission DEFAULT_DIR_PERMS = FsPermission.valueOf("drwxrwxrwx");
 	
 	/////////////////////////////////////////////////////////////
