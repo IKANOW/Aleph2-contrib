@@ -16,12 +16,15 @@
 package com.ikanow.aleph2.security.module;
 
 import org.apache.shiro.authc.credential.CredentialsMatcher;
+import org.apache.shiro.cache.CacheManager;
 
 import com.google.inject.multibindings.Multibinder;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 import com.ikanow.aleph2.security.service.AccountStatusCredentialsMatcher;
+import com.ikanow.aleph2.security.service.IModificationChecker;
 import com.ikanow.aleph2.security.service.IkanowV1AdminRoleProvider;
 import com.ikanow.aleph2.security.service.IkanowV1DataGroupRoleProvider;
+import com.ikanow.aleph2.security.service.IkanowV1DataModificationChecker;
 import com.ikanow.aleph2.security.service.IkanowV1Realm;
 import com.ikanow.aleph2.security.service.IkanowV1UserGroupRoleProvider;
 
@@ -31,6 +34,12 @@ public class IkanowV1SecurityModule extends CoreSecurityModule{
 	public IkanowV1SecurityModule(){
 	}
 	
+	@Override
+	protected void bindMisc() {
+		bind(IModificationChecker.class).to(IkanowV1DataModificationChecker.class).asEagerSingleton();
+		expose(IModificationChecker.class);
+	}
+
 	@Override
 	protected void bindRealms() {
 		bindRealm().to(IkanowV1Realm.class).asEagerSingleton();		

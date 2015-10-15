@@ -43,6 +43,9 @@ public class IkanowV1SecurityService extends SecurityService implements ISecurit
 	private static final Logger logger = LogManager.getLogger(IkanowV1SecurityService.class);
 	@Inject
 	protected IServiceContext serviceContext;
+
+	@Inject
+	protected IModificationChecker modificationChecker;
 	
 	@Inject
 	public IkanowV1SecurityService(IServiceContext serviceContext, SecurityManager securityManager, CacheManager cacheManager) {
@@ -118,4 +121,13 @@ public class IkanowV1SecurityService extends SecurityService implements ISecurit
 				Stream.of(this))
 				.collect(Collectors.toList());
 	}
+
+
+	@Override
+	public boolean isCacheInvalid() {
+		// TODO Auto-generated method stub
+		return ISecurityService.super.isCacheInvalid();
+	}
+	
+	
 }
