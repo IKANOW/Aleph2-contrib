@@ -21,8 +21,10 @@ import java.util.Optional;
 
 import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.FileContext;
+import org.apache.hadoop.fs.Path;
 import org.junit.Test;
 
+import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 
@@ -43,7 +45,12 @@ public class TestHdfsStorageSystem {
 			FileContext fs1b = storageService.getUnderlyingPlatformDriver(FileContext.class, Optional.<String>empty()).get();
 			assertEquals(fs1, fs1b);
 
-			//TODO: add local
+			FileContext lfs1 = storageService.getUnderlyingPlatformDriver(FileContext.class, IStorageService.LOCAL_FS).get();
+			assertNotNull(lfs1);		
+			final String test = lfs1.makeQualified(new Path("/")).toString();
+			assertTrue("Wrong auth: " + test, test.startsWith("file:"));
+			FileContext lfs2 = storageService.getUnderlyingPlatformDriver(FileContext.class, IStorageService.LOCAL_FS).get();
+			assertEquals(lfs1, lfs2);
 			
 			AbstractFileSystem fs3 = storageService.getUnderlyingPlatformDriver(AbstractFileSystem.class,Optional.<String>empty()).get();
 			assertNotNull(fs3); 
