@@ -181,6 +181,9 @@ public class HdfsStorageService implements IStorageService {
 				// default with localhost
 				uriStr = "hdfs://localhost:8020";
 			}
+			if (!uriStr.matches("^[a-zA-Z0-9_-]+://.*$")) {
+				uriStr = "hdfs://" + uriStr;				
+			}
 			uri = new URI(uriStr);
 		} catch (URISyntaxException e) {
 			_logger.error("Caught Exception:",e);
