@@ -158,7 +158,7 @@ public class HadoopTechnologyUtils {
 	 */
 	@SuppressWarnings("unchecked")
 	public static List<EnrichmentControlMetadataBean> convertAnalyticJob(String job_name, final Map<String, Object> analytic_config) {
-		return analytic_config.entrySet()
+		return Optional.ofNullable(analytic_config).orElse(Collections.emptyMap()).entrySet()
 				.stream()
 				.filter(kv -> kv.getValue() instanceof Map)
 				.map(kv -> BeanTemplateUtils
@@ -188,8 +188,10 @@ public class HadoopTechnologyUtils {
 			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/mapred-site.xml"));
 		}
 		// These are not added by Hortonworks, so add them manually
-		configuration.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");									
+		configuration.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");						
+		configuration.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");									
 		configuration.set("fs.AbstractFileSystem.hdfs.impl", "org.apache.hadoop.fs.Hdfs");
+		configuration.set("fs.AbstractFileSystem.file.impl", "org.apache.hadoop.fs.local.LocalFs");
 		// Some other config defaults:
 		// (not sure if these are actually applied, or derived from the defaults - for some reason they don't appear in CDH's client config)
 		configuration.set("mapred.reduce.tasks.speculative.execution", "false");

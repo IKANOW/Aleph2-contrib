@@ -1,12 +1,18 @@
 <configuration>
-<property>
-  <name>fs.hdfs.impl</name>
-  <value>org.apache.hadoop.hdfs.DistributedFileSystem</value>
-  <final>true</final>
-</property>
-<property>
-  <name>fs.AbstractFileSystem.hdfs.impl</name>
-  <value>org.apache.hadoop.fs.Hdfs</value>
-  <final>true</final>
-</property>
+	<property>
+		<name>fs.file.impl</name>
+		<value>org.apache.hadoop.fs.LocalFileSystem</value>
+	</property>
+	<property>
+		<name>fs.hdfs.impl</name>
+		<value>org.apache.hadoop.hdfs.DistributedFileSystem</value>
+	</property>
+	<property>
+		<name>fs.AbstractFileSystem.file.impl</name>
+		<value>org.apache.hadoop.fs.local.LocalFs</value>
+	</property>
+	<property>
+		<name>fs.AbstractFileSystem.hdfs.impl</name>
+		<value>org.apache.hadoop.fs.Hdfs</value>
+	</property>
 </configuration>

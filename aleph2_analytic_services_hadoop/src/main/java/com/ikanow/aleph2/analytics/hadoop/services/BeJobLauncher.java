@@ -18,11 +18,15 @@ package com.ikanow.aleph2.analytics.hadoop.services;
 import java.io.IOException;
 import java.io.File;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.CreateFlag;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -31,6 +35,7 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.google.common.io.Files;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.analytics.hadoop.assets.Aleph2MultiInputFormatBuilder;
 import com.ikanow.aleph2.analytics.hadoop.assets.BatchEnrichmentJob;
@@ -187,6 +192,7 @@ public class BeJobLauncher implements IBeJobService{
 	    	.map(f -> Tuples._2T(f, new Path(rootPath + "/" + f.getName())))
 	    	.map(Lambdas.wrap_u(f_p -> {
 	    		final FileStatus fs = Lambdas.get(() -> {
+	    			//TODO (ALEPH-12): need to clear out the cache intermittently
 		    		try {
 		    			return fc.getFileStatus(f_p._2());
 		    		}
@@ -194,8 +200,21 @@ public class BeJobLauncher implements IBeJobService{
 	    		});
 	    		if (null == fs) { //cache doesn't exist
 	    			// Local version
-	    			Path srcPath = FileContext.getLocalFSFileContext().makeQualified(new Path(f_p._1().toString()));
-	    			fc.util().copy(srcPath, f_p._2());
+	    			try (FSDataOutputStream outer = fc.create(f_p._2(), EnumSet.of(CreateFlag.CREATE), // ie should fail if the destination file already exists 
+	    					org.apache.hadoop.fs.Options.CreateOpts.createParent()))
+	    			{
+	    				Files.copy(f_p._1(), outer.getWrappedStream());
+	    			}
+	    			catch (FileAlreadyExistsException e) {//(carry on - the file is versioned so it can't be out of date)
+	    			}
+
+	    			// This doens't work for some reason, get unsupported schema for "file" even though the config is set
+//	    			Path srcPath = FileContext.getLocalFSFileContext().makeQualified(new Path(f_p._1().toString()));
+//	    			try {
+//	    				fc.util().copy(srcPath, f_p._2());
+//	    			}
+//	    			catch (FileAlreadyExistsException e) {//(carry on - the file is versioned so it can't be out of date)
+//	    			}
 	    		}
 	    		return f_p._2();
 	    	}))

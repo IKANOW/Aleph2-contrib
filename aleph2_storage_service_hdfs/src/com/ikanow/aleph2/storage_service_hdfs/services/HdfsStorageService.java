@@ -165,7 +165,9 @@ public class HdfsStorageService implements IStorageService {
 		}
 		// These are not added by Hortonworks, so add them manually
 		config.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");									
+		config.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");									
 		config.set("fs.AbstractFileSystem.hdfs.impl", "org.apache.hadoop.fs.Hdfs");
+		config.set("fs.AbstractFileSystem.file.impl", "org.apache.hadoop.local.fs.LocalFs");
 		
 		return config;
 		
