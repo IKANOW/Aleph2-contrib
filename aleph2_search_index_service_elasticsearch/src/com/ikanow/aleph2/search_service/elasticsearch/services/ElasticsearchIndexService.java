@@ -547,6 +547,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 						
 						// (format is <base-index-signature>_<date>[_<fragment>])						
 						final long num_deleted = stats.getIndices().keySet().stream()
+								.filter(s -> s.length() > base_index.length()) //(otherwise not a date suffix)
 								.map(s -> s.substring(1 + base_index.length())) //(+1 for _)
 								.map(s -> {
 									final int index = s.lastIndexOf('_');
