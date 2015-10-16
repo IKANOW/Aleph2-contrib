@@ -176,7 +176,7 @@ public class HdfsStorageService implements IStorageService {
 	protected URI getUri(Configuration configuration){
 		URI uri = null;
 		try {			
-			String uriStr = configuration.get("dfs.namenode.rpc-address", configuration.get("fs.default.name", configuration.get("fs.defaultFS")));
+			String uriStr = configuration.get("fs.defaultFS", configuration.get("dfs.namenode.rpc-address", configuration.get("fs.default.name")));
 			if(uriStr==null){
 				// default with localhost
 				uriStr = "hdfs://localhost:8020";
