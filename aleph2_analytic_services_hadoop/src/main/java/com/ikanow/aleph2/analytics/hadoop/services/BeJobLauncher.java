@@ -22,6 +22,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CreateFlag;
@@ -50,6 +51,7 @@ import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
 
@@ -241,7 +243,17 @@ public class BeJobLauncher implements IBeJobService{
 	 * @throws InterruptedException
 	 */
 	public void launch(Job job) throws ClassNotFoundException, IOException, InterruptedException{
-		job.submit();		
+		try {
+			job.submit();
+		}
+		catch (Exception e) {
+			// Dump the config params to string
+			
+			logger.error(ErrorUtils.get("Error submitting, config= {0}", 
+					Optionals.streamOf(job.getConfiguration().iterator(), false).map(kv -> kv.getKey() + ":" + kv.getValue()).collect(Collectors.joining("; "))));
+			
+			throw e;
+		}
 	}
 
 }
