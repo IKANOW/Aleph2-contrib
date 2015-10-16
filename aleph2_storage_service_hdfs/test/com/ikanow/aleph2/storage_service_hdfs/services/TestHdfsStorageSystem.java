@@ -21,7 +21,6 @@ import java.util.Optional;
 
 import org.apache.hadoop.fs.AbstractFileSystem;
 import org.apache.hadoop.fs.FileContext;
-import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.junit.Test;
 
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
@@ -44,11 +43,8 @@ public class TestHdfsStorageSystem {
 			FileContext fs1b = storageService.getUnderlyingPlatformDriver(FileContext.class, Optional.<String>empty()).get();
 			assertEquals(fs1, fs1b);
 
-			RawLocalFileSystem fs2 = storageService.getUnderlyingPlatformDriver(RawLocalFileSystem.class,Optional.<String>empty()).get();
-			assertNotNull(fs2); 
-			RawLocalFileSystem fs2b = storageService.getUnderlyingPlatformDriver(RawLocalFileSystem.class,Optional.<String>empty()).get();
-			assertEquals(fs2, fs2b);
-
+			//TODO: add local
+			
 			AbstractFileSystem fs3 = storageService.getUnderlyingPlatformDriver(AbstractFileSystem.class,Optional.<String>empty()).get();
 			assertNotNull(fs3); 
 			AbstractFileSystem fs3b = storageService.getUnderlyingPlatformDriver(AbstractFileSystem.class,Optional.<String>empty()).get();

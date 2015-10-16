@@ -60,7 +60,6 @@ import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Options.Rename;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.logging.log4j.LogManager;
@@ -133,12 +132,15 @@ public class HdfsStorageService implements IStorageService {
 					
 					return (Optional<T>) Optional.of(fs);
 				}			
-				else if(driver_class.isAssignableFrom(FileContext.class)){				
-					FileContext fs = FileContext.getFileContext(AbstractFileSystem.createFileSystem(uri, config), config);
-					return (Optional<T>) Optional.of(fs);
-				}
-				else if(driver_class.isAssignableFrom(RawLocalFileSystem.class)){
-					return Optional.of(driver_class.newInstance());
+				else if(driver_class.isAssignableFrom(FileContext.class)){					
+					if (driver_options.equals(IStorageService.LOCAL_FS)) {
+						FileContext fs = FileContext.getLocalFSFileContext(config);
+						return (Optional<T>) Optional.of(fs);
+					}
+					else {
+						FileContext fs = FileContext.getFileContext(AbstractFileSystem.createFileSystem(uri, config), config);
+						return (Optional<T>) Optional.of(fs);
+					}
 				}
 			} // !=null
 		} 
@@ -167,8 +169,7 @@ public class HdfsStorageService implements IStorageService {
 		config.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");									
 		config.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");									
 		config.set("fs.AbstractFileSystem.hdfs.impl", "org.apache.hadoop.fs.Hdfs");
-		config.set("fs.AbstractFileSystem.file.impl", "org.apache.hadoop.local.fs.LocalFs");
-		
+		config.set("fs.AbstractFileSystem.file.impl", "org.apache.hadoop.fs.local.LocalFs");
 		return config;
 		
 	}
