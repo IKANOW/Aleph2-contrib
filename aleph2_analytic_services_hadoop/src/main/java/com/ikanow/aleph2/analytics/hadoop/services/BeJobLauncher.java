@@ -139,6 +139,9 @@ public class BeJobLauncher implements IBeJobService{
 		    
 			final String jobName = BucketUtils.getUniqueSignature(bucket.full_name(), Optional.ofNullable(_batchEnrichmentContext.getJob().name()));
 			
+			// Try to minimize class conflicts vs Hadoop's ancient libraries:
+			config.set("mapreduce.job.user.classpath.first", "true");
+			
 		    // do not set anything into config past this line (can set job.getConfiguration() elements though - that is what the builder does)
 		    Job job = Job.getInstance(config, jobName);
 		    job.setJarByClass(BatchEnrichmentJob.class);
