@@ -212,14 +212,6 @@ public class BeJobLauncher implements IBeJobService{
 	    			}
 	    			catch (FileAlreadyExistsException e) {//(carry on - the file is versioned so it can't be out of date)
 	    			}
-
-	    			// This doens't work for some reason, get unsupported schema for "file" even though the config is set
-//	    			Path srcPath = FileContext.getLocalFSFileContext().makeQualified(new Path(f_p._1().toString()));
-//	    			try {
-//	    				fc.util().copy(srcPath, f_p._2());
-//	    			}
-//	    			catch (FileAlreadyExistsException e) {//(carry on - the file is versioned so it can't be out of date)
-//	    			}
 	    		}
 	    		return f_p._2();
 	    	}))

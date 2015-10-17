@@ -243,27 +243,36 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#storeObjects(java.util.List, boolean)
 	 */
 	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(final List<O> new_objects, final boolean replace_if_present) {
-		if (replace_if_present) {
-			// This is an "illegal arg exception" so throw immediately
-			throw new RuntimeException(ErrorUtils.BULK_REPLACE_DUPLICATES_NOT_SUPPORTED);
-		}
 		try {
+			//TODO (ALEPH-22): find a bulk store-and-overwrite
 			final List<DBObject> l = new_objects.stream().map(o -> convertToBson(o)).collect(Collectors.toList());
-
-			final com.mongodb.WriteResult orig_result = _state.orig_coll.insert(l, 
-						Patterns.match(_state.orig_coll)
-								.<InsertOptions>andReturn()
-								.when(FongoDBCollection.class, 
-										() -> new InsertOptions().continueOnError(true).writeConcern(new WriteConcern()))
-								.otherwise(() -> new InsertOptions().continueOnError(true)));
 			
-			return CompletableFuture.completedFuture(
-					Tuples._2T(() -> l.stream().map(o -> (Object)_state.coll.convertFromDbId(o.get(_ID))).collect(Collectors.toList()),
-							() -> {
-								return Patterns.match(_state.orig_coll).<Long>andReturn()
-									.when(FongoDBCollection.class, () -> (Long)(long)orig_result.getN())
-									.otherwise(__ -> (long)l.size());
-							}));
+			if (replace_if_present) {
+				l.stream().forEach(o -> _state.orig_coll.save(o));
+				
+				return CompletableFuture.completedFuture(
+						Tuples._2T(() -> l.stream().map(o -> (Object)_state.coll.convertFromDbId(o.get(_ID))).collect(Collectors.toList()),
+								() -> {
+									return Patterns.match(_state.orig_coll).<Long>andReturn()
+										.otherwise(__ -> (long)l.size());
+								}));
+			}
+			else {	
+				final com.mongodb.WriteResult orig_result = _state.orig_coll.insert(l, 
+							Patterns.match(_state.orig_coll)
+									.<InsertOptions>andReturn()
+									.when(FongoDBCollection.class, 
+											() -> new InsertOptions().continueOnError(true).writeConcern(new WriteConcern()))
+									.otherwise(() -> new InsertOptions().continueOnError(true)));
+				
+				return CompletableFuture.completedFuture(
+						Tuples._2T(() -> l.stream().map(o -> (Object)_state.coll.convertFromDbId(o.get(_ID))).collect(Collectors.toList()),
+								() -> {
+									return Patterns.match(_state.orig_coll).<Long>andReturn()
+										.when(FongoDBCollection.class, () -> (Long)(long)orig_result.getN())
+										.otherwise(__ -> (long)l.size());
+								}));
+			}				
 		}		
 		catch (Exception e) {			
 			return FutureUtils.<Tuple2<Supplier<List<Object>>, Supplier<Long>>>returnError(e);
