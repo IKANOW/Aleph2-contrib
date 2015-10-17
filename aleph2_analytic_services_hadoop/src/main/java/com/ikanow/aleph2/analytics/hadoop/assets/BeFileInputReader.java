@@ -85,6 +85,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	protected int _numFiles = 1;
 	protected int _numRecords = 0;
 	protected int _maxRecords = Integer.MAX_VALUE;
+	protected IParser _parser = null;
 	
 	protected String _currentFileName = null;
 
@@ -168,10 +169,11 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 					return false; // all done
 				}
 			}
+			this._currentFileName = _fileSplit.getPath(_currFile).toString();
+			_parser = getParser(_currentFileName);
 		}	 // instream = null		
-		this._currentFileName = _fileSplit.getPath(_currFile).toString();
-		IParser parser = getParser(_currentFileName);
-		_record = parser.getNextRecord(_currFile,_currentFileName,_inStream);
+		
+		_record = _parser.getNextRecord(_currFile,_currentFileName,_inStream);
 		if (null == _record) { // Finished this file - are there any others?
 			archiveOrDeleteFile();
 			_currFile++;
@@ -185,7 +187,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 			}
 		} // record = null
 		// close stream if not multiple records per file supported
-		if(!parser.multipleRecordsPerFile()){
+		if(!_parser.multipleRecordsPerFile()){
 			archiveOrDeleteFile();
 			_currFile++;
 			_inStream.close();
@@ -261,18 +263,11 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	protected  IParser getParser(String fileName) {
 		IParser parser = null;
 		
-		/**/
-		System.out.println(">>>>>>>>> filename = " + fileName);
-		
 		if(fileName!=null){
 			 int dotPos =  fileName.lastIndexOf("."); 
 			 if (dotPos >= 0) {
 				String ext = fileName.substring(dotPos+1).toUpperCase();  
-				/**/
-				System.out.println(">>>>>>>>> ext = " + ext);
 				parser = _parsers.get(ext);
-				/**/
-				System.out.println(">>>>>>>>> parser = " + parser);
 			 }
 			// default to binary
 			if(parser == null){

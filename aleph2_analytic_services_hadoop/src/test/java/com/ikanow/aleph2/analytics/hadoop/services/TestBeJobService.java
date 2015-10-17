@@ -246,7 +246,7 @@ public class TestBeJobService {
 				break;
 			}
 		}			
-		assertEquals(2, es_index.countObjects().get().intValue());			
+		assertEquals(3, es_index.countObjects().get().intValue());			
 		
 		String[] subpaths = new File(_service_context.getStorageService().getBucketRootPath()+test_bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW + IStorageService.NO_TIME_SUFFIX).list();
 		//(note all lengths are *2 because of .crc file)
@@ -286,7 +286,7 @@ public class TestBeJobService {
 		sb.append("bucket1data\r\n");
 		DirUtils.createUTF8File(fileContext,bucketReadyPath1+"/bucket1data.txt", sb);
 		StringBuffer sb2 = new StringBuffer();
-		sb2.append("{\"testField\":\"test1\"}");
+		sb2.append("{\"testField\":\"test1\"}\n{\"testField\":\"test2\"}");
 		DirUtils.createUTF8File(fileContext,bucketReadyPath1+"/bucket1data.json", sb2);
 	}
 	

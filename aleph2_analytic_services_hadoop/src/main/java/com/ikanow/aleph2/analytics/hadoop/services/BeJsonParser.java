@@ -32,18 +32,22 @@ import com.ikanow.aleph2.analytics.hadoop.assets.BeFileInputReader;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IParser;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
-import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 
 /** Parser for reading in JSON data
  * @author Alex
  */
 public class BeJsonParser implements IParser {
-	private static final Logger logger = LogManager.getLogger(BeJsonParser.class);
+	protected static final Logger logger = LogManager.getLogger(BeJsonParser.class);
 
 	private ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 	private JsonParser _parser = null;
 	private JsonFactory _factory = null;
-	
+		
+	@Override
+	public boolean multipleRecordsPerFile(){
+		return true;
+	}
+
 	@Override
 	public Tuple2<Long, IBatchRecord> getNextRecord(long currentFileIndex,String fileName,  InputStream inStream) {
 		Tuple2<Long, IBatchRecord> t2 = null;
@@ -64,19 +68,11 @@ public class BeJsonParser implements IParser {
 			}
 			JsonNode node = _parser.readValueAsTree();
 			
-			/**/
-			System.out.println("JSON ?? " + node.toString());
-			
-			
 			t2 = new Tuple2<Long, IBatchRecord>(currentFileIndex, new BeFileInputReader.BatchRecord(node, null));
 			return t2;
 			
 		} catch (Exception e) {
-			/**/
-			System.out.println("JSON PARSER EXC = " + ErrorUtils.getLongForm("{0}", e));
-			
-			logger.error("JsonParser caught exception",e);
-			
+			// (this can often happen as an EOF condition)s
 			_parser = null;
 			return null; //EOF
 		}
