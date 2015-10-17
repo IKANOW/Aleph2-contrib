@@ -77,6 +77,7 @@ import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigRenderOptions;
 import com.typesafe.config.ConfigValueFactory;
 
+import fj.Unit;
 import fj.data.Either;
 
 /** A minimal implementation of the analytics context interface for test purposes
@@ -787,5 +788,13 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 			_distributed_services.produce(topic, obj_json.toString());
 		}
 		//(else nothing to do)
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#flushBatchOutput(java.util.Optional, com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean)
+	 */
+	@Override
+	public CompletableFuture<?> flushBatchOutput(Optional<DataBucketBean> bucket, AnalyticThreadJobBean job) {
+		return CompletableFuture.completedFuture(Unit.unit());
 	}
 }

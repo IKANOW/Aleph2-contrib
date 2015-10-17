@@ -23,6 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -407,6 +408,14 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 			Optional<StateDirectoryType> translated_type = Optional.ofNullable(type.orElse(StateDirectoryType.enrichment));
 			return _delegate.get().getBucketObjectStore(clazz, bucket, collection, translated_type);
 		}
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#flushBatchOutput(java.util.Optional)
+	 */
+	@Override
+	public CompletableFuture<?> flushBatchOutput(Optional<DataBucketBean> bucket) {
+		return _delegate.get().flushBatchOutput(bucket, _job.get());
 	}
 
 }
