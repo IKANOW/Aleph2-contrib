@@ -23,6 +23,9 @@ import org.apache.logging.log4j.Logger;
 
 import scala.Tuple2;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikanow.aleph2.analytics.hadoop.assets.BeFileInputReader;
@@ -37,25 +40,46 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 public class BeJsonParser implements IParser {
 	private static final Logger logger = LogManager.getLogger(BeJsonParser.class);
 
+	private ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
+	private JsonParser _parser = null;
+	private JsonFactory _factory = null;
+	
 	@Override
 	public Tuple2<Long, IBatchRecord> getNextRecord(long currentFileIndex,String fileName,  InputStream inStream) {
-		ObjectMapper object_mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 		Tuple2<Long, IBatchRecord> t2 = null;
 		try {
-			JsonNode node = object_mapper.readTree(inStream);
+			if (null == _factory) {
+				_factory = _mapper.getFactory();
+			}
+			if (null == _parser) {
+				_parser = _factory.createParser(inStream);
+			}
+			JsonToken token = _parser.nextToken();
+			while ((token != JsonToken.START_OBJECT) && (token != null)) {
+				token = _parser.nextToken();
+			}
+			if (null == token) {
+				_parser = null;
+				return null; //EOF
+			}
+			JsonNode node = _parser.readValueAsTree();
 			
 			/**/
 			System.out.println("JSON ?? " + node.toString());
 			
 			
 			t2 = new Tuple2<Long, IBatchRecord>(currentFileIndex, new BeFileInputReader.BatchRecord(node, null));
+			return t2;
+			
 		} catch (Exception e) {
 			/**/
 			System.out.println("JSON PARSER EXC = " + ErrorUtils.getLongForm("{0}", e));
 			
 			logger.error("JsonParser caught exception",e);
+			
+			_parser = null;
+			return null; //EOF
 		}
-		return t2;
 	}
 
 }
