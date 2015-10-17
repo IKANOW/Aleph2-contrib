@@ -261,10 +261,19 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	protected  IParser getParser(String fileName) {
 		IParser parser = null;
 		
+		/**/
+		System.out.println(">>>>>>>>> filename = " + fileName);
+		
 		if(fileName!=null){
 			 int dotPos =  fileName.lastIndexOf("."); 
-			String ext = fileName.substring(dotPos+1).toUpperCase();  
-			parser = _parsers.get(ext);
+			 if (dotPos >= 0) {
+				String ext = fileName.substring(dotPos+1).toUpperCase();  
+				/**/
+				System.out.println(">>>>>>>>> ext = " + ext);
+				parser = _parsers.get(ext);
+				/**/
+				System.out.println(">>>>>>>>> parser = " + parser);
+			 }
 			// default to binary
 			if(parser == null){
 				parser = _parsers.get("BIN");
