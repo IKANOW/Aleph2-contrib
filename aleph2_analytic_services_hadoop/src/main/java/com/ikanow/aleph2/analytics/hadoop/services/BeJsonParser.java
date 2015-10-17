@@ -29,6 +29,7 @@ import com.ikanow.aleph2.analytics.hadoop.assets.BeFileInputReader;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IParser;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 
 /** Parser for reading in JSON data
  * @author Alex
@@ -42,8 +43,16 @@ public class BeJsonParser implements IParser {
 		Tuple2<Long, IBatchRecord> t2 = null;
 		try {
 			JsonNode node = object_mapper.readTree(inStream);
+			
+			/**/
+			System.out.println("JSON ?? " + node.toString());
+			
+			
 			t2 = new Tuple2<Long, IBatchRecord>(currentFileIndex, new BeFileInputReader.BatchRecord(node, null));
 		} catch (Exception e) {
+			/**/
+			System.out.println("JSON PARSER EXC = " + ErrorUtils.getLongForm("{0}", e));
+			
 			logger.error("JsonParser caught exception",e);
 		}
 		return t2;
