@@ -1046,6 +1046,12 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		public void storeObject(O new_object) {
 			storeObject(new_object, false);			
 		}
+
+		@Override
+		public CompletableFuture<?> flushOutput() {
+			// TODO Auto-generated method stub
+			return null;
+		}
 	}
 	protected ElasticsearchBatchSubsystem _batch_processor = null;
 	

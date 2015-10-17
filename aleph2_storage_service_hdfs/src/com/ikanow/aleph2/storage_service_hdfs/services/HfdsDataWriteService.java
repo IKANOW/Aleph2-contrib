@@ -300,6 +300,12 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				_state._workers.execute(new WriterWorker());
 			}			
 		}
+
+		@Override
+		public CompletableFuture<?> flushOutput() {
+			// TODO Auto-generated method stub
+			return null;
+		}
 	}
 
 	/////////////////////////////////////////////////////////////
