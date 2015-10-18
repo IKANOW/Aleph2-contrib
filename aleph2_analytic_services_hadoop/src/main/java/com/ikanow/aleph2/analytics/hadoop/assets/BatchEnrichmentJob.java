@@ -182,6 +182,9 @@ public class BatchEnrichmentJob{
 			checkBatch(true);
 			
 			_ecMetadata.stream().forEach(ecm -> ecm._1().onStageComplete(true));
+			if (null != _enrichmentContext) {
+				_enrichmentContext.flushBatchOutput(Optional.empty()).join();
+			}
 		}
 
 		/* (non-Javadoc)
