@@ -301,10 +301,24 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 			}			
 		}
 
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService.IBatchSubservice#flushOutput()
+		 */
 		@Override
 		public CompletableFuture<?> flushOutput() {
-			// TODO Auto-generated method stub
-			return null;
+			
+			// This is a bit ugly, just shutdown all the threads and start new ones:
+			_state._workers.shutdownNow();
+			return CompletableFuture.runAsync(() -> {
+				try {
+					boolean completed = _state._workers.awaitTermination(5, TimeUnit.SECONDS);
+					if (!completed) {
+						_logger.warn("(workers not completed before timeout expired: " + _state._workers.toString() + ")");
+					}
+				}
+				catch (Exception e) {}
+				fillUpEmptyQueue();
+			});			
 		}
 	}
 

@@ -1047,10 +1047,16 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			storeObject(new_object, false);			
 		}
 
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService.IBatchSubservice#flushOutput()
+		 */
 		@Override
 		public CompletableFuture<?> flushOutput() {
-			// TODO Auto-generated method stub
-			return null;
+			synchronized (this) {
+				if (null != _current) _current.flush(); 
+			}
+			// Just sleep for 1.25s
+			return CompletableFuture.runAsync(Lambdas.wrap_runnable_i(() -> TimeUnit.MILLISECONDS.sleep(1250L)));
 		}
 	}
 	protected ElasticsearchBatchSubsystem _batch_processor = null;
