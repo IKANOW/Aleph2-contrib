@@ -17,6 +17,7 @@ package com.ikanow.aleph2.shared.crud.mongodb.services;
 
 import java.net.UnknownHostException;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -1126,5 +1127,32 @@ public class TestMongoDbCrudService {
 		    count++;
 		}		
 		assertEquals(4,count);
+	}
+	
+	public static class DateBean {
+		DateBean() {}
+		DateBean(Date d) { this.d = d; }
+		Date d;
+	}
+	
+	@Test
+	public void dateTest() {
+		
+		final MongoDbCrudService<DateBean, String> service = getTestService("dateTest", DateBean.class, String.class);
+				
+		service.storeObject(new DateBean(new Date(new Date().getTime() - 1000L))).join();
+		assertEquals(1L, service.countObjects().join().longValue());
+		
+		assertEquals(1L, service._state.orig_coll.count(new BasicDBObject("d", new BasicDBObject("$lt", new Date()))));
+		assertEquals(1L, service._state.coll.count(new BasicDBObject("d", new BasicDBObject("$lt", new Date()))));
+		
+		assertEquals(1L, service.countObjectsBySpec(CrudUtils.allOf(DateBean.class)
+							.rangeBelow("d", new Date(), true)).join().longValue()
+				);
+		
+		assertEquals(1L, service.deleteObjectsBySpec(CrudUtils.allOf(DateBean.class)
+				.rangeBelow("d", new Date(), true)).join().longValue());
+				
+		assertEquals(0L, service._state.orig_coll.count(new BasicDBObject("d", new BasicDBObject("$lt", new Date()))));
 	}
 }
