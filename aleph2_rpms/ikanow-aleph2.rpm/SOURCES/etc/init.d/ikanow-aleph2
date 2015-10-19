@@ -53,7 +53,7 @@ start() {
 
 stop() {
         echo -n $"Shutting down $prog: "
-        killproc -p $pid_file
+        killproc -p $pid_file -d 15s
         RETVAL=$?
         echo
         [ $RETVAL -eq 0 ] && rm -f $lock_file
