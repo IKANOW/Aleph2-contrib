@@ -982,7 +982,9 @@ public class TestElasticsearchIndexService {
 		
 		BasicMessageBean res1 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_1"), Optional.empty()).join();
 		
-		assertTrue("Switch worked: " + res1.message(), res1.success());
+		{
+			assertTrue("Switch worked: " + res1.message(), res1.success());
+		}
 		
 		assertEquals(Optional.of("sec_test_1"), index_data_service.getPrimaryBufferName(bucket));				
 		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));		
@@ -997,12 +999,44 @@ public class TestElasticsearchIndexService {
 		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
 		
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket));
-		
+
+		{
+			BasicMessageBean res2 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_2"), Optional.empty()).join();
+			
+			assertTrue("Switch worked: " + res2.message(), res2.success());
+		}
+			
+		assertEquals(Optional.of("sec_test_2"), index_data_service.getPrimaryBufferName(bucket));				
+		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));		
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getAliasedBuffers(bucket));
+
+		addRecordToSecondaryBuffer(bucket, Optional.empty()); 
+		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_1")); 
+		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_2")); 
+		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_3"));
+		System.out.println("Waiting for indices and aliases to be generated....");
+		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getAliasedBuffers(bucket));
+				
 		// 5) Switch original back again
+
+		{
+			BasicMessageBean res3 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_1"), Optional.empty()).join();
+			
+			assertTrue("Switch worked: " + res3.message(), res3.success());
+		}
 		
-		//TODO
+		assertEquals(Optional.of("sec_test_1"), index_data_service.getPrimaryBufferName(bucket));				
+		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket));
 		
-		//TODO (IKANOW/Aleph2#28):  will need a test where the outgoing aliases don't existing but the incoming ones do, to check that even though you'll prob get an IndexMissingException it will still apply the other tests
+		addRecordToSecondaryBuffer(bucket, Optional.empty()); 
+		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_1")); 
+		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_2")); 
+		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_3"));
+		System.out.println("Waiting for indices and aliases to be generated....");
+		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket));				
 	}
 
 	///////////////////////////////////

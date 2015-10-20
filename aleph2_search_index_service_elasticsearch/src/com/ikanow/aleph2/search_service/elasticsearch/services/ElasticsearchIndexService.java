@@ -428,12 +428,13 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		public CompletableFuture<BasicMessageBean> switchCrudServiceToPrimaryBuffer(
 				DataBucketBean bucket, Optional<String> secondary_buffer, Optional<String> new_name_for_ex_primary)
 		{
+			// 0) Grab the current primary before doing anything else
+			final Optional<String> curr_primary = getPrimaryBufferName(bucket);
+			
 			// 1) Update the templates of the aliases - all but the new primary get "is_primary" set 
 			updateTemplates(bucket, secondary_buffer);
 			
 			// 2) Delete all the existing aliases and set the new ones as transactionally as possible!
-			
-			final Optional<String> curr_primary = getPrimaryBufferName(bucket);
 			
 			final String base_index_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty());
 			final String new_primary_index_base = ElasticsearchIndexUtils.getBaseIndexName(bucket, secondary_buffer);
