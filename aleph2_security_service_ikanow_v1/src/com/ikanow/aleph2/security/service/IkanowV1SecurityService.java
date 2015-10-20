@@ -125,8 +125,11 @@ public class IkanowV1SecurityService extends SecurityService implements ISecurit
 
 	@Override
 	public boolean isCacheInvalid() {
-		// TODO Auto-generated method stub
-		return ISecurityService.super.isCacheInvalid();
+		if(modificationChecker!=null){
+			return modificationChecker.isModified();
+		}else{
+			return ISecurityService.super.isCacheInvalid();
+		}
 	}
 	
 	

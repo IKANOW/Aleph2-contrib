@@ -1,5 +1,21 @@
+/*******************************************************************************
+ * Copyright 2015, The IKANOW Open Source Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package com.ikanow.aleph2.security.service;
 
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Iterator;
@@ -25,7 +41,7 @@ public class IkanowV1DataModificationChecker implements IModificationChecker{
 	protected IServiceContext _context;
 	private ICrudService<JsonNode> communityDb = null;
 	protected IManagementDbService _underlying_management_db = null;
-	private static final Logger logger = LogManager.getLogger(IkanowV1CommunityRoleProvider.class);
+	private static final Logger logger = LogManager.getLogger(IkanowV1DataModificationChecker.class);
 	private Date lastModified = null;
 
 
@@ -36,13 +52,12 @@ public class IkanowV1DataModificationChecker implements IModificationChecker{
 	}
 	
 	public boolean isModified(){
-		Optional<JsonNode> result;
 		try {
 						
 			// index modified
 			if(lastModified==null){
-				// wait for index
-				getCommunityDb().optimizeQuery(Arrays.asList("modified")).thenApply(this::queryLastModifiedDate);//.thenRun(queryLastModifiedRunnable);
+				// dont wait for index
+				getCommunityDb().optimizeQuery(Arrays.asList("modified")).thenApply(this::queryLastModifiedDate);
 				return true;
 			}
 		} catch (Exception e) {
@@ -51,21 +66,28 @@ public class IkanowV1DataModificationChecker implements IModificationChecker{
 		return false;
 	}
 	
-	private Date queryLastModifiedDate(Boolean wasIndexed) {
-		if(wasIndexed){
-			
-			SingleQueryComponent<JsonNode> query = CrudUtils.allOf().orderBy(new Tuple2<String,Integer>("modified",-1)).limit(1);			
-			CompletableFuture<Cursor<JsonNode>> fCursor = getCommunityDb().getObjectsBySpec(query, Arrays.asList("modified"), false);
-			Iterator<JsonNode> it;
+	protected Date queryLastModifiedDate(Boolean wasIndexed) {
+		if (wasIndexed) {
+
+			SingleQueryComponent<JsonNode> query = CrudUtils.allOf().orderBy(new Tuple2<String, Integer>("modified", -1)).limit(1);
+			CompletableFuture<Cursor<JsonNode>> fCursor = getCommunityDb().getObjectsBySpec(query, Arrays.asList("modified"), true);
 			try {
-				it = fCursor.get().iterator();
-				if(it.hasNext()){
+				Iterator<JsonNode> it = fCursor.get().iterator();
+				if (it.hasNext()) {
 					JsonNode n = it.next();
-					logger.debug(n);
+					logger.debug(n);					
+					JsonNode modifiedNode = n.get("modified");
+					if (modifiedNode != null) {
+						String modifiedText = modifiedNode.asText();
+						// logger.debug(modifiedText);
+						// example Thu Aug 13 15:44:08 CDT 2015
+						SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
+						lastModified = sdf.parse(modifiedText);
+						// logger.debug(lastModified);
+					}
 				}
-				}
-					 catch (Exception e) {
-				logger.error("queryLastModifiedDate caught Exception",e);
+			} catch (Throwable e) {
+				logger.error("queryLastModifiedDate caught Exception", e);
 			}
 		}
 		return null;
