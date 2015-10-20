@@ -61,7 +61,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Options.Rename;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -369,7 +368,7 @@ public class HdfsStorageService implements IStorageService {
 					fc.rename(src_path, dst_path, Rename.OVERWRITE);
 				}
 				catch (FileNotFoundException e) { // this one's OK, just create the end dir
-					fc.mkdir(dst_path, FsPermission.getDirDefault(), true);
+					fc.mkdir(dst_path, HfdsDataWriteService.DEFAULT_DIR_PERMS, true);
 				}
 				return path;
 			});			
@@ -557,7 +556,7 @@ public class HdfsStorageService implements IStorageService {
 						if (doesPathExist(dfs, p)) {			
 							dfs.delete(p, true);			
 							if (!secondary_buffer.isPresent() || !bucket_or_buffer_getting_deleted) {
-								dfs.mkdir(p, FsPermission.getDefault(), true); //(deletes then re-creates ... for secondaries may not re-create)
+								dfs.mkdir(p, HfdsDataWriteService.DEFAULT_DIR_PERMS, true); //(deletes then re-creates ... for secondaries may not re-create)
 							}
 							
 							return ErrorUtils.buildSuccessMessage("HdfsDataService", "handleBucketDeletionRequest", ErrorUtils.get("Deleted data from bucket = {0} (path={1})", bucket.full_name(), p.toString()));
