@@ -46,7 +46,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	protected Config config = null;
 
 	@Inject
-	protected IServiceContext _temp_service_context = null;
+	protected IServiceContext _temp_service_context = null;	
 	protected static IServiceContext _service_context = null;
 
 	protected IManagementDbService _management_db;
@@ -54,8 +54,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 
 	protected String adminId = "4e3706c48d26852237078005";
 	protected String regularUserId = "54f86d8de4b03d27d1ea0d7b";  //cb_user
-	protected String testUserId = "4e3706c48d26852237079004"; 
-	
+	protected String testUserId = "4e3706c48d26852237079004"; 	
 
 	
 	@Before
@@ -67,6 +66,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	
 			// OK we're going to use guice, it was too painful doing this by hand...
 			config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v1.properties")))
+//			config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v1_remote.properties")))
 					.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 					.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 					.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
@@ -279,5 +279,12 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		assertEquals(true,securityService.hasRole(subject,"admin"));
 		logger.debug("Released Principals:"+p);
 	}
+	
+	@Test
+	public void testIsCacheInvalid() throws Exception{
+		securityService.isCacheInvalid();		
+		//Thread.sleep(50000);
+	}
+	
 
 }

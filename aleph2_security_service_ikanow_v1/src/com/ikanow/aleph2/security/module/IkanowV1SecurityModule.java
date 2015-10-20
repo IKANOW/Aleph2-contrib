@@ -35,6 +35,7 @@ public class IkanowV1SecurityModule extends CoreSecurityModule{
 	
 	@Override
 	protected void bindMisc() {
+		// do not just bind the implementation class,e.g. IkanowV1DataModificationChecker. This somehow creates an error about EhCachemanager already created.
 		bind(IModificationChecker.class).to(IkanowV1DataModificationChecker.class).asEagerSingleton();
 		expose(IModificationChecker.class);
 	}
