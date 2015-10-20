@@ -434,6 +434,12 @@ public class TestMongoDbCrudService {
 		
 		assertEquals("{ \"_id\" : \"id2\" , \"test_string\" : \"test_string2\"}", mapper.convertToDbObject(obj2a.get().get()).toString());
 		
+		// 2a.1) inclusive without _id (which mongodb treats differently)
+		
+		final Future<Optional<TestBean>> obj2a_1 = service.getObjectById("id2", Arrays.asList("test_string"), true);		
+		
+		assertEquals("{ \"test_string\" : \"test_string2\"}", mapper.convertToDbObject(obj2a_1.get().get()).toString());
+		
 		// 2b) exclusive:
 
 		final Future<Optional<TestBean>> obj2b = service.getObjectById("id3", Arrays.asList("_id", "test_string"), false);		

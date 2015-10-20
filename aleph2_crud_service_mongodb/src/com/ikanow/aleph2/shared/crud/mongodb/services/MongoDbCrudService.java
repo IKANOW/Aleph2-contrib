@@ -364,7 +364,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 				return CompletableFuture.completedFuture(Optional.ofNullable(_state.coll.findOne(MongoDbUtils.convertToMongoQuery(unique_spec)._1())));				
 			}
 			else {
-				final BasicDBObject fields = new BasicDBObject(field_list.stream().collect(Collectors.toMap(f -> f, f -> include ? 1 : 0)));
+				final BasicDBObject fields = getFields(field_list, include);
 				return CompletableFuture.completedFuture(Optional.ofNullable(_state.coll.findOne(MongoDbUtils.convertToMongoQuery(unique_spec)._1(), fields)));
 			}
 		}
@@ -392,7 +392,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 				return CompletableFuture.completedFuture(Optional.ofNullable(_state.coll.findOneById((K)id)));				
 			}
 			else {
-				final BasicDBObject fields = new BasicDBObject(field_list.stream().collect(Collectors.toMap(f -> f, f -> include ? 1 : 0)));
+				final BasicDBObject fields = getFields(field_list, include);
 				return CompletableFuture.completedFuture(Optional.ofNullable(_state.coll.findOneById((K)id, fields)));
 			}
 		}
@@ -421,8 +421,8 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 						.<DBCursor<O>>andReturn()
 						.when(qm -> field_list.isEmpty(), qm -> _state.coll.find(qm._1()))
 						.otherwise(qm -> {
-							final BasicDBObject fs = new BasicDBObject(field_list.stream().collect(Collectors.toMap(f -> f, f -> include ? 1 : 0)));
-							return _state.coll.find(qm._1(), fs);
+							final BasicDBObject fields = getFields(field_list, include);
+							return _state.coll.find(qm._1(), fields);
 						}))
 						// (now we're processing on a cursor "c")
 						.map(c -> {
@@ -536,7 +536,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			final Tuple2<DBObject, DBObject> query_and_meta = MongoDbUtils.convertToMongoQuery(unique_spec);
 			final DBObject update_object = MongoDbUtils.createUpdateObject(update);
 			
-			final BasicDBObject fields = new BasicDBObject(field_list.stream().collect(Collectors.toMap(f -> f, f -> include ? 1 : 0)));
+			final BasicDBObject fields = getFields(field_list, include);
 			
 			// ($unset: null removes the object, only possible via the UpdateComponent.deleteObject call) 
 			final boolean do_remove = update_object.containsField("$unset") && (null == update_object.get("$unset"));
@@ -723,5 +723,16 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	@Override
 	public Optional<ICrudService<O>> getCrudService() {
 		return Optional.of(this);
+	}
+	
+	/** Low level util to get the set of fields to collect for retrieval
+	 * @param field_list
+	 * @param include
+	 * @return
+	 */
+	private static BasicDBObject getFields(List<String> field_list, boolean include) {
+		final BasicDBObject fields = new BasicDBObject(field_list.stream().collect(Collectors.toMap(f -> f, f -> include ? 1 : 0)));
+		if (include && !fields.containsField("_id")) fields.put("_id", 0); // (mongodb adds this by default)
+		return fields;
 	}
 }
