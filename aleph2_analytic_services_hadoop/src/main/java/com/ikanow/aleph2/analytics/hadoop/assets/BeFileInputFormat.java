@@ -31,9 +31,12 @@ import org.apache.logging.log4j.Logger;
 import scala.Tuple2;
 
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.Optionals;
 
 import java.util.Arrays;
+import java.util.stream.Collectors;
 
 /** The file input format specific to batch enrichment modules
  * @author jfreydank
@@ -134,6 +137,12 @@ public class BeFileInputFormat extends UpdatedCombineFileInputFormat<String, Tup
 			return splits;
 			
 		} catch (Throwable t) {
+
+			//TODO (ALEPH-12): some extra debugging here:			
+			logger.error(ErrorUtils.get("Error getting splits, config= {0}", 
+					Optionals.streamOf(context.getConfiguration().iterator(), false).map(kv -> kv.getKey() + ":" + kv.getValue()).collect(Collectors.joining("; "))));
+			
+			
 			logger.error(t);
 			throw new IOException(t);
 		}
