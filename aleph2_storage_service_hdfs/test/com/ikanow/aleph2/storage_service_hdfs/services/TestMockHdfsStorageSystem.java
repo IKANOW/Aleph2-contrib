@@ -52,6 +52,8 @@ import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean;
@@ -460,6 +462,17 @@ public class TestMockHdfsStorageSystem {
 															.done().get()
 														)
 													.done().get())
+											.with(DataBucketBean::analytic_thread, 
+													BeanTemplateUtils.build(AnalyticThreadBean.class)
+														.with(AnalyticThreadBean::jobs,
+																Arrays.asList(
+																	BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+																		.with(AnalyticThreadJobBean::name, "test_job")
+																	.done().get()
+																)
+														)
+													.done().get()
+												)
 										.done().get();
 		
 		final DataBucketBean bucket_disabled = BeanTemplateUtils.build(DataBucketBean.class)
@@ -493,6 +506,25 @@ public class TestMockHdfsStorageSystem {
 			fail("Should have thrown exception");
 		}
 		catch (Exception e) {}
+		
+		// Try with invalid stage:job combo
+		try {
+			storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, bucket_full, Optional.of("processing:test_job"), Optional.empty()));
+			fail("Should have thrown exception");
+		}
+		catch (Exception e) {}
+		
+		// Try with missing job
+		try {
+			storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, bucket_full, Optional.of("transient_output:not_test_job"), Optional.empty()));
+			fail("Should have thrown exception");
+		}
+		catch (Exception e) {}
+		
+		// Finally check that works with transient and a valid job
+		assertTrue("Returns transient_output:test_job",
+				storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, bucket_full, Optional.of("transient_output:test_job"), Optional.empty())).isPresent()
+				);
 		
 		// Check some disabled cases:
 		
