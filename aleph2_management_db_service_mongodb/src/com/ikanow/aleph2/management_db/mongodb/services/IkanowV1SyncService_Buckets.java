@@ -630,8 +630,8 @@ public class IkanowV1SyncService_Buckets {
 						.filter(f -> !f.equals("sub_prefix") && !f.equals("sub_suffix")) // (remove non language fields)
 						.map(lang -> Tuples._2T(scripting.get(lang), lang))
 						// Get (separator regex, entire script, sub prefix)
-						.map(scriptobj_lang -> Tuples._3T(safeJsonGet("separator_regex", scriptobj_lang._1()).asText(""), 
-															safeJsonGet("script", scriptobj_lang._1()).asText(""), 
+						.map(scriptobj_lang -> Tuples._3T(safeJsonGet("separator_regex", scriptobj_lang._1()).asText(), 
+															safeJsonGet("script", scriptobj_lang._1()).asText(), 
 																sub_prefix + scriptobj_lang._2()))
 						// Split each "entire script" up into blocks of format (bloc, lang)
 						.<Stream<Tuple2<String,String>>>
