@@ -126,6 +126,9 @@ public class BeJobLauncher implements IBeJobService{
 					.stream()
 					.forEach(Lambdas.wrap_consumer_u(input -> {
 						final List<String> paths = _batchEnrichmentContext.getAnalyticsContext().getInputPaths(Optional.of(bucket), _batchEnrichmentContext.getJob(), input);
+						
+						logger.info(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));
+						
 					    final Job inputJob = Job.getInstance(config);
 					    inputJob.setInputFormatClass(BeFileInputFormat.class);				
 						paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(path))));
