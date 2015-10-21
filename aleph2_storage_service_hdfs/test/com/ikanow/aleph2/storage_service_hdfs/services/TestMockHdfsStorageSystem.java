@@ -608,6 +608,16 @@ public class TestMockHdfsStorageSystem {
 		catch (Exception e) {}
 		
 		assertEquals(Arrays.asList("test1", "test2"), storage_service.getDataService().get().getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));
+		
+		// Add some transients:
+		
+		dfs.mkdir(new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "transient1/job1"), FsPermission.getDirDefault(), true);
+		dfs.mkdir(new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "transient2/job1"), FsPermission.getDirDefault(), true);
+		dfs.mkdir(new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "transient1/job2"), FsPermission.getDirDefault(), true);
+		dfs.mkdir(new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "transient3/job3"), FsPermission.getDirDefault(), true);
+		
+		assertEquals(Arrays.asList("test1", "test2", "transient1", "transient2", "transient3"), 
+				storage_service.getDataService().get().getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));
 	}
 	
 	@Test
@@ -645,6 +655,10 @@ public class TestMockHdfsStorageSystem {
 		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON + "test_exdir"), FsPermission.getDirDefault(), true);
 		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "test3"), FsPermission.getDirDefault(), true);
 		dfs.mkdir(new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED + "test_exdir"), FsPermission.getDirDefault(), true);
+		//(transient)
+		dfs.mkdir(new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "test1/job1"), FsPermission.getDirDefault(), true);
+		dfs.mkdir(new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "test2/job2"), FsPermission.getDirDefault(), true);
+		dfs.mkdir(new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "test3/job3"), FsPermission.getDirDefault(), true);
 		
 		// (retire the primary, copy test2 across)
 		{
@@ -662,6 +676,13 @@ public class TestMockHdfsStorageSystem {
 		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "former_current/test_exdir")));
 		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + "former_current/test_exdir")));
 		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "former_current/test_exdir")));
+		
+		//(transient)
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "current/job2")));
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "test1/job1")));
+		assertFalse(doesDirExist(dfs, new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "test2/job2")));
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "test3/job3")));
+		
 		{
 			BasicMessageBean res2 = storage_service.getDataService().get().switchCrudServiceToPrimaryBuffer(bucket, Optional.of("test3"), Optional.of("ex_primary")).get();
 			System.out.println("(res2 = " + res2.message() + ")");
@@ -671,6 +692,12 @@ public class TestMockHdfsStorageSystem {
 		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + "ex_primary")));
 		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + "ex_primary")));
 		assertTrue(doesFileExist(dfs, new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + "ex_primary/test2.json")));
+
+		//(transient)
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "current/job3")));
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "test1/job1")));
+		assertTrue(doesDirExist(dfs, new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "ex_primary/job2")));
+		assertFalse(doesDirExist(dfs, new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + "test3/job3")));		
 		
 		// return to the primary, delete the current
 		{

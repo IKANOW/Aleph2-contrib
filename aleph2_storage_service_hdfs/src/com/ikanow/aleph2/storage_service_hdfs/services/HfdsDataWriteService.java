@@ -97,6 +97,29 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		_job_name = job_name;
 		_dfs = storage_service.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 		_parent = parent;
+		
+		// For safety, try creating a couple of dirs
+		// current:
+		initializeBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, IStorageService.PRIMARY_BUFFER_SUFFIX);
+		// secondary if present
+		secondary_buffer.ifPresent(secondary -> initializeBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, secondary));
+	}
+	
+	/** Initialization utility
+	 * @param root_path
+	 * @param bucket
+	 * @param stage
+	 * @param job_name
+	 * @param buffer
+	 */
+	public void initializeBasePath(final String root_path, final DataBucketBean bucket, final IStorageService.StorageStage stage, final Optional<String> job_name, final String buffer)
+	{
+		final Path p = new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, buffer));
+		try {
+			_dfs.mkdir(p, DEFAULT_DIR_PERMS, true);
+		}
+		catch (Exception e) {}		
+		try { _dfs.setPermission(p, DEFAULT_DIR_PERMS); } catch (Exception e) {} // (not supported in all FS)
 	}
 	
 	/** Lazy initialization for batch writer
@@ -398,6 +421,8 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				}
 			}
 			catch (Exception e) { // assume this is an interrupted error and fall through to....
+				//DEBUG - just to check it is the expected error
+				//e.printStackTrace();
 			}
 			try { // always try to complete current segment before exiting
 				complete_segment();
@@ -467,7 +492,11 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				_state.codec = getCanonicalCodec(_bucket.data_schema().storage_schema(), _stage); // (recheck the codec)			
 				
 				_state.curr_path = new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, _buffer_name) + "/" + SPOOL_DIR + "/" + getFilename());
-				try { _dfs.mkdir(_state.curr_path.getParent(), DEFAULT_DIR_PERMS, true); } catch (Exception e) {}
+				try { 
+					_dfs.mkdir(_state.curr_path.getParent(), DEFAULT_DIR_PERMS, true); //(note perm is & with umask)
+					try { _dfs.setPermission(_state.curr_path.getParent(), DEFAULT_DIR_PERMS); } catch (Exception e) {} // (not supported in all FS)
+
+				} catch (Exception e) {}
 				
 				_state.out = wrapOutputInCodec(_state.codec, _dfs.create(_state.curr_path, EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE)));
 			}
@@ -484,8 +513,11 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				
 				final Date now = new Date();
 				final Path path =  new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, _buffer_name) + "/" + getSuffix(now, _bucket, _stage) + "/" + _state.curr_path.getName());
-				try { _dfs.mkdir(path.getParent(), DEFAULT_DIR_PERMS, true); } catch (Exception e) {} // (fails if already exists?)
-				_dfs.rename(_state.curr_path, path);
+				try { 
+					_dfs.mkdir(path.getParent(), DEFAULT_DIR_PERMS, true); //(note perm is & with umask)
+				} catch (Exception e) {} // (fails if already exists?)
+				_dfs.rename(_state.curr_path, path);				
+				try { _dfs.setPermission(_state.curr_path, DEFAULT_DIR_PERMS); } catch (Exception e) {} // might not be supported in FS
 				try { _dfs.rename(getCrc(_state.curr_path), getCrc(path)); } catch (Exception e) {} // (don't care what the error is)				
 			}
 		}

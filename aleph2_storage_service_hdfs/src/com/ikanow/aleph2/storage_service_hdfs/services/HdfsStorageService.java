@@ -323,6 +323,32 @@ public class HdfsStorageService implements IStorageService {
 			return Optional.empty();
 		}
 
+		/** Simple utility to get all secondary buffers aka subdirs 1 or 2 dirs deep
+		 * @param fc
+		 * @param path
+		 * @param recurse - whether to recurse down one more directory or whether to return the dirs from the current depth
+		 * @return
+		 */
+		private Stream<String> getSubdirs(final FileContext fc, final Path path, final boolean recurse) {
+			try {
+				RemoteIterator<FileStatus> it = fc.listStatus(path);
+				return StreamUtils
+							.takeWhile(Stream.generate(() -> it), Lambdas.wrap_filter_u(ii -> ii.hasNext()))
+							.map(Lambdas.wrap_u(ii -> ii.next()))
+							.flatMap(fs -> fs.isDirectory()
+									? recurse
+										? getSubdirs(fc, fs.getPath(), false)
+										: Stream.of(fs.getPath().getName())
+									: Stream.empty()
+									)
+							.filter(name -> !name.equals("current"))
+							;
+			}
+			catch (Exception e) {
+				return Stream.empty();
+			}							
+		}
+		
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getSecondaryBufferList(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 		 */
@@ -330,31 +356,20 @@ public class HdfsStorageService implements IStorageService {
 		public Set<String> getSecondaryBuffers(DataBucketBean bucket) {
 			final FileContext fc = HdfsStorageService.this.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 			
-			final Function<Path, Stream<String>> getSubdirs = path -> {
-				try {
-					RemoteIterator<FileStatus> it = fc.listStatus(path);
-					return StreamUtils
-								.takeWhile(Stream.generate(() -> it), Lambdas.wrap_filter_u(ii -> ii.hasNext()))
-								.map(Lambdas.wrap_u(ii -> ii.next()))
-								.filter(fs -> fs.isDirectory())
-								.map(fs -> fs.getPath().getName())
-								.filter(name -> !name.equals("current"))
-								;
-				}
-				catch (Exception e) {
-					return Stream.empty();
-				}				
-			};
 			final Path raw_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY);
-			Stream<String> s1 = getSubdirs.apply(raw_top_level);
+			Stream<String> s1 = getSubdirs(fc, raw_top_level, false);
 			
 			final Path json_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY);
-			Stream<String> s2 = getSubdirs.apply(json_top_level);
+			Stream<String> s2 = getSubdirs(fc, json_top_level, false);
 			
 			final Path px_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY);
-			Stream<String> s3 = getSubdirs.apply(px_top_level);
+			Stream<String> s3 = getSubdirs(fc, px_top_level, false);
+
+			// Under transient, need to run across all the job-related subdirs
+			final Path transient_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY);
+			Stream<String> s4 = getSubdirs(fc, transient_top_level, false);
 			
-			return Stream.of(s1, s2, s3).flatMap(s -> s).collect(Collectors.toSet());
+			return Stream.of(s1, s2, s3, s4).flatMap(s -> s).collect(Collectors.toSet());
 		}
 
 		/* (non-Javadoc)
@@ -373,6 +388,7 @@ public class HdfsStorageService implements IStorageService {
 			final Path raw_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY);
 			final Path json_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY);
 			final Path px_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY);
+			final Path transient_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY);
 			
 			final Function<Path, Validation<Throwable, Path>> moveOrDeleteDir = path -> {
 				final Path path_to_move = Path.mergePaths(path, new Path(IStorageService.PRIMARY_BUFFER_SUFFIX));				
@@ -397,8 +413,9 @@ public class HdfsStorageService implements IStorageService {
 					fc.rename(src_path, dst_path, Rename.OVERWRITE);
 				}
 				catch (FileNotFoundException e) { // this one's OK, just create the end dir
-					fc.mkdir(dst_path, HfdsDataWriteService.DEFAULT_DIR_PERMS, true);
+					fc.mkdir(dst_path, HfdsDataWriteService.DEFAULT_DIR_PERMS, true); //(note perm is & with umask)
 				}
+				try { fc.setPermission(dst_path, HfdsDataWriteService.DEFAULT_DIR_PERMS); } catch (Exception e) {} // (not supported in all FS)
 				return path;
 			});			
 			
@@ -408,11 +425,13 @@ public class HdfsStorageService implements IStorageService {
 			final Validation<Throwable, Path> err2b = moveToPrimary.apply(json_top_level);
 			final Validation<Throwable, Path> err3a = moveOrDeleteDir.apply(px_top_level);
 			final Validation<Throwable, Path> err3b = moveToPrimary.apply(px_top_level);
+			final Validation<Throwable, Path> err4a = moveOrDeleteDir.apply(transient_top_level);
+			final Validation<Throwable, Path> err4b = moveToPrimary.apply(transient_top_level);
 			
-			final Stream<Throwable> errs = Stream.of(err1a, err1b, err2a, err2b, err3a, err3b)
+			final Stream<Throwable> errs = Stream.of(err1a, err1b, err2a, err2b, err3a, err3b, err4a, err4b)
 													.flatMap(err -> err.validation(fail -> Stream.of(fail), success -> Stream.empty()));
 			
-			final Stream<Throwable> critical_errs = Stream.of(err1b, err2b, err3b).flatMap(err -> err.validation(fail -> Stream.of(fail), success -> Stream.empty()));
+			final Stream<Throwable> critical_errs = Stream.of(err1b, err2b, err3b, err4b).flatMap(err -> err.validation(fail -> Stream.of(fail), success -> Stream.empty()));
 			
 			return CompletableFuture.completedFuture(ErrorUtils.buildMessage(
 					!critical_errs.findFirst().isPresent(), this.getClass().getName(), "switchCrudServiceToPrimaryBuffer", 
@@ -586,6 +605,7 @@ public class HdfsStorageService implements IStorageService {
 							dfs.delete(p, true);			
 							if (!secondary_buffer.isPresent() || !bucket_or_buffer_getting_deleted) {
 								dfs.mkdir(p, HfdsDataWriteService.DEFAULT_DIR_PERMS, true); //(deletes then re-creates ... for secondaries may not re-create)
+								try { dfs.setPermission(p, HfdsDataWriteService.DEFAULT_DIR_PERMS); } catch (Exception e) {} // (not supported in all FS)
 							}
 							
 							return ErrorUtils.buildSuccessMessage("HdfsDataService", "handleBucketDeletionRequest", ErrorUtils.get("Deleted data from bucket = {0} (path={1})", bucket.full_name(), p.toString()));
