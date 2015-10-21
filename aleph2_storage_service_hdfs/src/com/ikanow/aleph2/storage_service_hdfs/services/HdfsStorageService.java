@@ -266,20 +266,49 @@ public class HdfsStorageService implements IStorageService {
 		public <O> Optional<IDataWriteService<O>> getWritableDataService(
 				Class<O> clazz, DataBucketBean bucket,
 				Optional<String> options, Optional<String> secondary_buffer) {
-			
-			final IStorageService.StorageStage stage = options.map(option -> IStorageService.StorageStage.valueOf(option)).orElse(StorageStage.processed);
+
+			// Complication if transient:job_name is specified, then deal with that
+			Tuple2<StorageStage, Optional<String>> stage_job =
+					Lambdas.get(() -> {
+						try {
+							return options.map(stage -> {
+								if (stage.startsWith(StorageStage.transient_output.toString())) {
+									final String[] transient_job = stage.split(":");
+									String job = Optionals.of(() -> bucket.analytic_thread().jobs()).orElse(Collections.emptyList())
+																	.stream()
+																	.filter(j -> transient_job[1].equals(j.name()))
+																	.findFirst()
+																	.map(j -> j.name())
+																	.get(); // any error will exception out to the bottom
+									
+									return Tuples._2T(IStorageService.StorageStage.transient_output, Optional.of(job));
+								}
+								else {
+									return Tuples._2T(IStorageService.StorageStage.valueOf(stage), Optional.<String>empty());
+								}
+							})
+							.orElseGet(() -> Tuples._2T(StorageStage.processed, Optional.<String>empty()));
+						}
+						catch (Exception e) {
+							throw new RuntimeException(ErrorUtils.get(HdfsErrorUtils.TRANSIENT_NEED_MATCHING_JOB, bucket.full_name(), options));
+						}
+					});
 			
 			// Check if the stage is enabled:
 			
-			return Optionals.of(() -> bucket.data_schema().storage_schema())
+			return (StorageStage.transient_output == stage_job._1())
+					? 
+					Optional.of(new HfdsDataWriteService<O>(bucket, this, stage_job._1(), stage_job._2(), HdfsStorageService.this, secondary_buffer))
+					:
+					Optionals.of(() -> bucket.data_schema().storage_schema())
 								.filter(storage -> 
 											Optional.ofNullable(storage.enabled()).orElse(true))
 								.map(storage -> 
-											HfdsDataWriteService.getStorageSubSchema(storage, stage))
+											HfdsDataWriteService.getStorageSubSchema(storage, stage_job._1()))
 								.filter(substore -> 
 												Optional.ofNullable(substore.enabled()).orElse(true))
 								.map(__ -> 
-										new HfdsDataWriteService<O>(bucket, this, stage, Optional.empty(), HdfsStorageService.this, secondary_buffer))
+										new HfdsDataWriteService<O>(bucket, this, stage_job._1(), Optional.empty(), HdfsStorageService.this, secondary_buffer))
 								;
 		}
 

@@ -24,4 +24,5 @@ public class HdfsErrorUtils {
 	final public static String AGE_OUT_SETTING_NOT_PARSED = "{0}: No age out period specified: {1}";
 	final public static String OPERATION_NOT_SUPPORTED = "The HDFS implementation of the storage service does not support this operation: {0}";
 	final public static String CODEC_NOT_SUPPORTED = "This codec is not supported: {0}";
+	final public static String TRANSIENT_NEED_MATCHING_JOB = "Specified transient storage stage but no matching job: bucket {0} stage {1}";
 }
