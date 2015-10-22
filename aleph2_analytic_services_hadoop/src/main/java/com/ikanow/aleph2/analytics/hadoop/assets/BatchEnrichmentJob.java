@@ -181,10 +181,18 @@ public class BatchEnrichmentJob{
 				throws IOException, InterruptedException {
 			checkBatch(true);
 			
+			/**/
+			//TODO (ALEPH-12): for debugging
+			System.out.println("Flushing output....." + new java.util.Date());
+			
 			_ecMetadata.stream().forEach(ecm -> ecm._1().onStageComplete(true));
 			if (null != _enrichmentContext) {
 				_enrichmentContext.flushBatchOutput(Optional.empty()).join();
 			}
+						
+			/**/
+			//TODO (ALEPH-12): for debugging
+			System.out.println("Completed Flushing output....." + new java.util.Date());			
 		}
 
 		/* (non-Javadoc)
