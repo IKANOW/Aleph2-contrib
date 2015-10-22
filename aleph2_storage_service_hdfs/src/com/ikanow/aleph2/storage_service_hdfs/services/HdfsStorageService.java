@@ -104,11 +104,16 @@ public class HdfsStorageService implements IStorageService {
 	@SuppressWarnings("unchecked")
 	@Override
 	public <T> Optional<T> getUnderlyingPlatformDriver(
-			Class<T> driver_class, Optional<String> driver_options) {
+			Class<T> driver_class, Optional<String> driver_options) {		
 		
-		return (Optional<T>)_obj_cache.computeIfAbsent(Tuples._2T(driver_class.toString(), driver_options), 
+		Optional<T> ret_val = (Optional<T>)_obj_cache.computeIfAbsent(Tuples._2T(driver_class.toString(), driver_options), 
 				__ -> getUnderlyingPlatformDriver_internal(driver_class, driver_options).map(o -> (T)o)
 				);
+		if (!ret_val.isPresent()) { // remove so can try again - there's no case where this can happen sensibly
+			// and the configuration is read in each time
+			_obj_cache.remove(Tuples._2T(driver_class.toString(), driver_options));
+		}
+		return ret_val;
 	}
 	
 	/** Internal version of getUnderlyingPlatform driver, ie input to cache
@@ -150,10 +155,27 @@ public class HdfsStorageService implements IStorageService {
 	}
 
 	/** 
-	 * Override this function with system specific configuration
+	 * Retrieves the system configuration
+	 *  (with code to handle possible internal concurrency bug in Configuration)
 	 * @return
 	 */
-	protected Configuration getConfiguration(){
+	protected Configuration getConfiguration(){		
+		for (int i = 0; i < 60; ++i) {
+			try { 
+				return getConfiguration(i);
+			}
+			catch (java.util.ConcurrentModificationException e) {
+				try { Thread.sleep(100L); } catch (Exception ee) {}
+				if (59 == i) throw e;
+			}
+		}
+		return null;
+	}
+	/** Support for strange concurrent modification exception
+	 * @param try_number
+	 * @return
+	 */
+	protected Configuration getConfiguration(int try_number){
 		Configuration config = new Configuration(false);
 		
 		if (new File(_globals.local_yarn_config_dir()).exists()) {
