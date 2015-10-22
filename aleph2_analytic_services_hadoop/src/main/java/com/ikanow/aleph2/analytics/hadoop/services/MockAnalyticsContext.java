@@ -527,7 +527,7 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 						return Lambdas.get(() -> {
 							if (!bucket_subchannel[0].equals(my_bucket.full_name()) || !bucket_subchannel[1].isEmpty())
 							{
-								return Arrays.asList(_storage_service.getBucketRootPath() + bucket_subchannel[0] + IStorageService.TRANSIENT_DATA_SUFFIX + bucket_subchannel[1]);
+								return Arrays.asList(_storage_service.getBucketRootPath() + bucket_subchannel[0] + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + bucket_subchannel[1] + IStorageService.PRIMARY_BUFFER_SUFFIX);
 							}
 							else { // This is my input directory
 								return Arrays.asList(_storage_service.getBucketRootPath() + my_bucket.full_name() + IStorageService.TO_IMPORT_DATA_SUFFIX);

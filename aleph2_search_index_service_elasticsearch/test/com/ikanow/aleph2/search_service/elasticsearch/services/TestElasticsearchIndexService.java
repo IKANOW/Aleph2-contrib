@@ -913,19 +913,19 @@ public class TestElasticsearchIndexService {
 		
 		// 1) Check that doesn't die horribly on a bucket that doesn't exist
 		
-		assertEquals(new HashSet<String>(), index_data_service.getSecondaryBuffers(bucket));
+		assertEquals(new HashSet<String>(), index_data_service.getSecondaryBuffers(bucket, Optional.empty()));
 		
 		// 2) Ditto on one with no secondary buffers
 		
 		assertTrue(_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.empty()).isPresent());
-		assertEquals(new HashSet<String>(), index_data_service.getSecondaryBuffers(bucket));
+		assertEquals(new HashSet<String>(), index_data_service.getSecondaryBuffers(bucket, Optional.empty()));
 		
 		// 3) OK let's add some secondary buffers
 
 		assertTrue(_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.of("test1")).isPresent());
 		assertTrue(_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.of("test2")).isPresent());
 		assertTrue(_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.of("test3")).isPresent());
-		assertEquals(Arrays.asList("test1", "test2", "test3"), index_data_service.getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));		
+		assertEquals(Arrays.asList("test1", "test2", "test3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));		
 		
 		// 4) Test deletion of secondary buffers
 		{
@@ -933,7 +933,7 @@ public class TestElasticsearchIndexService {
 			assertTrue("Failed to delete secondary buffer: " + delete_res.message(), delete_res.success());
 			Thread.sleep(1250L);//(since the handleBucketDeletionRequest is async)
 		}
-		assertEquals(Arrays.asList("test1", "test3"), index_data_service.getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));		
+		assertEquals(Arrays.asList("test1", "test3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));		
 		
 		// 5) Check bucket deletion also deletes the secondaries
 		{
@@ -941,7 +941,7 @@ public class TestElasticsearchIndexService {
 			assertTrue("Failed to delete primary buffer + secondaries: " + delete_res2.message(), delete_res2.success());
 			Thread.sleep(1250L);//(since the handleBucketDeletionRequest is async)
 		}		
-		assertEquals(new HashSet<String>(), index_data_service.getSecondaryBuffers(bucket));
+		assertEquals(new HashSet<String>(), index_data_service.getSecondaryBuffers(bucket, Optional.empty()));
 	}
 	
 	
@@ -964,12 +964,12 @@ public class TestElasticsearchIndexService {
 		
 		// 1) Check doesn't return anything interesting if the bucket doesn't exist
 		
-		assertEquals(Optional.empty(), index_data_service.getPrimaryBufferName(bucket));		
+		assertEquals(Optional.empty(), index_data_service.getPrimaryBufferName(bucket, Optional.empty()));		
 		
 		// 2) Check doens't return anything until a buffer has been made primary
 		
 		assertTrue(_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.empty()).isPresent());
-		assertEquals(Optional.empty(), index_data_service.getPrimaryBufferName(bucket));				
+		assertEquals(Optional.empty(), index_data_service.getPrimaryBufferName(bucket, Optional.empty()));				
 		
 		// 3) Switch a buffer to primary, check - when there's no data
 
@@ -978,16 +978,16 @@ public class TestElasticsearchIndexService {
 		assertTrue(_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.of("sec_test_3")).isPresent());
 		
 		//(check they got created)
-		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));		
+		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));		
 		
-		BasicMessageBean res1 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_1"), Optional.empty()).join();
+		BasicMessageBean res1 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_1"), Optional.empty(), Optional.empty()).join();
 		
 		{
 			assertTrue("Switch worked: " + res1.message(), res1.success());
 		}
 		
-		assertEquals(Optional.of("sec_test_1"), index_data_service.getPrimaryBufferName(bucket));				
-		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));		
+		assertEquals(Optional.of("sec_test_1"), index_data_service.getPrimaryBufferName(bucket, Optional.empty()));				
+		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));		
 				
 		// 4) Change to a different buffer - when there is some data (also add some data to a secondary index at the same time) - check the data swaps
 		
@@ -1001,13 +1001,13 @@ public class TestElasticsearchIndexService {
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket));
 
 		{
-			BasicMessageBean res2 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_2"), Optional.empty()).join();
+			BasicMessageBean res2 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_2"), Optional.empty(), Optional.empty()).join();
 			
 			assertTrue("Switch worked: " + res2.message(), res2.success());
 		}
 			
-		assertEquals(Optional.of("sec_test_2"), index_data_service.getPrimaryBufferName(bucket));				
-		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));		
+		assertEquals(Optional.of("sec_test_2"), index_data_service.getPrimaryBufferName(bucket, Optional.empty()));				
+		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));		
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getAliasedBuffers(bucket));
 
 		addRecordToSecondaryBuffer(bucket, Optional.empty()); 
@@ -1021,13 +1021,13 @@ public class TestElasticsearchIndexService {
 		// 5) Switch original back again
 
 		{
-			BasicMessageBean res3 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_1"), Optional.empty()).join();
+			BasicMessageBean res3 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_1"), Optional.empty(), Optional.empty()).join();
 			
 			assertTrue("Switch worked: " + res3.message(), res3.success());
 		}
 		
-		assertEquals(Optional.of("sec_test_1"), index_data_service.getPrimaryBufferName(bucket));				
-		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket).stream().sorted().collect(Collectors.toList()));
+		assertEquals(Optional.of("sec_test_1"), index_data_service.getPrimaryBufferName(bucket, Optional.empty()));				
+		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket));
 		
 		addRecordToSecondaryBuffer(bucket, Optional.empty()); 

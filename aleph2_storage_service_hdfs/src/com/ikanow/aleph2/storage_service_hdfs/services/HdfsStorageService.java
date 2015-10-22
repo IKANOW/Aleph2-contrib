@@ -375,23 +375,32 @@ public class HdfsStorageService implements IStorageService {
 		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getSecondaryBufferList(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 		 */
 		@Override
-		public Set<String> getSecondaryBuffers(DataBucketBean bucket) {
+		public Set<String> getSecondaryBuffers(DataBucketBean bucket, Optional<String> intermediate_step) {
 			final FileContext fc = HdfsStorageService.this.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 			
-			final Path raw_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY);
-			Stream<String> s1 = getSubdirs(fc, raw_top_level, false);
-			
-			final Path json_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY);
-			Stream<String> s2 = getSubdirs(fc, json_top_level, false);
-			
-			final Path px_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY);
-			Stream<String> s3 = getSubdirs(fc, px_top_level, false);
+			return intermediate_step.map(job_name -> {
+				// Under transient, need to run across all the job-related subdirs
+				final Path transient_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + job_name);
+				Stream<String> s4 = getSubdirs(fc, transient_top_level, false);
+				
+				return Stream.of(s4);
+			})
+			.orElseGet(() -> {
+				final Path raw_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY);
+				Stream<String> s1 = getSubdirs(fc, raw_top_level, false);
+				
+				final Path json_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY);
+				Stream<String> s2 = getSubdirs(fc, json_top_level, false);
+				
+				final Path px_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY);
+				Stream<String> s3 = getSubdirs(fc, px_top_level, false);
 
-			// Under transient, need to run across all the job-related subdirs
-			final Path transient_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY);
-			Stream<String> s4 = getSubdirs(fc, transient_top_level, false);
+				return Stream.of(s1, s2, s3);
+				
+			})
+			.flatMap(s -> s).collect(Collectors.toSet())
+			;
 			
-			return Stream.of(s1, s2, s3, s4).flatMap(s -> s).collect(Collectors.toSet());
 		}
 
 		/* (non-Javadoc)
@@ -399,18 +408,13 @@ public class HdfsStorageService implements IStorageService {
 		 */
 		@Override
 		public CompletableFuture<BasicMessageBean> switchCrudServiceToPrimaryBuffer(
-				DataBucketBean bucket, Optional<String> secondary_buffer, final Optional<String> new_name_for_ex_primary)
+				DataBucketBean bucket, Optional<String> secondary_buffer, final Optional<String> new_name_for_ex_primary, final Optional<String> intermediate_step)
 		{
 			final FileContext fc = HdfsStorageService.this.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 			
 			// OK this is slightly unpleasant because of the lack of support for symlinks
 			
 			//  Basically we're going to remove or rename "current" and then move the secondary buffer across as quickly as we can (that's 2 atomic operations if you're counting!)
-			
-			final Path raw_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY);
-			final Path json_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY);
-			final Path px_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY);
-			final Path transient_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY);
 			
 			final Function<Path, Validation<Throwable, Path>> moveOrDeleteDir = path -> {
 				final Path path_to_move = Path.mergePaths(path, new Path(IStorageService.PRIMARY_BUFFER_SUFFIX));				
@@ -440,31 +444,53 @@ public class HdfsStorageService implements IStorageService {
 				try { fc.setPermission(dst_path, HfdsDataWriteService.DEFAULT_DIR_PERMS); } catch (Exception e) {} // (not supported in all FS)
 				return path;
 			});			
+
+			final Tuple2<Stream<Throwable>, Stream<Throwable>> critical_errs = intermediate_step.map(step -> {
+				
+				final Path transient_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + step);
+				
+				final Validation<Throwable, Path> err4a = moveOrDeleteDir.apply(transient_top_level);
+				final Validation<Throwable, Path> err4b = moveToPrimary.apply(transient_top_level);
+				
+				final Stream<Throwable> errs = Stream.of(err4a, err4b)
+						.flatMap(err -> err.validation(fail -> Stream.of(fail), success -> Stream.empty()));
+
+				final Stream<Throwable> critical = Stream.of(err4b).flatMap(err -> err.validation(fail -> Stream.of(fail), success -> Stream.empty()));
+
+				return Tuples._2T(critical, errs);
+			})
+			.orElseGet(() -> {
+				
+				final Path raw_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY);
+				final Path json_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY);
+				final Path px_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY);
+				
+				final Validation<Throwable, Path> err1a = moveOrDeleteDir.apply(raw_top_level);
+				final Validation<Throwable, Path> err1b = moveToPrimary.apply(raw_top_level);
+				final Validation<Throwable, Path> err2a = moveOrDeleteDir.apply(json_top_level);
+				final Validation<Throwable, Path> err2b = moveToPrimary.apply(json_top_level);
+				final Validation<Throwable, Path> err3a = moveOrDeleteDir.apply(px_top_level);
+				final Validation<Throwable, Path> err3b = moveToPrimary.apply(px_top_level);
+				
+				final Stream<Throwable> errs = Stream.of(err1a, err1b, err2a, err2b, err3a, err3b)
+						.flatMap(err -> err.validation(fail -> Stream.of(fail), success -> Stream.empty()));
+
+				final Stream<Throwable> critical = Stream.of(err1b, err2b, err3b).flatMap(err -> err.validation(fail -> Stream.of(fail), success -> Stream.empty()));
+				
+				return Tuples._2T(critical, errs);
+			});
 			
-			final Validation<Throwable, Path> err1a = moveOrDeleteDir.apply(raw_top_level);
-			final Validation<Throwable, Path> err1b = moveToPrimary.apply(raw_top_level);
-			final Validation<Throwable, Path> err2a = moveOrDeleteDir.apply(json_top_level);
-			final Validation<Throwable, Path> err2b = moveToPrimary.apply(json_top_level);
-			final Validation<Throwable, Path> err3a = moveOrDeleteDir.apply(px_top_level);
-			final Validation<Throwable, Path> err3b = moveToPrimary.apply(px_top_level);
-			final Validation<Throwable, Path> err4a = moveOrDeleteDir.apply(transient_top_level);
-			final Validation<Throwable, Path> err4b = moveToPrimary.apply(transient_top_level);
-			
-			final Stream<Throwable> errs = Stream.of(err1a, err1b, err2a, err2b, err3a, err3b, err4a, err4b)
-													.flatMap(err -> err.validation(fail -> Stream.of(fail), success -> Stream.empty()));
-			
-			final Stream<Throwable> critical_errs = Stream.of(err1b, err2b, err3b, err4b).flatMap(err -> err.validation(fail -> Stream.of(fail), success -> Stream.empty()));
 			
 			return CompletableFuture.completedFuture(ErrorUtils.buildMessage(
-					!critical_errs.findFirst().isPresent(), this.getClass().getName(), "switchCrudServiceToPrimaryBuffer", 
-						errs.map(t -> ErrorUtils.getLongForm("{0}", t)).collect(Collectors.joining(";"))));
+					!critical_errs._1().findFirst().isPresent(), this.getClass().getName(), "switchCrudServiceToPrimaryBuffer", 
+					critical_errs._2().map(t -> ErrorUtils.getLongForm("{0}", t)).collect(Collectors.joining(";"))));
 		}
 
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getPrimaryBufferName(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 		 */
 		@Override
-		public Optional<String> getPrimaryBufferName(DataBucketBean bucket) {
+		public Optional<String> getPrimaryBufferName(DataBucketBean bucket, Optional<String> intermediate_step) {
 			// We can't infer the primary buffer name for HDFS
 			return Optional.empty();
 		}		
@@ -475,7 +501,7 @@ public class HdfsStorageService implements IStorageService {
 		@Override
 		public CompletableFuture<BasicMessageBean> handleAgeOutRequest(final DataBucketBean bucket) {
 			// Loop over secondary buffers:
-			this.getSecondaryBuffers(bucket).stream().forEach(sec -> handleAgeOutRequest(bucket, Optional.of(sec)));
+			this.getSecondaryBuffers(bucket, Optional.empty()).stream().forEach(sec -> handleAgeOutRequest(bucket, Optional.of(sec)));
 			
 			// Only return the results from the main bucket:
 			return handleAgeOutRequest(bucket, Optional.empty());
@@ -596,6 +622,16 @@ public class HdfsStorageService implements IStorageService {
 			}			
 		}
 		
+		/** Returns a list of transient jobs that contain data
+		 * @param bucket
+		 * @return
+		 */
+		private Stream<String> getTransientJobs(final DataBucketBean bucket) {
+			final FileContext dfs = getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
+			final Path transient_top_level = new Path(HdfsStorageService.this.getBucketRootPath() + bucket.full_name() + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY);
+			return getSubdirs(dfs, transient_top_level, false);			
+		}
+		
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#handleBucketDeletionRequest(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Optional, boolean)
 		 */
@@ -606,8 +642,7 @@ public class HdfsStorageService implements IStorageService {
 				final boolean bucket_or_buffer_getting_deleted) {
 			
 			if (bucket_or_buffer_getting_deleted && !secondary_buffer.isPresent()) { // if we're deleting the bucket and nothing else is present then
-				// delete all the secondary buffers
-				getSecondaryBuffers(bucket).stream().parallel().forEach(buffer -> handleBucketDeletionRequest(bucket, Optional.of(buffer), true));				
+				return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage("HdfsDataService", "handleBucketDeletionRequest", "Done nothing - entire bucket folders from {0} are getting deleted", bucket.full_name()));
 			}
 			
 			final FileContext dfs = getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
@@ -619,9 +654,10 @@ public class HdfsStorageService implements IStorageService {
 				final Path p_px = new Path(bucket_root + IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY + buffer_suffix);
 				
 				// Also some transient paths:
-				final Path p_transients = new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + buffer_suffix);
+				final Stream<Path> p_transients = getTransientJobs(bucket)
+						.map(s -> new Path(bucket_root + IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + s + "/" + buffer_suffix));
 				
-				final List<BasicMessageBean> results = Stream.of(p_raw, p_json, p_px, p_transients).map(p -> {
+				final List<BasicMessageBean> results = Stream.concat(Stream.of(p_raw, p_json, p_px), p_transients).map(p -> {
 					try {
 						if (doesPathExist(dfs, p)) {			
 							dfs.delete(p, true);			

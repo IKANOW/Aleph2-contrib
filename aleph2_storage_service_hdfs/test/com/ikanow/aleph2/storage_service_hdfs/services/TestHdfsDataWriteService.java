@@ -144,7 +144,7 @@ public class TestHdfsDataWriteService {
 			fail("Should have thrown");
 		}
 		catch (Exception e) {}
-		assertEquals("/root/test/static/managed_bucket/import/transient/current/testj-testm", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.transient_output, Optional.of("testj-testm"), "current"));
+		assertEquals("/root/test/static/managed_bucket/import/transient/testj-testm/current", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.transient_output, Optional.of("testj-testm"), "current"));
 	}
 		
 	/** Get some easy testing out the way
@@ -633,15 +633,15 @@ public class TestHdfsDataWriteService {
 			}
 		}		
 		final String infix = is_transient ? IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY : IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY;
-		final String infix_name = is_transient ? "testj-testm" : "";
+		final String infix_name = is_transient ? "testj-testm/" : "/";
 		
 		// Check that initially the files are stored locally
 		File init_dir = new File(
-				(temp_dir + "/data/" + write_service._bucket.full_name() + infix + secondary.orElse("current") + "/" + infix_name + "/.spooldir/")
+				(temp_dir + "/data/" + write_service._bucket.full_name() + infix + infix_name + secondary.orElse("current") + "/.spooldir/")
 				.replace("/", File.separator)
 				);
 		File final_dir = new File(
-				(temp_dir + "/data/" + write_service._bucket.full_name() + infix + secondary.orElse("current") + "/" + infix_name + "/all_time/")
+				(temp_dir + "/data/" + write_service._bucket.full_name() + infix + infix_name + secondary.orElse("current") + "/all_time/")
 				.replace("/", File.separator)
 				);
 		

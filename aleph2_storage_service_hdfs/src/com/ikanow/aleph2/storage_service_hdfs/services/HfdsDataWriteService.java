@@ -613,7 +613,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 								.when(__ -> stage == IStorageService.StorageStage.raw, __ -> IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + buffer)
 								.when(__ -> stage == IStorageService.StorageStage.json, __ -> IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + buffer)
 								.when(__ -> stage == IStorageService.StorageStage.processed, __ -> IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY  + buffer)
-								.when(__ -> stage == IStorageService.StorageStage.transient_output, __ -> IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY  + buffer + "/" + job_name.get())
+								.when(__ -> stage == IStorageService.StorageStage.transient_output, __ -> IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY  + job_name.get() + "/" + buffer)
 									//(job_name exists by construction in the transient output case)
 								.otherwiseAssert()
 							)

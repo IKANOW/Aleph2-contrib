@@ -139,7 +139,7 @@ public class MockHadoopTestingService {
 	 * @throws IOException
 	 */
 	public void addFileToTransientJobOutput(final InputStream local_stream, final DataBucketBean bucket, String job) throws IOException {
-		addFileToBucketStorage(local_stream, bucket, IStorageService.TRANSIENT_DATA_SUFFIX + job, Either.right(Unit.unit()));
+		addFileToBucketStorage(local_stream, bucket, IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + job + IStorageService.PRIMARY_BUFFER_SUFFIX, Either.right(Unit.unit()));
 	}
 
 	/** Clears all data for the bucket
@@ -186,7 +186,7 @@ public class MockHadoopTestingService {
 	 * @return
 	 */
 	public int isFileInTransientJobOutput(final DataBucketBean bucket, final String job) {
-		return numFilesInBucketStorage(bucket, IStorageService.TRANSIENT_DATA_SUFFIX + job, Either.right(Unit.unit()));
+		return numFilesInBucketStorage(bucket, IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY + job + IStorageService.PRIMARY_BUFFER_SUFFIX, Either.right(Unit.unit()));
 	}
 	
 	/** Returns the number of records in the bucket's storage service

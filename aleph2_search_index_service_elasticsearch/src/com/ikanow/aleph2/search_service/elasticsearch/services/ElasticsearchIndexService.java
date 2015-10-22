@@ -278,7 +278,8 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		@Override
 		public <O> Optional<IDataWriteService<O>> getWritableDataService(
 				Class<O> clazz, DataBucketBean bucket,
-				Optional<String> options, Optional<String> secondary_buffer) {
+				Optional<String> options, Optional<String> secondary_buffer)
+		{
 			// There's two different cases
 			// 1) Multi-bucket - equivalent to the other version of getCrudService
 			// 2) Single bucket - a read/write bucket
@@ -302,7 +303,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			final Tuple3<ElasticsearchIndexServiceConfigBean, String, Optional<String>> schema_index_type = getSchemaConfigAndIndexAndType(bucket, _config);
 						
 			// only create aliases within ES context if there is no primary (ie secondary buffers), or if the secondary currently points at the primary
-			final boolean is_primary =  getPrimaryBufferName(bucket)
+			final boolean is_primary =  getPrimaryBufferName(bucket, Optional.empty())
 											.map(primary -> Optional.of(primary).equals(secondary_buffer))
 											.orElseGet(() -> { // (no primary buffer, just return true if i'm the default current 
 												return !secondary_buffer.isPresent();
@@ -323,7 +324,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			final Function<String, Optional<String>> aliasCheck = index_name -> {
 				final Optional<String> base_index = Optional.of(ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()));
 				final Optional<String> primary_buffer = 
-						getPrimaryBufferName(bucket)
+						getPrimaryBufferName(bucket, Optional.empty())
 							.<Optional<String>> map(name -> {
 								String primary_index = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.of(name));
 								return primary_index.equals(index_name)
@@ -391,7 +392,10 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getSecondaryBufferList(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 		 */
 		@Override
-		public Set<String> getSecondaryBuffers(DataBucketBean bucket) {
+		public Set<String> getSecondaryBuffers(DataBucketBean bucket, Optional<String> intermediate_step) {
+			if (intermediate_step.isPresent()) {
+				return Collections.emptySet();
+			}
 			return getMatchingTemplatesWithMeta(bucket, Optional.empty(), _crud_factory.getClient())
 					.map(json -> json.get(ElasticsearchIndexUtils.CUSTOM_META_SECONDARY))
 					.filter(json -> (null != json) && json.isTextual())
@@ -410,7 +414,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			final Tuple3<ElasticsearchIndexServiceConfigBean, String, Optional<String>> schema_index_type = getSchemaConfigAndIndexAndType(bucket, _config);
 			
 			// Remove it for all the other buffers
-			Stream.concat(Stream.of(""), getSecondaryBuffers(bucket).stream()).parallel()
+			Stream.concat(Stream.of(""), getSecondaryBuffers(bucket, Optional.empty()).stream()).parallel()
 				.<Optional<String>>map(buffer -> buffer.isEmpty() ? Optional.empty() : Optional.of(buffer))
 				.forEach(buffer -> {
 					final boolean is_primary = buffer.equals(new_primary_buffer);
@@ -426,10 +430,15 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		 */
 		@Override
 		public CompletableFuture<BasicMessageBean> switchCrudServiceToPrimaryBuffer(
-				DataBucketBean bucket, Optional<String> secondary_buffer, Optional<String> new_name_for_ex_primary)
+				DataBucketBean bucket, Optional<String> secondary_buffer, Optional<String> new_name_for_ex_primary, Optional<String> intermediate_step)
 		{
+			if (intermediate_step.isPresent()) {
+				return CompletableFuture.completedFuture(
+						ErrorUtils.buildErrorMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", "intermediate steps not supported in Elasticsearch (bucket {0})", bucket.full_name())); 
+			}			
+			
 			// 0) Grab the current primary before doing anything else
-			final Optional<String> curr_primary = getPrimaryBufferName(bucket);
+			final Optional<String> curr_primary = getPrimaryBufferName(bucket, intermediate_step);
 			
 			// 1) Update the templates of the aliases - all but the new primary get "is_primary" set 
 			updateTemplates(bucket, secondary_buffer);
@@ -479,7 +488,10 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getPrimaryBufferName(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 		 */
 		@Override
-		public Optional<String> getPrimaryBufferName(DataBucketBean bucket) {
+		public Optional<String> getPrimaryBufferName(DataBucketBean bucket, Optional<String> intermediate_step) {
+			if (intermediate_step.isPresent()) {
+				return Optional.empty();
+			}			
 			// This call gives us the mappings, which includes CUSTOM_META_PRIMARY == if is primary and CUSTOM_META_SECONDARY, ie the string to return
 			return getMatchingTemplatesWithMeta(bucket, Optional.empty(), _crud_factory.getClient())
 				.filter(json -> {
@@ -503,7 +515,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		@Override
 		public CompletableFuture<BasicMessageBean> handleAgeOutRequest(final DataBucketBean bucket) {
 			// (Age out the secondary buffers)
-			getSecondaryBuffers(bucket).stream().forEach(Lambdas.wrap_consumer_i(secondary -> handleAgeOutRequest(bucket, Optional.of(secondary))));
+			getSecondaryBuffers(bucket, Optional.empty()).stream().forEach(Lambdas.wrap_consumer_i(secondary -> handleAgeOutRequest(bucket, Optional.of(secondary))));
 			
 			// Only return the final value for this:
 			return handleAgeOutRequest(bucket, Optional.empty());
@@ -599,7 +611,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			
 			if (bucket_or_buffer_getting_deleted && !secondary_buffer.isPresent()) { // if we're deleting the bucket and nothing else is present then
 				// delete all the secondary buffers
-				getSecondaryBuffers(bucket).stream().parallel().forEach(buffer -> handleBucketDeletionRequest(bucket, Optional.of(buffer), true));				
+				getSecondaryBuffers(bucket, Optional.empty()).stream().parallel().forEach(buffer -> handleBucketDeletionRequest(bucket, Optional.of(buffer), true));				
 			}
 			
 			final Optional<ICrudService<JsonNode>> to_delete = this.getWritableDataService(JsonNode.class, bucket, Optional.empty(), secondary_buffer)

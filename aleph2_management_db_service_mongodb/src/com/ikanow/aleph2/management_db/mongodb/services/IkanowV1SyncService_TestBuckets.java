@@ -358,14 +358,14 @@ public class IkanowV1SyncService_TestBuckets {
 		return _context.getSearchIndexService().flatMap(IDataServiceProvider::getDataService)
 				.flatMap(s -> {
 					final Optional<String> buffer_to_read_from =
-							s.getPrimaryBufferName(test_data_bucket)
+							s.getPrimaryBufferName(test_data_bucket, Optional.empty())
 								//TODO (ALEPH-12): once the code to switch on completion is in here then this will need to be fixed
 								.map(primary -> IGenericDataService.SECONDARY_PING.equals(primary) ? 
 										IGenericDataService.SECONDARY_PONG : IGenericDataService.SECONDARY_PING)
 								.map(Optional::of)
 								.orElseGet(() -> { // no primary buffer, which happens (eg based on tech) - so guess the primary based on what's missing from the secondary
 													// and read from the other one (else it's not an analytic buffer)
-									final Set<String> secondary_buffers = s.getSecondaryBuffers(test_data_bucket);
+									final Set<String> secondary_buffers = s.getSecondaryBuffers(test_data_bucket, Optional.empty());
 									if (secondary_buffers.contains(IGenericDataService.SECONDARY_PING)) return Optional.of(IGenericDataService.SECONDARY_PING);
 									else if (secondary_buffers.contains(IGenericDataService.SECONDARY_PONG)) return Optional.of(IGenericDataService.SECONDARY_PONG);
 									else return Optional.empty();
