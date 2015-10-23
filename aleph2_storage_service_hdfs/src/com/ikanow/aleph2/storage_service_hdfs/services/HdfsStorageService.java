@@ -184,7 +184,24 @@ public class HdfsStorageService implements IStorageService {
 			config.addResource(new Path(_globals.local_yarn_config_dir() +"/hdfs-site.xml"));
 		}
 		else {
-			config.addResource("default_fs.xml");						
+			final String alternative = System.getenv("HADOOP_CONF_DIR");
+			
+			/**/
+			//ALEPH-2: just for printing
+			System.out.println("Aleph2 yarn-config dir not found, try alternative: " + alternative);
+			
+			/**/
+			System.out.println("Note: HADOOP_HOME = " + System.getenv("HADOOP_HOME"));
+			System.out.println("Note: HADOOP_HOME 2 = " + System.getProperty("hadoop.home.dir"));
+			System.out.println("Note: HADOOP_CONFIG 2 = " + System.getProperty("hadoop.config.dir"));
+			
+			if ((null != alternative) && new File(alternative).exists()) {
+				config.addResource(new Path(alternative +"/yarn-site.xml"));
+				config.addResource(new Path(alternative +"/core-site.xml"));
+				config.addResource(new Path(alternative +"/hdfs-site.xml"));				
+			}
+			else  // last ditch - will work for local testing but never from anything remote
+				config.addResource("default_fs.xml");						
 		}
 		// These are not added by Hortonworks, so add them manually
 		config.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");									
