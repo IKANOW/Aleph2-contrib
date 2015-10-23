@@ -85,6 +85,7 @@ public class MockHadoopTestingService {
 		// Context		
 		_analytics_context.setBucket(test_bucket);
 		_analytics_context.setTechnologyConfig(library);
+		_analytics_context.resetJob(job.get());
 				
 		//PHASE 2: CREATE TOPOLOGY AND SUBMit
 		return test_max_records.isPresent()
