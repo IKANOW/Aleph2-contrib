@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 
 import org.junit.Test;
 
+import com.ikanow.aleph2.analytics.services.AnalyticsContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
@@ -40,7 +41,7 @@ public class TestHadoopTechnologyService_Misc {
 	@Test
 	public void test_misc() throws InterruptedException, ExecutionException {
 		
-		final MockAnalyticsContext test_context = new MockAnalyticsContext();
+		final AnalyticsContext test_context = new AnalyticsContext();
 		final HadoopTechnologyService tech_service = new HadoopTechnologyService(); // (will look for a controller then back-off to NoStormController)		
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
@@ -104,8 +105,8 @@ public class TestHadoopTechnologyService_Misc {
 		{
 			final ManagementFuture<Boolean> res = tech_service.checkAnalyticJobProgress(test_bucket, jobs, dummy_job, test_context);
 			assertTrue("Trivial service returned true", res.get());
-			assertTrue("Side channel with 0 errors: " + res.getManagementResults().get().size(),
-					0 == res.getManagementResults().get().size());
+			assertTrue("Side channel with 1 return: " + res.getManagementResults().get().size(),
+					1 == res.getManagementResults().get().size());
 		}
 		
 		// And finally for completeness sake:
@@ -128,7 +129,7 @@ public class TestHadoopTechnologyService_Misc {
 		
 		// (all the logic is encapsulated within the storm controller, so there are just trivial tests for coverage sake)
 		
-		final MockAnalyticsContext test_context = new MockAnalyticsContext();
+		final AnalyticsContext test_context = new AnalyticsContext();
 		final MockHadoopTechnologyService tech_service = new MockHadoopTechnologyService();
 		
 		// The main thread logic is currently tested by the TestPassthoughtTopology class, so we're just testing some boring/trivial things here

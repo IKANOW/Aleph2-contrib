@@ -360,10 +360,9 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 					.reduce((j1, j2) -> (j1.getStartTime() > j2.getStartTime()) ? j1 : j2) // get the most recent version with this name
 					.map(job_status -> {
 
-						/**/
 						//DEBUG
-						_logger.warn(ErrorUtils.get("Job {0}:{1} FOUND {2} {3} {4}", job_status.getJobID(), job_status.getJobName(), 
-								job_status.isJobComplete(), job_status.isJobComplete(), job_status.getFailureInfo()));
+						//_logger.warn(ErrorUtils.get("Job {0}:{1} FOUND {2} {3} {4}", job_status.getJobID(), job_status.getJobName(), 
+						//		job_status.isJobComplete(), job_status.isJobComplete(), job_status.getFailureInfo()));
 						
 						//TODO (ALEPH-12): create useful info in the side channel beans ... eg if it's an error?
 						// (need to get the job first, then get more info)

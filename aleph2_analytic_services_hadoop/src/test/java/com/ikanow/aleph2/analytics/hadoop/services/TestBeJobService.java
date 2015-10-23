@@ -36,6 +36,7 @@ import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher;
+import com.ikanow.aleph2.analytics.services.AnalyticsContext;
 import com.ikanow.aleph2.core.shared.utils.DirUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
@@ -187,7 +188,7 @@ public class TestBeJobService {
 			logger.info("WINDOWS MODE SKIPPING THIS TEST");
 			return;
 		}		
-		final MockAnalyticsContext analytics_context = new MockAnalyticsContext(_service_context);
+		final AnalyticsContext analytics_context = new AnalyticsContext(_service_context);
 		final BatchEnrichmentContext batch_context = new BatchEnrichmentContext(analytics_context);
 		
 		final SharedLibraryBean technology = BeanTemplateUtils.build(SharedLibraryBean.class).with(SharedLibraryBean::path_name, "/tech/test").done().get();

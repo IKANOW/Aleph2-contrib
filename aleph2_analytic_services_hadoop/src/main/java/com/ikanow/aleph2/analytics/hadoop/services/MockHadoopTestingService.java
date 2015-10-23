@@ -30,6 +30,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.FileContext;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.ikanow.aleph2.analytics.services.AnalyticsContext;
 import com.ikanow.aleph2.core.shared.utils.DirUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
@@ -53,14 +54,14 @@ public class MockHadoopTestingService {
 	protected final IServiceContext _service_context;
 
 	protected final MockHadoopTechnologyService _service = new MockHadoopTechnologyService();
-	protected final MockAnalyticsContext _analytics_context;
+	protected final AnalyticsContext _analytics_context;
 	
 	/** User c'tor
 	 * @param service_context
 	 */
 	public MockHadoopTestingService(IServiceContext service_context) {
 		_service_context = service_context;
-		_analytics_context = new MockAnalyticsContext(_service_context);
+		_analytics_context = new AnalyticsContext(_service_context);
 	}
 	
 	/** Submit a test bucket with exactly one analytic job
