@@ -43,8 +43,15 @@ public class TestHadoopTechnologyService_Misc {
 		final MockAnalyticsContext test_context = new MockAnalyticsContext();
 		final HadoopTechnologyService tech_service = new HadoopTechnologyService(); // (will look for a controller then back-off to NoStormController)		
 		
-		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class).done().get();
+		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
+											.with(DataBucketBean::full_name, "/test/")
+											.with(DataBucketBean::_id, "test")
+											.done().get();
 		final Collection<AnalyticThreadJobBean> jobs = Collections.emptyList();
+		
+		final AnalyticThreadJobBean dummy_job = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+													.with(AnalyticThreadJobBean::name, "dummy_job")
+													.done().get();
 		
 		tech_service.onInit(test_context); // (just make sure it doesnt' crash)
 		assertFalse("Should return can't run on node", tech_service.canRunOnThisNode(test_bucket, jobs, test_context));
@@ -95,7 +102,7 @@ public class TestHadoopTechnologyService_Misc {
 			assertEquals("", res.get().message());
 		}
 		{
-			final ManagementFuture<Boolean> res = tech_service.checkAnalyticJobProgress(test_bucket, jobs, null, test_context);
+			final ManagementFuture<Boolean> res = tech_service.checkAnalyticJobProgress(test_bucket, jobs, dummy_job, test_context);
 			assertTrue("Trivial service returned true", res.get());
 			assertTrue("Side channel with 0 errors: " + res.getManagementResults().get().size(),
 					0 == res.getManagementResults().get().size());
