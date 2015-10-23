@@ -106,6 +106,7 @@ public class BeJobLauncher implements IBeJobService{
 		final ClassLoader currentClassloader = Thread.currentThread().getContextClassLoader();
 		//(not currently used, but has proven useful in the past)
 		
+		Job job = null;
 		try {
 			final String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
 		    config.set(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE, contextSignature);
@@ -146,7 +147,7 @@ public class BeJobLauncher implements IBeJobService{
 			config.set("mapreduce.job.user.classpath.first", "true");
 			
 		    // do not set anything into config past this line (can set job.getConfiguration() elements though - that is what the builder does)
-		    Job job = Job.getInstance(config, jobName);
+		    job = Job.getInstance(config, jobName);
 		    job.setJarByClass(BatchEnrichmentJob.class);
 
 		    // Set the classpath
@@ -170,10 +171,23 @@ public class BeJobLauncher implements IBeJobService{
 			return Validation.success(job);
 			
 		} 
-		catch (Throwable t) {
-			logger.error("Caught Exception",t);
-			return Validation.fail(ErrorUtils.getLongForm("{0}", t));
-		} 
+		catch (Throwable t) { 
+			Throwable tt = (t instanceof RuntimeException)
+							? (null != t.getCause()) ? t.getCause() : t
+							: t;
+			
+			if (tt instanceof org.apache.hadoop.mapreduce.lib.input.InvalidInputException) {
+				// Probably a benign "no matching paths", so return pithy error
+				return Validation.fail(ErrorUtils.get("{0}", tt.getMessage()));				
+			}
+			else { // General error : Dump the config params to string			
+				if (null != job) {
+					logger.error(ErrorUtils.get("Error submitting, config= {0}",  
+							Optionals.streamOf(job.getConfiguration().iterator(), false).map(kv -> kv.getKey() + ":" + kv.getValue()).collect(Collectors.joining("; "))));
+				}			
+				return Validation.fail(ErrorUtils.getLongForm("{0}", tt));
+			}
+		}
 		finally {
 			Thread.currentThread().setContextClassLoader(currentClassloader);
 		}
@@ -241,17 +255,7 @@ public class BeJobLauncher implements IBeJobService{
 	 * @throws InterruptedException
 	 */
 	public void launch(Job job) throws ClassNotFoundException, IOException, InterruptedException{
-		try {
-			job.submit();
-		}
-		catch (Exception e) {
-			// Dump the config params to string
-			
-			logger.error(ErrorUtils.get("Error submitting, config= {0}", 
-					Optionals.streamOf(job.getConfiguration().iterator(), false).map(kv -> kv.getKey() + ":" + kv.getValue()).collect(Collectors.joining("; "))));
-			
-			throw e;
-		}
+		job.submit();
 	}
 
 }

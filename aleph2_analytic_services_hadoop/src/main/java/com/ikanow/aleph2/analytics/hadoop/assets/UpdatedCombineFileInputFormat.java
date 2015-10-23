@@ -52,8 +52,6 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hadoop.mapreduce.lib.input.CombineFileSplit;
 import org.apache.hadoop.net.NodeBase;
 import org.apache.hadoop.net.NetworkTopology;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.HashMultiset;
@@ -93,9 +91,8 @@ public abstract class UpdatedCombineFileInputFormat<K, V>
   
   private static final Log LOG = LogFactory.getLog(UpdatedCombineFileInputFormat.class);
   
-  /**/
   //ALEPH-12: debug logger
-  private static final Logger debug_logger = LogManager.getLogger(UpdatedCombineFileInputFormat.class);
+  //private static final org.apache.logging.log4j.Logger debug_logger = org.apache.logging.log4j.LogManager.getLogger(UpdatedCombineFileInputFormat.class);
   
   public static final String SPLIT_MINSIZE_PERNODE = 
     "mapreduce.input.fileinputformat.split.minsize.per.node";
@@ -592,10 +589,10 @@ public abstract class UpdatedCombineFileInputFormat<K, V>
         if(locations.length == 0 && !stat.isDirectory()) {
           locations = new BlockLocation[] { new BlockLocation() };
         }
-        /**/
-        else if (0 == locations.length) {
-        	debug_logger.error("About to crash??! + " + stat.getPath().toString());
-        }
+//DEBUG        
+//        else if (0 == locations.length) {
+//        	debug_logger.error("About to crash??! + " + stat.getPath().toString());
+//        }
 
         if (!isSplitable) {
           // if the file is not splitable, just create the one block with

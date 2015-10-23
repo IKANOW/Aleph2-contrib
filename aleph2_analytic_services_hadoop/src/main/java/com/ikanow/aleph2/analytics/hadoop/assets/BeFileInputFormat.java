@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.analytics.hadoop.assets;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
 import org.apache.commons.lang.ArrayUtils;
@@ -138,13 +139,10 @@ public class BeFileInputFormat extends UpdatedCombineFileInputFormat<String, Tup
 			
 		} catch (Throwable t) {
 
-			//TODO (ALEPH-12): some extra debugging here:			
-			logger.error(ErrorUtils.get("Error getting splits, config= {0}", 
+			logger.error(ErrorUtils.getLongForm("Error getting splits, config= {1} error = {0}", t, 
 					Optionals.streamOf(context.getConfiguration().iterator(), false).map(kv -> kv.getKey() + ":" + kv.getValue()).collect(Collectors.joining("; "))));
 			
-			
-			logger.error(t);
-			throw new IOException(t);
+			return Collections.emptyList();
 		}
 	}
 }

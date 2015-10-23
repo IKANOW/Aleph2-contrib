@@ -185,15 +185,9 @@ public class HdfsStorageService implements IStorageService {
 		}
 		else {
 			final String alternative = System.getenv("HADOOP_CONF_DIR");
-			
-			/**/
-			//ALEPH-2: just for printing
-			System.out.println("Aleph2 yarn-config dir not found, try alternative: " + alternative);
-			
-			/**/
-			System.out.println("Note: HADOOP_HOME = " + System.getenv("HADOOP_HOME"));
-			System.out.println("Note: HADOOP_HOME 2 = " + System.getProperty("hadoop.home.dir"));
-			System.out.println("Note: HADOOP_CONFIG 2 = " + System.getProperty("hadoop.config.dir"));
+
+			_logger.warn("Aleph2 yarn-config dir not found, try alternative: " + alternative);
+			// (another alternative would be HADOOP_HOME + "/conf")
 			
 			if ((null != alternative) && new File(alternative).exists()) {
 				config.addResource(new Path(alternative +"/yarn-site.xml"));

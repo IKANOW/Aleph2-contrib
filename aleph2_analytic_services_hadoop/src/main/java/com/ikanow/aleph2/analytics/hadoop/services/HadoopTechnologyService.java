@@ -26,6 +26,8 @@ import java.util.concurrent.CompletableFuture;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.Cluster;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import com.google.inject.Module;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
@@ -53,6 +55,7 @@ import fj.data.Validation;
  * @author Alex
  */
 public class HadoopTechnologyService implements IAnalyticsTechnologyService, IExtraDependencyLoader {
+	protected static final Logger _logger = LogManager.getLogger();	
 
 	protected SetOnce<Configuration> _config = new SetOnce<>();
 	
@@ -351,9 +354,14 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 			final Cluster cluster = new Cluster(_config.get());
 			final String job_name = BucketUtils.getUniqueSignature(analytic_bucket.full_name(), Optional.ofNullable(job_to_check.name()));
 			return Arrays.stream(cluster.getAllJobStatuses())
+/**/.peek(job_status -> _logger.warn(ErrorUtils.get("Job {0}:{1} vs {2}", job_status.getJobID(), job_status.getJobName(), job_name)))
 					.filter(job_status -> job_status.getJobName().equals(job_name))
 					.findFirst()
 					.map(job_status -> {
+						/**/
+						_logger.warn(ErrorUtils.get("Job {0}:{1} FOUND {2} {3} {4}", job_status.getJobID(), job_status.getJobName(), 
+								job_status.isJobComplete(), job_status.isJobComplete(), job_status.getFailureInfo()));
+						
 						//TODO (ALEPH-12): create useful info in the side channel beans ... eg if it's an error?
 						// (need to get the job first, then get more info)
 						return FutureUtils.createManagementFuture(
@@ -367,7 +375,10 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 					.get() // (Will throw if not found falling through to catch below)
 					;
 		}
-		catch (Throwable t) {
+		catch (Throwable t) { //TODO (ALEPH-12): split this into job not present and other problems
+			/**/
+			_logger.error(t);
+			
 			return FutureUtils.createManagementFuture(CompletableFuture.completedFuture(true));
 		}
 	}
