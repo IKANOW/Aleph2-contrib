@@ -350,15 +350,18 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 			Collection<AnalyticThreadJobBean> jobs,
 			AnalyticThreadJobBean job_to_check, IAnalyticsContext context) {
 		
+		final String job_name = BucketUtils.getUniqueSignature(analytic_bucket.full_name(), Optional.ofNullable(job_to_check.name()));
 		try {
 			final Cluster cluster = new Cluster(_config.get());
-			final String job_name = BucketUtils.getUniqueSignature(analytic_bucket.full_name(), Optional.ofNullable(job_to_check.name()));
 			return Arrays.stream(cluster.getAllJobStatuses())
-/**/.peek(job_status -> _logger.warn(ErrorUtils.get("Job {0}:{1} vs {2}", job_status.getJobID(), job_status.getJobName(), job_name)))
+//DEBUG					
+//.peek(job_status -> _logger.warn(ErrorUtils.get("Job {0}:{1} vs {2}", job_status.getJobID(), job_status.getJobName(), job_name)))
 					.filter(job_status -> job_status.getJobName().equals(job_name))
-					.findFirst()
+					.reduce((j1, j2) -> (j1.getStartTime() > j2.getStartTime()) ? j1 : j2) // get the most recent version with this name
 					.map(job_status -> {
+
 						/**/
+						//DEBUG
 						_logger.warn(ErrorUtils.get("Job {0}:{1} FOUND {2} {3} {4}", job_status.getJobID(), job_status.getJobName(), 
 								job_status.isJobComplete(), job_status.isJobComplete(), job_status.getFailureInfo()));
 						
@@ -372,14 +375,25 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 														"TBD: more status")
 											)));
 					})
-					.get() // (Will throw if not found falling through to catch below)
+					.orElseGet(() -> { // 
+						return FutureUtils.createManagementFuture(
+								CompletableFuture.completedFuture(true)
+								,
+								CompletableFuture.completedFuture(Arrays.asList(
+									ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "checkAnalyticJobProgress", 
+											ErrorUtils.get("Job {0} not found, must have errored", job_name))
+								)));						
+					})
 					;
 		}
-		catch (Throwable t) { //TODO (ALEPH-12): split this into job not present and other problems
-			/**/
-			_logger.error(t);
-			
-			return FutureUtils.createManagementFuture(CompletableFuture.completedFuture(true));
+		catch (Throwable t) { 
+			return FutureUtils.createManagementFuture(
+					CompletableFuture.completedFuture(true)
+					,
+					CompletableFuture.completedFuture(Arrays.asList(
+						ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "checkAnalyticJobProgress", 
+								ErrorUtils.getLongForm("Job {1} generated error {0}", t, job_name))
+					)));						
 		}
 	}
 
