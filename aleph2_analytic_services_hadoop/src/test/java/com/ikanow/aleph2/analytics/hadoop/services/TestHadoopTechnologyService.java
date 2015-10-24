@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.logging.log4j.LogManager;
@@ -37,6 +38,7 @@ import org.junit.Test;
 
 import com.google.inject.Inject;
 import com.google.inject.Injector;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
@@ -45,6 +47,7 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
+import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
@@ -152,6 +155,9 @@ public class TestHadoopTechnologyService {
 														)
 											.done().get();
 		
+		//Need to store this bucket so that multi-input validation works later
+		final IManagementDbService mgmt_db = _service_context.getService(IManagementDbService.class, Optional.empty()).get();
+		mgmt_db.getDataBucketStore().storeObject(test_bucket, true).join();
 		
 		final MockHadoopTestingService test_service = new MockHadoopTestingService(_service_context);
 		
@@ -362,8 +368,11 @@ public class TestHadoopTechnologyService {
 		final InputStream test_file = new ByteArrayInputStream("{\"testField\":\"test1\"}".getBytes(StandardCharsets.UTF_8));
 		test_service.addFileToInputDirectory(test_file, test_bucket);
 		
-		test_service.testAnalyticModule(test_bucket, is_test ? Optional.of(10) : Optional.empty());
+		final CompletableFuture<BasicMessageBean> job_submit_result =
+				test_service.testAnalyticModule(test_bucket, is_test ? Optional.of(10) : Optional.empty());
 			
+		assertTrue("Job should succeed, err = " + job_submit_result.join().message(), job_submit_result.join().success());
+		
 		// Wait for job to finish
 		for (int ii = 0; ii < 120; ++ii) {
 			Thread.sleep(1000L);
