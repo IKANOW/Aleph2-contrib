@@ -331,17 +331,22 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		public CompletableFuture<?> flushOutput() {
 			
 			// This is a bit ugly, just shutdown all the threads and start new ones:
-			_state._workers.shutdownNow();
-			return CompletableFuture.runAsync(() -> {
-				try {
-					boolean completed = _state._workers.awaitTermination(5, TimeUnit.SECONDS);
-					if (!completed) {
-						_logger.warn("(workers not completed before timeout expired: " + _state._workers.toString() + ")");
+			if (null != _state._workers) { // (can be null because it's lazily initialized)
+				_state._workers.shutdownNow();
+				return CompletableFuture.runAsync(() -> {
+					try {
+						boolean completed = _state._workers.awaitTermination(5, TimeUnit.SECONDS);
+						if (!completed) {
+							_logger.warn("(workers not completed before timeout expired: " + _state._workers.toString() + ")");
+						}
 					}
-				}
-				catch (Exception e) {}
-				fillUpEmptyQueue();
-			});			
+					catch (Exception e) {}
+					fillUpEmptyQueue();
+				});
+			}
+			else {
+				return CompletableFuture.completedFuture(Unit.unit());
+			}
 		}
 	}
 
