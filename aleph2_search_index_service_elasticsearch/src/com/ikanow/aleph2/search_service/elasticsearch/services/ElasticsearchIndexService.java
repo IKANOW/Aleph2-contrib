@@ -331,23 +331,27 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			// LAMBDA util to pass into the ElasticsearchContext - determines dynamically if the alias should be generated
 			// (ElasticsearchContext is responsible for calling it efficiently)
 			final Function<String, Optional<String>> aliasCheck = index_name -> {
-				final Optional<String> base_index = Optional.of(ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()));
+				// the index_name is in the format <base_index>[_<secondary>]__<id>[_date], want to return 
+				// <base_index>__<id>[_date] (the ES context code then prepends "r__")
+				
 				final Optional<String> primary_buffer = 
 						getPrimaryBufferName(bucket, Optional.empty())
 							.<Optional<String>> map(name -> {
-								String primary_index = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.of(name));
-								return primary_index.equals(index_name)
-										? base_index
+								final String primary_index = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.of(name));
+								return index_name.startsWith(primary_index) // (ie they are the same except for the data suffix)
+										? Optional.of(ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()) 
+														+ ElasticsearchIndexUtils.snagDateFormatFromIndex(index_name).orElse(""))
 										: Optional.empty()
 										;
 							})
 							.orElseGet(() -> { // (no primary buffer, just return true if i'm the default current 
 								return secondary_buffer.isPresent()
 										? Optional.empty()
-										: base_index
+										: Optional.of(index_name)
 										;
 							})					
 							;
+				
 				return primary_buffer;
 			};
 			

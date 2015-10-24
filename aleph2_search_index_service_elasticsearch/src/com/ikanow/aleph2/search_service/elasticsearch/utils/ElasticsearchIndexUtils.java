@@ -82,7 +82,7 @@ public class ElasticsearchIndexUtils {
 		});
 	}
 	
-	/** Returns either a specifc type name, or "_default_" if auto types are used
+	/** Returns either a specific type name, or "_default_" if auto types are used
 	 * @param bucket
 	 * @return
 	 */
@@ -99,6 +99,22 @@ public class ElasticsearchIndexUtils {
 								.otherwise(__ -> null);
 					})
 				.orElse("_default_"); // (the default - "auto type")
+	}
+
+	/** Grabs the data suffix (including the leading "_") away from the full index (well, assuming it doesn't include the buffer #)
+	 * @param index_name - in the format <base_index>[_<secondary>]__<id>[_date] NOTE WITH NO BUFFER NUMBER AT THE END
+	 * @return
+	 */
+	public static Optional<String> snagDateFormatFromIndex(final String index_name) {
+		return Optional.of(index_name)
+						.map(s -> Tuples._2T(s, s.lastIndexOf("__"))) // find the __<id>
+						.filter(t2 -> t2._2() >= 0)
+						.map(t2 -> t2._1().substring(t2._2() + 2)) // step over the __
+						//  then same(-ish) again to find the date 
+						.map(s -> Tuples._2T(s, s.lastIndexOf("_"))) // find the _<date>
+						.filter(t2 -> t2._2() >= 0)
+						.map(t2 -> t2._1().substring(t2._2())) // return the _
+						;
 	}
 	
 	/////////////////////////////////////////////////////////////////////

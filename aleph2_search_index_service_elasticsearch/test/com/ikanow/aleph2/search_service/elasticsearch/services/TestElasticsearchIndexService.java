@@ -482,19 +482,23 @@ public class TestElasticsearchIndexService {
 	
 	@Test
 	public void test_endToEnd_autoTime() throws IOException, InterruptedException, ExecutionException {
-		test_endToEnd_autoTime(true);
+		test_endToEnd_autoTime(true, Optional.empty());
 	}
-	public void test_endToEnd_autoTime(boolean test_not_create_mode) throws IOException, InterruptedException, ExecutionException {
+	@Test
+	public void test_endToEnd_autoTime_nonDefaultPrimary() throws IOException, InterruptedException, ExecutionException {
+		test_endToEnd_autoTime(true, Optional.of("primary_test"));
+	}
+	public void test_endToEnd_autoTime(boolean test_not_create_mode, Optional<String> primary_name) throws IOException, InterruptedException, ExecutionException {
 		final Calendar time_setter = GregorianCalendar.getInstance();
 		time_setter.set(2015, 1, 1, 13, 0, 0);
 		final String bucket_str = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_end_2_end_bucket.json"), Charsets.UTF_8);
 		final DataBucketBean bucket = BeanTemplateUtils.build(bucket_str, DataBucketBean.class)
 													.with("_id", "test_end_2_end")
-													.with("full_name", "/test/end-end/auto-time")
+													.with("full_name", "/test/end-end/auto-time" + primary_name.map(s->"/"+s).orElse(""))
 													.with("modified", time_setter.getTime())
 												.done().get();
 
-		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty());
+		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, primary_name);
 		
 		// Check starting from clean
 		
@@ -513,6 +517,19 @@ public class TestElasticsearchIndexService {
 			assertTrue("No templates to start with", gtr.getIndexTemplates().isEmpty());
 		}				
 		
+		
+		// If the primary buffer is specified then create it and switch to it
+		primary_name.ifPresent(primary -> {
+			_index_service.getDataService()
+				.flatMap(s -> s.getWritableDataService(JsonNode.class, bucket, Optional.empty(), primary_name))
+				.flatMap(IDataWriteService::getCrudService)
+				.get();
+			
+			_index_service.getDataService().get().switchCrudServiceToPrimaryBuffer(bucket, primary_name, Optional.empty(), Optional.empty());			
+		});
+		
+		
+		// (note pass Optional.empty() in regardless of primary, since it should return the non-default primary regardless)
 		final ICrudService<JsonNode> index_service_crud = 
 				_index_service.getDataService()
 					.flatMap(s -> s.getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.empty()))
@@ -524,7 +541,10 @@ public class TestElasticsearchIndexService {
 		{
 			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
-			assertEquals(1, _index_service._bucket_template_cache.size());
+			assertTrue("Cache should contain the template: " + 
+					_index_service._bucket_template_cache.asMap().keySet(), 
+					_index_service._bucket_template_cache.asMap().containsKey(
+							bucket._id() + primary_name.map(s -> ":" + s).orElse("") + ":true"));
 			assertEquals(1, gtr2.getIndexTemplates().size());
 		}
 		
@@ -575,6 +595,15 @@ public class TestElasticsearchIndexService {
 				break;
 			}
 		}
+		Thread.sleep(2100L); // sleep another 2s+e for the aliases)
+		
+		// Check an alias per time slice gets created also
+		Arrays.asList("_2015-02-01", "_2015-03-01", "_2015-04-01", "_2015-05-01", "_2015-06-01")
+				.stream()
+				.forEach(time_suffix -> {
+					final List<String> aliases = getAliasedBuffers(bucket, Optional.of(time_suffix));
+					assertEquals(Arrays.asList(template_name + time_suffix), aliases);							
+				});
 		
 		final GetMappingsResponse gmr = es_context.client().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
 		
@@ -600,7 +629,7 @@ public class TestElasticsearchIndexService {
 			});
 		
 		//TEST DELETION:
-		if (test_not_create_mode) test_handleDeleteOrPurge(bucket, true);
+		if (test_not_create_mode) test_handleDeleteOrPurge(bucket, primary_name, true);
 	}
 	
 	@Test
@@ -644,7 +673,10 @@ public class TestElasticsearchIndexService {
 		{
 			final GetIndexTemplatesRequest gt2 = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr2 = _crud_factory.getClient().admin().indices().getTemplates(gt2).actionGet();
-			assertEquals(1, _index_service._bucket_template_cache.size());
+			assertTrue("Cache should contain the template: " + 
+					_index_service._bucket_template_cache.asMap().keySet(), 
+					_index_service._bucket_template_cache.asMap().containsKey(
+							bucket._id() + ":true"));
 			assertEquals(1, gtr2.getIndexTemplates().size());
 		}
 		
@@ -683,7 +715,7 @@ public class TestElasticsearchIndexService {
 						});
 
 		//(give it a chance to run)
-		Thread.sleep(5000L);
+		Thread.sleep(8000L);
 		
 		final GetMappingsResponse gmr = es_context.client().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
 		
@@ -692,6 +724,10 @@ public class TestElasticsearchIndexService {
 		assertEquals(1, gmr.getMappings().keys().size());
 		final Set<String> expected_keys =  Arrays.asList("test_fixed_fixed__1cb6bdcdf44f").stream().collect(Collectors.toSet());
 		final Set<String> expected_types =  Arrays.asList("data_object").stream().collect(Collectors.toSet());
+
+		// Check an alias gets created also
+		List<String> aliases = getAliasedBuffers(bucket, Optional.empty());
+		assertEquals(Arrays.asList(ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty())), aliases);
 		
 		StreamSupport.stream(gmr.getMappings().spliterator(), false)
 			.forEach(x -> {
@@ -708,7 +744,7 @@ public class TestElasticsearchIndexService {
 			});
 		
 		//TEST DELETION:
-		test_handleDeleteOrPurge(bucket, false);
+		test_handleDeleteOrPurge(bucket, Optional.empty(), false);
 	}
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -741,7 +777,7 @@ public class TestElasticsearchIndexService {
 	
 		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty());
 		
-		test_endToEnd_autoTime(false);
+		test_endToEnd_autoTime(false, Optional.empty());
 
 		_index_service._crud_factory.getClient().admin().indices().prepareCreate(template_name + "_2015-03-01_1").execute().actionGet();
 		
@@ -816,10 +852,10 @@ public class TestElasticsearchIndexService {
 	
 	// (these are called from the code above)
 	
-	public void test_handleDeleteOrPurge(final DataBucketBean to_handle, boolean delete_not_purge) throws InterruptedException, ExecutionException {
+	public void test_handleDeleteOrPurge(final DataBucketBean to_handle, Optional<String> primary_buffer, boolean delete_not_purge) throws InterruptedException, ExecutionException {
 		System.out.println("****** Checking delete/purge");
 		
-		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(to_handle, Optional.empty());
+		final String template_name = ElasticsearchIndexUtils.getBaseIndexName(to_handle, primary_buffer);
 		final ICrudService<JsonNode> index_service_crud = 
 				_index_service.getDataService()
 					.flatMap(s -> s.getWritableDataService(JsonNode.class, to_handle, Optional.empty(), Optional.empty()))
@@ -838,7 +874,10 @@ public class TestElasticsearchIndexService {
 		{
 			final GetIndexTemplatesRequest gt_pre = new GetIndexTemplatesRequest().names(template_name);
 			final GetIndexTemplatesResponse gtr_pre = _crud_factory.getClient().admin().indices().getTemplates(gt_pre).actionGet();
-			assertEquals(1, _index_service._bucket_template_cache.size());
+			assertTrue("Cache should contain the template: " + 
+					_index_service._bucket_template_cache.asMap().keySet(), 
+					_index_service._bucket_template_cache.asMap().containsKey(
+							to_handle._id() + primary_buffer.map(s -> ":" + s).orElse("") + ":true"));
 			assertEquals(1, gtr_pre.getIndexTemplates().size());			
 		}
 		
@@ -998,7 +1037,7 @@ public class TestElasticsearchIndexService {
 		System.out.println("Waiting for indices and aliases to be generated....");
 		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
 		
-		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket));
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));
 
 		{
 			BasicMessageBean res2 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_2"), Optional.empty(), Optional.empty()).join();
@@ -1008,7 +1047,7 @@ public class TestElasticsearchIndexService {
 			
 		assertEquals(Optional.of("sec_test_2"), index_data_service.getPrimaryBufferName(bucket, Optional.empty()));				
 		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));		
-		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getAliasedBuffers(bucket));
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));
 
 		// TEST INTERLUDE
 		// Quick check that having switched to sec_test_2 .. if I now request the default write buffer, what I get is sec_test_2....
@@ -1025,7 +1064,7 @@ public class TestElasticsearchIndexService {
 		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_3"));
 		System.out.println("Waiting for indices and aliases to be generated....");
 		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
-		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getAliasedBuffers(bucket));
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));
 				
 		// 5) Switch original back again
 
@@ -1037,7 +1076,7 @@ public class TestElasticsearchIndexService {
 		
 		assertEquals(Optional.of("sec_test_1"), index_data_service.getPrimaryBufferName(bucket, Optional.empty()));				
 		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));
-		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket));
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));
 		
 		addRecordToSecondaryBuffer(bucket, Optional.empty()); 
 		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_1")); 
@@ -1045,7 +1084,7 @@ public class TestElasticsearchIndexService {
 		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_3"));
 		System.out.println("Waiting for indices and aliases to be generated....");
 		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
-		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket));				
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));				
 	}
 
 	///////////////////////////////////
@@ -1061,10 +1100,15 @@ public class TestElasticsearchIndexService {
 	}
 
 	
-	public List<String> getAliasedBuffers(final DataBucketBean bucket) {
+	/** Builds the alias name (NOTE: always default not primary buffer name - that's the whole point)
+	 * @param bucket
+	 * @param time_suffix
+	 * @return
+	 */
+	public List<String> getAliasedBuffers(final DataBucketBean bucket, final Optional<String> time_suffix) {
 		return _crud_factory.getClient().admin().indices().prepareStats()
                     .clear()
-                    .setIndices("r__" + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()) + "*")
+                    .setIndices("r__" + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()) + time_suffix.orElse("*"))
                     .setStore(true)
                     .get()
 					.getIndices().keySet().stream().sorted().collect(Collectors.toList())

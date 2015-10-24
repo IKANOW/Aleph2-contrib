@@ -215,6 +215,13 @@ public class TestElasticsearchIndexUtils {
 	}
 
 	@Test
+	public void test_snagDateFromIndex() {
+		assertEquals(Optional.empty(), ElasticsearchIndexUtils.snagDateFormatFromIndex("base_index"));
+		assertEquals(Optional.empty(), ElasticsearchIndexUtils.snagDateFormatFromIndex("base_index__test"));
+		assertEquals(Optional.of("_2015"), ElasticsearchIndexUtils.snagDateFormatFromIndex("base_index__test_2015"));
+	}
+	
+	@Test
 	public void test_parseDefaultMapping() throws JsonProcessingException, IOException {
 
 		// Check the different components

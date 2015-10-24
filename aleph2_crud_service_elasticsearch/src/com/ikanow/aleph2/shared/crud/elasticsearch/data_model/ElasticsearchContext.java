@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.indices.IndexMissingException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,6 +43,7 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConte
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchFutureUtils;
 
+import fj.Unit;
 import fj.data.Either;
 
 import java.util.concurrent.TimeUnit;
@@ -238,14 +240,38 @@ public abstract class ElasticsearchContext {
 								right -> right.apply(index_name));
 				
 				alias_to_create.ifPresent(base_index -> {
-					_scheduler.schedule(() -> {
-						this.client().admin().indices().prepareAliases().addAlias(index_name + "*", READ_PREFIX + base_index).execute();
-					}
-					,
-					2, TimeUnit.SECONDS // need to give the index time to write or the alias won't exist...
-					);												
+					recursiveAliasCreate(base_index, index_name, 30); //(try for a minute - 2s sleep between each try)
 				});				
 				return alias_to_create.isPresent();
+			}
+			
+			/** Low level recursive utility for trying repeatedly to create an index until its index exists
+			 * @param base_index
+			 * @param index_name
+			 * @param number_of_tries
+			 */
+			private void recursiveAliasCreate(final String base_index, final String index_name, int number_of_tries) {
+				_scheduler.schedule(() -> {
+					ElasticsearchFutureUtils.wrap(this.client().admin().indices().prepareAliases().addAlias(index_name + "*", READ_PREFIX + base_index).execute(),
+							__ -> {
+								// Index created we're done
+								return Unit.unit();
+							},
+							(e, cf) -> {
+								if ((e instanceof IndexMissingException) ||
+										((null != e.getCause()) && (e.getCause() instanceof IndexMissingException)))
+								{
+									if (number_of_tries > 0) {
+										recursiveAliasCreate(base_index, index_name, number_of_tries - 1);
+									}
+								}
+							}
+							);
+				}
+				,
+				2, TimeUnit.SECONDS // need to give the index time to write or the alias won't exist...
+				);												
+				
 			}
 			
 			// INDEX SIZING UTILITY:
