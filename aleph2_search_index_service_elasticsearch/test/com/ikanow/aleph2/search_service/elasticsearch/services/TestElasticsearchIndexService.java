@@ -1010,6 +1010,15 @@ public class TestElasticsearchIndexService {
 		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));		
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getAliasedBuffers(bucket));
 
+		// TEST INTERLUDE
+		// Quick check that having switched to sec_test_2 .. if I now request the default write buffer, what I get is sec_test_2....
+		final IDataWriteService<JsonNode> writer = index_data_service.getWritableDataService(JsonNode.class, bucket, Optional.empty(), Optional.empty()).get();
+		final ICrudService<JsonNode> writer_crud = (ICrudService<JsonNode>)writer;
+		final ElasticsearchContext es_context = (ElasticsearchContext) writer_crud.getUnderlyingPlatformDriver(ElasticsearchContext.class, Optional.empty()).get();
+		List<String> base_index = es_context.indexContext().getReadableIndexList(Optional.empty());
+		assertEquals(Arrays.asList(ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.of("sec_test_2")) + "*"), base_index);
+		// END TEST INTERLUDE
+		
 		addRecordToSecondaryBuffer(bucket, Optional.empty()); 
 		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_1")); 
 		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_2")); 

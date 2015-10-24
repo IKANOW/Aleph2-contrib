@@ -278,7 +278,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		@Override
 		public <O> Optional<IDataWriteService<O>> getWritableDataService(
 				Class<O> clazz, DataBucketBean bucket,
-				Optional<String> options, Optional<String> secondary_buffer)
+				Optional<String> options, Optional<String> secondary_buffer_in)
 		{
 			// There's two different cases
 			// 1) Multi-bucket - equivalent to the other version of getCrudService
@@ -302,8 +302,17 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			
 			final Tuple3<ElasticsearchIndexServiceConfigBean, String, Optional<String>> schema_index_type = getSchemaConfigAndIndexAndType(bucket, _config);
 						
+			// Are we writing into a non-default primary?
+			final Optional<String> curr_primary = getPrimaryBufferName(bucket, Optional.empty());
+			
+			// Special case: if i pass in "no secondary buffer" and the primary exists, then use that instead
+			final Optional<String> secondary_buffer = secondary_buffer_in
+														.map(Optional::of)
+														.orElseGet(() ->  curr_primary
+															.map(Optional::of).orElse(secondary_buffer_in));
+			
 			// only create aliases within ES context if there is no primary (ie secondary buffers), or if the secondary currently points at the primary
-			final boolean is_primary =  getPrimaryBufferName(bucket, Optional.empty())
+			final boolean is_primary =  curr_primary
 											.map(primary -> Optional.of(primary).equals(secondary_buffer))
 											.orElseGet(() -> { // (no primary buffer, just return true if i'm the default current 
 												return !secondary_buffer.isPresent();
