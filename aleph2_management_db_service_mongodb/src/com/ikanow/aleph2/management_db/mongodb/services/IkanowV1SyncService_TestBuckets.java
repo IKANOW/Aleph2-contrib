@@ -23,7 +23,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Date;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -46,7 +45,6 @@ import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
@@ -355,22 +353,11 @@ public class IkanowV1SyncService_TestBuckets {
 		//if (test_config.service == "search_index_schema") service_context.getSearchIndexService().get().getCrudService(test_bucket).blah()
 		//if (test_config.service == "storage_service") { /* TODO read the file or something */ }
 		//longer term if (test_config_service == "graph_service") service_context.getGraphService().get().getTinkerpopService().blah
+		
 		return _context.getSearchIndexService().flatMap(IDataServiceProvider::getDataService)
 				.flatMap(s -> {
-					final Optional<String> buffer_to_read_from =
-							s.getPrimaryBufferName(test_data_bucket, Optional.empty())
-								//TODO (ALEPH-12): once the code to switch on completion is in here then this will need to be fixed
-								.map(primary -> IGenericDataService.SECONDARY_PING.equals(primary) ? 
-										IGenericDataService.SECONDARY_PONG : IGenericDataService.SECONDARY_PING)
-								.map(Optional::of)
-								.orElseGet(() -> { // no primary buffer, which happens (eg based on tech) - so guess the primary based on what's missing from the secondary
-													// and read from the other one (else it's not an analytic buffer)
-									final Set<String> secondary_buffers = s.getSecondaryBuffers(test_data_bucket, Optional.empty());
-									if (secondary_buffers.contains(IGenericDataService.SECONDARY_PING)) return Optional.of(IGenericDataService.SECONDARY_PING);
-									else if (secondary_buffers.contains(IGenericDataService.SECONDARY_PONG)) return Optional.of(IGenericDataService.SECONDARY_PONG);
-									else return Optional.empty();
-								})
-								;
+					// (always read from the primary, ie won't get anything until the full job completes)
+					final Optional<String> buffer_to_read_from = s.getPrimaryBufferName(test_data_bucket, Optional.empty());
 					return s.getWritableDataService(JsonNode.class, test_data_bucket, Optional.empty(), buffer_to_read_from);
 				})
 				.flatMap(IDataWriteService::getCrudService);
