@@ -204,6 +204,7 @@ public class TestBeJobService {
 					.build());
 		analytics_context.setBucket(test_bucket);
 		batch_context.setJob(test_bucket.analytic_thread().jobs().get(0));
+		analytics_context.resetJob(test_bucket.analytic_thread().jobs().get(0));
 		
 		// Set up directory:
 		createFolderStructure(test_bucket);
