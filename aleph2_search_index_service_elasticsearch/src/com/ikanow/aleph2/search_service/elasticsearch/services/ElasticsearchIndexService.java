@@ -486,6 +486,13 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 								_crud_factory.getClient().admin().indices().prepareAliases()
 								.removeAlias(ElasticsearchIndexUtils.getBaseIndexName(bucket, curr_primary) + "*", ElasticsearchContext.READ_PREFIX + base_index_name + "*");
 
+						/**/
+						//TODO (ALEPH-12) debugging test (?) not generating alias							
+						if (BucketUtils.isTestBucket(bucket)) _logger.warn("Remove index: " + 
+								ElasticsearchIndexUtils.getBaseIndexName(bucket, curr_primary) + "*"
+								+ " from "
+								+ ElasticsearchContext.READ_PREFIX + base_index_name + "*" + " (curr pri = " + curr_primary) ;						
+						
 						// Add the timestamped aliases to the timestamped indexes
 						indexes
 							.stream()
