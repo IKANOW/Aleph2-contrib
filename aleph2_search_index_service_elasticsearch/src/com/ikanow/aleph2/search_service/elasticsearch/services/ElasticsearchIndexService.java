@@ -476,13 +476,17 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					})
 					.exceptionally(__ -> Collections.emptySet())
 					.thenCompose(indexes -> {
-						
+										
 						final IndicesAliasesRequestBuilder iarb = 
 								_crud_factory.getClient().admin().indices().prepareAliases()
-								.removeAlias(ElasticsearchIndexUtils.getBaseIndexName(bucket, curr_primary) + "*", ElasticsearchContext.READ_PREFIX + base_index_name);
+								.removeAlias(ElasticsearchIndexUtils.getBaseIndexName(bucket, curr_primary) + "*", ElasticsearchContext.READ_PREFIX + base_index_name + "*");
 
-						// Add the timestamped aliases
-						indexes.stream().reduce(iarb, (acc,  v) -> acc.addAlias(v, ElasticsearchContext.READ_PREFIX + base_index_name), (acc1, acc2) -> acc1);
+						// Add the timestamped aliases to the timestamped indexes
+						indexes.stream().reduce(
+								iarb, 
+								(acc,  v) -> acc.addAlias(v, ElasticsearchContext.READ_PREFIX + base_index_name + 
+																ElasticsearchIndexUtils.snagDateFormatFromIndex(v).orElse("")), 
+								(acc1, acc2) -> acc1);
 						
 						return ElasticsearchFutureUtils.wrap(iarb.execute(),
 								iar -> 

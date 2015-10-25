@@ -218,7 +218,9 @@ public class TestElasticsearchIndexUtils {
 	public void test_snagDateFromIndex() {
 		assertEquals(Optional.empty(), ElasticsearchIndexUtils.snagDateFormatFromIndex("base_index"));
 		assertEquals(Optional.empty(), ElasticsearchIndexUtils.snagDateFormatFromIndex("base_index__test"));
+		assertEquals(Optional.empty(), ElasticsearchIndexUtils.snagDateFormatFromIndex("base_index__test_1"));
 		assertEquals(Optional.of("_2015"), ElasticsearchIndexUtils.snagDateFormatFromIndex("base_index__test_2015"));
+		assertEquals(Optional.of("_2015"), ElasticsearchIndexUtils.snagDateFormatFromIndex("base_index__test_2015_1"));
 	}
 	
 	@Test

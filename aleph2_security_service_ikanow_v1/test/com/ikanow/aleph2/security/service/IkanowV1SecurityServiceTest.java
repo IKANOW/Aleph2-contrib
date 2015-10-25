@@ -163,7 +163,9 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		((IkanowV1SecurityService)securityService).setSessionTimeout(1000);
 		ISubject subject = loginAsAdmin();
 		// system community
+		@SuppressWarnings("unused")
 		String permission = "4c927585d591d31d7b37097a";
+		@SuppressWarnings("unused")
 		String role = "admin";
 		assertEquals(true,securityService.hasRole(subject,"admin"));
 		try {

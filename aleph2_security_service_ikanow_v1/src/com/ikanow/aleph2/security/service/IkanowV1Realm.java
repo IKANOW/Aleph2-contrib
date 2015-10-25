@@ -152,7 +152,8 @@ public class IkanowV1Realm extends AuthorizingRealm implements IClearableRealmCa
         
 
     		SingleQueryComponent<AuthenticationBean> queryUsername = CrudUtils.anyOf(AuthenticationBean.class).when("username",username);		
-            ObjectId objectId = null;
+            @SuppressWarnings("unused")
+			ObjectId objectId = null;
 	        try {
 	            objectId = new ObjectId(username);
 	            // if we get here the username can be mapped to an id

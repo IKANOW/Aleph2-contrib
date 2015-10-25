@@ -111,9 +111,19 @@ public class ElasticsearchIndexUtils {
 						.filter(t2 -> t2._2() >= 0)
 						.map(t2 -> t2._1().substring(t2._2() + 2)) // step over the __
 						//  then same(-ish) again to find the date 
-						.map(s -> Tuples._2T(s, s.lastIndexOf("_"))) // find the _<date>
+						.map(s -> Tuples._2T(s, s.indexOf("_"))) // find the _<date>[_segment]
 						.filter(t2 -> t2._2() >= 0)
-						.map(t2 -> t2._1().substring(t2._2())) // return the _
+						.map(t2 -> t2._1().substring(t2._2())) // return the _<date>[_segment]
+						.filter(substr -> substr.length() > 3) // get rid of just [_segment] case
+						.map(substr -> { // remove the _segment if present
+							final int segment = substr.lastIndexOf("_");
+							if (segment > 0) { //>0 because of the leading _
+								return substr.substring(0, segment);
+							}
+							else {
+								return substr;
+							}
+						})
 						;
 	}
 	
