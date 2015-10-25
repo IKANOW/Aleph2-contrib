@@ -74,7 +74,6 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchInd
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
-import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
@@ -462,10 +461,6 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			final String base_index_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty());
 			final String new_primary_index_base = ElasticsearchIndexUtils.getBaseIndexName(bucket, secondary_buffer);
 			
-			/**/
-			//TODO (ALEPH-12) debugging test (?) not generating alias
-			if (BucketUtils.isTestBucket(bucket)) _logger.warn("Switch test bucket " + bucket.full_name() + " new_primary = " + new_primary_index_base);
-			
 			return ElasticsearchFutureUtils.wrap(
 					_crud_factory.getClient().admin().indices().prepareStats()
 	                    .clear()
@@ -486,20 +481,8 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 								_crud_factory.getClient().admin().indices().prepareAliases()
 								.removeAlias(ElasticsearchIndexUtils.getBaseIndexName(bucket, curr_primary) + "*", ElasticsearchContext.READ_PREFIX + base_index_name + "*");
 
-						/**/
-						//TODO (ALEPH-12) debugging test (?) not generating alias							
-						if (BucketUtils.isTestBucket(bucket)) _logger.warn("Remove index: " + 
-								ElasticsearchIndexUtils.getBaseIndexName(bucket, curr_primary) + "*"
-								+ " from "
-								+ ElasticsearchContext.READ_PREFIX + base_index_name + "*" + " (curr pri = " + curr_primary) ;						
-						
 						// Add the timestamped aliases to the timestamped indexes
-						indexes
-							.stream()
-/**/
-//TODO (ALEPH-12) debugging test (?) not generating alias							
-.peek(v -> { if (BucketUtils.isTestBucket(bucket)) _logger.warn("Alias: " + v + " to " + ElasticsearchContext.READ_PREFIX 
-			+ base_index_name + ElasticsearchIndexUtils.snagDateFormatFromIndex(v).orElse("")); })
+						indexes.stream() //(NOTE: repeated below, need to sync changes)							
 							.reduce(
 								iarb, 
 								(acc,  v) -> acc.addAlias(v, ElasticsearchContext.READ_PREFIX + base_index_name + 
@@ -509,7 +492,31 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 						return ElasticsearchFutureUtils.wrap(iarb.execute(),
 								iar -> 
 									ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", "Bucket {0} Added {1} Removed {2}", bucket.full_name(), secondary_buffer, curr_primary.orElse("(none)"))
-								)
+								,
+								(t, cf) -> { // Error handler - mainly need to handle the case where the remove global didn't exist
+									if (!indexes.isEmpty() && (t instanceof IndexMissingException)) { // This is probably because the "to be deleted" glob didn't exist
+										final IndicesAliasesRequestBuilder iarb2 = _crud_factory.getClient().admin().indices().prepareAliases();
+										
+										indexes.stream()  //(NOTE: repeated above, need to sync changes)
+													.reduce(
+														iarb2, 
+														(acc,  v) -> acc.addAlias(v, ElasticsearchContext.READ_PREFIX + base_index_name + 
+																						ElasticsearchIndexUtils.snagDateFormatFromIndex(v).orElse("")), 
+														(acc1, acc2) -> acc1);
+										
+										ElasticsearchFutureUtils.wrap(iarb2.execute(), cf, 
+												(ir, next_future) -> {
+													next_future.complete(
+															ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", "Bucket {0} Added {1}", bucket.full_name(), secondary_buffer)
+														);
+												}
+												,
+												(t2, cf2) -> cf2.completeExceptionally(t2))
+												;
+									}
+									else 
+										cf.completeExceptionally(t);
+								})
 								.exceptionally(t -> 
 									(t instanceof IndexMissingException)
 										? ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", "Bucket {0} Added {1} Removed {2} (no indexes to switch)", bucket.full_name(), secondary_buffer, curr_primary.orElse("(none)"))

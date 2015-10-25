@@ -1018,20 +1018,30 @@ public class TestElasticsearchIndexService {
 		
 		//(check they got created)
 		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));		
-		
-		BasicMessageBean res1 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_1"), Optional.empty(), Optional.empty()).join();
-		
+				
 		{
+			BasicMessageBean res1 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_3"), Optional.empty(), Optional.empty()).join();
 			assertTrue("Switch worked: " + res1.message(), res1.success());
 		}
 		
-		assertEquals(Optional.of("sec_test_1"), index_data_service.getPrimaryBufferName(bucket, Optional.empty()));				
+		assertEquals(Optional.of("sec_test_3"), index_data_service.getPrimaryBufferName(bucket, Optional.empty()));				
 		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));		
 				
+		// 3b) Switch a buffer to primary when there's data in the incoming buffer but not the outgoing one
+		
+		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_1")); 
+		System.out.println("Waiting for indices and aliases to be generated....");
+		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
+		assertEquals(Arrays.asList(), getAliasedBuffers(bucket, Optional.empty()));
+		{
+			BasicMessageBean res1b = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_1"), Optional.empty(), Optional.empty()).join();		
+			assertTrue("Switch worked: " + res1b.message(), res1b.success());
+		}
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));		
+		
 		// 4) Change to a different buffer - when there is some data (also add some data to a secondary index at the same time) - check the data swaps
 		
 		addRecordToSecondaryBuffer(bucket, Optional.empty()); 
-		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_1")); 
 		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_2")); 
 		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_3"));
 		System.out.println("Waiting for indices and aliases to be generated....");
