@@ -74,6 +74,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchInd
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
@@ -461,6 +462,10 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			final String base_index_name = ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty());
 			final String new_primary_index_base = ElasticsearchIndexUtils.getBaseIndexName(bucket, secondary_buffer);
 			
+			/**/
+			//TODO (ALEPH-12) debugging test (?) not generating alias
+			if (BucketUtils.isTestBucket(bucket)) _logger.warn("Switch test bucket " + bucket.full_name() + " new_primary = " + new_primary_index_base);
+			
 			return ElasticsearchFutureUtils.wrap(
 					_crud_factory.getClient().admin().indices().prepareStats()
 	                    .clear()
@@ -482,7 +487,13 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 								.removeAlias(ElasticsearchIndexUtils.getBaseIndexName(bucket, curr_primary) + "*", ElasticsearchContext.READ_PREFIX + base_index_name + "*");
 
 						// Add the timestamped aliases to the timestamped indexes
-						indexes.stream().reduce(
+						indexes
+							.stream()
+/**/
+//TODO (ALEPH-12) debugging test (?) not generating alias							
+.peek(v -> { if (BucketUtils.isTestBucket(bucket)) _logger.warn("Alias: " + v + " to " + ElasticsearchContext.READ_PREFIX 
+			+ base_index_name + ElasticsearchIndexUtils.snagDateFormatFromIndex(v).orElse("")); })
+							.reduce(
 								iarb, 
 								(acc,  v) -> acc.addAlias(v, ElasticsearchContext.READ_PREFIX + base_index_name + 
 																ElasticsearchIndexUtils.snagDateFormatFromIndex(v).orElse("")), 
