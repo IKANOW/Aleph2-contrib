@@ -472,8 +472,11 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 					_state.timestamp_of_first_record_in_batch = _temporal_field
 							.filter(__ -> _state.time_policy == DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.TimeSourcePolicy.batch)
 							.map(tf -> j.get(tf))
-							.filter(jsonl -> jsonl.isLong())
-							.map(jsonl -> new Date(jsonl.asLong()))
+							.map(jsonl -> {
+								if (jsonl.isLong()) return new Date(jsonl.asLong());
+								else if (jsonl.isTextual()) return TimeUtils.parseIsoString(jsonl.asText()).validation(__ -> null, success -> success);
+								else return null; // return nulls fall through to...)
+							})
 							.orElseGet(Date::new)
 							;
 				}

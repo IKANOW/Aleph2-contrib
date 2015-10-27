@@ -38,6 +38,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
+import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchContextUtils;
@@ -496,9 +497,12 @@ public abstract class ElasticsearchContext {
 					final Date d = _time_field
 											.filter(__ -> writable_object.isPresent())
 											.map(t -> writable_object.get().get(t))
-											.filter(j -> j.isLong())
-											.map(j -> new Date(j.asLong()))
-										.orElseGet(() -> new Date()); // (else just use "now")
+											.map(jsonl -> {
+												if (jsonl.isLong()) return new Date(jsonl.asLong());
+												else if (jsonl.isTextual()) return TimeUtils.parseIsoString(jsonl.asText()).validation(__ -> null, success -> success);
+												else return null; // return nulls fall through to...)
+											})
+										.orElseGet(Date::new); // (else just use "now")
 							
 					final String formatted_date = _formatter.get().format(d);
 
