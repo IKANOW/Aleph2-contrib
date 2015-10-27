@@ -80,6 +80,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	protected final String _buffer_name; 
 	protected final Optional<String> _job_name;
 	protected final IGenericDataService _parent;
+	protected final Optional<String> _temporal_field;
 	
 	// (currently just share on of these across all users of this service, basically across the process/classloader)
 	protected final SetOnce<BatchHdfsWriteService> _writer = new SetOnce<>();
@@ -97,6 +98,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		_job_name = job_name;
 		_dfs = storage_service.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 		_parent = parent;
+		_temporal_field = Optionals.of(() -> bucket.data_schema().temporal_schema().time_field());
 		
 		// For safety, try creating a couple of dirs
 		// current:
@@ -364,12 +366,14 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		public class MutableState {
 			boolean terminate = false;
 			Optional<String> codec = Optional.empty();
+			DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.TimeSourcePolicy time_policy = null;
 			int segment = 1;
 			int curr_objects;
 			long curr_size_b;
 			long last_segmented;
 			Path curr_path;
 			OutputStream out;
+			Date timestamp_of_first_record_in_batch = null;
 		}
 		final protected MutableState _state = new MutableState();
 		
@@ -450,14 +454,30 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				return;
 			}
 			else if (o instanceof String) {
+				if (null == _state.timestamp_of_first_record_in_batch) {
+					_state.timestamp_of_first_record_in_batch = new Date(); // can't infer from the object)
+				}
 				s = ((String) o);
 				if (!s.endsWith("\n")) s += "\n"; //(i think it will a fair bit)
 			}
-			else if (o instanceof JsonNode) {
-				s = ((JsonNode) o).toString() + "\n";
-			}
-			else {
-				s = BeanTemplateUtils.toJson(o).toString() + "\n";
+			else { // These 2 - can get the times if possible
+				JsonNode j;
+				if (o instanceof JsonNode) {
+					j = ((JsonNode) o);
+				}
+				else {
+					j = BeanTemplateUtils.toJson(o);
+				}
+				if (null == _state.timestamp_of_first_record_in_batch) {
+					_state.timestamp_of_first_record_in_batch = _temporal_field
+							.filter(__ -> _state.time_policy == DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.TimeSourcePolicy.batch)
+							.map(tf -> j.get(tf))
+							.filter(jsonl -> jsonl.isLong())
+							.map(jsonl -> new Date(jsonl.asLong()))
+							.orElseGet(Date::new)
+							;
+				}
+				s = j.toString() + "\n";
 			}
 			_state.out.write(s.getBytes());
 			_state.curr_objects++;
@@ -494,7 +514,9 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				_state.last_segmented = System.currentTimeMillis();
 				_state.curr_size_b = 0L;
 				_state.curr_objects = 0;
-				_state.codec = getCanonicalCodec(_bucket.data_schema().storage_schema(), _stage); // (recheck the codec)			
+				_state.codec = getCanonicalCodec(_bucket.data_schema().storage_schema(), _stage); // (recheck the codec)
+				_state.time_policy = Optional.ofNullable(getStorageSubSchema(_bucket.data_schema().storage_schema(), _stage).grouping_time_policy())
+												.orElse(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.TimeSourcePolicy.batch);
 				
 				_state.curr_path = new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, _buffer_name) + "/" + SPOOL_DIR + "/" + getFilename());
 				try { 
@@ -511,13 +533,14 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		 * @throws IOException 
 		 */
 		protected synchronized void complete_segment() throws IOException {
+			_state.timestamp_of_first_record_in_batch = null; // (always reset this)
 			if ((null != _state.out) && (_state.curr_objects > 0)) {
 				_state.out.close();
 				_state.out = null;
 				_state.segment++;
 				
-				final Date now = new Date();
-				final Path path =  new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, _buffer_name) + "/" + getSuffix(now, _bucket, _stage) + "/" + _state.curr_path.getName());
+				final Date batch_time = Optional.ofNullable(_state.timestamp_of_first_record_in_batch).orElseGet(Date::new);
+				final Path path =  new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, _buffer_name) + "/" + getSuffix(batch_time, _bucket, _stage) + "/" + _state.curr_path.getName());
 				try { 
 					_dfs.mkdir(path.getParent(), DEFAULT_DIR_PERMS, true); //(note perm is & with umask)
 				} catch (Exception e) {} // (fails if already exists?)
