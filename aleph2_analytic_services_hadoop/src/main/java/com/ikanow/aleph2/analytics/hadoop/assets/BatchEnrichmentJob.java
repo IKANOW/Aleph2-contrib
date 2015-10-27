@@ -77,6 +77,7 @@ public class BatchEnrichmentJob{
 	public static String BE_DEBUG_MAX_SIZE = "aleph2.batch.debugMaxSize";
 
 	private static final Logger logger = LogManager.getLogger(BatchEnrichmentJob.class);
+	private static final org.apache.log4j.Logger _v1_logger = org.apache.log4j.LogManager.getLogger(BatchEnrichmentJob.class);
 	
 	public BatchEnrichmentJob(){
 		logger.debug("BatchEnrichmentJob constructor");		
@@ -115,10 +116,14 @@ public class BatchEnrichmentJob{
 			} catch (Exception e) {
 				throw new IOException(e);
 			}			
+			_v1_logger.info("Setup BatchEnrichmentJob for " + this._enrichmentContext.getBucket().map(b -> b.full_name()).orElse("unknown"));
 			
 			final Iterator<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> it = _ecMetadata.iterator();
 			while (it.hasNext()) {
-				final Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean> t3 = it.next();				
+				final Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean> t3 = it.next();
+				
+				_v1_logger.info("Set up enrichment module " + t3._2().getClass().getSimpleName() + " name " + Optional.ofNullable(t3._3().name()).orElse("(no name)"));
+				
 				t3._1().onStageInitialize(t3._2(), _dataBucket, t3._3(), !it.hasNext());	
 			}
 			
@@ -145,9 +150,14 @@ public class BatchEnrichmentJob{
 			this._ecMetadata = ecMetadata.stream()
 									.<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>>flatMap(ecm -> {
 										final Optional<String> entryPoint = BucketUtils.getBatchEntryPoint(library_beans, ecm);
+										
+										_v1_logger.info("Trying to launch stage " + ecm.name() + " with entry point = " + entryPoint);
+										
 										return entryPoint.map(Stream::of).orElseGet(() -> Stream.of(BePassthroughModule.class.getName()))
 												.flatMap(Lambdas.flatWrap_i(ep -> (IEnrichmentBatchModule)Class.forName(ep).newInstance()))
 												.map(mod -> {			
+													_v1_logger.info("Completed initialization of stage " + ecm.name());
+													
 													final BatchEnrichmentContext cloned_context = new BatchEnrichmentContext(_enrichmentContext, _batchSize);
 													Optional.ofNullable(library_beans.get(ecm.module_name_or_id())).ifPresent(lib -> cloned_context.setModule(lib));													
 													return Tuples._3T(mod, cloned_context, ecm);
@@ -205,6 +215,9 @@ public class BatchEnrichmentJob{
 		 * @param flush
 		 */
 		protected void checkBatch(boolean flush){
+			if (flush)
+				_v1_logger.info("Completing job");
+			
 			if((_batch.size()>= _batchSize) || flush){
 				final Iterator<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> it = _ecMetadata.iterator();
 				List<Tuple2<Long, IBatchRecord>> mutable_start = _batch;
@@ -215,6 +228,9 @@ public class BatchEnrichmentJob{
 					t3._1().onObjectBatch(mutable_start.stream(), Optional.of(mutable_start.size()), Optional.empty());
 					mutable_start = t3._2().getOutputRecords();
 	
+					if (flush)
+						_v1_logger.info("Stage " + t3._3().name() + " output " + mutable_start.size() + "records final_stage=" + !it.hasNext());
+					
 					if (!it.hasNext()) { // final stage output anything we have here
 						final IAnalyticsContext analytics_context = _enrichmentContext.getAnalyticsContext();
 						mutable_start.forEach(record ->
