@@ -43,8 +43,10 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 
 public class TestHdfsDataWriteService {
 
@@ -370,9 +372,10 @@ public class TestHdfsDataWriteService {
 	}	
 	
 	public static class TestBean {
-		public TestBean(String a, String b) { _id = a; value = b; }
+		public TestBean(String a, String b, Date t) { _id = a; value = b; time = t; }
 		public String _id;
 		public String value;
+		public Date time;
 	}
 	
 	protected HfdsDataWriteService<TestBean> getWriter(String name) {
@@ -392,10 +395,33 @@ public class TestHdfsDataWriteService {
 				.with(DataBucketBean::full_name, name)
 				.with(DataBucketBean::data_schema,
 						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::temporal_schema, 
+									Lambdas.get(() -> { // test a few different cases
+										if (is_transient) 
+											return BeanTemplateUtils.build(TemporalSchemaBean.class)
+														.with(TemporalSchemaBean::time_field, "time")
+													.done().get();
+										else if (secondary.isPresent())
+											return null;
+										else
+											return BeanTemplateUtils.build(TemporalSchemaBean.class)
+														.with(TemporalSchemaBean::time_field, "time")
+													.done().get();
+									}))
 							.with(DataSchemaBean::storage_schema,
 								BeanTemplateUtils.build(StorageSchemaBean.class)
 									.with(StorageSchemaBean::processed, 
 											BeanTemplateUtils.build(StorageSchemaBean.StorageSubSchemaBean.class)
+												.with(StorageSchemaBean.StorageSubSchemaBean::grouping_time_policy,
+														Lambdas.get(() -> { // test a few different cases
+															if (is_transient) 
+																return StorageSchemaBean.StorageSubSchemaBean.TimeSourcePolicy.clock_time;
+															else if (secondary.isPresent())
+																return StorageSchemaBean.StorageSubSchemaBean.TimeSourcePolicy.batch; //(but no temporal schema, see above)
+															else
+																return StorageSchemaBean.StorageSubSchemaBean.TimeSourcePolicy.batch;
+														})
+												)
 												//(no compression)
 												//.with(StorageSchemaBean.StorageSubSchemaBean::codec, "snappy")
 											.done().get())
@@ -479,8 +505,8 @@ public class TestHdfsDataWriteService {
 		}
 		// Check writes + non-empty segment
 		{
-			TestBean t1 = new TestBean("t1", "v1");
-			TestBean t2 = new TestBean("t2", "v2");
+			TestBean t1 = new TestBean("t1", "v1", null);
+			TestBean t2 = new TestBean("t2", "v2", null);
 			
 			worker.new_segment();
 			
@@ -513,8 +539,8 @@ public class TestHdfsDataWriteService {
 		}		
 		// Check basic write + second segment (list)
 		{
-			TestBean t1 = new TestBean("t1b", "v1b");
-			TestBean t2 = new TestBean("t2b", "v2b");			
+			TestBean t1 = new TestBean("t1b", "v1b", null);
+			TestBean t2 = new TestBean("t2b", "v2b", null);			
 			
 			worker.new_segment();
 			
@@ -611,7 +637,7 @@ public class TestHdfsDataWriteService {
 		assertEquals(3, write_service._writer.get()._state._workers.getActiveCount());
 	
 		for (int i = 0; i < 20; ++i) {
-			TestBean emit = new TestBean("id" + i, "val" + i);
+			TestBean emit = new TestBean("id" + i, "val" + i, null);
 			if (0 == (i % 2)) {
 				if (0 == ((i/2) % 2)) {
 					batch.storeObject(emit);
@@ -675,8 +701,8 @@ public class TestHdfsDataWriteService {
 		
 		// Change batch properties so that will segment (also check number of threads reduces)
 		batch.setBatchProperties(Optional.of(10), Optional.of(1000L), Optional.of(Duration.ofSeconds(5L)), Optional.of(1));
-		List<TestBean> l1 = IntStream.range(0, 8).boxed().map(i -> new TestBean("id" + i, "val" + i)).collect(Collectors.toList());
-		List<TestBean> l2 = IntStream.range(8, 15).boxed().map(i -> new TestBean("id" + i, "val" + i)).collect(Collectors.toList());
+		List<TestBean> l1 = IntStream.range(0, 8).boxed().map(i -> new TestBean("id" + i, "val" + i, new Date())).collect(Collectors.toList());
+		List<TestBean> l2 = IntStream.range(8, 15).boxed().map(i -> new TestBean("id" + i, "val" + i, new Date())).collect(Collectors.toList());
 		
 		batch.storeObjects(l1);
 		Thread.sleep(750L);
