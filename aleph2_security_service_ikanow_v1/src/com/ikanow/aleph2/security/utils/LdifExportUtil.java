@@ -176,7 +176,7 @@ public class LdifExportUtil {
 				sb.append("\n");				
 				sb.append("uid: "+authenticationBean.getUsername());
 				sb.append("\n");
-				sb.append("userPassword: "+authenticationBean.getPassword());
+				sb.append("userPassword: {sha256}"+authenticationBean.getPassword());
 				sb.append("\n");
 				sb.append("employeeType: "+authenticationBean.getAccountType());
 				sb.append("\n");
