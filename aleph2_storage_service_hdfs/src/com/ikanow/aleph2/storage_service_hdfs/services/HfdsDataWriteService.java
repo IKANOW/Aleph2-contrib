@@ -520,7 +520,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				_state.codec = getCanonicalCodec(_bucket.data_schema().storage_schema(), _stage); // (recheck the codec)
 				_state.time_policy = Optional.ofNullable(getStorageSubSchema(_bucket.data_schema().storage_schema(), _stage).grouping_time_policy())
 												.orElse(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.TimeSourcePolicy.batch);
-				
+
 				_state.curr_path = new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, _buffer_name) + "/" + SPOOL_DIR + "/" + getFilename());
 				try { 
 					_dfs.mkdir(_state.curr_path.getParent(), DEFAULT_DIR_PERMS, true); //(note perm is & with umask)
@@ -536,20 +536,24 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		 * @throws IOException 
 		 */
 		protected synchronized void complete_segment() throws IOException {
-			_state.timestamp_of_first_record_in_batch = null; // (always reset this)
-			if ((null != _state.out) && (_state.curr_objects > 0)) {
-				_state.out.close();
-				_state.out = null;
-				_state.segment++;
-				
-				final Date batch_time = Optional.ofNullable(_state.timestamp_of_first_record_in_batch).orElseGet(Date::new);
-				final Path path =  new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, _buffer_name) + "/" + getSuffix(batch_time, _bucket, _stage) + "/" + _state.curr_path.getName());
-				try { 
-					_dfs.mkdir(path.getParent(), DEFAULT_DIR_PERMS, true); //(note perm is & with umask)
-				} catch (Exception e) {} // (fails if already exists?)
-				_dfs.rename(_state.curr_path, path);				
-				try { _dfs.setPermission(_state.curr_path, DEFAULT_DIR_PERMS); } catch (Exception e) {} // might not be supported in FS
-				try { _dfs.rename(getCrc(_state.curr_path), getCrc(path)); } catch (Exception e) {} // (don't care what the error is)				
+			try {
+				if ((null != _state.out) && (_state.curr_objects > 0)) {
+					_state.out.close();
+					_state.out = null;
+					_state.segment++;
+					
+					final Date batch_time = Optional.ofNullable(_state.timestamp_of_first_record_in_batch).orElseGet(Date::new);
+					final Path path =  new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, _buffer_name) + "/" + getSuffix(batch_time, _bucket, _stage) + "/" + _state.curr_path.getName());
+					try { 
+						_dfs.mkdir(path.getParent(), DEFAULT_DIR_PERMS, true); //(note perm is & with umask)
+					} catch (Exception e) {} // (fails if already exists?)
+					_dfs.rename(_state.curr_path, path);				
+					try { _dfs.setPermission(_state.curr_path, DEFAULT_DIR_PERMS); } catch (Exception e) {} // might not be supported in FS
+					try { _dfs.rename(getCrc(_state.curr_path), getCrc(path)); } catch (Exception e) {} // (don't care what the error is)				
+				}
+			}
+			finally {
+				_state.timestamp_of_first_record_in_batch = null; // (always reset this)				
 			}
 		}
 		
