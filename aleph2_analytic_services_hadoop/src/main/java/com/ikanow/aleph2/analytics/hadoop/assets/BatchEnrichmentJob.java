@@ -151,12 +151,12 @@ public class BatchEnrichmentJob{
 									.<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>>flatMap(ecm -> {
 										final Optional<String> entryPoint = BucketUtils.getBatchEntryPoint(library_beans, ecm);
 										
-										_v1_logger.info("Trying to launch stage " + ecm.name() + " with entry point = " + entryPoint);
+										_v1_logger.info("Trying to launch stage " + Optional.ofNullable(ecm.name()).orElse("(no name)") + " with entry point = " + entryPoint);
 										
 										return entryPoint.map(Stream::of).orElseGet(() -> Stream.of(BePassthroughModule.class.getName()))
 												.flatMap(Lambdas.flatWrap_i(ep -> (IEnrichmentBatchModule)Class.forName(ep).newInstance()))
 												.map(mod -> {			
-													_v1_logger.info("Completed initialization of stage " + ecm.name());
+													_v1_logger.info("Completed initialization of stage " + Optional.ofNullable(ecm.name()).orElse("(no name)"));
 													
 													final BatchEnrichmentContext cloned_context = new BatchEnrichmentContext(_enrichmentContext, _batchSize);
 													Optional.ofNullable(library_beans.get(ecm.module_name_or_id())).ifPresent(lib -> cloned_context.setModule(lib));													
@@ -229,7 +229,7 @@ public class BatchEnrichmentJob{
 					mutable_start = t3._2().getOutputRecords();
 	
 					if (flush)
-						_v1_logger.info("Stage " + t3._3().name() + " output " + mutable_start.size() + "records final_stage=" + !it.hasNext());
+						_v1_logger.info("Stage " + Optional.ofNullable(t3._3().name()).orElse("(no name)") + " output records=" + mutable_start.size() + " final_stage=" + !it.hasNext());
 					
 					if (!it.hasNext()) { // final stage output anything we have here
 						final IAnalyticsContext analytics_context = _enrichmentContext.getAnalyticsContext();
