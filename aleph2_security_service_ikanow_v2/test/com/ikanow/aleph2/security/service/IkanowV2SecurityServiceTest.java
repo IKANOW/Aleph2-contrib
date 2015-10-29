@@ -54,8 +54,9 @@ public class IkanowV2SecurityServiceTest  {
 
 	protected String adminId = "4e3706c48d26852237078005";
 	protected String regularUserId = "54f86d8de4b03d27d1ea0d7b";  //cb_user
-	protected String testUserId = "4e3706c48d26852237079004"; 	
-
+	//protected String testUserId = "4e3706c48d26852237079004"; 	
+	protected String testUserId = "54ac1584e4b0a760274bcae4"; 	
+	
 	
 	@Before
 	public void setupDependencies() throws Exception {
@@ -98,7 +99,8 @@ public class IkanowV2SecurityServiceTest  {
 	}
 
 	protected ISubject loginAsTestUser() throws AuthenticationException{
-		String password = "xxxxxx";
+		String password = "ashley.kalina";
+		//String password = "{sha256}4k6GF9zQPEgvz/q+8rkNubQI98yNnrKibKJfk4PLvRc=";
 		ISubject subject = securityService.login(testUserId,password);			
 		return subject;
 	}

@@ -15,6 +15,11 @@
  *******************************************************************************/
 package com.ikanow.aleph2.security.module;
 
+import org.apache.shiro.config.Ini;
+import org.apache.shiro.realm.ldap.JndiLdapContextFactory;
+import org.apache.shiro.realm.text.IniRealm;
+
+import com.google.inject.Provides;
 import com.google.inject.multibindings.Multibinder;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 import com.ikanow.aleph2.security.service.IkanowV2Realm;
@@ -34,8 +39,15 @@ public class IkanowV2SecurityModule extends CoreSecurityModule{
 
 	@Override
 	protected void bindRealms() {
-		//set JndiLdapContextFactory
-		bindRealm().to(IkanowV2Realm.class).asEagerSingleton();		
+
+		IkanowV2Realm realm  =  new IkanowV2Realm();
+		JndiLdapContextFactory contextFactory = new JndiLdapContextFactory();
+		contextFactory.setUrl("ldap://localhost:10389");
+		contextFactory.setAuthenticationMechanism("simple");
+		realm.setContextFactory(contextFactory);
+		realm.setUserDnTemplate("cn={0},ou=users,ou=aleph2,dc=ikanow,dc=com");
+		
+		bindRealm().toInstance(realm);		
 	}
 	
 
@@ -51,4 +63,9 @@ public class IkanowV2SecurityModule extends CoreSecurityModule{
 	protected void bindCredentialsMatcher() {
  		//bind(CredentialsMatcher.class).to(AccountStatusCredentialsMatcher.class);
 	}
+	
+	@Provides
+    Ini loadShiroIni() {
+        return Ini.fromResourcePath("classpath:shiro.ini");
+    }
 }
