@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CreateFlag;
@@ -43,18 +44,22 @@ import com.ikanow.aleph2.analytics.hadoop.assets.BatchEnrichmentJob;
 import com.ikanow.aleph2.analytics.hadoop.assets.BeFileInputFormat;
 import com.ikanow.aleph2.analytics.hadoop.assets.BeFileOutputFormat;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobService;
+import com.ikanow.aleph2.analytics.hadoop.data_model.HadoopTechnologyOverrideBean;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
 
+import fj.Unit;
 import fj.data.Validation;
 
 /** Responsible for launching the hadoop job
@@ -106,7 +111,7 @@ public class BeJobLauncher implements IBeJobService{
 		final ClassLoader currentClassloader = Thread.currentThread().getContextClassLoader();
 		//(not currently used, but has proven useful in the past)
 		
-		Job job = null;
+		final SetOnce<Job> job = new SetOnce<>();
 		try {
 			final String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
 		    config.set(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE, contextSignature);
@@ -146,29 +151,69 @@ public class BeJobLauncher implements IBeJobService{
 			// Try to minimize class conflicts vs Hadoop's ancient libraries:
 			config.set("mapreduce.job.user.classpath.first", "true");
 			
+			// Get max batch size, apply that everywhere:
+			final Optional<Integer> max_requested_batch_size = 
+			    Optional.ofNullable(bucket.batch_enrichment_configs()).orElse(Collections.emptyList())
+					.stream()
+					.filter(cfg -> Optional.ofNullable(cfg.enabled()).orElse(true))
+	    			.<Integer>flatMap(cfg -> {
+	    				final HadoopTechnologyOverrideBean tech_override = 
+	    						BeanTemplateUtils.from(Optional.ofNullable(cfg.technology_override()).orElse(Collections.emptyMap()), 
+	    								HadoopTechnologyOverrideBean.class)
+	    								.get();
+	    				return Optional.ofNullable(tech_override.requested_batch_size()).map(Stream::of).orElseGet(Stream::empty);
+	    			})
+	    			.max(Integer::max)
+	    			;
+			max_requested_batch_size.ifPresent(i -> config.set(BatchEnrichmentJob.BATCH_SIZE_PARAM, Integer.toString(i)));
+			
 		    // do not set anything into config past this line (can set job.getConfiguration() elements though - that is what the builder does)
-		    job = Job.getInstance(config, jobName);
-		    job.setJarByClass(BatchEnrichmentJob.class);
+		    job.set(Job.getInstance(config, jobName));
+		    job.get().setJarByClass(BatchEnrichmentJob.class);
 
 		    // Set the classpath
 		    
-		    cacheJars(job, bucket, _batchEnrichmentContext.getAnalyticsContext());
+		    cacheJars(job.get(), bucket, _batchEnrichmentContext.getAnalyticsContext());
 		    
 		    // (generic mapper - the actual code is run using the classes in the shared libraries)
-		    job.setMapperClass(BatchEnrichmentJob.BatchEnrichmentMapper.class);
+		    job.get().setMapperClass(BatchEnrichmentJob.BatchEnrichmentMapper.class);
 		    
-		    //TODO: ALEPH-12 handle reducer scenarios
-		    job.setNumReduceTasks(0);
+		    // (combiner and reducer)
+		    Optional.ofNullable(bucket.batch_enrichment_configs()).orElse(Collections.emptyList())
+		    			.stream()
+		    			.filter(cfg -> Optional.ofNullable(cfg.enabled()).orElse(true))
+		    			.filter(cfg -> !Optionals.ofNullable(cfg.grouping_fields()).isEmpty())
+		    			.findAny()
+		    			.map(cfg -> {
+		    				final HadoopTechnologyOverrideBean tech_override = 
+		    						BeanTemplateUtils.from(Optional.ofNullable(cfg.technology_override()).orElse(Collections.emptyMap()), 
+		    								HadoopTechnologyOverrideBean.class)
+		    								.get();
+		    				
+		    				job.get().setNumReduceTasks(Optional.ofNullable(tech_override.num_reducers()).orElse(2));
+		    				job.get().setReducerClass(BatchEnrichmentJob.BatchEnrichmentReducer.class);
+		    				
+		    				if (tech_override.use_combiner()) {
+		    					job.get().setCombinerClass(BatchEnrichmentJob.BatchEnrichmentCombiner.class);
+		    				}		    				
+		    				return Unit.unit();
+		    			})
+		    			.orElseGet(() -> {
+		    				job.get().setNumReduceTasks(0);
+		    				return Unit.unit();
+		    			})
+		    			;
+		    
 		    //job.setReducerClass(BatchEnrichmentJob.BatchEnrichmentReducer.class);
 
 		    // Input format:
-		    inputBuilder.build(job);
+		    inputBuilder.build(job.get());
 
 			// Output format (doesn't really do anything, all the actual output code is performed by the mapper via the enrichment context)
-		    job.setOutputFormatClass(BeFileOutputFormat.class);
+		    job.get().setOutputFormatClass(BeFileOutputFormat.class);
 			
-			launch(job);
-			return Validation.success(job);
+			launch(job.get());
+			return Validation.success(job.get());
 			
 		} 
 		catch (Throwable t) { 
@@ -181,9 +226,9 @@ public class BeJobLauncher implements IBeJobService{
 				return Validation.fail(ErrorUtils.get("{0}", tt.getMessage()));				
 			}
 			else { // General error : Dump the config params to string			
-				if (null != job) {
+				if (job.isSet()) {
 					logger.error(ErrorUtils.get("Error submitting, config= {0}",  
-							Optionals.streamOf(job.getConfiguration().iterator(), false).map(kv -> kv.getKey() + ":" + kv.getValue()).collect(Collectors.joining("; "))));
+							Optionals.streamOf(job.get().getConfiguration().iterator(), false).map(kv -> kv.getKey() + ":" + kv.getValue()).collect(Collectors.joining("; "))));
 				}			
 				return Validation.fail(ErrorUtils.getLongForm("{0}", tt));
 			}

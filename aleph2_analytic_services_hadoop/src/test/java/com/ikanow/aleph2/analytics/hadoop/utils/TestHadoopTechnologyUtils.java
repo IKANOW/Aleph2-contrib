@@ -401,6 +401,37 @@ public class TestHadoopTechnologyUtils {
 			assertEquals("Correct error message: " + res1.message(), ErrorUtils.get(HadoopErrorUtils.CURRENTLY_ONLY_ONE_REDUCE_SUPPORTED, "/test", "analytic_job_7", "reducer_1"), res1.message());			
 		}
 		
+		// Test error case 10: invalid technology overrides
+		{
+			final AnalyticThreadJobBean analytic_job10 = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+					.with(AnalyticThreadJobBean::name, "analytic_job_10")
+					.with(AnalyticThreadJobBean::analytic_technology_name_or_id, "test_analytic_tech_id")
+					.with(AnalyticThreadJobBean::analytic_type, MasterEnrichmentType.batch)
+					.with(AnalyticThreadJobBean::library_names_or_ids, Arrays.asList("id1", "name2"))
+					.with(AnalyticThreadJobBean::config, 
+							new LinkedHashMap<String, Object>(
+								ImmutableMap.<String, Object>builder()
+									.put("mapper1",
+											new LinkedHashMap<String, Object>(
+												ImmutableMap.<String, Object>builder()
+													.put("technology_override", 
+															ImmutableMap.<String, Object>builder()
+																.put("invalid_entry", "test")
+															.build()
+															)
+												.build()
+											))
+								.build()
+							))
+					.done().get();
+			
+			final BasicMessageBean res1 = HadoopTechnologyUtils.validateJob(test_bucket1, Collections.emptyList(), analytic_job10);			
+			assertFalse("Validation should fail", res1.success());
+			assertEquals("Correct error message: " + res1.message(), ErrorUtils.get(HadoopErrorUtils.TECHNOLOGY_OVERRIDE_INVALID, 
+					"/test", "analytic_job_10", "mapper1", "num_reducers;use_combiner;requested_batch_size", "(unknown)"), 
+					res1.message());			
+		}
+		
 		////////////////////////////////////////////////
 		
 		// Test pass case 1:
@@ -468,6 +499,11 @@ public class TestHadoopTechnologyUtils {
 									.put("mapper1",
 											new LinkedHashMap<String, Object>(
 												ImmutableMap.<String, Object>builder()
+													.put("technology_override", 
+															ImmutableMap.<String, Object>builder()
+																.put("num_reducers", 3)
+															.build()
+															)
 												.build()
 											))
 									.put("reducer",
@@ -475,12 +511,22 @@ public class TestHadoopTechnologyUtils {
 												ImmutableMap.<String, Object>builder()
 													.put("dependencies", Arrays.asList())
 													.put("grouping_fields", Arrays.asList("test"))
+													.put("technology_override", 
+															ImmutableMap.<String, Object>builder()
+																.put("requested_batch_size", 1000)
+															.build()
+															)
 												.build()
 											))
 									.put("post_reducer1",
 											new LinkedHashMap<String, Object>(
 												ImmutableMap.<String, Object>builder()
 													.put("dependencies", Arrays.asList("reducer"))
+													.put("technology_override", 
+															ImmutableMap.<String, Object>builder()
+																.put("use_combiner", true)
+															.build()
+															)
 												.build()
 											))
 									.put("post_reducer2",

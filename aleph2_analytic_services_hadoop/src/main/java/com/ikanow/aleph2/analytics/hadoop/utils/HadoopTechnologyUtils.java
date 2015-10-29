@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.analytics.hadoop.utils;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
@@ -35,6 +36,7 @@ import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.analytics.hadoop.data_model.HadoopTechnologyOverrideBean;
 
 import java.util.Collections;
 
@@ -123,7 +125,7 @@ public class HadoopTechnologyUtils {
 				// Is there a reducer step?
 				final Set<String> reducer_steps =
 						configs.stream()
-						.filter(cfg -> null != cfg.grouping_fields())
+						.filter(cfg -> !Optionals.ofNullable(cfg.grouping_fields()).isEmpty())
 						.map(cfg -> cfg.name())
 						.collect(Collectors.toSet())
 						;
@@ -162,6 +164,26 @@ public class HadoopTechnologyUtils {
 									});
 					})
 					;
+
+				// Check technology overrides:
+				configs.stream()
+					.filter(config -> Optional.ofNullable(config.enabled()).orElse(true))
+					.filter(config -> null != config.technology_override())
+					.forEach(config -> {
+						try {
+							@SuppressWarnings("unused")
+							final HadoopTechnologyOverrideBean tech_bean = 
+									BeanTemplateUtils.from(config.technology_override(), HadoopTechnologyOverrideBean.class).get(); // (non null by construction)
+						}
+						catch (Exception e) {
+							//DEBUG
+							//e.printStackTrace();
+							
+							errors.add(ErrorUtils.get(HadoopErrorUtils.TECHNOLOGY_OVERRIDE_INVALID, analytic_bucket.full_name(), job.name(), config.name(),
+									Arrays.asList("num_reducers", "use_combiner", "requested_batch_size").stream().collect(Collectors.joining(";")), "(unknown)"));								
+						}
+						//(will error if invalid, else do nothing
+					});				
 				
 				// Check the names are different:
 				// NOTE: can't test this because the names are taken from the keys which have to be unique by construction
