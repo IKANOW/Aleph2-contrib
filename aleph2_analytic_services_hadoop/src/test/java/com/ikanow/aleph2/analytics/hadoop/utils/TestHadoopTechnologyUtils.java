@@ -265,6 +265,142 @@ public class TestHadoopTechnologyUtils {
 			assertEquals("Correct error message: " + res1.message(), ErrorUtils.get(HadoopErrorUtils.CURR_DEPENDENCY_RESTRICTIONS, "invalid_dep", "valid_name", "/test", "analytic_job_5"), res1.message());
 		}
 		
+		// Test error case 6: multiple reducers
+		// THIS CAN'T WORK BECAUSE THE KEYS ARE USED AS THE NAMES THEREFORE THEY MUST BE UNIQUE
+//		{
+//			final AnalyticThreadJobBean analytic_job6 = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+//					.with(AnalyticThreadJobBean::name, "analytic_job_6")
+//					.with(AnalyticThreadJobBean::analytic_technology_name_or_id, "test_analytic_tech_id")
+//					.with(AnalyticThreadJobBean::analytic_type, MasterEnrichmentType.batch)
+//					.with(AnalyticThreadJobBean::library_names_or_ids, Arrays.asList("id1", "name2"))
+//					.with(AnalyticThreadJobBean::config, 
+//							new LinkedHashMap<String, Object>(
+//								ImmutableMap.<String, Object>builder()
+//									.put("dup_name_1",
+//											new LinkedHashMap<String, Object>(
+//												ImmutableMap.<String, Object>builder()
+//													.put("dependencies", Arrays.asList())
+//													.put("name", "test")
+//												.build()
+//											))
+//									.put("dup_name_2",
+//											new LinkedHashMap<String, Object>(
+//												ImmutableMap.<String, Object>builder()
+//													.put("dependencies", Arrays.asList())
+//													.put("name", "test")
+//												.build()
+//											))
+//								.build()
+//							))
+//					.done().get();
+//			
+//			final BasicMessageBean res1 = HadoopTechnologyUtils.validateJob(test_bucket1, Collections.emptyList(), analytic_job6);			
+//			assertFalse("Validation should fail", res1.success());
+//			assertEquals("Correct error message: " + res1.message(), ErrorUtils.get(HadoopErrorUtils.ERROR_IN_ANALYTIC_JOB_CONFIGURATION, "test", "/test", "analytic_job_6"), res1.message());			
+//		}
+		
+		
+		// Test error case 7: multiple reducers
+		{
+			final AnalyticThreadJobBean analytic_job7 = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+					.with(AnalyticThreadJobBean::name, "analytic_job_7")
+					.with(AnalyticThreadJobBean::analytic_technology_name_or_id, "test_analytic_tech_id")
+					.with(AnalyticThreadJobBean::analytic_type, MasterEnrichmentType.batch)
+					.with(AnalyticThreadJobBean::library_names_or_ids, Arrays.asList("id1", "name2"))
+					.with(AnalyticThreadJobBean::config, 
+							new LinkedHashMap<String, Object>(
+								ImmutableMap.<String, Object>builder()
+									.put("mapper",
+											new LinkedHashMap<String, Object>(
+												ImmutableMap.<String, Object>builder()
+												.build()
+											))
+									.put("reducer_1",
+											new LinkedHashMap<String, Object>(
+												ImmutableMap.<String, Object>builder()
+													.put("dependencies", Arrays.asList())
+													.put("grouping_fields", Arrays.asList("test"))
+												.build()
+											))
+									.put("reducer_2",
+											new LinkedHashMap<String, Object>(
+												ImmutableMap.<String, Object>builder()
+													.put("dependencies", Arrays.asList())
+													.put("grouping_fields", Arrays.asList("test"))
+												.build()
+											))
+								.build()
+							))
+					.done().get();
+			
+			final BasicMessageBean res1 = HadoopTechnologyUtils.validateJob(test_bucket1, Collections.emptyList(), analytic_job7);			
+			assertFalse("Validation should fail", res1.success());
+			assertEquals("Correct error message: " + res1.message(), ErrorUtils.get(HadoopErrorUtils.CURRENTLY_ONLY_ONE_REDUCE_SUPPORTED, "/test", "analytic_job_7", "reducer_2;reducer_1"), res1.message());			
+		}
+		
+		// Test error case 8: dependency order confusion
+		{
+			final AnalyticThreadJobBean analytic_job8 = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+					.with(AnalyticThreadJobBean::name, "analytic_job_8")
+					.with(AnalyticThreadJobBean::analytic_technology_name_or_id, "test_analytic_tech_id")
+					.with(AnalyticThreadJobBean::analytic_type, MasterEnrichmentType.batch)
+					.with(AnalyticThreadJobBean::library_names_or_ids, Arrays.asList("id1", "name2"))
+					.with(AnalyticThreadJobBean::config, 
+							new LinkedHashMap<String, Object>(
+								ImmutableMap.<String, Object>builder()
+									.put("mapper",
+											new LinkedHashMap<String, Object>(
+												ImmutableMap.<String, Object>builder()
+													.put("dependencies", Arrays.asList("reducer"))
+												.build()
+											))
+									.put("reducer",
+											new LinkedHashMap<String, Object>(
+												ImmutableMap.<String, Object>builder()
+													.put("dependencies", Arrays.asList())
+													.put("grouping_fields", Arrays.asList("test"))
+												.build()
+											))
+								.build()
+							))
+					.done().get();
+			
+			final BasicMessageBean res1 = HadoopTechnologyUtils.validateJob(test_bucket1, Collections.emptyList(), analytic_job8);			
+			assertFalse("Validation should fail", res1.success());
+			assertEquals("Correct error message: " + res1.message(), ErrorUtils.get(HadoopErrorUtils.CURR_DEPENDENCY_RESTRICTIONS, "reducer", "mapper", "/test", "analytic_job_8"), res1.message());
+		}
+		
+		// Test error case 9: reducer can't be at the start
+		{
+			final AnalyticThreadJobBean analytic_job9 = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+					.with(AnalyticThreadJobBean::name, "analytic_job_9")
+					.with(AnalyticThreadJobBean::analytic_technology_name_or_id, "test_analytic_tech_id")
+					.with(AnalyticThreadJobBean::analytic_type, MasterEnrichmentType.batch)
+					.with(AnalyticThreadJobBean::library_names_or_ids, Arrays.asList("id1", "name2"))
+					.with(AnalyticThreadJobBean::config, 
+							new LinkedHashMap<String, Object>(
+								ImmutableMap.<String, Object>builder()
+									.put("reducer_1",
+											new LinkedHashMap<String, Object>(
+												ImmutableMap.<String, Object>builder()
+													.put("dependencies", Arrays.asList())
+													.put("grouping_fields", Arrays.asList("test"))
+												.build()
+											))
+									.put("mapper1",
+											new LinkedHashMap<String, Object>(
+												ImmutableMap.<String, Object>builder()
+												.build()
+											))
+								.build()
+							))
+					.done().get();
+			
+			final BasicMessageBean res1 = HadoopTechnologyUtils.validateJob(test_bucket1, Collections.emptyList(), analytic_job9);			
+			assertFalse("Validation should fail", res1.success());
+			assertEquals("Correct error message: " + res1.message(), ErrorUtils.get(HadoopErrorUtils.CURRENTLY_ONLY_ONE_REDUCE_SUPPORTED, "/test", "analytic_job_7", "reducer_1"), res1.message());			
+		}
+		
 		////////////////////////////////////////////////
 		
 		// Test pass case 1:
@@ -318,6 +454,48 @@ public class TestHadoopTechnologyUtils {
 			assertEquals(2, messages.length);
 			assertEquals("Correct error message 1: " + messages[0], ErrorUtils.get(HadoopErrorUtils.CURR_INPUT_RESTRICTIONS, "search_index_service", "/test", "analytic_job_1"), messages[0]);
 			assertEquals("Correct error message 2: " + messages[1], ErrorUtils.get(HadoopErrorUtils.TEMP_TRANSIENT_OUTPUTS_MUST_BE_BATCH, "/test", "analytic_job_2", "streaming"), messages[1]);
+		}
+		
+		{
+			final AnalyticThreadJobBean analytic_job_pass2 = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+					.with(AnalyticThreadJobBean::name, "analytic_job_pass2")
+					.with(AnalyticThreadJobBean::analytic_technology_name_or_id, "test_analytic_tech_id")
+					.with(AnalyticThreadJobBean::analytic_type, MasterEnrichmentType.batch)
+					.with(AnalyticThreadJobBean::library_names_or_ids, Arrays.asList("id1", "name2"))
+					.with(AnalyticThreadJobBean::config, 
+							new LinkedHashMap<String, Object>(
+								ImmutableMap.<String, Object>builder()
+									.put("mapper1",
+											new LinkedHashMap<String, Object>(
+												ImmutableMap.<String, Object>builder()
+												.build()
+											))
+									.put("reducer",
+											new LinkedHashMap<String, Object>(
+												ImmutableMap.<String, Object>builder()
+													.put("dependencies", Arrays.asList())
+													.put("grouping_fields", Arrays.asList("test"))
+												.build()
+											))
+									.put("post_reducer1",
+											new LinkedHashMap<String, Object>(
+												ImmutableMap.<String, Object>builder()
+													.put("dependencies", Arrays.asList("reducer"))
+												.build()
+											))
+									.put("post_reducer2",
+											new LinkedHashMap<String, Object>(
+												ImmutableMap.<String, Object>builder()
+													.put("dependencies", Arrays.asList())//(implicit)
+												.build()
+											))
+								.build()
+							))
+					.done().get();
+			
+			final BasicMessageBean res1 = HadoopTechnologyUtils.validateJob(test_bucket1, Collections.emptyList(), analytic_job_pass2);			
+			assertTrue("Validation should pass: " + res1.message(), res1.success());
+			assertEquals("Correct error message: " + res1.message(), "", res1.message());			
 		}
 	}
 }
