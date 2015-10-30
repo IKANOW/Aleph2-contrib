@@ -68,7 +68,7 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	
 	//(list of records to emit)
 	protected final AtomicLong _mutable_1up = new AtomicLong(0);
-	protected ArrayList<Tuple2<Long, IBatchRecord>> _mutable_records = new ArrayList<>();
+	protected ArrayList<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> _mutable_records = new ArrayList<>();
 	
 	/** User constructor - in technology
 	 * @param analytics_context - the context to wrap
@@ -161,7 +161,7 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	/** Returns the last batch of outputs
 	 * @return
 	 */
-	public ArrayList<Tuple2<Long, IBatchRecord>> getOutputRecords() {
+	public ArrayList<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> getOutputRecords() {
 		return _mutable_records;
 	}
 	
@@ -263,7 +263,7 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 		if (annotation.isPresent()) {
 			throw new RuntimeException(ErrorUtils.get(HadoopErrorUtils.NOT_YET_IMPLEMENTED, "annotations"));			
 		}
-		_mutable_records.add(Tuples._2T(_mutable_1up.incrementAndGet(), new BeFileInputReader.BatchRecord(mutated_json, null)));
+		_mutable_records.add(Tuples._2T(Tuples._2T(_mutable_1up.incrementAndGet(), new BeFileInputReader.BatchRecord(mutated_json, null)), grouping_fields));
 	}
 
 	/* (non-Javadoc)
