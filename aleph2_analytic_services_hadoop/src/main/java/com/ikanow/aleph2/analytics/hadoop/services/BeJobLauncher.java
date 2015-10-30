@@ -43,6 +43,7 @@ import com.ikanow.aleph2.analytics.hadoop.assets.Aleph2MultiInputFormatBuilder;
 import com.ikanow.aleph2.analytics.hadoop.assets.BatchEnrichmentJob;
 import com.ikanow.aleph2.analytics.hadoop.assets.BeFileInputFormat;
 import com.ikanow.aleph2.analytics.hadoop.assets.BeFileOutputFormat;
+import com.ikanow.aleph2.analytics.hadoop.assets.ObjectNodeWritableComparable;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobService;
 import com.ikanow.aleph2.analytics.hadoop.data_model.HadoopTechnologyOverrideBean;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
@@ -170,7 +171,8 @@ public class BeJobLauncher implements IBeJobService{
 		    // do not set anything into config past this line (can set job.getConfiguration() elements though - that is what the builder does)
 		    job.set(Job.getInstance(config, jobName));
 		    job.get().setJarByClass(BatchEnrichmentJob.class);
-
+		    job.get().setSortComparatorClass(ObjectNodeWritableComparable.Comparator.class); //(avoid deser of json node for intermediate things)
+		    
 		    // Set the classpath
 		    
 		    cacheJars(job.get(), bucket, _batchEnrichmentContext.getAnalyticsContext());
