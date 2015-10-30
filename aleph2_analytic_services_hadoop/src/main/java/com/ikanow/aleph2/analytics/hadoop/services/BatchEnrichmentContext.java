@@ -259,7 +259,7 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	 */
 	@Override
 	public void emitMutableObject(long id, ObjectNode mutated_json,
-			Optional<AnnotationBean> annotation) {
+			Optional<AnnotationBean> annotation, final Optional<JsonNode> grouping_fields) {
 		if (annotation.isPresent()) {
 			throw new RuntimeException(ErrorUtils.get(HadoopErrorUtils.NOT_YET_IMPLEMENTED, "annotations"));			
 		}
@@ -271,13 +271,13 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	 */
 	@Override
 	public void emitImmutableObject(long id, JsonNode original_json,
-			Optional<ObjectNode> mutations, Optional<AnnotationBean> annotations) {
+			Optional<ObjectNode> mutations, Optional<AnnotationBean> annotations, final Optional<JsonNode> grouping_fields) {
 		final JsonNode to_emit = 
 				mutations.map(o -> StreamSupport.<Map.Entry<String, JsonNode>>stream(Spliterators.spliteratorUnknownSize(o.fields(), Spliterator.ORDERED), false)
 									.reduce(original_json, (acc, kv) -> ((ObjectNode) acc).set(kv.getKey(), kv.getValue()), (val1, val2) -> val2))
 									.orElse(original_json);
 		
-		emitMutableObject(0L, (ObjectNode)to_emit, annotations);
+		emitMutableObject(0L, (ObjectNode)to_emit, annotations, grouping_fields);
 	}
 
 	/* (non-Javadoc)

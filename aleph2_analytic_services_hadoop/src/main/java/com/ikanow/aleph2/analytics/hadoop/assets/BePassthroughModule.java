@@ -17,6 +17,7 @@ package com.ikanow.aleph2.analytics.hadoop.assets;
 
 import java.util.Optional;
 import java.util.stream.Stream;
+import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -47,7 +48,7 @@ public class BePassthroughModule implements IEnrichmentBatchModule {
 	 */
 	@Override
 	public void onStageInitialize(IEnrichmentModuleContext context, DataBucketBean bucket, EnrichmentControlMetadataBean control, 
-			final Tuple2<ProcessingStage, ProcessingStage> previous_next)
+			final Tuple2<ProcessingStage, ProcessingStage> previous_next, final Optional<List<String>> next_grouping_fields)
 	{			
 		logger.debug("BatchEnrichmentModule.onStageInitialize:"+ context+", DataBucketBean:"+ bucket+", prev_next:"+previous_next);
 		this._context = context;
@@ -66,7 +67,7 @@ public class BePassthroughModule implements IEnrichmentBatchModule {
 			// not sure what to do with streaming (probably binary) data - probably will have to just ignore it in default mode?
 			// (the alternative is to build Tika directly in? or maybe dump it directly in .. not sure how Jackson manages raw data?)
 			Optional<ObjectNode> streamBytes = Optional.empty();						
-			_context.emitImmutableObject(t2._1(), t2._2().getJson(), streamBytes, Optional.empty());
+			_context.emitImmutableObject(t2._1(), t2._2().getJson(), streamBytes, Optional.empty(), grouping_key);
 
 		}); // for 
 	}

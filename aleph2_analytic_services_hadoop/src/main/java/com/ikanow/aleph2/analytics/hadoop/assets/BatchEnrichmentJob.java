@@ -259,7 +259,9 @@ public class BatchEnrichmentJob{
 							!it.hasNext()
 								? (_mapper_only_job ? ProcessingStage.output : ProcessingStage.grouping)
 								: ProcessingStage.batch
-						));	
+						),
+						Optional.empty() //TODO (ALEPH-12): if next stage is not mapper then pass in fields
+						);	
 			}
 			
 		} // setup

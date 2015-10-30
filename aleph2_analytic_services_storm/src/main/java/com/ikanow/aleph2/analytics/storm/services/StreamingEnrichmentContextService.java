@@ -299,7 +299,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitMutableObject(long, com.fasterxml.jackson.databind.node.ObjectNode, java.util.Optional)
 	 */
 	@Override
-	public void emitMutableObject(final long id, final ObjectNode mutated_json, final Optional<AnnotationBean> annotation) {		
+	public void emitMutableObject(final long id, final ObjectNode mutated_json, final Optional<AnnotationBean> annotation, final Optional<JsonNode> grouping_fields) {		
 		_delegate.get().emitObject(_delegate.get().getBucket(), _job.get(), Either.left((JsonNode) mutated_json), annotation);
 	}
 
@@ -307,8 +307,11 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitImmutableObject(long, com.fasterxml.jackson.databind.JsonNode, java.util.Optional, java.util.Optional)
 	 */
 	@Override
-	public void emitImmutableObject(final long id, final JsonNode original_json, final Optional<ObjectNode> mutations, final Optional<AnnotationBean> annotations) {
+	public void emitImmutableObject(final long id, final JsonNode original_json, final Optional<ObjectNode> mutations, final Optional<AnnotationBean> annotations, final Optional<JsonNode> grouping_fields) {
 		if (annotations.isPresent()) {
+			throw new RuntimeException(ErrorUtils.NOT_YET_IMPLEMENTED);			
+		}
+		if (grouping_fields.isPresent()) {
 			throw new RuntimeException(ErrorUtils.NOT_YET_IMPLEMENTED);			
 		}
 		final JsonNode to_emit = 
@@ -316,7 +319,7 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 									.reduce(original_json, (acc, kv) -> ((ObjectNode) acc).set(kv.getKey(), kv.getValue()), (val1, val2) -> val2))
 									.orElse(original_json);
 		
-		emitMutableObject(0L, (ObjectNode)to_emit, annotations);
+		emitMutableObject(0L, (ObjectNode)to_emit, annotations, Optional.empty());
 	}
 
 	/* (non-Javadoc)

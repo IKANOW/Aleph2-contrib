@@ -17,6 +17,7 @@ package com.ikanow.aleph2.analytics.hadoop.assets;
 
 import java.util.Optional;
 import java.util.stream.Stream;
+import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -36,7 +37,7 @@ public class MockEnrichmentBatchModule implements IEnrichmentBatchModule {
 
 	@Override
 	public void onStageInitialize(IEnrichmentModuleContext context, DataBucketBean bucket, EnrichmentControlMetadataBean control, 
-			final Tuple2<ProcessingStage, ProcessingStage> previous_next)
+			final Tuple2<ProcessingStage, ProcessingStage> previous_next, final Optional<List<String>> grouping_fields)
 	{			
 		logger.debug("MockEnrichmentBatchModule.onStageInitialize:"+ context+", DataBucketBean:"+ bucket+", previous_next:"+previous_next);
 
