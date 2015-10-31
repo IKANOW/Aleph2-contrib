@@ -24,6 +24,7 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.io.WritableComparator;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -37,6 +38,13 @@ public class ObjectNodeWritableComparable implements WritableComparable<Object> 
 
 	private ObjectNode _object_node;
 
+	/** Returns the wrapped JSON object
+	 * @return
+	 */
+	public JsonNode get() {
+		return _object_node;
+	}
+	
 	/** User c'tor
 	 * @param object_node
 	 */

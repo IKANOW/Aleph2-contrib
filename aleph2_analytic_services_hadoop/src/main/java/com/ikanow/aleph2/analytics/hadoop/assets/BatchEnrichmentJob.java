@@ -29,7 +29,6 @@
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 ******************************************************************************/package com.ikanow.aleph2.analytics.hadoop.assets;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -104,21 +103,20 @@ public class BatchEnrichmentJob{
 		
 		protected Optional<EnrichmentControlMetadataBean> _grouping_element = Optional.empty();
 		
-		protected DataBucketBean _dataBucket = null;
-		protected BatchEnrichmentContext _enrichmentContext = null;
+		protected DataBucketBean _data_bucket = null;
+		protected BatchEnrichmentContext _enrichment_context = null;
 
-		protected int _batchSize = 100;
-		protected List<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> _ecMetadata = null;
+		protected int _batch_size = 100;
+		protected List<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> _ec_metadata = null;
 		
-		protected List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> _batch = new ArrayList<>();
-		
+		protected List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> _batch = new ArrayList<>();		
 		
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setDataBucket(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 		 */
 		@Override
 		public void setDataBucket(DataBucketBean dataBucketBean) {
-			this._dataBucket = dataBucketBean;			
+			this._data_bucket = dataBucketBean;			
 		}
 		
 		/* (non-Javadoc)
@@ -126,7 +124,7 @@ public class BatchEnrichmentJob{
 		 */
 		@Override
 		public void setEnrichmentContext(BatchEnrichmentContext enrichmentContext) {
-			this._enrichmentContext = enrichmentContext;
+			this._enrichment_context = enrichmentContext;
 		}
 		
 		/* (non-Javadoc)
@@ -134,9 +132,47 @@ public class BatchEnrichmentJob{
 		 */
 		@Override
 		public void setBatchSize(int bs) {
-			this._batchSize=bs;			
+			this._batch_size=bs;			
 		}
 
+		//////////////////////////////////////////////////////////////////////////////////////////////
+		
+		/** Performs generic set up operations
+		 * @param config
+		 * @throws IOException
+		 * @throws InterruptedException
+		 */
+		protected void setup(final Configuration config) throws IOException, InterruptedException {
+			logger.debug("BatchEnrichmentJob setup");
+			
+			try {
+				BatchEnrichmentJob.extractBeJobParameters(this, config);
+			} catch (Exception e) {
+				throw new IOException(e);
+			}			
+			_v1_logger.info("Setup BatchEnrichmentJob for " + this._enrichment_context.getBucket().map(b -> b.full_name()).orElse("unknown"));
+			
+			final Iterator<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> it = _ec_metadata.iterator();
+			ProcessingStage mutable_prev_stage = ProcessingStage.input;
+			while (it.hasNext()) {
+				final Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean> t3 = it.next();
+				
+				_v1_logger.info("Set up enrichment module " + t3._2().getClass().getSimpleName() + " name " + Optional.ofNullable(t3._3().name()).orElse("(no name)"));
+				
+				t3._1().onStageInitialize(t3._2(), _data_bucket, t3._3(), 
+						Tuples._2T(
+							mutable_prev_stage
+							, 
+							!it.hasNext()
+								? (_grouping_element.isPresent() ? ProcessingStage.grouping : ProcessingStage.output)
+								: ProcessingStage.batch
+						),
+						_grouping_element.map(cfg -> cfg.dependencies())
+						);	
+			}
+			
+		} // setup
+		
 		/** Checks if we should send a batch of objects to the next stage in the pipeline
 		 * @param flush
 		 */
@@ -144,8 +180,8 @@ public class BatchEnrichmentJob{
 			if (flush)
 				_v1_logger.info("Completing job");
 			
-			if((_batch.size()>= _batchSize) || flush){
-				final Iterator<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> it = _ecMetadata.iterator();
+			if((_batch.size()>= _batch_size) || flush){
+				final Iterator<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> it = _ec_metadata.iterator();
 				List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> mutable_start = _batch;
 				while (it.hasNext()) {
 					final Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean> t3 = it.next();				
@@ -163,6 +199,28 @@ public class BatchEnrichmentJob{
 				}				
 				_batch.clear();
 			}		
+		}
+		
+		/** cleanup delegate
+		 * @param context
+		 * @throws IOException
+		 * @throws InterruptedException
+		 */
+		protected void cleanup(
+				TaskInputOutputContext<?, ?, ObjectNodeWritableComparable, ObjectNodeWritableComparable> context)
+				throws IOException, InterruptedException {
+			checkBatch(true, context);
+			
+			//DEBUG
+			//System.out.println("Flushing output....." + new java.util.Date());
+			
+			_ec_metadata.stream().forEach(ecm -> ecm._1().onStageComplete(true));
+			if (null != _enrichment_context) {
+				_enrichment_context.flushBatchOutput(Optional.empty()).join();
+			}
+						
+			//DEBUG
+			//System.out.println("Completed Flushing output....." + new java.util.Date());			
 		}
 		
 		/** Completes the final stage of a mapper/reducer/combiner
@@ -183,8 +241,8 @@ public class BatchEnrichmentJob{
 						.findFirst()
 						;			
 			
-			final Map<String, SharedLibraryBean> library_beans = _enrichmentContext.getAnalyticsContext().getLibraryConfigs();
-			this._ecMetadata = streamGenerator.apply(ecMetadata.stream().filter(cfg -> Optional.ofNullable(cfg.enabled()).orElse(true)))									
+			final Map<String, SharedLibraryBean> library_beans = _enrichment_context.getAnalyticsContext().getLibraryConfigs();
+			this._ec_metadata = streamGenerator.apply(ecMetadata.stream().filter(cfg -> Optional.ofNullable(cfg.enabled()).orElse(true)))									
 									.<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>>flatMap(ecm -> {
 										final Optional<String> entryPoint = BucketUtils.getBatchEntryPoint(library_beans, ecm);
 										
@@ -195,12 +253,12 @@ public class BatchEnrichmentJob{
 												.map(mod -> {			
 													_v1_logger.info("Completed initialization of stage " + Optional.ofNullable(ecm.name()).orElse("(no name)"));
 													
-													final BatchEnrichmentContext cloned_context = new BatchEnrichmentContext(_enrichmentContext, _batchSize);
+													final BatchEnrichmentContext cloned_context = new BatchEnrichmentContext(_enrichment_context, _batch_size);
 													Optional.ofNullable(library_beans.get(ecm.module_name_or_id())).ifPresent(lib -> cloned_context.setModule(lib));													
 													return Tuples._3T(mod, cloned_context, ecm);
 												});
 									})
-									.collect(Collectors.toList());
+									.collect(Collectors.toList());			
 		}
 	
 	}
@@ -242,34 +300,7 @@ public class BatchEnrichmentJob{
 		 * @throws InterruptedException
 		 */
 		protected void setup(Mapper<String, Tuple2<Long, IBatchRecord>, ObjectNodeWritableComparable, ObjectNodeWritableComparable>.Context context) throws IOException, InterruptedException {
-			logger.debug("BatchEnrichmentJob setup");
-			
-			try {
-				BatchEnrichmentJob.extractBeJobParameters(this, context.getConfiguration());
-			} catch (Exception e) {
-				throw new IOException(e);
-			}			
-			_v1_logger.info("Setup BatchEnrichmentJob for " + this._enrichmentContext.getBucket().map(b -> b.full_name()).orElse("unknown"));
-			
-			final Iterator<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> it = _ecMetadata.iterator();
-			ProcessingStage mutable_prev_stage = ProcessingStage.input;
-			while (it.hasNext()) {
-				final Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean> t3 = it.next();
-				
-				_v1_logger.info("Set up enrichment module " + t3._2().getClass().getSimpleName() + " name " + Optional.ofNullable(t3._3().name()).orElse("(no name)"));
-				
-				t3._1().onStageInitialize(t3._2(), _dataBucket, t3._3(), 
-						Tuples._2T(
-							mutable_prev_stage
-							, 
-							!it.hasNext()
-								? (_grouping_element.isPresent() ? ProcessingStage.grouping : ProcessingStage.output)
-								: ProcessingStage.batch
-						),
-						_grouping_element.map(cfg -> cfg.dependencies())
-						);	
-			}
-			
+			this.setup(context.getConfiguration());
 		} // setup
 		
 		
@@ -296,29 +327,6 @@ public class BatchEnrichmentJob{
 			_batch.add(Tuples._2T(value, Optional.empty()));
 			checkBatch(false, context);
 		} // map
-
-		/** cleanup delegate
-		 * @param context
-		 * @throws IOException
-		 * @throws InterruptedException
-		 */
-		protected void cleanup(
-				Mapper<String, Tuple2<Long, IBatchRecord>, ObjectNodeWritableComparable, ObjectNodeWritableComparable>.Context context)
-				throws IOException, InterruptedException {
-			checkBatch(true, context);
-			
-			//DEBUG
-			//System.out.println("Flushing output....." + new java.util.Date());
-			
-			_ecMetadata.stream().forEach(ecm -> ecm._1().onStageComplete(true));
-			if (null != _enrichmentContext) {
-				_enrichmentContext.flushBatchOutput(Optional.empty()).join();
-			}
-						
-			//DEBUG
-			//System.out.println("Completed Flushing output....." + new java.util.Date());			
-		}
-
 
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.analytics.hadoop.assets.BatchEnrichmentJob.BatchEnrichmentBase#completeBatchFinalStage(java.util.List)
@@ -349,9 +357,9 @@ public class BatchEnrichmentJob{
 				return Unit.unit();
 			})
 			.orElseGet(() -> {
-				final IAnalyticsContext analytics_context = _enrichmentContext.getAnalyticsContext();
+				final IAnalyticsContext analytics_context = _enrichment_context.getAnalyticsContext();
 				output_objects.forEach(record ->
-					analytics_context.emitObject(Optional.empty(), _enrichmentContext.getJob(), Either.left(record._1()._2().getJson()), Optional.empty()));				
+					analytics_context.emitObject(Optional.empty(), _enrichment_context.getJob(), Either.left(record._1()._2().getJson()), Optional.empty()));				
 				
 				return Unit.unit();
 			});			
@@ -418,6 +426,9 @@ public class BatchEnrichmentJob{
 		public BatchEnrichmentBaseReducer(final boolean is_combiner) {
 			this.is_combiner = is_combiner;
 		}
+		protected boolean _single_element;
+		protected Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean> _first_element;
+		protected IAnalyticsContext _analytics_context;
 		
 		/** Setup delegate
 		 * @param context
@@ -427,36 +438,50 @@ public class BatchEnrichmentJob{
 		protected void setup(
 				Reducer<ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable>.Context context)
 				throws IOException, InterruptedException {
-			// TODO Auto-generated method stub
+			this.setup(context.getConfiguration());
+			
+			_single_element = (1 == _ec_metadata.size());	
+			_first_element = _ec_metadata.get(0); //(exists by construction)
+			
+			_analytics_context = _enrichment_context.getAnalyticsContext();			
 		}
 		
 		/** Reduce delegate
-		 * @param arg0
-		 * @param arg1
-		 * @param arg2
-		 * @throws IOException
-		 * @throws InterruptedException
-		 */
-		protected void reduce(
-				String arg0,
-				Iterable<Tuple3<Long, JsonNode, Optional<ByteArrayOutputStream>>> arg1,
-				Reducer<ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable>.Context arg2)
-				throws IOException, InterruptedException {
-			// TODO Auto-generated method stub
-		}
-
-		/** Cleanup delegate
+		 * @param key
+		 * @param values
 		 * @param context
 		 * @throws IOException
 		 * @throws InterruptedException
 		 */
-		protected void cleanup(
-				Reducer<String, Tuple3<Long, JsonNode, Optional<ByteArrayOutputStream>>, String, Tuple3<Long, JsonNode, Optional<ByteArrayOutputStream>>>.Context context)
-				throws IOException, InterruptedException {
-			// TODO Auto-generated method stub
+		protected void reduce(
+				ObjectNodeWritableComparable key,
+				Iterable<ObjectNodeWritableComparable> values,
+				Reducer<ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable>.Context context)
+				throws IOException, InterruptedException
+		{
+			// OK first up, do the reduce bit, no batching needed for this bit
+			
+			_first_element._1().cloneForNewGrouping().onObjectBatch(
+					Optionals.streamOf(values, false)
+						.map(x -> Tuples._2T(0L, new BeFileInputReader.BatchRecord(x.get(), null))),
+					Optional.empty(), Optional.of(key.get()));
+			
+			if (_single_element) { // yay no need to batch
+				_enrichment_context.getOutputRecords().stream().forEach(Lambdas.wrap_consumer_i(record -> {
+					if (is_combiner) {
+						context.write(key, new ObjectNodeWritableComparable((ObjectNode) record._1()._2().getJson()));
+					}
+					else {
+						_analytics_context.emitObject(Optional.empty(), _enrichment_context.getJob(), Either.left(record._1()._2().getJson()), Optional.empty());										
+					}
+				}));
+			}		
+			else { //(else we're going to do it all in the batching bit)
+				_batch.addAll(_enrichment_context.getOutputRecords());
+				checkBatch(false, context);
+			}
 		}
 
-		
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setEcMetadata(com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean)
 		 */
@@ -470,8 +495,34 @@ public class BatchEnrichmentJob{
 
 		@Override
 		public void completeBatchFinalStage(
-				List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> output_objects, final TaskInputOutputContext<?,?,ObjectNodeWritableComparable,ObjectNodeWritableComparable> hadoop_context) {
-			// TODO Auto-generated method stub			
+				List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> output_objects, final TaskInputOutputContext<?,?,ObjectNodeWritableComparable,ObjectNodeWritableComparable> hadoop_context)
+		{
+			output_objects.forEach(record ->
+				_analytics_context.emitObject(Optional.empty(), _enrichment_context.getJob(), Either.left(record._1()._2().getJson()), Optional.empty()));				
+		}
+
+		/** cleanup delegate - differs from base because of the arg/order of onStageComplete
+		 * @param context
+		 * @throws IOException
+		 * @throws InterruptedException
+		 */
+		protected void cleanup(
+				TaskInputOutputContext<?, ?, ObjectNodeWritableComparable, ObjectNodeWritableComparable> context)
+				throws IOException, InterruptedException {
+			checkBatch(true, context);
+			
+			//DEBUG
+			//System.out.println("Flushing output....." + new java.util.Date());
+			
+			_ec_metadata.stream().skip(1).forEach(ecm -> ecm._1().onStageComplete(false));
+			// do this one first
+			_first_element._1().onStageComplete(true);
+			if (null != _enrichment_context) {
+				_enrichment_context.flushBatchOutput(Optional.empty()).join();
+			}
+						
+			//DEBUG
+			//System.out.println("Completed Flushing output....." + new java.util.Date());			
 		}
 		
 	}
@@ -483,30 +534,6 @@ public class BatchEnrichmentJob{
 		protected BatchEnrichmentBaseReducer _delegate;
 		
 		/* (non-Javadoc)
-		 * @see org.apache.hadoop.mapreduce.Reducer#cleanup(org.apache.hadoop.mapreduce.Reducer.Context)
-		 */
-		@Override
-		protected void cleanup(
-				Reducer<ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable>.Context context)
-				throws IOException, InterruptedException {
-			// TODO Auto-generated method stub
-			super.cleanup(context);
-		}
-
-		/* (non-Javadoc)
-		 * @see org.apache.hadoop.mapreduce.Reducer#reduce(java.lang.Object, java.lang.Iterable, org.apache.hadoop.mapreduce.Reducer.Context)
-		 */
-		@Override
-		protected void reduce(
-				ObjectNodeWritableComparable arg0,
-				Iterable<ObjectNodeWritableComparable> arg1,
-				Reducer<ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable>.Context arg2)
-				throws IOException, InterruptedException {
-			// TODO Auto-generated method stub
-			super.reduce(arg0, arg1, arg2);
-		}
-
-		/* (non-Javadoc)
 		 * @see org.apache.hadoop.mapreduce.Reducer#setup(org.apache.hadoop.mapreduce.Reducer.Context)
 		 */
 		@Override
@@ -515,6 +542,30 @@ public class BatchEnrichmentJob{
 				throws IOException, InterruptedException {			
 			_delegate = new BatchEnrichmentBaseReducer(false);
 			_delegate.setup(context);
+		}
+
+		/* (non-Javadoc)
+		 * @see org.apache.hadoop.mapreduce.Reducer#reduce(java.lang.Object, java.lang.Iterable, org.apache.hadoop.mapreduce.Reducer.Context)
+		 */
+		@Override
+		protected void reduce(
+				ObjectNodeWritableComparable key,
+				Iterable<ObjectNodeWritableComparable> values,
+				Reducer<ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable>.Context context)
+				throws IOException, InterruptedException
+		{
+			_delegate.reduce(key, values, context);
+		}
+
+		/* (non-Javadoc)
+		 * @see org.apache.hadoop.mapreduce.Reducer#cleanup(org.apache.hadoop.mapreduce.Reducer.Context)
+		 */
+		@Override
+		protected void cleanup(
+				Reducer<ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable>.Context context)
+				throws IOException, InterruptedException
+		{
+			_delegate.cleanup(context);
 		}
 
 	} // reducer
