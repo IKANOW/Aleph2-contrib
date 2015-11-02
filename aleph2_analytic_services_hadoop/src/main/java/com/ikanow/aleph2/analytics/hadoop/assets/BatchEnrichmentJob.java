@@ -62,12 +62,12 @@ import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ContextUtils;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
-
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.Arrays;
@@ -85,17 +85,35 @@ public class BatchEnrichmentJob{
 	public static String BE_DEBUG_MAX_SIZE = "aleph2.batch.debugMaxSize";
 
 	private static final Logger logger = LogManager.getLogger(BatchEnrichmentJob.class);
-	private static final org.apache.log4j.Logger _v1_logger = org.apache.log4j.LogManager.getLogger(BatchEnrichmentJob.class);
 	
 	public BatchEnrichmentJob(){
-		logger.debug("BatchEnrichmentJob constructor");		
+		logger.debug("BatchEnrichmentJob constructor");
+	}
+	
+	/** Temp class because i'm running into v1 vs v2 log4j classpath issues that I don't have time to resolve but I'd quite like for
+	 *  logging to work
+	 * @author Alex
+	 */
+	protected static class Loggable {
+		protected Optional<org.apache.log4j.Logger> _v1_logger = Optional.empty(); // (don't make final in case Loggable c'tor isn't called)
+		public Loggable() {
+			_v1_logger = Lambdas.get(() -> {
+				try {
+					return Optional.<org.apache.log4j.Logger>of(org.apache.log4j.LogManager.getLogger(BatchEnrichmentJob.class));
+				}
+				catch (Throwable t) {
+					logger.error(ErrorUtils.getLongForm("Error creating v1 logger: {0}", t));
+					return Optional.<org.apache.log4j.Logger>empty();
+				}
+			});			
+		}
 	}
 	
 	/** Common functions between mapper and reducer
 	 * @author Alex
 	 *
 	 */
-	protected static abstract class BatchEnrichmentBase implements IBeJobConfigurable {
+	protected static abstract class BatchEnrichmentBase extends Loggable implements IBeJobConfigurable  {
 
 		//////////////////////////////////////////////////////////////////////////////////////////////////
 		
@@ -150,14 +168,14 @@ public class BatchEnrichmentJob{
 			} catch (Exception e) {
 				throw new IOException(e);
 			}			
-			_v1_logger.info("Setup BatchEnrichmentJob for " + this._enrichment_context.getBucket().map(b -> b.full_name()).orElse("unknown"));
+			_v1_logger.ifPresent(logger -> logger.info("Setup BatchEnrichmentJob for " + this._enrichment_context.getBucket().map(b -> b.full_name()).orElse("unknown")));
 			
 			final Iterator<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> it = _ec_metadata.iterator();
 			ProcessingStage mutable_prev_stage = ProcessingStage.input;
 			while (it.hasNext()) {
 				final Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean> t3 = it.next();
 				
-				_v1_logger.info("Set up enrichment module " + t3._2().getClass().getSimpleName() + " name " + Optional.ofNullable(t3._3().name()).orElse("(no name)"));
+				_v1_logger.ifPresent(logger -> logger.info("Set up enrichment module " + t3._2().getClass().getSimpleName() + " name " + Optional.ofNullable(t3._3().name()).orElse("(no name)")));
 				
 				t3._1().onStageInitialize(t3._2(), _data_bucket, t3._3(), 
 						Tuples._2T(
@@ -178,7 +196,7 @@ public class BatchEnrichmentJob{
 		 */
 		protected void checkBatch(boolean flush, final TaskInputOutputContext<?,?,ObjectNodeWritableComparable,ObjectNodeWritableComparable> hadoop_context){
 			if (flush)
-				_v1_logger.info("Completing job");
+				_v1_logger.ifPresent(logger -> logger.info("Completing job"));
 			
 			if((_batch.size()>= _batch_size) || flush){
 				final Iterator<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> it = _ec_metadata.iterator();
@@ -190,8 +208,10 @@ public class BatchEnrichmentJob{
 					t3._1().onObjectBatch(mutable_start.stream().map(t2 -> t2._1()), Optional.of(mutable_start.size()), Optional.empty());
 					mutable_start = t3._2().getOutputRecords();
 	
-					if (flush)
-						_v1_logger.info("Stage " + Optional.ofNullable(t3._3().name()).orElse("(no name)") + " output records=" + mutable_start.size() + " final_stage=" + !it.hasNext());
+					if (flush) {
+						if (_v1_logger.isPresent()) // (have to do it this way because of mutable var) 
+							_v1_logger.get().info("Stage " + Optional.ofNullable(t3._3().name()).orElse("(no name)") + " output records=" + mutable_start.size() + " final_stage=" + !it.hasNext());
+					}
 					
 					if (!it.hasNext()) { // final stage output anything we have here
 						completeBatchFinalStage(mutable_start, hadoop_context);
@@ -246,12 +266,12 @@ public class BatchEnrichmentJob{
 									.<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>>flatMap(ecm -> {
 										final Optional<String> entryPoint = BucketUtils.getBatchEntryPoint(library_beans, ecm);
 										
-										_v1_logger.info("Trying to launch stage " + Optional.ofNullable(ecm.name()).orElse("(no name)") + " with entry point = " + entryPoint);
+										_v1_logger.ifPresent(logger -> logger.info("Trying to launch stage " + Optional.ofNullable(ecm.name()).orElse("(no name)") + " with entry point = " + entryPoint));
 										
 										return entryPoint.map(Stream::of).orElseGet(() -> Stream.of(BePassthroughModule.class.getName()))
 												.flatMap(Lambdas.flatWrap_i(ep -> (IEnrichmentBatchModule)Class.forName(ep).newInstance()))
 												.map(mod -> {			
-													_v1_logger.info("Completed initialization of stage " + Optional.ofNullable(ecm.name()).orElse("(no name)"));
+													_v1_logger.ifPresent(logger -> logger.info("Completed initialization of stage " + Optional.ofNullable(ecm.name()).orElse("(no name)")));
 													
 													final BatchEnrichmentContext cloned_context = new BatchEnrichmentContext(_enrichment_context, _batch_size);
 													Optional.ofNullable(library_beans.get(ecm.module_name_or_id())).ifPresent(lib -> cloned_context.setModule(lib));													
