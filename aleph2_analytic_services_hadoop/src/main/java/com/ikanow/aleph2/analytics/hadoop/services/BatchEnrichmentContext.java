@@ -68,7 +68,7 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	
 	//(list of records to emit)
 	protected final AtomicLong _mutable_1up = new AtomicLong(0);
-	protected ArrayList<Tuple2<Long, IBatchRecord>> _mutable_records = new ArrayList<>();
+	protected ArrayList<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> _mutable_records = new ArrayList<>();
 	
 	/** User constructor - in technology
 	 * @param analytics_context - the context to wrap
@@ -161,7 +161,7 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	/** Returns the last batch of outputs
 	 * @return
 	 */
-	public ArrayList<Tuple2<Long, IBatchRecord>> getOutputRecords() {
+	public ArrayList<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> getOutputRecords() {
 		return _mutable_records;
 	}
 	
@@ -259,11 +259,11 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	 */
 	@Override
 	public void emitMutableObject(long id, ObjectNode mutated_json,
-			Optional<AnnotationBean> annotation) {
+			Optional<AnnotationBean> annotation, final Optional<JsonNode> grouping_fields) {
 		if (annotation.isPresent()) {
 			throw new RuntimeException(ErrorUtils.get(HadoopErrorUtils.NOT_YET_IMPLEMENTED, "annotations"));			
 		}
-		_mutable_records.add(Tuples._2T(_mutable_1up.incrementAndGet(), new BeFileInputReader.BatchRecord(mutated_json, null)));
+		_mutable_records.add(Tuples._2T(Tuples._2T(_mutable_1up.incrementAndGet(), new BeFileInputReader.BatchRecord(mutated_json, null)), grouping_fields));
 	}
 
 	/* (non-Javadoc)
@@ -271,13 +271,13 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	 */
 	@Override
 	public void emitImmutableObject(long id, JsonNode original_json,
-			Optional<ObjectNode> mutations, Optional<AnnotationBean> annotations) {
+			Optional<ObjectNode> mutations, Optional<AnnotationBean> annotations, final Optional<JsonNode> grouping_fields) {
 		final JsonNode to_emit = 
 				mutations.map(o -> StreamSupport.<Map.Entry<String, JsonNode>>stream(Spliterators.spliteratorUnknownSize(o.fields(), Spliterator.ORDERED), false)
 									.reduce(original_json, (acc, kv) -> ((ObjectNode) acc).set(kv.getKey(), kv.getValue()), (val1, val2) -> val2))
 									.orElse(original_json);
 		
-		emitMutableObject(0L, (ObjectNode)to_emit, annotations);
+		emitMutableObject(0L, (ObjectNode)to_emit, annotations, grouping_fields);
 	}
 
 	/* (non-Javadoc)

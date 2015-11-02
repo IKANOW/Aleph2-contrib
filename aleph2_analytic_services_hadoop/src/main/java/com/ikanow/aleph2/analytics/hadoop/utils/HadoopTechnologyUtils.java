@@ -16,14 +16,17 @@
 package com.ikanow.aleph2.analytics.hadoop.utils;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import com.codepoetics.protonpack.StreamUtils;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean.MasterEnrichmentType;
@@ -33,6 +36,7 @@ import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.analytics.hadoop.data_model.HadoopTechnologyOverrideBean;
 
 import java.util.Collections;
 
@@ -118,6 +122,26 @@ public class HadoopTechnologyUtils {
 			if (null != job.config()) {
 				final List<EnrichmentControlMetadataBean> configs = convertAnalyticJob(job.name(), job.config());
 				
+				// Is there a reducer step?
+				final Set<String> reducer_steps =
+						configs.stream()
+						.filter(cfg -> !Optionals.ofNullable(cfg.grouping_fields()).isEmpty())
+						.map(cfg -> cfg.name())
+						.collect(Collectors.toSet())
+						;
+				
+				if (reducer_steps.size() > 1) {
+					errors.add(ErrorUtils.get(HadoopErrorUtils.CURRENTLY_ONLY_ONE_REDUCE_SUPPORTED, analytic_bucket.full_name(), job.name(), 
+							reducer_steps.stream().collect(Collectors.joining(";"))));
+				}
+				if (!reducer_steps.isEmpty()) {
+					// Reducer can't be at the start
+					if (reducer_steps.contains(configs.get(0).name())) { // non-empty by construction
+						errors.add(ErrorUtils.get(HadoopErrorUtils.CURRENTLY_ONLY_ONE_REDUCE_SUPPORTED, analytic_bucket.full_name(), job.name(), 
+								configs.get(0).name()));						
+					}
+				}
+						
 				configs.stream()
 					.filter(config -> Optional.ofNullable(config.enabled()).orElse(true))
 					.forEach(config -> {
@@ -134,15 +158,70 @@ public class HadoopTechnologyUtils {
 									.stream()
 									.forEach(dependency -> {
 										final String normalized_dep = Optional.ofNullable(dependency).orElse("");
-										if (!"$previous".equals(normalized_dep) && !"".equals(normalized_dep)) {
+										if (!"$previous".equals(normalized_dep) && !"".equals(normalized_dep) && !reducer_steps.contains(normalized_dep)) {
 											errors.add(ErrorUtils.get(HadoopErrorUtils.CURR_DEPENDENCY_RESTRICTIONS, normalized_dep, config.name(), analytic_bucket.full_name(), job.name()));																
 										}
 									});
 					})
 					;
+
+				// Check technology overrides:
+				configs.stream()
+					.filter(config -> Optional.ofNullable(config.enabled()).orElse(true))
+					.filter(config -> null != config.technology_override())
+					.forEach(config -> {
+						try {
+							@SuppressWarnings("unused")
+							final HadoopTechnologyOverrideBean tech_bean = 
+									BeanTemplateUtils.from(config.technology_override(), HadoopTechnologyOverrideBean.class).get(); // (non null by construction)
+						}
+						catch (Exception e) {
+							//DEBUG
+							//e.printStackTrace();
+							
+							errors.add(ErrorUtils.get(HadoopErrorUtils.TECHNOLOGY_OVERRIDE_INVALID, analytic_bucket.full_name(), job.name(), config.name(),
+									Arrays.asList("num_reducers", "use_combiner", "requested_batch_size").stream().collect(Collectors.joining(";")), "(unknown)"));								
+						}
+						//(will error if invalid, else do nothing
+					});				
+				
+				// Check the names are different:
+				// NOTE: can't test this because the names are taken from the keys which have to be unique by construction
+				// when converting from batch_enrichment_config you'll get an exception earlier on if that isn't the case
+				final List<String> dup_job_names =
+						configs.stream()
+						.collect(Collectors.groupingBy(cfg -> cfg.name()))
+						.entrySet()
+						.stream()
+						.filter(kv -> kv.getValue().size() > 1)
+						.map(kv -> kv.getKey())
+						.collect(Collectors.toList())
+						;
+				if (!dup_job_names.isEmpty()) {
+					errors.add(ErrorUtils.get(HadoopErrorUtils.ERROR_IN_ANALYTIC_JOB_CONFIGURATION, 
+							dup_job_names.stream().collect(Collectors.joining(";")), 
+							analytic_bucket.full_name(), job.name()));										
+				}
+				
+				// If there is a reducer, check any dependencies of that stage are after it 
+				final List<String> early_reducer_deps = StreamUtils.takeUntil(configs.stream(), cfg -> reducer_steps.contains(cfg.name()))
+							.filter(cfg -> null != cfg.dependencies())
+							.filter(cfg -> Optionals.ofNullable(cfg.dependencies()).stream().anyMatch(d -> reducer_steps.contains(d)))
+							.map(cfg -> cfg.name())
+							.collect(Collectors.toList())
+							;
+				if (!early_reducer_deps.isEmpty()) {
+					errors.add(ErrorUtils.get(HadoopErrorUtils.CURR_DEPENDENCY_RESTRICTIONS, reducer_steps.iterator().next(),//(exists by construction) 
+							early_reducer_deps.stream().collect(Collectors.joining(";")), 
+							analytic_bucket.full_name(), job.name()));					
+				}
+				
 			}
 		}
 		catch (Exception e) {
+			//DEBUG
+			//e.printStackTrace();
+			
 			errors.add(ErrorUtils.get(HadoopErrorUtils.ERROR_IN_ANALYTIC_JOB_CONFIGURATION, "(unknown)", analytic_bucket.full_name(), job.name()));								
 		}
 		

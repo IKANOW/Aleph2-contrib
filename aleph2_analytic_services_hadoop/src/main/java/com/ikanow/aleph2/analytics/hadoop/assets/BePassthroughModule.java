@@ -17,6 +17,7 @@ package com.ikanow.aleph2.analytics.hadoop.assets;
 
 import java.util.Optional;
 import java.util.stream.Stream;
+import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -40,18 +41,19 @@ public class BePassthroughModule implements IEnrichmentBatchModule {
 
 	protected IEnrichmentModuleContext _context;
 	protected DataBucketBean _bucket;
-	protected boolean _finalStage;
+	protected Tuple2<ProcessingStage, ProcessingStage> _previous_next;
 	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule#onStageInitialize(com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, boolean)
 	 */
 	@Override
-	public void onStageInitialize(IEnrichmentModuleContext context, DataBucketBean bucket, EnrichmentControlMetadataBean control, boolean final_stage) {
-		logger.debug("BatchEnrichmentModule.onStageInitialize:"+ context+", DataBucketBean:"+ bucket+", final_stage"+final_stage);
+	public void onStageInitialize(IEnrichmentModuleContext context, DataBucketBean bucket, EnrichmentControlMetadataBean control, 
+			final Tuple2<ProcessingStage, ProcessingStage> previous_next, final Optional<List<String>> next_grouping_fields)
+	{			
+		logger.debug("BatchEnrichmentModule.onStageInitialize:"+ context+", DataBucketBean:"+ bucket+", prev_next:"+previous_next);
 		this._context = context;
 		this._bucket = bucket;
-		this._finalStage = final_stage;
-
+		this._previous_next = previous_next;
 	}
 
 	/* (non-Javadoc)
@@ -65,7 +67,7 @@ public class BePassthroughModule implements IEnrichmentBatchModule {
 			// not sure what to do with streaming (probably binary) data - probably will have to just ignore it in default mode?
 			// (the alternative is to build Tika directly in? or maybe dump it directly in .. not sure how Jackson manages raw data?)
 			Optional<ObjectNode> streamBytes = Optional.empty();						
-			_context.emitImmutableObject(t2._1(), t2._2().getJson(), streamBytes, Optional.empty());
+			_context.emitImmutableObject(t2._1(), t2._2().getJson(), streamBytes, Optional.empty(), grouping_key);
 
 		}); // for 
 	}

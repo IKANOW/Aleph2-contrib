@@ -643,25 +643,25 @@ public class TestStreamingEnrichmentContextService {
 		
 		//(try some errors)
 		try {
-			test_external1a.emitMutableObject(0, test_external1a.convertToMutable(jn1), Optional.of(BeanTemplateUtils.build(AnnotationBean.class).done().get()));
+			test_external1a.emitMutableObject(0, test_external1a.convertToMutable(jn1), Optional.of(BeanTemplateUtils.build(AnnotationBean.class).done().get()), Optional.empty());
 			fail("Should have thrown exception");
 		}
 		catch (Exception e) {
 			assertEquals(ErrorUtils.NOT_YET_IMPLEMENTED, e.getMessage());
 		}
 		try {
-			test_external1a.emitImmutableObject(0, jn2, Optional.empty(), Optional.of(BeanTemplateUtils.build(AnnotationBean.class).done().get()));
+			test_external1a.emitImmutableObject(0, jn2, Optional.empty(), Optional.of(BeanTemplateUtils.build(AnnotationBean.class).done().get()), Optional.empty());
 			fail("Should have thrown exception");
 		}
 		catch (Exception e) {
 			assertEquals(ErrorUtils.NOT_YET_IMPLEMENTED, e.getMessage());
 		}
 		
-		test_external1a.emitMutableObject(0, test_external1a.convertToMutable(jn1), Optional.empty());
-		test_external1a.emitImmutableObject(0, jn2, Optional.empty(), Optional.empty());		
+		test_external1a.emitMutableObject(0, test_external1a.convertToMutable(jn1), Optional.empty(), Optional.empty());
+		test_external1a.emitImmutableObject(0, jn2, Optional.empty(), Optional.empty(), Optional.empty());		
 		test_external1a.emitImmutableObject(0, jn2, 
 				Optional.of(_mapper.createObjectNode().put("extra", "test3_extra").put("test", "test3")), 
-				Optional.empty());
+				Optional.empty(), Optional.empty());
 		
 		for (int i = 0; i < 60; ++i) {
 			Thread.sleep(1000L);
