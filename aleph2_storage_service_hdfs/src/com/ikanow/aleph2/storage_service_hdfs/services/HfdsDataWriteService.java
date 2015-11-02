@@ -548,7 +548,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 						_dfs.mkdir(path.getParent(), DEFAULT_DIR_PERMS, true); //(note perm is & with umask)
 					} catch (Exception e) {} // (fails if already exists?)
 					_dfs.rename(_state.curr_path, path);				
-					try { _dfs.setPermission(_state.curr_path, DEFAULT_DIR_PERMS); } catch (Exception e) {} // might not be supported in FS
+					try { _dfs.setPermission(path, DEFAULT_DIR_PERMS); } catch (Exception e) {} // might not be supported in FS
 					try { _dfs.rename(getCrc(_state.curr_path), getCrc(path)); } catch (Exception e) {} // (don't care what the error is)				
 				}
 			}
