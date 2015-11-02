@@ -544,12 +544,29 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 					
 					final Date batch_time = Optional.ofNullable(_state.timestamp_of_first_record_in_batch).orElseGet(Date::new);
 					final Path path =  new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, _buffer_name) + "/" + getSuffix(batch_time, _bucket, _stage) + "/" + _state.curr_path.getName());
-					try { 
+					try {
+						// create directory
 						_dfs.mkdir(path.getParent(), DEFAULT_DIR_PERMS, true); //(note perm is & with umask)
+						
+						// update permissions on directory ignoring umask
+						try { _dfs.setPermission(path.getParent(), DEFAULT_DIR_PERMS); } catch (Exception e) {
+							//DEBUG
+							_logger.error(ErrorUtils.getLongForm("Failed to update perms on {1}: {0}", e, path.getParent().toString()));
+						} // might not be supported in FS
+						
 					} catch (Exception e) {} // (fails if already exists?)
+					
+					// Update file permissions:
+					final Path crc_path = getCrc(_state.curr_path);
+
+					try { _dfs.setPermission(_state.curr_path, DEFAULT_DIR_PERMS); } catch (Exception e) {} // might not be supported in FS
+					try { _dfs.setPermission(crc_path, DEFAULT_DIR_PERMS); } catch (Exception e) {} // might not be supported in FS					
+					
+					// move file
 					_dfs.rename(_state.curr_path, path);				
-					try { _dfs.setPermission(path, DEFAULT_DIR_PERMS); } catch (Exception e) {} // might not be supported in FS
-					try { _dfs.rename(getCrc(_state.curr_path), getCrc(path)); } catch (Exception e) {} // (don't care what the error is)				
+					// move crc file
+					try { _dfs.rename(crc_path, getCrc(path)); } catch (Exception e) {} // (don't care what the error is)
+					
 				}
 			}
 			finally {
