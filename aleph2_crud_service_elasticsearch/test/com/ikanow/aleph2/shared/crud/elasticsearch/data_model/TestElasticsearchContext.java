@@ -135,6 +135,25 @@ public class TestElasticsearchContext {
 	}
 	
 	@Test
+	public void test_mixedContext() {
+		
+		final Calendar c1 = GregorianCalendar.getInstance();
+		final Calendar c2 = GregorianCalendar.getInstance();
+		final Calendar cnow = GregorianCalendar.getInstance();
+		
+		final ElasticsearchContext.IndexContext.ReadOnlyIndexContext.MixedRoIndexContext index_context_1 =
+				new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.MixedRoIndexContext(
+						Arrays.asList("test1_{yyyy}", "test_2_{yyyy.MM}", "test3"),
+						Arrays.asList("fixed_{yyyy}", "fixed")
+						);
+		
+		c1.set(2004, 11, 28); c2.set(2005,  0, 2);
+		assertEquals(Arrays.asList("test1_2004*", "test1_2005*", "test_2_2004.12*", "test_2_2005.01*", "test3*", "fixed_{yyyy}*", "fixed*"), 
+				index_context_1.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
+	}
+		
+	
+	@Test
 	public void test_contextContainers() {
 		
 		final MockElasticsearchCrudServiceFactory factory = new MockElasticsearchCrudServiceFactory();
@@ -144,7 +163,7 @@ public class TestElasticsearchContext {
 			final ElasticsearchContext.IndexContext.ReadOnlyIndexContext.FixedRoIndexContext test_ro_index = 
 					new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.FixedRoIndexContext(Arrays.asList("test_ro_1", "test_ro_2"));
 			
-			assertEquals(Arrays.asList("test_ro_1", "test_ro_2"), test_ro_index.getReadableIndexList(Optional.empty()));
+			assertEquals(Arrays.asList("test_ro_1*", "test_ro_2*"), test_ro_index.getReadableIndexList(Optional.empty()));
 			
 			final ElasticsearchContext.TypeContext.ReadOnlyTypeContext.FixedRoTypeContext test_ro_type = 
 					new ElasticsearchContext.TypeContext.ReadOnlyTypeContext.FixedRoTypeContext(Arrays.asList("test_context_1", "test_context_2"));

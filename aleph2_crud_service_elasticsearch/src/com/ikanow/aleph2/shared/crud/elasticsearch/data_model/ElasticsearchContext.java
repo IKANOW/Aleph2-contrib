@@ -28,6 +28,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.client.Client;
@@ -176,7 +177,7 @@ public abstract class ElasticsearchContext {
 				
 				@Override
 				public List<String> getReadableIndexList(final Optional<Tuple2<Long, Long>> date_range) {
-					return Collections.unmodifiableList(_indexes);
+					return _indexes.stream().map(s -> s + "*").collect(Collectors.toList()); //(need the "*" to support segments)
 				} 
 			}
 			/** A simple list of multiple indexes to query over
@@ -200,6 +201,23 @@ public abstract class ElasticsearchContext {
 									.collect(Collectors.toList());
 					}
 				} 
+			}
+			/** Handles a combination of fixed and timed read only indexes
+			 * @author Alex
+			 */
+			public static class MixedRoIndexContext extends ReadOnlyIndexContext {
+				public MixedRoIndexContext(final List<String> timed_indexes, final List<String> fixed_indexes) {
+					_timed_delegate = new TimedRoIndexContext(timed_indexes);
+					_fixed_delegate = new FixedRoIndexContext(fixed_indexes);
+				}				
+				final TimedRoIndexContext _timed_delegate;				
+				final FixedRoIndexContext _fixed_delegate;				
+				@Override
+				public List<String> getReadableIndexList(
+						Optional<Tuple2<Long, Long>> date_range) {
+					return Stream.concat(_timed_delegate.getReadableIndexList(date_range).stream(), _fixed_delegate.getReadableIndexList(date_range).stream())
+							.collect(Collectors.toList());
+				}				
 			}
 		}
 		/** ADT encapsulating information about a read-write single index - see enclosing class for details
