@@ -40,6 +40,7 @@ import org.elasticsearch.common.collect.ImmutableMap;
 import org.elasticsearch.common.collect.ImmutableSet;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -48,6 +49,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
@@ -63,6 +65,7 @@ import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.ManagementDbUtils;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
@@ -73,8 +76,11 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConte
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudServiceFactory;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.MockElasticsearchCrudServiceFactory;
+import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.CreationPolicy;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
+
+import fj.data.Either;
 
 public class TestElasticsearchIndexService {
 
@@ -85,6 +91,8 @@ public class TestElasticsearchIndexService {
 	protected IElasticsearchCrudServiceFactory _crud_factory;
 	protected ElasticsearchIndexServiceConfigBean _config_bean;
 	protected MockSecurityService _security_service;
+	
+	protected ICrudService<DataBucketBean> _dummy_bucket_crud;
 	
 	// Set this string to connect vs a real DB
 	private final String _connection_string = null;
@@ -106,8 +114,26 @@ public class TestElasticsearchIndexService {
 		
 		_security_service = new MockSecurityService();
 		
+		_dummy_bucket_crud = _crud_factory.getElasticsearchCrudService(
+				DataBucketBean.class, 
+				new ElasticsearchContext.ReadWriteContext(_crud_factory.getClient(),
+						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("bucket_crud", Optional.empty(), Either.left(true)),
+						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext("bucket")
+						), 
+				Optional.empty(), 
+				CreationPolicy.OPTIMIZED, 
+				Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+		
+		_dummy_bucket_crud.deleteDatastore().join();
+		
+		IManagementDbService dummy_management_db = Mockito.mock(IManagementDbService.class);
+		Mockito.when(dummy_management_db.getDataBucketStore()).thenReturn(ManagementDbUtils.wrap(_dummy_bucket_crud));
+		Mockito.when(dummy_management_db.readOnlyVersion()).thenReturn(dummy_management_db);
+		
 		_service_context = new MockServiceContext();
 		_service_context.addService(ISecurityService.class, Optional.empty(), _security_service);
+		_service_context.addService(IManagementDbService.class, Optional.empty(), dummy_management_db);
+		_service_context.addService(IManagementDbService.class, IManagementDbService.CORE_MANAGEMENT_DB, dummy_management_db);
 		
 		_index_service = new MockElasticsearchIndexService(_service_context, _crud_factory, _config_bean);
 	}
@@ -1097,6 +1123,175 @@ public class TestElasticsearchIndexService {
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));				
 	}
 
+	@org.junit.Ignore
+	@Test
+	public void test_readOnlyCrud() throws InterruptedException {
+		
+		// Create a few buckets 
+		final DataBucketBean single_fixed = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "single_fixed")
+				.with("full_name", "/test/single/fixed")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();
+		
+		final DataBucketBean single_timed = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "single_timed")
+				.with("full_name", "/test/single/timed")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+							.with(DataSchemaBean::temporal_schema,
+								BeanTemplateUtils.build(TemporalSchemaBean.class)
+									.with(TemporalSchemaBean::grouping_time_period, "daily")
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();
+
+		//(just to check we do ignore some buckets!)
+		final DataBucketBean single_unused = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "single_unused")
+				.with("full_name", "/test/single/unused")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+							.with(DataSchemaBean::temporal_schema,
+								BeanTemplateUtils.build(TemporalSchemaBean.class)
+									.with(TemporalSchemaBean::grouping_time_period, "daily")
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();
+		
+		// Create a few buckets 
+		final DataBucketBean multi_parent = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "multi_parent")
+				.with("full_name", "/test/multi/parent")
+				.with("multi_bucket_children", new HashSet<String>(Arrays.asList("/test/multi/**", "/test/other_multi/child/fixed", "/test/multi/child/not_auth")))
+				.done().get();	
+		//(multi-bucket children includes itself but will be ignored because no nested multi-bickets 
+		
+		final DataBucketBean multi_fixed = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "multi_fixed")
+				.with("full_name", "/test/multi/child/fixed")
+				.with("owner_id", "test")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();
+
+		final DataBucketBean other_multi_fixed = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "other_multi_fixed")
+				.with("full_name", "/test/other_multi/child/fixed")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();
+		
+		final DataBucketBean multi_timed = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "multi_timed")
+				.with("full_name", "/test/multi/child/timed")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+							.with(DataSchemaBean::temporal_schema,
+								BeanTemplateUtils.build(TemporalSchemaBean.class)
+									.with(TemporalSchemaBean::grouping_time_period, "daily")
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();
+		
+		//(just to check we do ignore some buckets!)
+		final DataBucketBean other_multi_unused = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "other_multi_unused")
+				.with("full_name", "/test/other_multi/unused")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+							.with(DataSchemaBean::temporal_schema,
+								BeanTemplateUtils.build(TemporalSchemaBean.class)
+									.with(TemporalSchemaBean::grouping_time_period, "daily")
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();		
+		
+		// 1) Write some data into each real bucket:
+		
+		Arrays.asList(
+				single_fixed,
+				single_timed,
+				single_unused,
+				multi_fixed,
+				other_multi_fixed,
+				multi_timed,
+				other_multi_unused
+				)
+				.stream()
+				.forEach(b -> {
+					
+					// Create them in the dummy bucket store
+					_dummy_bucket_crud.storeObject(b).join();
+					
+					// Create some data
+					_index_service.getDataService().get().getWritableDataService(JsonNode.class, b, Optional.empty(), Optional.empty()).get()
+						.storeObject(_mapper.createObjectNode().put("name", b.full_name()).put("not_used", b.full_name().concat("/unused")) )
+						.join()
+						;
+				});
+		;
+		
+		Thread.sleep(2000L);
+		
+		// 2) Grab a readable CRUD service and do some operations
+
+		//TODO: fix this, currently is empty
+		
+		final ICrudService<JsonNode> read_crud =
+				_index_service.getDataService().get().getReadableCrudService(JsonNode.class, 
+						Arrays.asList(single_fixed, single_timed, multi_parent), 
+						Optional.empty()).get();
+		
+		assertEquals(5, read_crud.countObjects().join().intValue());
+		
+	}
+	
+	//TODO: test what happens if nothing matches 1) at all, 2) from a given multi bucket, 3) from the non multi-buckets
+	
 	///////////////////////////////////
 	
 	// UTILITIES
