@@ -1338,6 +1338,13 @@ public class TestElasticsearchIndexService {
 		
 		assertEquals(0, read_crud_nothing.countObjects().join().intValue());
 		
+		final ICrudService<JsonNode> read_crud_really_nothing =
+				_index_service.getDataService().get().getReadableCrudService(JsonNode.class, 
+						Arrays.asList(), 
+						Optional.empty()).get();
+		
+		assertEquals(0, read_crud_really_nothing.countObjects().join().intValue());		
+		
 		final ICrudService<JsonNode> read_crud_no_multi_no_fixed =
 				_index_service.getDataService().get().getReadableCrudService(JsonNode.class, 
 						Arrays.asList(single_timed, multi_missing_parent), 

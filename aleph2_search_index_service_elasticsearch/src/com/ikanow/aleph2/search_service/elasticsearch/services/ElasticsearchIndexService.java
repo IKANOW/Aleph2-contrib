@@ -406,7 +406,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 
 			// First get any buckets that we need to resolve
 			//final Set<String> wildcard_bucket_list = 
-			final Map<String, List<Tuple2<String, String>>> wildcard_bucket_list =
+			final Map<String, List<Tuple2<String, String>>> multi_bucket_list =
 					buckets.stream()
 						.flatMap(b -> Optional.ofNullable(b.multi_bucket_children())
 												.map(s -> s.stream()
@@ -421,22 +421,22 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			// Now get a final list of buckets
 			
 			final Collection<DataBucketBean> final_bucket_list = 
-					wildcard_bucket_list.isEmpty()
+					multi_bucket_list.isEmpty()
 					? buckets
 					: Stream.concat(buckets.stream(), Lambdas.get(() -> {
 						
-						final List<CompletableFuture<Stream<DataBucketBean>>> res = wildcard_bucket_list.entrySet().stream().parallel()
+						final List<CompletableFuture<Stream<DataBucketBean>>> res = multi_bucket_list.entrySet().stream().parallel()
 								.<CompletableFuture<Stream<DataBucketBean>>>map(kv -> {
 									
-									final List<String> wildcard_paths = kv.getValue().stream().map(s_o -> s_o._1()).collect(Collectors.toList());
+									final List<String> multi_paths = kv.getValue().stream().map(s_o -> s_o._1()).collect(Collectors.toList());
 									
 									//DEBUG
 									//System.out.println("PATHS = " + wildcard_paths.stream().collect(Collectors.joining(";")));
 									
 									final QueryComponent<DataBucketBean> query = 
-											BucketUtils.getApproxMultiBucketQuery(wildcard_paths);
+											BucketUtils.getApproxMultiBucketQuery(multi_paths);
 									
-									final Predicate<String> filter = BucketUtils.refineMultiBucketQuery(wildcard_paths);
+									final Predicate<String> filter = BucketUtils.refineMultiBucketQuery(multi_paths);
 									
 									final ICrudService<DataBucketBean> bucket_store = 
 											Optional.of(_service_context.getCoreManagementDbService().readOnlyVersion().getDataBucketStore())
