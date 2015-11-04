@@ -411,9 +411,9 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 						.flatMap(b -> Optional.ofNullable(b.multi_bucket_children())
 												.map(s -> s.stream()
 															.<Tuple2<String, String>>
-																map(ss -> Tuples._2T(ss, Optional.ofNullable(b.owner_id()).orElse("")))).orElse(Stream.empty())
+																map(ss -> Tuples._2T(ss, Optional.ofNullable(b.owner_id()).orElse(""))))
+												.orElse(Stream.empty())
 						)
-						.filter(s_o -> s_o._1().matches(".*[*?].*"))
 						.collect(Collectors.groupingBy((Tuple2<String, String> s_o) -> s_o._2()))
 						;
 			//(due to security architecture if we have any wild
@@ -430,6 +430,9 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 									
 									final List<String> wildcard_paths = kv.getValue().stream().map(s_o -> s_o._1()).collect(Collectors.toList());
 									
+									//DEBUG
+									//System.out.println("PATHS = " + wildcard_paths.stream().collect(Collectors.joining(";")));
+									
 									final QueryComponent<DataBucketBean> query = 
 											BucketUtils.getApproxMultiBucketQuery(wildcard_paths);
 									
@@ -440,6 +443,9 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 													.map(db -> kv.getKey().isEmpty() ? db : db.secured(_service_context, new AuthorizationBean(kv.getKey())))
 													.get()
 													;
+									
+									//DEBUG
+									//System.out.println("OWNER: " + kv.getKey() + " .. " + bucket_store.countObjects().join().intValue() + " query = \n" + query.toString());
 									
 									return bucket_store												
 												.getObjectsBySpec(query)
@@ -463,30 +469,31 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			
 			// Next up, split the (now non-multi) buckets into fixed and timed 
 			
-			final Map<Boolean, List<DataBucketBean>> timed_vs_fixed_indexes =
+			final Map<Boolean, List<Tuple2<String, Validation<String, ChronoUnit>>>> timed_vs_fixed_indexes =
 					final_bucket_list.stream()
 						.filter(b -> Optionals.ofNullable(b.multi_bucket_children()).isEmpty()) //(ignore nested multi-buckets)
-						.collect(Collectors.partitioningBy(bucket -> {
+						.map(bucket -> {
 							final Tuple3<ElasticsearchIndexServiceConfigBean, String, Optional<String>> schema_index_type = getSchemaConfigAndIndexAndType(bucket, _config);
 							final Validation<String, ChronoUnit> time_period = 
 									TimeUtils.getTimePeriod(Optional.ofNullable(schema_index_type._1().temporal_technology_override())
 												.map(t -> t.grouping_time_period()).orElse(""));
 
-							return time_period.isSuccess();
-						}))
+							return Tuples._2T(ElasticsearchIndexUtils.getReadableBaseIndexName(bucket), time_period);
+						})
+						.collect(Collectors.partitioningBy(t2 -> t2._2().isSuccess()))
 						;
-			
+						
 			final ElasticsearchContext.ReadOnlyContext context =
 					new ElasticsearchContext.ReadOnlyContext(
 							_crud_factory.getClient()
 							,
 							new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.MixedRoIndexContext(
-									Optionals.ofNullable(timed_vs_fixed_indexes.get(true)).stream().map(b -> b.full_name()).collect(Collectors.toList())
+									Optionals.ofNullable(timed_vs_fixed_indexes.get(true)).stream().map(t2 -> t2._1() + ElasticsearchContextUtils.getIndexSuffix(t2._2().success())).collect(Collectors.toList())
 									,
-									Optionals.ofNullable(timed_vs_fixed_indexes.get(false)).stream().map(b -> b.full_name()).collect(Collectors.toList())
+									Optionals.ofNullable(timed_vs_fixed_indexes.get(false)).stream().map(t2 -> t2._1()).collect(Collectors.toList())
 									),									
 							new ElasticsearchContext.TypeContext.ReadOnlyTypeContext.FixedRoTypeContext(Arrays.asList())
-							) //(^I think we can just wildcard over all _types when reading)
+							) //(^I think we can just wildcard over all _types when reading -confirmed via junit)
 							;
 			
 			

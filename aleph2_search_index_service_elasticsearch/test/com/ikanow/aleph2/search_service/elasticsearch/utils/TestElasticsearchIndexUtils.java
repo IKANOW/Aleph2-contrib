@@ -75,6 +75,9 @@ public class TestElasticsearchIndexUtils {
 			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1").done().get(), Optional.empty());
 			
 			assertEquals("test_1_1__514e7056b0d8", base_index);
+
+			final String r_base_index = ElasticsearchIndexUtils.getReadableBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1").done().get());
+			assertEquals("r__test_1_1__514e7056b0d8", r_base_index);
 			
 			final String base_index2 = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1/another__test").done().get(), Optional.empty());
 			
@@ -102,6 +105,9 @@ public class TestElasticsearchIndexUtils {
 			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(test_index_override, Optional.empty());
 			
 			assertEquals("test_index_override", base_index);
+			
+			final String r_base_index = ElasticsearchIndexUtils.getReadableBaseIndexName(test_index_override);
+			assertEquals("test_index_override", r_base_index);			
 		}
 		
 		// Type stuff

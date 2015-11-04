@@ -33,6 +33,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
 import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesRequest;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesResponse;
@@ -63,6 +64,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchInd
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.ManagementDbUtils;
@@ -113,7 +115,7 @@ public class TestElasticsearchIndexService {
 		_config_bean = ElasticsearchIndexConfigUtils.buildConfigBean(full_config);
 		
 		_security_service = new MockSecurityService();
-		
+						
 		_dummy_bucket_crud = _crud_factory.getElasticsearchCrudService(
 				DataBucketBean.class, 
 				new ElasticsearchContext.ReadWriteContext(_crud_factory.getClient(),
@@ -125,6 +127,11 @@ public class TestElasticsearchIndexService {
 				Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
 		
 		_dummy_bucket_crud.deleteDatastore().join();
+		// for dummy bucket crud set full_name to not indexed so tests will work (gah!)
+		CreateIndexRequestBuilder cirb = _crud_factory.getClient().admin().indices().prepareCreate("bucket_crud");
+		cirb.addMapping("bucket", 
+				"{\"properties\":{\"full_name\":{\"type\": \"string\", \"index\": \"not_analyzed\"}}}");
+		cirb.execute().actionGet();
 		
 		IManagementDbService dummy_management_db = Mockito.mock(IManagementDbService.class);
 		Mockito.when(dummy_management_db.getDataBucketStore()).thenReturn(ManagementDbUtils.wrap(_dummy_bucket_crud));
@@ -1123,7 +1130,6 @@ public class TestElasticsearchIndexService {
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));				
 	}
 
-	@org.junit.Ignore
 	@Test
 	public void test_readOnlyCrud() throws InterruptedException {
 		
@@ -1144,6 +1150,7 @@ public class TestElasticsearchIndexService {
 		final DataBucketBean single_timed = BeanTemplateUtils.build(DataBucketBean.class)
 				.with("_id", "single_timed")
 				.with("full_name", "/test/single/timed")
+				.with("multi_bucket_children", new HashSet<String>())
 				.with(DataBucketBean::data_schema,
 						BeanTemplateUtils.build(DataSchemaBean.class)
 							.with(DataSchemaBean::search_index_schema,
@@ -1184,7 +1191,22 @@ public class TestElasticsearchIndexService {
 				.with("full_name", "/test/multi/parent")
 				.with("multi_bucket_children", new HashSet<String>(Arrays.asList("/test/multi/**", "/test/other_multi/child/fixed", "/test/multi/child/not_auth")))
 				.done().get();	
-		//(multi-bucket children includes itself but will be ignored because no nested multi-bickets 
+		//(multi-bucket children includes itself but will be ignored because no nested multi-buckets 
+
+		final DataBucketBean multi_no_wildcards = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "multi_parent")
+				.with("full_name", "/test/multi/parent")
+				.with("multi_bucket_children", new HashSet<String>(Arrays.asList("/test/other_multi/child/fixed", "/test/multi/child/not_auth")))
+				.done().get();	
+		//(multi-bucket children includes itself but will be ignored because no nested multi-buckets 
+		
+		
+		final DataBucketBean multi_missing_parent = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "multi_parent")
+				.with("full_name", "/test/multi/missing/parent")
+				.with("multi_bucket_children", new HashSet<String>(Arrays.asList("/test/multi/missing/**", "/test/multi/child/not_auth")))
+				.done().get();	
+		
 		
 		final DataBucketBean multi_fixed = BeanTemplateUtils.build(DataBucketBean.class)
 				.with("_id", "multi_fixed")
@@ -1262,25 +1284,30 @@ public class TestElasticsearchIndexService {
 				other_multi_unused
 				)
 				.stream()
+				.parallel()
 				.forEach(b -> {
 					
 					// Create them in the dummy bucket store
 					_dummy_bucket_crud.storeObject(b).join();
 					
 					// Create some data
-					_index_service.getDataService().get().getWritableDataService(JsonNode.class, b, Optional.empty(), Optional.empty()).get()
-						.storeObject(_mapper.createObjectNode().put("name", b.full_name()).put("not_used", b.full_name().concat("/unused")) )
+					IDataWriteService<JsonNode> dws = _index_service.getDataService().get().getWritableDataService(JsonNode.class, b, Optional.empty(), Optional.empty()).get();
+					dws.deleteDatastore().join();
+										
+					dws.storeObject(_mapper.createObjectNode().put("name", b._id()).put("not_used", b.full_name().contains("/unused")) )
 						.join()
 						;
+
+					for (int ii = 0; ii < 10; ++ii) {
+						try { Thread.sleep(1000L); } catch (Exception e) {}
+						if (dws.countObjects().join().intValue() > 0) break;
+					}
 				});
 		;
 		
-		Thread.sleep(2000L);
 		
 		// 2) Grab a readable CRUD service and do some operations
 
-		//TODO: fix this, currently is empty
-		
 		final ICrudService<JsonNode> read_crud =
 				_index_service.getDataService().get().getReadableCrudService(JsonNode.class, 
 						Arrays.asList(single_fixed, single_timed, multi_parent), 
@@ -1288,9 +1315,43 @@ public class TestElasticsearchIndexService {
 		
 		assertEquals(5, read_crud.countObjects().join().intValue());
 		
-	}
+		assertEquals(1, read_crud.getObjectsBySpec(CrudUtils.allOf().when("name", "single_fixed")).join().count());
+		assertEquals(0, read_crud.countObjectsBySpec(CrudUtils.allOf().when("not_used", true)).join().intValue());
+		assertEquals(5, read_crud.countObjectsBySpec(CrudUtils.allOf().when("not_used", false)).join().intValue());
+		assertTrue(read_crud.getObjectBySpec(CrudUtils.allOf().when("name", "multi_timed")).join().isPresent());
 	
-	//TODO: test what happens if nothing matches 1) at all, 2) from a given multi bucket, 3) from the non multi-buckets
+		
+		// 3) A few edge cases:
+
+		final ICrudService<JsonNode> no_wildcards =
+				_index_service.getDataService().get().getReadableCrudService(JsonNode.class, 
+						Arrays.asList(multi_no_wildcards, single_timed), 
+						Optional.empty()).get();
+		
+		assertEquals(2, no_wildcards.countObjects().join().intValue());
+		
+		
+		final ICrudService<JsonNode> read_crud_nothing =
+				_index_service.getDataService().get().getReadableCrudService(JsonNode.class, 
+						Arrays.asList(multi_missing_parent), 
+						Optional.empty()).get();
+		
+		assertEquals(0, read_crud_nothing.countObjects().join().intValue());
+		
+		final ICrudService<JsonNode> read_crud_no_multi_no_fixed =
+				_index_service.getDataService().get().getReadableCrudService(JsonNode.class, 
+						Arrays.asList(single_timed, multi_missing_parent), 
+						Optional.empty()).get();
+		
+		assertEquals(1, read_crud_no_multi_no_fixed.countObjects().join().intValue());
+		
+		final ICrudService<JsonNode> read_crud_no_multi_no_timed =
+				_index_service.getDataService().get().getReadableCrudService(JsonNode.class, 
+						Arrays.asList(single_fixed, multi_missing_parent), 
+						Optional.empty()).get();
+		
+		assertEquals(1, read_crud_no_multi_no_timed.countObjects().join().intValue());
+	}
 	
 	///////////////////////////////////
 	

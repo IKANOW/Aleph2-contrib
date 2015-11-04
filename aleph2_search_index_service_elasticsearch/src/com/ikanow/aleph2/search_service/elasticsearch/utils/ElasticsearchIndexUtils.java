@@ -49,6 +49,7 @@ import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
+import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 
 import fj.data.Either;
 
@@ -80,6 +81,20 @@ public class ElasticsearchIndexUtils {
 		return override_string.orElseGet(() -> {		
 			return BucketUtils.getUniqueSignature(bucket.full_name(), secondary_buffer);
 		});
+	}
+	
+	/** Returns a readable copy of the base name  (before any date strings, splits etc)
+	 *  Uses the read alias that all non-overridden indexes have
+	 * @param bucket
+	 * @return
+	 */
+	public static String getReadableBaseIndexName(final DataBucketBean bucket) {
+		final Optional<String> override_string = Optionals.<String>of(() -> 
+		((String) bucket.data_schema().search_index_schema().technology_override_schema().get(SearchIndexSchemaDefaultBean.index_name_override_)));
+		
+		return override_string.orElseGet(() -> {		
+			return ElasticsearchContext.READ_PREFIX + BucketUtils.getUniqueSignature(bucket.full_name(), Optional.empty());
+		});		
 	}
 	
 	/** Returns either a specific type name, or "_default_" if auto types are used

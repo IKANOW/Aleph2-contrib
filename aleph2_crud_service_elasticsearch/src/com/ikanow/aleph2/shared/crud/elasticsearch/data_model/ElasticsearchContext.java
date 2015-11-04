@@ -95,6 +95,11 @@ public abstract class ElasticsearchContext {
 	 */
 	public static final String READ_PREFIX = "r__";		
 	
+	/** Returns a random index instead of [] which defaults to "everything"
+	 */
+	public static final String NO_INDEX_FOUND = "NO_INDEXES_FOUND_e8ed37b4_831e_11e5_8bcf_feff819cdc9f";
+	public static final List<String> NO_INDEXES_FOUND = Arrays.asList(NO_INDEX_FOUND);
+	
 	/** Elasticsearch context that one can read from but not write to (eg because it has multiple indexes)
 	 * @author Alex
 	 */
@@ -177,7 +182,8 @@ public abstract class ElasticsearchContext {
 				
 				@Override
 				public List<String> getReadableIndexList(final Optional<Tuple2<Long, Long>> date_range) {
-					return _indexes.stream().map(s -> s + "*").collect(Collectors.toList()); //(need the "*" to support segments)
+					final List<String> ret_val = _indexes.stream().map(s -> s + "*").collect(Collectors.toList()); //(need the "*" to support segments)
+					return ret_val.isEmpty() ? NO_INDEXES_FOUND : ret_val;
 				} 
 			}
 			/** A simple list of multiple indexes to query over
@@ -191,15 +197,20 @@ public abstract class ElasticsearchContext {
 				
 				@Override
 				public List<String> getReadableIndexList(final Optional<Tuple2<Long, Long>> date_range) {
-					if (!date_range.isPresent()) { // Convert to wildcards
-						return _indexes.stream().map(i -> i.replaceFirst("_[^_]+$", "_*")).collect(Collectors.toList());
-					}
-					else {
-						return _indexes.stream()
-									.flatMap(i -> ElasticsearchContextUtils.getIndexesFromDateRange(i, date_range.get()))
-									.map(s -> s + '*')
-									.collect(Collectors.toList());
-					}
+					
+					final List<String> ret_val = Lambdas.get(() -> {
+						if (!date_range.isPresent()) { // Convert to wildcards
+							//(the extra bits here handle the case where a timed index is passed in without its date suffix (eg "somewhat_badly_formed__UUID")
+							return _indexes.stream().map(i -> i.replaceFirst("([^_])_[^_]+$", "$1*")).map(i -> i.endsWith("*") ? i : (i + "*")).collect(Collectors.toList());
+						}
+						else {
+							return _indexes.stream()
+										.flatMap(i -> ElasticsearchContextUtils.getIndexesFromDateRange(i, date_range.get()))
+										.map(s -> s + '*')
+										.collect(Collectors.toList());
+						}
+					});
+					return ret_val.isEmpty() ? NO_INDEXES_FOUND : ret_val;
 				} 
 			}
 			/** Handles a combination of fixed and timed read only indexes
@@ -215,8 +226,13 @@ public abstract class ElasticsearchContext {
 				@Override
 				public List<String> getReadableIndexList(
 						Optional<Tuple2<Long, Long>> date_range) {
-					return Stream.concat(_timed_delegate.getReadableIndexList(date_range).stream(), _fixed_delegate.getReadableIndexList(date_range).stream())
-							.collect(Collectors.toList());
+					final List<String> ret_val = 
+							Stream.concat(
+									_timed_delegate.getReadableIndexList(date_range).stream().filter(s -> !NO_INDEX_FOUND.equals(s))
+									, 
+									_fixed_delegate.getReadableIndexList(date_range).stream().filter(s -> !NO_INDEX_FOUND.equals(s)))
+								.collect(Collectors.toList());
+					return ret_val.isEmpty() ? NO_INDEXES_FOUND : ret_val;					
 				}				
 			}
 		}
@@ -501,9 +517,11 @@ public abstract class ElasticsearchContext {
 				@Override
 				public List<String> getReadableIndexList(final Optional<Tuple2<Long, Long>> date_range) {
 					if (!date_range.isPresent()) { // Convert to wildcards
-						return Arrays.asList(_index.replaceFirst("_[^_]+$", "_*"));
+						//(the extra bits here handle the case where a timed index is passed in without its date suffix (eg "somewhat_badly_formed__UUID")
+						final String s1 = _index.replaceFirst("([^_])_[^_]+$", "$1*");
+						return Arrays.asList(s1.endsWith("*") ? s1 : (s1 + "*"));
 					}
-					else {
+					else { //(always returns >1 index by construction)
 						return ElasticsearchContextUtils.getIndexesFromDateRange(_index, date_range.get()).map(s -> s + '*').collect(Collectors.toList());
 					}
 				}
