@@ -626,7 +626,7 @@ public class TestElasticsearchIndexUtils {
 		// TEST with default config, no settings specified in mapping
 		{		
 			final String default_settings = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":null,\"is_primary\":\"true\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true}}}}";
-			final String default_settings_2 = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":null,\"is_primary\":\"true\",\"secondary_buffer\":\"\"},\"_meta\":{\"test\":\"override\",\"bucket_path\":null,\"is_primary\":\"true\",\"secondary_buffer\":\"\"}}}}";
+			final String default_settings_2 = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_meta\":{\"test\":\"override\",\"bucket_path\":null,\"is_primary\":\"true\",\"secondary_buffer\":\"\"}}}}";
 				//(this has duplicate _meta fields but the second one is overwritten giving us the merged one we want)
 			
 			final DataBucketBean test_bucket_0a = BeanTemplateUtils.build(DataBucketBean.class).done().get();
@@ -666,7 +666,7 @@ public class TestElasticsearchIndexUtils {
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0a, Optional.empty(), true, config_bean, Optional.of(XContentFactory.jsonBuilder().startObject()), _mapper).bytes().toUtf8());
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0b, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0c, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
-			assertEquals(default_settings_2, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0c, Optional.empty(), true, config_bean_2, Optional.empty(), _mapper).bytes().toUtf8());
+			assertEquals(default_settings_2, _mapper.readTree(ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0c, Optional.empty(), true, config_bean_2, Optional.empty(), _mapper).bytes().toUtf8()).toString());
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0d, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0e, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
 			

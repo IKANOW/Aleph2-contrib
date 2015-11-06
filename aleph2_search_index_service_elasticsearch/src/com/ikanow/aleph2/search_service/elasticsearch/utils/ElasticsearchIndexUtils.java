@@ -704,7 +704,7 @@ public class ElasticsearchIndexUtils {
 			// Mappings and overrides
 			.andThen(Lambdas.wrap_u(json -> json.startObject("mappings").startObject(type_key)))
 			// Add the secondary buffer name to the metadata:
-			.andThen(Lambdas.wrap_u(json -> {
+			.andThen(Lambdas.wrap_u(json -> {				
 				return json.rawField(CUSTOM_META, createMergedMeta(Either.right(mapper), bucket, is_primary, secondary_buffer).toString().getBytes())
 						;
 			}))
