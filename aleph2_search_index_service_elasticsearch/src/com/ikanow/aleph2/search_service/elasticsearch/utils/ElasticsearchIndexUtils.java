@@ -639,7 +639,8 @@ public class ElasticsearchIndexUtils {
 				)
 				.ifPresent(jj -> { if (override_existing || !mutable_o.has("fielddata")) mutable_o.set("fielddata", jj); } );						
 		}
-		else {
+		else { // This means it's a columnar exclude lookup
+			//Previously did this, however I think it's preferable if columnar is disabled just to leave it alone
 			mutable_o.set("fielddata", mapper.readTree(DISABLED_FIELDDATA));										
 		}
 	}
@@ -820,11 +821,18 @@ public class ElasticsearchIndexUtils {
 		
 		// Also get JsonNodes for the default field config bit
 		
+		final boolean columnar_enabled = 
+				Optional.ofNullable(bucket.data_schema())
+					.map(DataSchemaBean::columnar_schema)
+					.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+					.isPresent();
+		
 		// (these can't be null by construction)
-		final JsonNode enabled_analyzed_field = mapper.convertValue(schema_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class);
-		final JsonNode enabled_not_analyzed_field = mapper.convertValue(schema_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class);
-		final JsonNode default_analyzed_field = mapper.convertValue(schema_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class);
-		final JsonNode default_not_analyzed_field = mapper.convertValue(schema_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class);
+		final JsonNode enabled_analyzed_field = 
+				columnar_enabled ? mapper.convertValue(schema_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class) : mapper.createObjectNode();
+		final JsonNode enabled_not_analyzed_field = columnar_enabled ? mapper.convertValue(schema_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class) : mapper.createObjectNode();
+		final JsonNode default_analyzed_field = columnar_enabled ? mapper.convertValue(schema_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class) : mapper.createObjectNode();
+		final JsonNode default_not_analyzed_field = columnar_enabled ? mapper.convertValue(schema_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class) : mapper.createObjectNode();
 		
 		// Get a list of field overrides Either<String,Tuple2<String,String>> for dynamic/real fields
 		
