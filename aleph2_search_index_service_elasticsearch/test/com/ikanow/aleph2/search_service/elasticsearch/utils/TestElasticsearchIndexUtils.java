@@ -47,6 +47,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
 import com.typesafe.config.ConfigFactory;
 
@@ -598,9 +599,35 @@ public class TestElasticsearchIndexUtils {
 		
 		final ElasticsearchIndexServiceConfigBean config_bean = ElasticsearchIndexConfigUtils.buildConfigBean(ConfigFactory.empty());	
 		
+		final Map<String, Object> override_meta =
+							ImmutableMap.<String, Object>builder()
+							.put("*",
+								ImmutableMap.builder()
+									.put("_meta",
+											ImmutableMap.builder()
+												.put("test", "override")
+											.build()
+											)		
+								.build()
+							)
+							.build()
+							;
+		
+		config_bean.search_technology_override().mapping_overrides();
+		
+		final ElasticsearchIndexServiceConfigBean config_bean_2 = 
+				BeanTemplateUtils.clone(config_bean)
+					.with(ElasticsearchIndexServiceConfigBean::search_technology_override, 
+							BeanTemplateUtils.clone(config_bean.search_technology_override())
+								.with(SearchIndexSchemaDefaultBean::mapping_overrides, override_meta)
+							.done())
+				.done();		
+		
 		// TEST with default config, no settings specified in mapping
 		{		
 			final String default_settings = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":null,\"is_primary\":\"true\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true}}}}";
+			final String default_settings_2 = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":null,\"is_primary\":\"true\",\"secondary_buffer\":\"\"},\"_meta\":{\"test\":\"override\",\"bucket_path\":null,\"is_primary\":\"true\",\"secondary_buffer\":\"\"}}}}";
+				//(this has duplicate _meta fields but the second one is overwritten giving us the merged one we want)
 			
 			final DataBucketBean test_bucket_0a = BeanTemplateUtils.build(DataBucketBean.class).done().get();
 			final DataBucketBean test_bucket_0b = BeanTemplateUtils.build(DataBucketBean.class)
@@ -619,9 +646,6 @@ public class TestElasticsearchIndexUtils {
 								.with(DataSchemaBean::search_index_schema,
 										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
 											.with("enabled", false)
-											.with("technology_override_schema",
-													ImmutableMap.builder().build()
-													)
 								.done().get())
 							.done().get())
 					.done().get();
@@ -642,6 +666,7 @@ public class TestElasticsearchIndexUtils {
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0a, Optional.empty(), true, config_bean, Optional.of(XContentFactory.jsonBuilder().startObject()), _mapper).bytes().toUtf8());
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0b, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0c, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
+			assertEquals(default_settings_2, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0c, Optional.empty(), true, config_bean_2, Optional.empty(), _mapper).bytes().toUtf8());
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0d, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0e, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
 			
