@@ -48,12 +48,12 @@ public class TestElasticsearchContextUtils {
 	public void test_timePeriods() {
 		String s1, s2, s3, s4, s5, s6, s7;
 		
-		assertEquals("_{yyyy-MM-dd-HH}", s1 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.SECONDS));
-		assertEquals("_{yyyy-MM-dd-HH}", s2 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.MINUTES));
-		assertEquals("_{yyyy-MM-dd-HH}", s3 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.HOURS));
-		assertEquals("_{yyyy-MM-dd}", s4 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.DAYS));
-		assertEquals("_{YYYY.ww}", s5 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.WEEKS));
-		assertEquals("_{yyyy-MM}", s6 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.MONTHS));
+		assertEquals("_{yyyy.MM.dd.HH}", s1 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.SECONDS));
+		assertEquals("_{yyyy.MM.dd.HH}", s2 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.MINUTES));
+		assertEquals("_{yyyy.MM.dd.HH}", s3 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.HOURS));
+		assertEquals("_{yyyy.MM.dd}", s4 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.DAYS));
+		assertEquals("_{YYYY-ww}", s5 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.WEEKS));
+		assertEquals("_{yyyy.MM}", s6 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.MONTHS));
 		assertEquals("_{yyyy}", s7 = ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.YEARS));
 		assertEquals("", ElasticsearchContextUtils.getIndexSuffix(ChronoUnit.CENTURIES));
 		

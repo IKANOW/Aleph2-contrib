@@ -260,7 +260,7 @@ public class TestElasticsearchIndexService {
 								).done()
 						).done();
 			
-			assertEquals("_{yyyy-MM-dd}", _index_service.validateSchema(bucket_temporal_grouping.data_schema().temporal_schema(), bucket)._1());
+			assertEquals("_{yyyy.MM.dd}", _index_service.validateSchema(bucket_temporal_grouping.data_schema().temporal_schema(), bucket)._1());
 		}
 	}
 	
@@ -631,7 +631,7 @@ public class TestElasticsearchIndexService {
 		Thread.sleep(2100L); // sleep another 2s+e for the aliases)
 		
 		// Check an alias per time slice gets created also
-		Arrays.asList("_2015-02-01", "_2015-03-01", "_2015-04-01", "_2015-05-01", "_2015-06-01")
+		Arrays.asList("_2015.02.01", "_2015.03.01", "_2015.04.01", "_2015.05.01", "_2015.06.01")
 				.stream()
 				.forEach(time_suffix -> {
 					final List<String> aliases = getAliasedBuffers(bucket, Optional.of(time_suffix));
@@ -640,7 +640,7 @@ public class TestElasticsearchIndexService {
 		
 		// Check the top level alias is created
 		final List<String> aliases = this.getMainAliasedBuffers(bucket);
-		assertEquals(Arrays.asList("_2015-02-01", "_2015-03-01", "_2015-04-01", "_2015-05-01", "_2015-06-01")
+		assertEquals(Arrays.asList("_2015.02.01", "_2015.03.01", "_2015.04.01", "_2015.05.01", "_2015.06.01")
 				.stream().map(x -> template_name + x).collect(Collectors.toList()), aliases);
 		
 		final GetMappingsResponse gmr = es_context.client().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
@@ -648,7 +648,7 @@ public class TestElasticsearchIndexService {
 		// Should have 5 different indexes, each with 2 types + _default_
 		
 		assertEquals(5, gmr.getMappings().keys().size());
-		final Set<String> expected_keys =  Arrays.asList(1, 2, 3, 4, 5).stream().map(i -> template_name + "_2015-0" + (i+1) + "-01").collect(Collectors.toSet());
+		final Set<String> expected_keys =  Arrays.asList(1, 2, 3, 4, 5).stream().map(i -> template_name + "_2015.0" + (i+1) + ".01").collect(Collectors.toSet());
 		final Set<String> expected_types =  Arrays.asList("_default_", "type_1", "type_2").stream().collect(Collectors.toSet());
 		
 		if (test_not_create_mode) StreamSupport.stream(gmr.getMappings().spliterator(), false)
@@ -798,7 +798,7 @@ public class TestElasticsearchIndexService {
 		// Call test_endToEnd_autoTime to create 5 time based indexes
 		// 2015-01-01 -> 2015-05-01
 		// How far is now from 2015-05-03
-		final Date d = TimeUtils.getDateFromSuffix("2015-03-02").success();
+		final Date d = TimeUtils.getDateFromSuffix("2015.03.02").success();
 		final long total_time_ms = new Date().getTime() - d.getTime();
 		final long total_days = total_time_ms/(1000L*3600L*24L);
 		final String age_out = ErrorUtils.get("{0} days", total_days);
@@ -820,7 +820,7 @@ public class TestElasticsearchIndexService {
 		
 		test_endToEnd_autoTime(false, Optional.empty());
 
-		_index_service._crud_factory.getClient().admin().indices().prepareCreate(template_name + "_2015-03-01_1").execute().actionGet();
+		_index_service._crud_factory.getClient().admin().indices().prepareCreate(template_name + "_2015.03.01_1").execute().actionGet();
 		
 		final GetMappingsResponse gmr = _index_service._crud_factory.getClient().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
 		assertEquals(6, gmr.getMappings().keys().size());
