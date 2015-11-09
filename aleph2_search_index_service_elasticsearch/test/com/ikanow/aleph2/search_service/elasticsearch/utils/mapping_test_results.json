@@ -3,6 +3,7 @@
   "settings" : {
     "index.refresh_interval" : "10s"
   },
+  "aliases":{"r__test_full_mapping__13e5c26beb3d":{}},
   "mappings" : {
     "_default_" : {
        "_meta": {

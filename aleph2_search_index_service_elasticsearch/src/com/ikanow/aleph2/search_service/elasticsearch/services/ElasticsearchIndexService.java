@@ -23,11 +23,13 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -72,8 +74,11 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchIndexSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
+import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
@@ -398,7 +403,105 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		public <O> Optional<ICrudService<O>> getReadableCrudService(
 				Class<O> clazz, Collection<DataBucketBean> buckets,
 				Optional<String> options) {
-			throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "ElasticsearchDataService.getReadableCrudService"));
+
+			// First get any buckets that we need to resolve
+			//final Set<String> wildcard_bucket_list = 
+			final Map<String, List<Tuple2<String, String>>> multi_bucket_list =
+					buckets.stream()
+						.flatMap(b -> Optional.ofNullable(b.multi_bucket_children())
+												.map(s -> s.stream()
+															.<Tuple2<String, String>>
+																map(ss -> Tuples._2T(ss, Optional.ofNullable(b.owner_id()).orElse(""))))
+												.orElse(Stream.empty())
+						)
+						.collect(Collectors.groupingBy((Tuple2<String, String> s_o) -> s_o._2()))
+						;
+			//(due to security architecture if we have any wild
+			
+			// Now get a final list of buckets
+			
+			final Collection<DataBucketBean> final_bucket_list = 
+					multi_bucket_list.isEmpty()
+					? buckets
+					: Stream.concat(buckets.stream(), Lambdas.get(() -> {
+						
+						final List<CompletableFuture<Stream<DataBucketBean>>> res = multi_bucket_list.entrySet().stream().parallel()
+								.<CompletableFuture<Stream<DataBucketBean>>>map(kv -> {
+									
+									final List<String> multi_paths = kv.getValue().stream().map(s_o -> s_o._1()).collect(Collectors.toList());
+									
+									//DEBUG
+									//System.out.println("PATHS = " + wildcard_paths.stream().collect(Collectors.joining(";")));
+									
+									final QueryComponent<DataBucketBean> query = 
+											BucketUtils.getApproxMultiBucketQuery(multi_paths);
+									
+									final Predicate<String> filter = BucketUtils.refineMultiBucketQuery(multi_paths);
+									
+									final ICrudService<DataBucketBean> bucket_store = 
+											Optional.of(_service_context.getCoreManagementDbService().readOnlyVersion().getDataBucketStore())
+													.map(db -> kv.getKey().isEmpty() ? db : db.secured(_service_context, new AuthorizationBean(kv.getKey())))
+													.get()
+													;
+									
+									//DEBUG
+									//System.out.println("OWNER: " + kv.getKey() + " .. " + bucket_store.countObjects().join().intValue() + " query = \n" + query.toString());
+									
+									return bucket_store												
+												.getObjectsBySpec(query)
+												.thenApply(cursor -> {
+													return Optionals.streamOf(cursor.iterator(), false)
+																.filter(b -> filter.test(b.full_name()))
+																;
+												});
+								})
+								.collect(Collectors.toList());
+						
+						// Wait for everything to stop
+						CompletableFuture.allOf(res.stream().toArray(CompletableFuture[]::new)).join();
+						
+						// Create a stream of buckets
+						
+						return res.stream().flatMap(cf -> cf.join());
+						
+					})).collect(Collectors.toSet());
+			
+			
+			// Next up, split the (now non-multi) buckets into fixed and timed 
+			
+			final Map<Boolean, List<Tuple2<String, Validation<String, ChronoUnit>>>> timed_vs_fixed_indexes =
+					final_bucket_list.stream()
+						.filter(b -> Optionals.ofNullable(b.multi_bucket_children()).isEmpty()) //(ignore nested multi-buckets)
+						.map(bucket -> {
+							final Tuple3<ElasticsearchIndexServiceConfigBean, String, Optional<String>> schema_index_type = getSchemaConfigAndIndexAndType(bucket, _config);
+							final Validation<String, ChronoUnit> time_period = 
+									TimeUtils.getTimePeriod(Optional.ofNullable(schema_index_type._1().temporal_technology_override())
+												.map(t -> t.grouping_time_period()).orElse(""));
+
+							return Tuples._2T(ElasticsearchIndexUtils.getReadableBaseIndexName(bucket), time_period);
+						})
+						.collect(Collectors.partitioningBy(t2 -> t2._2().isSuccess()))
+						;
+						
+			final ElasticsearchContext.ReadOnlyContext context =
+					new ElasticsearchContext.ReadOnlyContext(
+							_crud_factory.getClient()
+							,
+							new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.MixedRoIndexContext(
+									Optionals.ofNullable(timed_vs_fixed_indexes.get(true)).stream().map(t2 -> t2._1() + ElasticsearchContextUtils.getIndexSuffix(t2._2().success())).collect(Collectors.toList())
+									,
+									Optionals.ofNullable(timed_vs_fixed_indexes.get(false)).stream().map(t2 -> t2._1()).collect(Collectors.toList())
+									),									
+							new ElasticsearchContext.TypeContext.ReadOnlyTypeContext.FixedRoTypeContext(Arrays.asList())
+							) //(^I think we can just wildcard over all _types when reading -confirmed via junit)
+							;
+			
+			
+			return Optional.of(_crud_factory.getElasticsearchCrudService(clazz,
+					context,
+					Optional.empty(), 
+					CreationPolicy.OPTIMIZED, 
+					Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()));
 		}
 
 		/* (non-Javadoc)
@@ -486,7 +589,9 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 							.reduce(
 								iarb, 
 								(acc,  v) -> acc.addAlias(v, ElasticsearchContext.READ_PREFIX + base_index_name + 
-																ElasticsearchIndexUtils.snagDateFormatFromIndex(v).orElse("")), 
+																ElasticsearchIndexUtils.snagDateFormatFromIndex(v).orElse(""))
+												.addAlias(v, ElasticsearchContext.READ_PREFIX + base_index_name)																						
+								, 
 								(acc1, acc2) -> acc1);
 						
 						return ElasticsearchFutureUtils.wrap(iarb.execute(),
@@ -501,7 +606,9 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 													.reduce(
 														iarb2, 
 														(acc,  v) -> acc.addAlias(v, ElasticsearchContext.READ_PREFIX + base_index_name + 
-																						ElasticsearchIndexUtils.snagDateFormatFromIndex(v).orElse("")), 
+																						ElasticsearchIndexUtils.snagDateFormatFromIndex(v).orElse(""))
+																		.addAlias(v, ElasticsearchContext.READ_PREFIX + base_index_name)																						
+														, 
 														(acc1, acc2) -> acc1);
 										
 										ElasticsearchFutureUtils.wrap(iarb2.execute(), cf, 

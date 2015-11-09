@@ -33,6 +33,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
 import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesRequest;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesResponse;
@@ -40,6 +41,7 @@ import org.elasticsearch.common.collect.ImmutableMap;
 import org.elasticsearch.common.collect.ImmutableSet;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -48,6 +50,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
@@ -61,8 +64,10 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchInd
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.ManagementDbUtils;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
@@ -73,8 +78,11 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConte
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudServiceFactory;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.MockElasticsearchCrudServiceFactory;
+import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.CreationPolicy;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
+
+import fj.data.Either;
 
 public class TestElasticsearchIndexService {
 
@@ -85,6 +93,8 @@ public class TestElasticsearchIndexService {
 	protected IElasticsearchCrudServiceFactory _crud_factory;
 	protected ElasticsearchIndexServiceConfigBean _config_bean;
 	protected MockSecurityService _security_service;
+	
+	protected ICrudService<DataBucketBean> _dummy_bucket_crud;
 	
 	// Set this string to connect vs a real DB
 	private final String _connection_string = null;
@@ -105,9 +115,32 @@ public class TestElasticsearchIndexService {
 		_config_bean = ElasticsearchIndexConfigUtils.buildConfigBean(full_config);
 		
 		_security_service = new MockSecurityService();
+						
+		_dummy_bucket_crud = _crud_factory.getElasticsearchCrudService(
+				DataBucketBean.class, 
+				new ElasticsearchContext.ReadWriteContext(_crud_factory.getClient(),
+						new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("bucket_crud", Optional.empty(), Either.left(true)),
+						new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext("bucket")
+						), 
+				Optional.empty(), 
+				CreationPolicy.OPTIMIZED, 
+				Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+		
+		_dummy_bucket_crud.deleteDatastore().join();
+		// for dummy bucket crud set full_name to not indexed so tests will work (gah!)
+		CreateIndexRequestBuilder cirb = _crud_factory.getClient().admin().indices().prepareCreate("bucket_crud");
+		cirb.addMapping("bucket", 
+				"{\"properties\":{\"full_name\":{\"type\": \"string\", \"index\": \"not_analyzed\"}}}");
+		cirb.execute().actionGet();
+		
+		IManagementDbService dummy_management_db = Mockito.mock(IManagementDbService.class);
+		Mockito.when(dummy_management_db.getDataBucketStore()).thenReturn(ManagementDbUtils.wrap(_dummy_bucket_crud));
+		Mockito.when(dummy_management_db.readOnlyVersion()).thenReturn(dummy_management_db);
 		
 		_service_context = new MockServiceContext();
 		_service_context.addService(ISecurityService.class, Optional.empty(), _security_service);
+		_service_context.addService(IManagementDbService.class, Optional.empty(), dummy_management_db);
+		_service_context.addService(IManagementDbService.class, IManagementDbService.CORE_MANAGEMENT_DB, dummy_management_db);
 		
 		_index_service = new MockElasticsearchIndexService(_service_context, _crud_factory, _config_bean);
 	}
@@ -227,7 +260,7 @@ public class TestElasticsearchIndexService {
 								).done()
 						).done();
 			
-			assertEquals("_{yyyy-MM-dd}", _index_service.validateSchema(bucket_temporal_grouping.data_schema().temporal_schema(), bucket)._1());
+			assertEquals("_{yyyy.MM.dd}", _index_service.validateSchema(bucket_temporal_grouping.data_schema().temporal_schema(), bucket)._1());
 		}
 	}
 	
@@ -598,19 +631,24 @@ public class TestElasticsearchIndexService {
 		Thread.sleep(2100L); // sleep another 2s+e for the aliases)
 		
 		// Check an alias per time slice gets created also
-		Arrays.asList("_2015-02-01", "_2015-03-01", "_2015-04-01", "_2015-05-01", "_2015-06-01")
+		Arrays.asList("_2015.02.01", "_2015.03.01", "_2015.04.01", "_2015.05.01", "_2015.06.01")
 				.stream()
 				.forEach(time_suffix -> {
 					final List<String> aliases = getAliasedBuffers(bucket, Optional.of(time_suffix));
 					assertEquals(Arrays.asList(template_name + time_suffix), aliases);							
 				});
 		
+		// Check the top level alias is created
+		final List<String> aliases = this.getMainAliasedBuffers(bucket);
+		assertEquals(Arrays.asList("_2015.02.01", "_2015.03.01", "_2015.04.01", "_2015.05.01", "_2015.06.01")
+				.stream().map(x -> template_name + x).collect(Collectors.toList()), aliases);
+		
 		final GetMappingsResponse gmr = es_context.client().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
 		
 		// Should have 5 different indexes, each with 2 types + _default_
 		
 		assertEquals(5, gmr.getMappings().keys().size());
-		final Set<String> expected_keys =  Arrays.asList(1, 2, 3, 4, 5).stream().map(i -> template_name + "_2015-0" + (i+1) + "-01").collect(Collectors.toSet());
+		final Set<String> expected_keys =  Arrays.asList(1, 2, 3, 4, 5).stream().map(i -> template_name + "_2015.0" + (i+1) + ".01").collect(Collectors.toSet());
 		final Set<String> expected_types =  Arrays.asList("_default_", "type_1", "type_2").stream().collect(Collectors.toSet());
 		
 		if (test_not_create_mode) StreamSupport.stream(gmr.getMappings().spliterator(), false)
@@ -728,6 +766,9 @@ public class TestElasticsearchIndexService {
 		// Check an alias gets created also
 		List<String> aliases = getAliasedBuffers(bucket, Optional.empty());
 		assertEquals(Arrays.asList(ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty())), aliases);
+		// Check the top level alias is created
+		final List<String> aliases_2 = this.getMainAliasedBuffers(bucket);
+		assertEquals(Arrays.asList(ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty())), aliases_2);		
 		
 		StreamSupport.stream(gmr.getMappings().spliterator(), false)
 			.forEach(x -> {
@@ -757,7 +798,7 @@ public class TestElasticsearchIndexService {
 		// Call test_endToEnd_autoTime to create 5 time based indexes
 		// 2015-01-01 -> 2015-05-01
 		// How far is now from 2015-05-03
-		final Date d = TimeUtils.getDateFromSuffix("2015-03-02").success();
+		final Date d = TimeUtils.getDateFromSuffix("2015.03.02").success();
 		final long total_time_ms = new Date().getTime() - d.getTime();
 		final long total_days = total_time_ms/(1000L*3600L*24L);
 		final String age_out = ErrorUtils.get("{0} days", total_days);
@@ -779,7 +820,7 @@ public class TestElasticsearchIndexService {
 		
 		test_endToEnd_autoTime(false, Optional.empty());
 
-		_index_service._crud_factory.getClient().admin().indices().prepareCreate(template_name + "_2015-03-01_1").execute().actionGet();
+		_index_service._crud_factory.getClient().admin().indices().prepareCreate(template_name + "_2015.03.01_1").execute().actionGet();
 		
 		final GetMappingsResponse gmr = _index_service._crud_factory.getClient().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
 		assertEquals(6, gmr.getMappings().keys().size());
@@ -1033,11 +1074,17 @@ public class TestElasticsearchIndexService {
 		System.out.println("Waiting for indices and aliases to be generated....");
 		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
 		assertEquals(Arrays.asList(), getAliasedBuffers(bucket, Optional.empty()));
+		try {
+			getMainAliasedBuffers(bucket);
+			fail("Should have thrown exception because won't exist yet");
+		}
+		catch (Exception e) {}
 		{
 			BasicMessageBean res1b = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_1"), Optional.empty(), Optional.empty()).join();		
 			assertTrue("Switch worked: " + res1b.message(), res1b.success());
 		}
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));		
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getMainAliasedBuffers(bucket));		
 		
 		// 4) Change to a different buffer - when there is some data (also add some data to a secondary index at the same time) - check the data swaps
 		
@@ -1048,6 +1095,7 @@ public class TestElasticsearchIndexService {
 		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
 		
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getMainAliasedBuffers(bucket));
 
 		{
 			BasicMessageBean res2 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_2"), Optional.empty(), Optional.empty()).join();
@@ -1057,7 +1105,7 @@ public class TestElasticsearchIndexService {
 			
 		assertEquals(Optional.of("sec_test_2"), index_data_service.getPrimaryBufferName(bucket, Optional.empty()));				
 		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));		
-		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getMainAliasedBuffers(bucket));
 
 		// TEST INTERLUDE
 		// Quick check that having switched to sec_test_2 .. if I now request the default write buffer, what I get is sec_test_2....
@@ -1075,6 +1123,7 @@ public class TestElasticsearchIndexService {
 		System.out.println("Waiting for indices and aliases to be generated....");
 		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getMainAliasedBuffers(bucket));
 				
 		// 5) Switch original back again
 
@@ -1087,6 +1136,7 @@ public class TestElasticsearchIndexService {
 		assertEquals(Optional.of("sec_test_1"), index_data_service.getPrimaryBufferName(bucket, Optional.empty()));				
 		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getMainAliasedBuffers(bucket));
 		
 		addRecordToSecondaryBuffer(bucket, Optional.empty()); 
 		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_1")); 
@@ -1095,8 +1145,239 @@ public class TestElasticsearchIndexService {
 		System.out.println("Waiting for indices and aliases to be generated....");
 		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));				
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getMainAliasedBuffers(bucket));				
 	}
 
+	@Test
+	public void test_readOnlyCrud() throws InterruptedException {
+		
+		// Create a few buckets 
+		final DataBucketBean single_fixed = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "single_fixed")
+				.with("full_name", "/test/single/fixed")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();
+		
+		final DataBucketBean single_timed = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "single_timed")
+				.with("full_name", "/test/single/timed")
+				.with("multi_bucket_children", new HashSet<String>())
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+							.with(DataSchemaBean::temporal_schema,
+								BeanTemplateUtils.build(TemporalSchemaBean.class)
+									.with(TemporalSchemaBean::grouping_time_period, "daily")
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();
+
+		//(just to check we do ignore some buckets!)
+		final DataBucketBean single_unused = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "single_unused")
+				.with("full_name", "/test/single/unused")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+							.with(DataSchemaBean::temporal_schema,
+								BeanTemplateUtils.build(TemporalSchemaBean.class)
+									.with(TemporalSchemaBean::grouping_time_period, "daily")
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();
+		
+		// Create a few buckets 
+		final DataBucketBean multi_parent = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "multi_parent")
+				.with("full_name", "/test/multi/parent")
+				.with("multi_bucket_children", new HashSet<String>(Arrays.asList("/test/multi/**", "/test/other_multi/child/fixed", "/test/multi/child/not_auth")))
+				.done().get();	
+		//(multi-bucket children includes itself but will be ignored because no nested multi-buckets 
+
+		final DataBucketBean multi_no_wildcards = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "multi_parent")
+				.with("full_name", "/test/multi/parent")
+				.with("multi_bucket_children", new HashSet<String>(Arrays.asList("/test/other_multi/child/fixed", "/test/multi/child/not_auth")))
+				.done().get();	
+		//(multi-bucket children includes itself but will be ignored because no nested multi-buckets 
+		
+		
+		final DataBucketBean multi_missing_parent = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "multi_parent")
+				.with("full_name", "/test/multi/missing/parent")
+				.with("multi_bucket_children", new HashSet<String>(Arrays.asList("/test/multi/missing/**", "/test/multi/child/not_auth")))
+				.done().get();	
+		
+		
+		final DataBucketBean multi_fixed = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "multi_fixed")
+				.with("full_name", "/test/multi/child/fixed")
+				.with("owner_id", "test")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();
+
+		final DataBucketBean other_multi_fixed = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "other_multi_fixed")
+				.with("full_name", "/test/other_multi/child/fixed")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();
+		
+		final DataBucketBean multi_timed = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "multi_timed")
+				.with("full_name", "/test/multi/child/timed")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+							.with(DataSchemaBean::temporal_schema,
+								BeanTemplateUtils.build(TemporalSchemaBean.class)
+									.with(TemporalSchemaBean::grouping_time_period, "daily")
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();
+		
+		//(just to check we do ignore some buckets!)
+		final DataBucketBean other_multi_unused = BeanTemplateUtils.build(DataBucketBean.class)
+				.with("_id", "other_multi_unused")
+				.with("full_name", "/test/other_multi/unused")
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.build(DataSchemaBean.class)
+							.with(DataSchemaBean::search_index_schema,
+								BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.done().get()
+							)
+							.with(DataSchemaBean::temporal_schema,
+								BeanTemplateUtils.build(TemporalSchemaBean.class)
+									.with(TemporalSchemaBean::grouping_time_period, "daily")
+								.done().get()
+							)
+						.done().get()
+						)
+				.done().get();		
+		
+		// 1) Write some data into each real bucket:
+		
+		Arrays.asList(
+				single_fixed,
+				single_timed,
+				single_unused,
+				multi_fixed,
+				other_multi_fixed,
+				multi_timed,
+				other_multi_unused
+				)
+				.stream()
+				.parallel()
+				.forEach(b -> {
+					
+					// Create them in the dummy bucket store
+					_dummy_bucket_crud.storeObject(b).join();
+					
+					// Create some data
+					IDataWriteService<JsonNode> dws = _index_service.getDataService().get().getWritableDataService(JsonNode.class, b, Optional.empty(), Optional.empty()).get();
+					dws.deleteDatastore().join();
+										
+					dws.storeObject(_mapper.createObjectNode().put("name", b._id()).put("not_used", b.full_name().contains("/unused")) )
+						.join()
+						;
+
+					for (int ii = 0; ii < 10; ++ii) {
+						try { Thread.sleep(1000L); } catch (Exception e) {}
+						if (dws.countObjects().join().intValue() > 0) break;
+					}
+				});
+		;
+		
+		
+		// 2) Grab a readable CRUD service and do some operations
+
+		final ICrudService<JsonNode> read_crud =
+				_index_service.getDataService().get().getReadableCrudService(JsonNode.class, 
+						Arrays.asList(single_fixed, single_timed, multi_parent), 
+						Optional.empty()).get();
+		
+		assertEquals(5, read_crud.countObjects().join().intValue());
+		
+		assertEquals(1, read_crud.getObjectsBySpec(CrudUtils.allOf().when("name", "single_fixed")).join().count());
+		assertEquals(0, read_crud.countObjectsBySpec(CrudUtils.allOf().when("not_used", true)).join().intValue());
+		assertEquals(5, read_crud.countObjectsBySpec(CrudUtils.allOf().when("not_used", false)).join().intValue());
+		assertTrue(read_crud.getObjectBySpec(CrudUtils.allOf().when("name", "multi_timed")).join().isPresent());
+	
+		
+		// 3) A few edge cases:
+
+		final ICrudService<JsonNode> no_wildcards =
+				_index_service.getDataService().get().getReadableCrudService(JsonNode.class, 
+						Arrays.asList(multi_no_wildcards, single_timed), 
+						Optional.empty()).get();
+		
+		assertEquals(2, no_wildcards.countObjects().join().intValue());
+		
+		
+		final ICrudService<JsonNode> read_crud_nothing =
+				_index_service.getDataService().get().getReadableCrudService(JsonNode.class, 
+						Arrays.asList(multi_missing_parent), 
+						Optional.empty()).get();
+		
+		assertEquals(0, read_crud_nothing.countObjects().join().intValue());
+		
+		final ICrudService<JsonNode> read_crud_really_nothing =
+				_index_service.getDataService().get().getReadableCrudService(JsonNode.class, 
+						Arrays.asList(), 
+						Optional.empty()).get();
+		
+		assertEquals(0, read_crud_really_nothing.countObjects().join().intValue());		
+		
+		final ICrudService<JsonNode> read_crud_no_multi_no_fixed =
+				_index_service.getDataService().get().getReadableCrudService(JsonNode.class, 
+						Arrays.asList(single_timed, multi_missing_parent), 
+						Optional.empty()).get();
+		
+		assertEquals(1, read_crud_no_multi_no_fixed.countObjects().join().intValue());
+		
+		final ICrudService<JsonNode> read_crud_no_multi_no_timed =
+				_index_service.getDataService().get().getReadableCrudService(JsonNode.class, 
+						Arrays.asList(single_fixed, multi_missing_parent), 
+						Optional.empty()).get();
+		
+		assertEquals(1, read_crud_no_multi_no_timed.countObjects().join().intValue());
+	}
+	
 	///////////////////////////////////
 	
 	// UTILITIES
@@ -1119,6 +1400,20 @@ public class TestElasticsearchIndexService {
 		return _crud_factory.getClient().admin().indices().prepareStats()
                     .clear()
                     .setIndices("r__" + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()) + time_suffix.orElse("*"))
+                    .setStore(true)
+                    .get()
+					.getIndices().keySet().stream().sorted().collect(Collectors.toList())
+                    ;
+	}
+	/** Builds the alias name (NOTE: always default not primary buffer name - that's the whole point)
+	 * @param bucket
+	 * @param time_suffix
+	 * @return
+	 */
+	public List<String> getMainAliasedBuffers(final DataBucketBean bucket) {
+		return _crud_factory.getClient().admin().indices().prepareStats()
+                    .clear()
+                    .setIndices("r__" + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()))
                     .setStore(true)
                     .get()
 					.getIndices().keySet().stream().sorted().collect(Collectors.toList())

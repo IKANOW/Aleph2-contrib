@@ -49,6 +49,7 @@ import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
+import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 
 import fj.data.Either;
 
@@ -80,6 +81,20 @@ public class ElasticsearchIndexUtils {
 		return override_string.orElseGet(() -> {		
 			return BucketUtils.getUniqueSignature(bucket.full_name(), secondary_buffer);
 		});
+	}
+	
+	/** Returns a readable copy of the base name  (before any date strings, splits etc)
+	 *  Uses the read alias that all non-overridden indexes have
+	 * @param bucket
+	 * @return
+	 */
+	public static String getReadableBaseIndexName(final DataBucketBean bucket) {
+		final Optional<String> override_string = Optionals.<String>of(() -> 
+		((String) bucket.data_schema().search_index_schema().technology_override_schema().get(SearchIndexSchemaDefaultBean.index_name_override_)));
+		
+		return override_string.orElseGet(() -> {		
+			return ElasticsearchContext.READ_PREFIX + BucketUtils.getUniqueSignature(bucket.full_name(), Optional.empty());
+		});		
 	}
 	
 	/** Returns either a specific type name, or "_default_" if auto types are used
@@ -624,7 +639,8 @@ public class ElasticsearchIndexUtils {
 				)
 				.ifPresent(jj -> { if (override_existing || !mutable_o.has("fielddata")) mutable_o.set("fielddata", jj); } );						
 		}
-		else {
+		else { // This means it's a columnar exclude lookup
+			//Previously did this, however I think it's preferable if columnar is disabled just to leave it alone
 			mutable_o.set("fielddata", mapper.readTree(DISABLED_FIELDDATA));										
 		}
 	}
@@ -659,10 +675,14 @@ public class ElasticsearchIndexUtils {
 											.orElse(null);
 			
 			//(very briefly Nullable)
-			final JsonNode aliases = Optional.ofNullable(search_schema)
+			final ObjectNode aliases = (ObjectNode) Optional.ofNullable(search_schema)
 											.map(s -> s.aliases())
 											.map(o -> mapper.convertValue(o, JsonNode.class))
-											.orElse(null);
+											.orElse(mapper.createObjectNode());
+			
+			if (is_primary) { // add the "read only" prefix alias
+				aliases.put(ElasticsearchContext.READ_PREFIX + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()), mapper.createObjectNode());
+			}
 			
 			// Settings
 			
@@ -678,7 +698,7 @@ public class ElasticsearchIndexUtils {
 			})
 			// Aliases
 			.andThen(Lambdas.wrap_u(json -> {
-				if (null == aliases) { // nothing to do
+				if (!aliases.elements().hasNext()) { // nothing to do
 					return json;
 				}
 				else {
@@ -688,12 +708,8 @@ public class ElasticsearchIndexUtils {
 			// Mappings and overrides
 			.andThen(Lambdas.wrap_u(json -> json.startObject("mappings").startObject(type_key)))
 			// Add the secondary buffer name to the metadata:
-			.andThen(Lambdas.wrap_u(json -> {
-				return json.startObject(CUSTOM_META)
-							.field(CUSTOM_META_BUCKET, bucket.full_name())
-							.field(CUSTOM_META_IS_PRIMARY, Boolean.toString(is_primary))
-							.field(CUSTOM_META_SECONDARY, secondary_buffer.orElse(""))
-						.endObject()
+			.andThen(Lambdas.wrap_u(json -> {				
+				return json.rawField(CUSTOM_META, createMergedMeta(Either.right(mapper), bucket, is_primary, secondary_buffer).toString().getBytes())
 						;
 			}))
 			// More mapping overrides
@@ -706,7 +722,17 @@ public class ElasticsearchIndexUtils {
 							.entrySet().stream()
 							.reduce(json, 
 									Lambdas.wrap_u(
-											(acc, kv) -> acc.rawField(kv.getKey(), mapper.convertValue(kv.getValue(), JsonNode.class).toString().getBytes())), 
+											(acc, kv) -> {
+												if (CUSTOM_META.equals(kv.getKey())) { // meta is a special case, merge my results in regardless
+													return acc.rawField(kv.getKey(), 
+															createMergedMeta(Either.left(mapper.convertValue(kv.getValue(), JsonNode.class)), 
+																				bucket, is_primary, secondary_buffer).toString().getBytes())
+													;
+												}
+												else {
+													return acc.rawField(kv.getKey(), mapper.convertValue(kv.getValue(), JsonNode.class).toString().getBytes());
+												}
+											}), 
 									(acc1, acc2) -> acc1 // (can't actually ever happen)
 									)
 							;
@@ -717,6 +743,25 @@ public class ElasticsearchIndexUtils {
 			//Handle fake "IOException"
 			return null;
 		}
+	}
+	
+	/** Utility to build the "_meta" field
+	 * @param to_merge
+	 * @param bucket
+	 * @param is_primary
+	 * @param secondary_buffer
+	 * @return
+	 */
+	protected static JsonNode createMergedMeta(Either<JsonNode, ObjectMapper> to_merge, DataBucketBean bucket, boolean is_primary, Optional<String> secondary_buffer) {
+		final ObjectNode ret_val = to_merge.either(j -> (ObjectNode)j, om -> om.createObjectNode());
+		
+		ret_val
+			.put(CUSTOM_META_BUCKET, bucket.full_name())
+			.put(CUSTOM_META_IS_PRIMARY, Boolean.toString(is_primary))
+			.put(CUSTOM_META_SECONDARY, secondary_buffer.orElse(""))
+			;
+				
+		return ret_val;
 	}
 
 	///////////////////////////////////////////////////////////////
@@ -780,11 +825,18 @@ public class ElasticsearchIndexUtils {
 		
 		// Also get JsonNodes for the default field config bit
 		
+		final boolean columnar_enabled = 
+				Optional.ofNullable(bucket.data_schema())
+					.map(DataSchemaBean::columnar_schema)
+					.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+					.isPresent();
+		
 		// (these can't be null by construction)
-		final JsonNode enabled_analyzed_field = mapper.convertValue(schema_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class);
-		final JsonNode enabled_not_analyzed_field = mapper.convertValue(schema_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class);
-		final JsonNode default_analyzed_field = mapper.convertValue(schema_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class);
-		final JsonNode default_not_analyzed_field = mapper.convertValue(schema_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class);
+		final JsonNode enabled_analyzed_field = 
+				columnar_enabled ? mapper.convertValue(schema_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class) : mapper.createObjectNode();
+		final JsonNode enabled_not_analyzed_field = columnar_enabled ? mapper.convertValue(schema_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class) : mapper.createObjectNode();
+		final JsonNode default_analyzed_field = columnar_enabled ? mapper.convertValue(schema_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class) : mapper.createObjectNode();
+		final JsonNode default_not_analyzed_field = columnar_enabled ? mapper.convertValue(schema_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class) : mapper.createObjectNode();
 		
 		// Get a list of field overrides Either<String,Tuple2<String,String>> for dynamic/real fields
 		

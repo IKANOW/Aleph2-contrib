@@ -8,7 +8,8 @@
 		"test1": {},
 		"test2": {
 			"filter": { "term": {"test2a": "test2b"}}
-		}
+		},
+		"r__test_validate_success__e93de293b3cb":{}
 	},    
     "mappings": {
         "_default_": {

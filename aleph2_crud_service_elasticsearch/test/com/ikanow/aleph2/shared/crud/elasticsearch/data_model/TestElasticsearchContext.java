@@ -54,13 +54,21 @@ public class TestElasticsearchContext {
 		// Just going to test the non-trivial logic:
 		{
 			final ElasticsearchContext.IndexContext.ReadOnlyIndexContext.TimedRoIndexContext index_context_1 = 
-					new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.TimedRoIndexContext(Arrays.asList("test1_{yyyy}", "test_2_{yyyy.MM}", "test3"));
+					new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.TimedRoIndexContext(Arrays.asList("test1_{yyyy}", "test_2_{yyyy.MM}", "test3__MYID"));
 			
-			assertEquals(Arrays.asList("test1_*", "test_2_*", "test3"), index_context_1.getReadableIndexList(Optional.empty()));
+			assertEquals(Arrays.asList("test1*", "test_2*", "test3__MYID*"), index_context_1.getReadableIndexList(Optional.empty()));
 			
 			c1.set(2004, 11, 28); c2.set(2005,  0, 2);
-			assertEquals(Arrays.asList("test1_2004*", "test1_2005*", "test_2_2004.12*", "test_2_2005.01*", "test3*"), 
+			assertEquals(Arrays.asList("test1_2004*", "test1_2005*", "test_2_2004.12*", "test_2_2005.01*", "test3__MYID*"), 
 					index_context_1.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
+		}
+		
+		// Check get an invalid entry if the index list is empty
+		{
+			final ElasticsearchContext.IndexContext.ReadOnlyIndexContext.TimedRoIndexContext index_context_1 = 
+					new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.TimedRoIndexContext(Arrays.asList());
+			
+			assertEquals(Arrays.asList(ElasticsearchContext.NO_INDEX_FOUND), index_context_1.getReadableIndexList(Optional.empty()));
 		}
 		
 		// Some timestamp testing
@@ -85,8 +93,8 @@ public class TestElasticsearchContext {
 //			final ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext index_context_4 = 
 //					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.TimedRwIndexContext("test3", Optional.of("@timestamp"));
 			
-			assertEquals(Arrays.asList("test1_*"), index_context_2.getReadableIndexList(Optional.empty()));
-			assertEquals(Arrays.asList("test_2_*"), index_context_3.getReadableIndexList(Optional.empty()));
+			assertEquals(Arrays.asList("test1*"), index_context_2.getReadableIndexList(Optional.empty()));
+			assertEquals(Arrays.asList("test_2*"), index_context_3.getReadableIndexList(Optional.empty()));
 			
 			assertEquals(Arrays.asList("test1_2004*", "test1_2005*"), index_context_2.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
 			assertEquals(Arrays.asList("test_2_2004.12*", "test_2_2005.01*"), index_context_3.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
@@ -130,9 +138,66 @@ public class TestElasticsearchContext {
 					new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("test4", Optional.of(10L), Either.left(true));
 			
 			assertEquals(Arrays.asList("test4*"), index_context_4.getReadableIndexList(Optional.empty()));
+		}		
+	}
+	
+	@Test
+	public void test_mixedContext() {
+		
+		final Calendar c1 = GregorianCalendar.getInstance();
+		final Calendar c2 = GregorianCalendar.getInstance();
+		final Calendar cnow = GregorianCalendar.getInstance();
+		
+		{
+			final ElasticsearchContext.IndexContext.ReadOnlyIndexContext.MixedRoIndexContext index_context_1 =
+					new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.MixedRoIndexContext(
+							Arrays.asList("test1_{yyyy}", "test_2_{yyyy.MM}", "test3"),
+							Arrays.asList("fixed_{yyyy}", "fixed")
+							);
+			
+			c1.set(2004, 11, 28); c2.set(2005,  0, 2);
+			assertEquals(Arrays.asList("test1_2004*", "test1_2005*", "test_2_2004.12*", "test_2_2005.01*", "test3*", "fixed_{yyyy}*", "fixed*"), 
+					index_context_1.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
+		}
+		
+		// Also check that if the indexes are empty it works:
+		
+		{
+			final ElasticsearchContext.IndexContext.ReadOnlyIndexContext.MixedRoIndexContext index_context_2 =
+					new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.MixedRoIndexContext(
+							Arrays.asList(),
+							Arrays.asList("fixed_{yyyy}", "fixed")
+							);
+			
+			c1.set(2004, 11, 28); c2.set(2005,  0, 2);
+			assertEquals(Arrays.asList("fixed_{yyyy}*", "fixed*"), 
+					index_context_2.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
+		}
+		{
+			final ElasticsearchContext.IndexContext.ReadOnlyIndexContext.MixedRoIndexContext index_context_2 =
+					new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.MixedRoIndexContext(
+							Arrays.asList("test1_{yyyy}", "test_2_{yyyy.MM}", "test3"),
+							Arrays.asList()
+							);
+			
+			c1.set(2004, 11, 28); c2.set(2005,  0, 2);
+			assertEquals(Arrays.asList("test1_2004*", "test1_2005*", "test_2_2004.12*", "test_2_2005.01*", "test3*"), 
+					index_context_2.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
+		}
+		{
+			final ElasticsearchContext.IndexContext.ReadOnlyIndexContext.MixedRoIndexContext index_context_2 =
+					new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.MixedRoIndexContext(
+							Arrays.asList(),
+							Arrays.asList()
+							);
+			
+			c1.set(2004, 11, 28); c2.set(2005,  0, 2);
+			assertEquals(Arrays.asList(ElasticsearchContext.NO_INDEX_FOUND), 
+					index_context_2.getReadableIndexList(Optional.of(Tuples._2T(c1.getTime().getTime(), c2.getTime().getTime()))));
 		}
 		
 	}
+		
 	
 	@Test
 	public void test_contextContainers() {
@@ -144,7 +209,7 @@ public class TestElasticsearchContext {
 			final ElasticsearchContext.IndexContext.ReadOnlyIndexContext.FixedRoIndexContext test_ro_index = 
 					new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.FixedRoIndexContext(Arrays.asList("test_ro_1", "test_ro_2"));
 			
-			assertEquals(Arrays.asList("test_ro_1", "test_ro_2"), test_ro_index.getReadableIndexList(Optional.empty()));
+			assertEquals(Arrays.asList("test_ro_1*", "test_ro_2*"), test_ro_index.getReadableIndexList(Optional.empty()));
 			
 			final ElasticsearchContext.TypeContext.ReadOnlyTypeContext.FixedRoTypeContext test_ro_type = 
 					new ElasticsearchContext.TypeContext.ReadOnlyTypeContext.FixedRoTypeContext(Arrays.asList("test_context_1", "test_context_2"));
@@ -161,13 +226,19 @@ public class TestElasticsearchContext {
 			assertEquals(test_ro_index, test.indexContext());
 			assertEquals(test_ro_type, test.typeContext());
 		}
+		
+		// Check get an invalid entry if the index list is empty
+		{
+			final ElasticsearchContext.IndexContext.ReadOnlyIndexContext.FixedRoIndexContext index_context_1 = 
+					new ElasticsearchContext.IndexContext.ReadOnlyIndexContext.FixedRoIndexContext(Arrays.asList());
+			
+			assertEquals(Arrays.asList(ElasticsearchContext.NO_INDEX_FOUND), index_context_1.getReadableIndexList(Optional.empty()));
+		}
+		
 	}
 	
 	// (Other code is covered by TestElasticsearchCrudService - we'll live with that for now)
 
 	// (In particular, the code for testing the max size is living in TestElasticsearchCrudService, since that's where all the code for inserting docs etc lives)
 	
-	//TODO: use size==0 to test
-	
-	//TODO: test secondary
 }

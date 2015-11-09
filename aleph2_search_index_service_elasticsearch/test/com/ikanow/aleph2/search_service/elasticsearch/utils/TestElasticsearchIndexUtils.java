@@ -47,6 +47,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
 import com.typesafe.config.ConfigFactory;
 
@@ -75,6 +76,9 @@ public class TestElasticsearchIndexUtils {
 			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1").done().get(), Optional.empty());
 			
 			assertEquals("test_1_1__514e7056b0d8", base_index);
+
+			final String r_base_index = ElasticsearchIndexUtils.getReadableBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1").done().get());
+			assertEquals("r__test_1_1__514e7056b0d8", r_base_index);
 			
 			final String base_index2 = ElasticsearchIndexUtils.getBaseIndexName(BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test+1-1/another__test").done().get(), Optional.empty());
 			
@@ -102,6 +106,9 @@ public class TestElasticsearchIndexUtils {
 			final String base_index = ElasticsearchIndexUtils.getBaseIndexName(test_index_override, Optional.empty());
 			
 			assertEquals("test_index_override", base_index);
+			
+			final String r_base_index = ElasticsearchIndexUtils.getReadableBaseIndexName(test_index_override);
+			assertEquals("test_index_override", r_base_index);			
 		}
 		
 		// Type stuff
@@ -592,14 +599,45 @@ public class TestElasticsearchIndexUtils {
 		
 		final ElasticsearchIndexServiceConfigBean config_bean = ElasticsearchIndexConfigUtils.buildConfigBean(ConfigFactory.empty());	
 		
+		final Map<String, Object> override_meta =
+							ImmutableMap.<String, Object>builder()
+							.put("*",
+								ImmutableMap.builder()
+									.put("_meta",
+											ImmutableMap.builder()
+												.put("test", "override")
+											.build()
+											)		
+								.build()
+							)
+							.build()
+							;
+		
+		config_bean.search_technology_override().mapping_overrides();
+		
+		final ElasticsearchIndexServiceConfigBean config_bean_2 = 
+				BeanTemplateUtils.clone(config_bean)
+					.with(ElasticsearchIndexServiceConfigBean::search_technology_override, 
+							BeanTemplateUtils.clone(config_bean.search_technology_override())
+								.with(SearchIndexSchemaDefaultBean::mapping_overrides, override_meta)
+							.done())
+				.done();		
+		
 		// TEST with default config, no settings specified in mapping
 		{		
-			final String default_settings = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":null,\"is_primary\":\"true\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true}}}}";
+			final String default_settings = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"aliases\":{\"r__test__f911f6d77ac9\":{}},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":\"/test\",\"is_primary\":\"true\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true}}}}";
+			final String default_settings_2 = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_meta\":{\"test\":\"override\",\"bucket_path\":\"/test\",\"is_primary\":\"false\",\"secondary_buffer\":\"\"}}}}";
+				//(this has duplicate _meta fields but the second one is overwritten giving us the merged one we want)
 			
-			final DataBucketBean test_bucket_0a = BeanTemplateUtils.build(DataBucketBean.class).done().get();
+			final DataBucketBean test_bucket_0a = BeanTemplateUtils.build(DataBucketBean.class)
+													.with(DataBucketBean::full_name, "/test")
+													.done().get();
 			final DataBucketBean test_bucket_0b = BeanTemplateUtils.build(DataBucketBean.class)
-					.with(DataBucketBean::data_schema, BeanTemplateUtils.build(DataSchemaBean.class).done().get()).done().get();
+					.with(DataBucketBean::full_name, "/test")
+					.with(DataBucketBean::data_schema, BeanTemplateUtils.build(DataSchemaBean.class).done().get())
+					.done().get();
 			final DataBucketBean test_bucket_0c = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::full_name, "/test")
 					.with(DataBucketBean::data_schema, 
 							BeanTemplateUtils.build(DataSchemaBean.class)
 								.with(DataSchemaBean::search_index_schema,
@@ -608,18 +646,17 @@ public class TestElasticsearchIndexUtils {
 							.done().get())
 					.done().get();
 			final DataBucketBean test_bucket_0d = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::full_name, "/test")
 					.with(DataBucketBean::data_schema, 
 							BeanTemplateUtils.build(DataSchemaBean.class)
 								.with(DataSchemaBean::search_index_schema,
 										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
 											.with("enabled", false)
-											.with("technology_override_schema",
-													ImmutableMap.builder().build()
-													)
 								.done().get())
 							.done().get())
 					.done().get();
 			final DataBucketBean test_bucket_0e = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::full_name, "/test")
 					.with(DataBucketBean::data_schema, 
 							BeanTemplateUtils.build(DataSchemaBean.class)
 								.with(DataSchemaBean::search_index_schema,
@@ -636,19 +673,21 @@ public class TestElasticsearchIndexUtils {
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0a, Optional.empty(), true, config_bean, Optional.of(XContentFactory.jsonBuilder().startObject()), _mapper).bytes().toUtf8());
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0b, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0c, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
+			assertEquals(default_settings_2, _mapper.readTree(ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0c, Optional.empty(), false, config_bean_2, Optional.empty(), _mapper).bytes().toUtf8()).toString());
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0d, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
 			assertEquals(default_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0e, Optional.empty(), true, config_bean, Optional.empty(), _mapper).bytes().toUtf8());
 			
 			// Not even config
 			final ElasticsearchIndexServiceConfigBean config_bean2 = BeanTemplateUtils.build(ElasticsearchIndexServiceConfigBean.class).done().get();
-			assertEquals("{\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":null,\"is_primary\":\"true\",\"secondary_buffer\":\"\"}}}}", ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0a, Optional.empty(), true, config_bean2, Optional.of(XContentFactory.jsonBuilder().startObject()), _mapper).bytes().toUtf8());
+			assertEquals("{\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":\"/test\",\"is_primary\":\"false\",\"secondary_buffer\":\"\"}}}}", ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_0a, Optional.empty(), false, config_bean2, Optional.of(XContentFactory.jsonBuilder().startObject()), _mapper).bytes().toUtf8());
 		}		
 		
 		// TEST with settings specified in mapping
 		{
-			final String user_settings = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"25%\"},\"mappings\":{\"data_object\":{\"_meta\":{\"bucket_path\":null,\"is_primary\":\"true\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true}}}}";
+			final String user_settings = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"25%\"},\"mappings\":{\"data_object\":{\"_meta\":{\"bucket_path\":\"/test\",\"is_primary\":\"false\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true}}}}";
 			
 			final DataBucketBean test_bucket_1 = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::full_name, "/test")
 					.with(DataBucketBean::data_schema, 
 							BeanTemplateUtils.build(DataSchemaBean.class)
 								.with(DataSchemaBean::search_index_schema,
@@ -668,14 +707,15 @@ public class TestElasticsearchIndexUtils {
 
 			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(test_bucket_1, config_bean, _mapper);
 			
-			assertEquals(user_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_1, Optional.empty(), true, schema_config, Optional.empty(), _mapper).bytes().toUtf8());			
+			assertEquals(user_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_1, Optional.empty(), false, schema_config, Optional.empty(), _mapper).bytes().toUtf8());			
 		}
 		
 		// TEST with mapping overrides
 		{
-			final String user_settings = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"25%\"},\"mappings\":{\"test_type\":{\"_meta\":{\"bucket_path\":null,\"is_primary\":\"true\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false}}}}";
+			final String user_settings = "{\"settings\":{\"index.indices.fielddata.cache.size\":\"25%\"},\"mappings\":{\"test_type\":{\"_meta\":{\"bucket_path\":\"/test\",\"is_primary\":\"false\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false}}}}";
 			
 			final DataBucketBean test_bucket_1 = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::full_name, "/test")
 					.with(DataBucketBean::data_schema, 
 							BeanTemplateUtils.build(DataSchemaBean.class)
 								.with(DataSchemaBean::search_index_schema,
@@ -701,7 +741,7 @@ public class TestElasticsearchIndexUtils {
 			
 			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(test_bucket_1, config_bean, _mapper);
 			
-			assertEquals(user_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_1, Optional.empty(), true, schema_config, Optional.empty(), _mapper).bytes().toUtf8());						
+			assertEquals(user_settings, ElasticsearchIndexUtils.getSearchServiceMapping(test_bucket_1, Optional.empty(), false, schema_config, Optional.empty(), _mapper).bytes().toUtf8());						
 		}
 	}
 
@@ -798,7 +838,7 @@ public class TestElasticsearchIndexUtils {
 						)
 			.done().get();
 		
-		final String expected = "{\"template\":\"test_test__f19167d49eac*\",\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":\"/test/test\",\"is_primary\":\"true\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true},\"properties\":{\"@timestamp\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"}},\"dynamic_templates\":[{\"STAR_string\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"fields\":{\"raw\":{\"fielddata\":{\"format\":\"disabled\"},\"ignore_above\":256,\"index\":\"not_analyzed\",\"type\":\"string\"}},\"index\":\"analyzed\",\"omit_norms\":true,\"type\":\"string\"},\"match\":\"*\",\"match_mapping_type\":\"string\"}},{\"STAR_STAR\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"index\":\"not_analyzed\",\"type\":\"{dynamic_type}\"},\"match\":\"*\",\"match_mapping_type\":\"*\"}}]}}}";
+		final String expected = "{\"template\":\"test_test__f19167d49eac*\",\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"aliases\":{\"r__test_test__f19167d49eac\":{}},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":\"/test/test\",\"is_primary\":\"true\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true},\"properties\":{\"@timestamp\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"}},\"dynamic_templates\":[{\"STAR_string\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"fields\":{\"raw\":{\"fielddata\":{\"format\":\"disabled\"},\"ignore_above\":256,\"index\":\"not_analyzed\",\"type\":\"string\"}},\"index\":\"analyzed\",\"omit_norms\":true,\"type\":\"string\"},\"match\":\"*\",\"match_mapping_type\":\"string\"}},{\"STAR_STAR\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"index\":\"not_analyzed\",\"type\":\"{dynamic_type}\"},\"match\":\"*\",\"match_mapping_type\":\"*\"}}]}}}";
 		
 		// Search index schema only
 		{			
@@ -857,7 +897,7 @@ public class TestElasticsearchIndexUtils {
 			//
 
 			//(has testtime inserted)
-			final String expected2 = "{\"template\":\"test_test__f19167d49eac*\",\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":\"/test/test\",\"is_primary\":\"true\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true},\"properties\":{\"@timestamp\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"},\"testtime\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"}},\"dynamic_templates\":[{\"STAR_string\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"fields\":{\"raw\":{\"fielddata\":{\"format\":\"disabled\"},\"ignore_above\":256,\"index\":\"not_analyzed\",\"type\":\"string\"}},\"index\":\"analyzed\",\"omit_norms\":true,\"type\":\"string\"},\"match\":\"*\",\"match_mapping_type\":\"string\"}},{\"STAR_STAR\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"index\":\"not_analyzed\",\"type\":\"{dynamic_type}\"},\"match\":\"*\",\"match_mapping_type\":\"*\"}}]}}}";
+			final String expected2 = "{\"template\":\"test_test__f19167d49eac*\",\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":\"/test/test\",\"is_primary\":\"false\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true},\"properties\":{\"@timestamp\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"},\"testtime\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"}},\"dynamic_templates\":[{\"STAR_string\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"fields\":{\"raw\":{\"fielddata\":{\"format\":\"disabled\"},\"ignore_above\":256,\"index\":\"not_analyzed\",\"type\":\"string\"}},\"index\":\"analyzed\",\"omit_norms\":true,\"type\":\"string\"},\"match\":\"*\",\"match_mapping_type\":\"string\"}},{\"STAR_STAR\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"index\":\"not_analyzed\",\"type\":\"{dynamic_type}\"},\"match\":\"*\",\"match_mapping_type\":\"*\"}}]}}}";
 
 			final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
 			final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
@@ -865,7 +905,7 @@ public class TestElasticsearchIndexUtils {
 						? "_default_"
 						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
 			
-			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_test, Optional.empty(), true, schema_config, _mapper, index_type);
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(temporal_test, Optional.empty(), false, schema_config, _mapper, index_type);
 	
 			assertEquals("Get expected search_index_test schema", expected2, mapping.bytes().toUtf8());
 		}

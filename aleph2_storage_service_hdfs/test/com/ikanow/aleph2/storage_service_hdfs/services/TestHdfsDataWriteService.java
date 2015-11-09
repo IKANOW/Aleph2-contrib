@@ -119,7 +119,7 @@ public class TestHdfsDataWriteService {
 							.done().get())
 					.done().get();
 			
-			assertEquals("2015-09", HfdsDataWriteService.getSuffix(then, test_bucket, IStorageService.StorageStage.processed));			
+			assertEquals("2015.09", HfdsDataWriteService.getSuffix(then, test_bucket, IStorageService.StorageStage.processed));			
 		}
 	}
 	
