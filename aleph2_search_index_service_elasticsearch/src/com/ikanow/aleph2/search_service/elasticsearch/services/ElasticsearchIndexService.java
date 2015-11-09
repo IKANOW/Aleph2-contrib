@@ -589,7 +589,9 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 							.reduce(
 								iarb, 
 								(acc,  v) -> acc.addAlias(v, ElasticsearchContext.READ_PREFIX + base_index_name + 
-																ElasticsearchIndexUtils.snagDateFormatFromIndex(v).orElse("")), 
+																ElasticsearchIndexUtils.snagDateFormatFromIndex(v).orElse(""))
+												.addAlias(v, ElasticsearchContext.READ_PREFIX + base_index_name)																						
+								, 
 								(acc1, acc2) -> acc1);
 						
 						return ElasticsearchFutureUtils.wrap(iarb.execute(),
@@ -604,7 +606,9 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 													.reduce(
 														iarb2, 
 														(acc,  v) -> acc.addAlias(v, ElasticsearchContext.READ_PREFIX + base_index_name + 
-																						ElasticsearchIndexUtils.snagDateFormatFromIndex(v).orElse("")), 
+																						ElasticsearchIndexUtils.snagDateFormatFromIndex(v).orElse(""))
+																		.addAlias(v, ElasticsearchContext.READ_PREFIX + base_index_name)																						
+														, 
 														(acc1, acc2) -> acc1);
 										
 										ElasticsearchFutureUtils.wrap(iarb2.execute(), cf, 

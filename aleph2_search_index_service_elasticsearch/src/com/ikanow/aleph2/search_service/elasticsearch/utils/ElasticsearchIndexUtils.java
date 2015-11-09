@@ -675,10 +675,14 @@ public class ElasticsearchIndexUtils {
 											.orElse(null);
 			
 			//(very briefly Nullable)
-			final JsonNode aliases = Optional.ofNullable(search_schema)
+			final ObjectNode aliases = (ObjectNode) Optional.ofNullable(search_schema)
 											.map(s -> s.aliases())
 											.map(o -> mapper.convertValue(o, JsonNode.class))
-											.orElse(null);
+											.orElse(mapper.createObjectNode());
+			
+			if (is_primary) { // add the "read only" prefix alias
+				aliases.put(ElasticsearchContext.READ_PREFIX + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()), mapper.createObjectNode());
+			}
 			
 			// Settings
 			
@@ -694,7 +698,7 @@ public class ElasticsearchIndexUtils {
 			})
 			// Aliases
 			.andThen(Lambdas.wrap_u(json -> {
-				if (null == aliases) { // nothing to do
+				if (!aliases.elements().hasNext()) { // nothing to do
 					return json;
 				}
 				else {

@@ -638,6 +638,11 @@ public class TestElasticsearchIndexService {
 					assertEquals(Arrays.asList(template_name + time_suffix), aliases);							
 				});
 		
+		// Check the top level alias is created
+		final List<String> aliases = this.getMainAliasedBuffers(bucket);
+		assertEquals(Arrays.asList("_2015-02-01", "_2015-03-01", "_2015-04-01", "_2015-05-01", "_2015-06-01")
+				.stream().map(x -> template_name + x).collect(Collectors.toList()), aliases);
+		
 		final GetMappingsResponse gmr = es_context.client().admin().indices().prepareGetMappings(template_name + "*").execute().actionGet();
 		
 		// Should have 5 different indexes, each with 2 types + _default_
@@ -761,6 +766,9 @@ public class TestElasticsearchIndexService {
 		// Check an alias gets created also
 		List<String> aliases = getAliasedBuffers(bucket, Optional.empty());
 		assertEquals(Arrays.asList(ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty())), aliases);
+		// Check the top level alias is created
+		final List<String> aliases_2 = this.getMainAliasedBuffers(bucket);
+		assertEquals(Arrays.asList(ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty())), aliases_2);		
 		
 		StreamSupport.stream(gmr.getMappings().spliterator(), false)
 			.forEach(x -> {
@@ -1066,11 +1074,17 @@ public class TestElasticsearchIndexService {
 		System.out.println("Waiting for indices and aliases to be generated....");
 		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
 		assertEquals(Arrays.asList(), getAliasedBuffers(bucket, Optional.empty()));
+		try {
+			getMainAliasedBuffers(bucket);
+			fail("Should have thrown exception because won't exist yet");
+		}
+		catch (Exception e) {}
 		{
 			BasicMessageBean res1b = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_1"), Optional.empty(), Optional.empty()).join();		
 			assertTrue("Switch worked: " + res1b.message(), res1b.success());
 		}
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));		
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getMainAliasedBuffers(bucket));		
 		
 		// 4) Change to a different buffer - when there is some data (also add some data to a secondary index at the same time) - check the data swaps
 		
@@ -1081,6 +1095,7 @@ public class TestElasticsearchIndexService {
 		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
 		
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getMainAliasedBuffers(bucket));
 
 		{
 			BasicMessageBean res2 = index_data_service.switchCrudServiceToPrimaryBuffer(bucket, Optional.of("sec_test_2"), Optional.empty(), Optional.empty()).join();
@@ -1090,7 +1105,7 @@ public class TestElasticsearchIndexService {
 			
 		assertEquals(Optional.of("sec_test_2"), index_data_service.getPrimaryBufferName(bucket, Optional.empty()));				
 		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));		
-		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getMainAliasedBuffers(bucket));
 
 		// TEST INTERLUDE
 		// Quick check that having switched to sec_test_2 .. if I now request the default write buffer, what I get is sec_test_2....
@@ -1108,6 +1123,7 @@ public class TestElasticsearchIndexService {
 		System.out.println("Waiting for indices and aliases to be generated....");
 		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_2__4c857de2de23"), getMainAliasedBuffers(bucket));
 				
 		// 5) Switch original back again
 
@@ -1120,6 +1136,7 @@ public class TestElasticsearchIndexService {
 		assertEquals(Optional.of("sec_test_1"), index_data_service.getPrimaryBufferName(bucket, Optional.empty()));				
 		assertEquals(Arrays.asList("sec_test_1", "sec_test_2", "sec_test_3"), index_data_service.getSecondaryBuffers(bucket, Optional.empty()).stream().sorted().collect(Collectors.toList()));
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getMainAliasedBuffers(bucket));
 		
 		addRecordToSecondaryBuffer(bucket, Optional.empty()); 
 		addRecordToSecondaryBuffer(bucket, Optional.of("sec_test_1")); 
@@ -1128,6 +1145,7 @@ public class TestElasticsearchIndexService {
 		System.out.println("Waiting for indices and aliases to be generated....");
 		Thread.sleep(4000L); // wait for the indexes and aliases to generate themselves
 		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getAliasedBuffers(bucket, Optional.empty()));				
+		assertEquals(Arrays.asList("test_buffer_switching_sec_test_1__4c857de2de23"), getMainAliasedBuffers(bucket));				
 	}
 
 	@Test
@@ -1382,6 +1400,20 @@ public class TestElasticsearchIndexService {
 		return _crud_factory.getClient().admin().indices().prepareStats()
                     .clear()
                     .setIndices("r__" + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()) + time_suffix.orElse("*"))
+                    .setStore(true)
+                    .get()
+					.getIndices().keySet().stream().sorted().collect(Collectors.toList())
+                    ;
+	}
+	/** Builds the alias name (NOTE: always default not primary buffer name - that's the whole point)
+	 * @param bucket
+	 * @param time_suffix
+	 * @return
+	 */
+	public List<String> getMainAliasedBuffers(final DataBucketBean bucket) {
+		return _crud_factory.getClient().admin().indices().prepareStats()
+                    .clear()
+                    .setIndices("r__" + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()))
                     .setStore(true)
                     .get()
 					.getIndices().keySet().stream().sorted().collect(Collectors.toList())
