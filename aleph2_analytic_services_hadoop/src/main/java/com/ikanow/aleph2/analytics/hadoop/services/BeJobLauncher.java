@@ -32,6 +32,7 @@ import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.logging.log4j.LogManager;
@@ -47,6 +48,7 @@ import com.ikanow.aleph2.analytics.hadoop.assets.ObjectNodeWritableComparable;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobService;
 import com.ikanow.aleph2.analytics.hadoop.data_model.HadoopTechnologyOverrideBean;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
@@ -79,6 +81,9 @@ public class BeJobLauncher implements IBeJobService{
 
 	protected BatchEnrichmentContext _batchEnrichmentContext;
 
+	@SuppressWarnings("rawtypes")
+	public static interface HadoopAccessContext extends IAnalyticsAccessContext<InputFormat> {}
+	
 	/** User/guice c'tor
 	 * @param globals
 	 * @param beJobLoader
@@ -134,14 +139,37 @@ public class BeJobLauncher implements IBeJobService{
 					.forEach(Lambdas.wrap_consumer_u(input -> {
 						final List<String> paths = _batchEnrichmentContext.getAnalyticsContext().getInputPaths(Optional.of(bucket), _batchEnrichmentContext.getJob(), input);
 						
-						logger.info(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));
+						if (!paths.isEmpty()) {
 						
-					    final Job inputJob = Job.getInstance(config);
-					    inputJob.setInputFormatClass(BeFileInputFormat.class);				
-						paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(path))));
-						inputBuilder.addInput(UuidUtils.get().getRandomUuid(), inputJob);
+							logger.info(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));
+							
+						    final Job inputJob = Job.getInstance(config);
+						    inputJob.setInputFormatClass(BeFileInputFormat.class);				
+							paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(path))));
+							inputBuilder.addInput(UuidUtils.get().getRandomUuid(), inputJob);
+						}
+						else { // not easily available in HDFS directory format, try getting from the context
+							
+							Optional<HadoopAccessContext> input_format_info = _batchEnrichmentContext.getAnalyticsContext().getServiceInput(HadoopAccessContext.class, Optional.of(bucket), _batchEnrichmentContext.getJob(), input);
+							if (!input_format_info.isPresent()) {
+								logger.warn(ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input)));
+							}
+							else {
+								logger.info(ErrorUtils.get("Adding data service path for bucket {0}: {1} ({2})", bucket.full_name()),
+										input_format_info.get().getAccessService().either(l -> l.getClass().getSimpleName(), r -> r.getSimpleName()),
+										input_format_info.get().getAccessConfig().map(cfg -> cfg.size()).orElse(0)
+										);
+								
+							    final Job inputJob = Job.getInstance(config);
+							    inputJob.setInputFormatClass(input_format_info.get().getAccessService().either(l -> l.getClass(), r -> r));
+							    input_format_info.get().getAccessConfig().ifPresent(map -> {
+							    	map.entrySet().forEach(kv -> inputJob.getConfiguration().set(kv.getKey(), kv.getValue().toString()));
+							    });							    
+							    inputBuilder.addInput(UuidUtils.get().getRandomUuid(), inputJob);
+							}
+						}
 					}));
-					;
+					;					
 					
 			// (ALEPH-12): other input format types
 			

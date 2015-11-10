@@ -89,9 +89,26 @@
   		<version>4.12</version>
   		<scope>test</scope>
   	</dependency>
+	<dependency>
+		<groupId>org.elasticsearch</groupId>
+		<artifactId>elasticsearch-hadoop</artifactId>
+		<version>2.1.2</version>
+	</dependency>
   	<dependency>
   		<groupId>com.ikanow.aleph2</groupId>
   		<artifactId>aleph2_crud_service_elasticsearch</artifactId>
+  		<version>${aleph2.version}</version>
+		<scope>${aleph2.scope}</scope>  		  		
+  	</dependency>
+  	<dependency>
+  		<groupId>com.ikanow.aleph2</groupId>
+  		<artifactId>aleph2_hadoop_dependencies</artifactId>
+  		<version>${aleph2.version}</version>
+		<scope>${aleph2.scope}</scope>  		  		
+  	</dependency>
+  	<dependency>
+  		<groupId>com.ikanow.aleph2</groupId>
+  		<artifactId>aleph2_storm_dependencies</artifactId>
   		<version>${aleph2.version}</version>
 		<scope>${aleph2.scope}</scope>  		  		
   	</dependency>

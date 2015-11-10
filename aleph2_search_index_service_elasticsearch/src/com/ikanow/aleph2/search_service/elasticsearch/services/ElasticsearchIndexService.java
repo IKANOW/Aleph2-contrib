@@ -38,6 +38,7 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
 
+import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
@@ -60,6 +61,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.inject.Inject;
 import com.google.inject.Module;
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService;
@@ -69,6 +71,7 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISubject;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean;
@@ -79,6 +82,7 @@ import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
+import com.ikanow.aleph2.data_model.utils.AnalyticsUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
@@ -88,6 +92,7 @@ import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIn
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
 import com.ikanow.aleph2.search_service.elasticsearch.module.ElasticsearchIndexServiceModule;
+import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchHadoopUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.SearchIndexErrorUtils;
@@ -816,11 +821,19 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService#getUnderlyingPlatformDriver(java.lang.Class, java.util.Optional)
 	 */
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
 	public <T> Optional<T> getUnderlyingPlatformDriver(final Class<T> driver_class, final Optional<String> driver_options) {
 		if (Client.class.isAssignableFrom(driver_class)) {
 			return (Optional<T>) Optional.of(_crud_factory.getClient());
+		}
+		if (IAnalyticsAccessContext.class.isAssignableFrom(driver_class)) {
+			if (InputFormat.class.isAssignableFrom(AnalyticsUtils.getTypeName((Class<? extends IAnalyticsAccessContext>)driver_class))) { // INPUT FORMAT
+				return (Optional<T>) driver_options.map(json -> BeanTemplateUtils.from(json, AnalyticThreadJobBean.AnalyticThreadJobInputBean.class))
+						.map(job_input -> ElasticsearchHadoopUtils.getInputFormat(job_input.get()))
+						.map(access_context -> AnalyticsUtils.injectImplementation((Class<? extends IAnalyticsAccessContext>)driver_class, access_context))
+						;
+			}			
 		}
 		return Optional.empty();
 	}

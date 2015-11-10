@@ -681,7 +681,7 @@ public class ElasticsearchIndexUtils {
 											.orElse(mapper.createObjectNode());
 			
 			if (is_primary) { // add the "read only" prefix alias
-				aliases.put(ElasticsearchContext.READ_PREFIX + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()), mapper.createObjectNode());
+				aliases.set(ElasticsearchContext.READ_PREFIX + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()), mapper.createObjectNode());
 			}
 			
 			// Settings
