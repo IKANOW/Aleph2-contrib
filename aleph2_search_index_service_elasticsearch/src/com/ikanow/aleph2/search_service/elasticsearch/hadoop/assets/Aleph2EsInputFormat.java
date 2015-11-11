@@ -63,15 +63,16 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 	/* (non-Javadoc)
 	 * @see org.elasticsearch.hadoop.mr.EsInputFormat#getSplits(org.apache.hadoop.mapreduce.JobContext)
 	 */
+	@SuppressWarnings("unchecked")
 	@Override
-	public List getSplits(JobContext context) throws IOException {
+	public List<InputSplit> getSplits(JobContext context) throws IOException {
 		final String[] indexes = context.getConfiguration().get(ALEPH2_RESOURCE, "").split(",,");
 				
-		return Arrays.stream(indexes).flatMap(Lambdas.wrap_u(index -> {
+		return Arrays.stream(indexes).<InputSplit>flatMap(Lambdas.wrap_u(index -> {
 			context.getConfiguration().set("es.resource.read", index.replace(" ", "%20"));
-			return super.getSplits(context).stream();
+			return ((List<InputSplit>)super.getSplits(context)).stream();
 		}))
-		.collect(Collectors.toList())
+		.collect(Collectors.<InputSplit>toList())
 		;
 	}
 
