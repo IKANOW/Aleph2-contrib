@@ -230,7 +230,7 @@ public class ElasticsearchIndexUtils {
 					.map(p -> {
 						return StreamSupport.stream(Spliterators.spliteratorUnknownSize(p.fields(), Spliterator.ORDERED), false)
 							.map(kv -> {
-								if (!kv.getValue().has("type") && !kv.getValue().has("properties")) throw new RuntimeException(SearchIndexErrorUtils.get("field '{0}' must have a 'type' or 'properties' sub-field", kv.getKey()));
+								if (!kv.getValue().has("type") && !kv.getValue().has("properties")) throw new RuntimeException(SearchIndexErrorUtils.get("field {0} must have a 'type' or 'properties' sub-field", kv.getKey()));
 								return kv;
 							})
 							.collect(Collectors.

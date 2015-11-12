@@ -269,7 +269,17 @@ public class BatchEnrichmentJob{
 										_v1_logger.ifPresent(logger -> logger.info("Trying to launch stage " + Optional.ofNullable(ecm.name()).orElse("(no name)") + " with entry point = " + entryPoint));
 										
 										return entryPoint.map(Stream::of).orElseGet(() -> Stream.of(BePassthroughModule.class.getName()))
-												.flatMap(Lambdas.flatWrap_i(ep -> (IEnrichmentBatchModule)Class.forName(ep).newInstance()))
+												.flatMap(Lambdas.flatWrap_i(ep -> {
+													try {
+														return (IEnrichmentBatchModule)Class.forName(ep).newInstance();
+													}
+													catch (Throwable t) {
+														_v1_logger.ifPresent(logger -> logger.info(ErrorUtils.getLongForm("Error intializing {1}:{2}: {0}", t,
+																Optional.ofNullable(ecm.name()).orElse("(no name)"), entryPoint
+																)));
+														throw t; // (will be ignored)
+													}
+												}))
 												.map(mod -> {			
 													_v1_logger.ifPresent(logger -> logger.info("Completed initialization of stage " + Optional.ofNullable(ecm.name()).orElse("(no name)")));
 													
