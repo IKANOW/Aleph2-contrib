@@ -221,22 +221,32 @@ public class JsonNodeWritableUtils {
 	 * @author Alex
 	 */
 	public static class ObjectNodeWrapper extends ObjectNode {
+		private Map<String, JsonNode> _my_children;
 		/** User c'tor
 		 * @param nc
 		 * @param kids
 		 */
+		@SuppressWarnings("unchecked")
 		public ObjectNodeWrapper(JsonNodeFactory nc, Map<Writable, Writable> kids) {
-			super(nc, new LazyTransformingMap(kids, nc));
+			super(nc);
+			try {
+				// Ugh, children is private
+				final Field f = ObjectNode.class.getDeclaredField("_children");
+				f.setAccessible(true);
+				f.set(this, new LazyTransformingMap(kids, nc));
+				_my_children = (Map<String, JsonNode>) f.get(this);
+			}
+			catch (Exception e) {}
 		}
 		
 		public boolean containsKey(Object key) {
-			return _children.containsKey(key);
+			return _my_children.containsKey(key);
 		}
 		public boolean containsValue(Object val) {
-			return _children.containsValue(val);
+			return _my_children.containsValue(val);
 		}
 		public boolean isEmpty() {
-			return _children.isEmpty();
+			return _my_children.isEmpty();
 		}
 	}
 	

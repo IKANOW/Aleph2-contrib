@@ -74,7 +74,6 @@ public class TestJsonNodeWritableUtils {
 		// will test object writable and array writable below		
 	}
 	
-	@SuppressWarnings("deprecation")
 	@Test
 	public void test_mapWritableWrapper() {
 		final ObjectMapper mapper = BeanTemplateUtils.configureMapper(Optional.empty());
