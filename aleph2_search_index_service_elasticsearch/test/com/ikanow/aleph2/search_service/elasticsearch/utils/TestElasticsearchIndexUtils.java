@@ -589,7 +589,7 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
 				_mapper, "_default_");
-	
+			
 			assertEquals(expected_json.get("mappings").get("_default_").toString(), test_result.bytes().toUtf8());
 		}
 	}
