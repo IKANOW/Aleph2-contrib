@@ -19,7 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
@@ -92,9 +92,12 @@ public class TestLoggingService {
 		
 		//check its in ES, wait 10s max for the index to refresh
 		final DataBucketBean logging_test_bucket = LoggingService.convertBucketToLoggingBucket(test_bucket);
-		final ICrudService<BasicMessageBean> logging_crud = search_index_service.getDataService().get().getReadableCrudService(BasicMessageBean.class, Arrays.asList(logging_test_bucket), Optional.empty()).get();
+		final IDataWriteService<BasicMessageBean> logging_crud = search_index_service.getDataService().get().getWritableDataService(BasicMessageBean.class, logging_test_bucket, Optional.empty(), Optional.empty()).get();
 		waitForResults(logging_crud, 10);
 		assertEquals(num_messages_to_log, logging_crud.countObjects().get().longValue());
+
+		//cleanup
+		logging_crud.deleteDatastore().get();
 	}
 	
 	@Test
@@ -109,9 +112,12 @@ public class TestLoggingService {
 		
 		//check its in ES, wait 10s max for the index to refresh
 		final DataBucketBean logging_test_bucket = LoggingService.convertBucketToLoggingBucket(test_bucket);
-		final ICrudService<BasicMessageBean> logging_crud = search_index_service.getDataService().get().getReadableCrudService(BasicMessageBean.class, Arrays.asList(logging_test_bucket), Optional.empty()).get();
+		final IDataWriteService<BasicMessageBean> logging_crud = search_index_service.getDataService().get().getWritableDataService(BasicMessageBean.class, logging_test_bucket, Optional.empty(), Optional.empty()).get();
 		waitForResults(logging_crud, 10);
 		assertEquals(num_messages_to_log, logging_crud.countObjects().get().longValue());
+
+		//cleanup
+		logging_crud.deleteDatastore().get();
 	}
 	
 	@Test
@@ -125,9 +131,12 @@ public class TestLoggingService {
 		
 		//check its in ES, wait 10s max for the index to refresh
 		final DataBucketBean logging_test_bucket = LoggingService.convertBucketToLoggingBucket(test_bucket);
-		final ICrudService<BasicMessageBean> logging_crud = search_index_service.getDataService().get().getReadableCrudService(BasicMessageBean.class, Arrays.asList(logging_test_bucket), Optional.empty()).get();
+		final IDataWriteService<BasicMessageBean> logging_crud = search_index_service.getDataService().get().getWritableDataService(BasicMessageBean.class, logging_test_bucket, Optional.empty(), Optional.empty()).get();
 		waitForResults(logging_crud, 10);
 		assertEquals(num_messages_to_log, logging_crud.countObjects().get().longValue());
+
+		//cleanup
+		logging_crud.deleteDatastore().get();
 	}
 	
 	/**
@@ -137,7 +146,7 @@ public class TestLoggingService {
 	 * @param crud_service
 	 * @param max_wait_time_s
 	 */
-	private static void waitForResults(final ICrudService<?> crud_service, final long max_wait_time_s) {
+	private static void waitForResults(final IDataWriteService<?> crud_service, final long max_wait_time_s) {
 		for (int ii = 0; ii < max_wait_time_s; ++ii) {
 			try { Thread.sleep(1000L); } catch (Exception e) {}
 			if (crud_service.countObjects().join().intValue() > 0) break;
