@@ -207,6 +207,8 @@ public class BeJobLauncher implements IBeJobService{
 		    
 		    // (generic mapper - the actual code is run using the classes in the shared libraries)
 		    job.get().setMapperClass(BatchEnrichmentJob.BatchEnrichmentMapper.class);
+		    job.get().setMapOutputKeyClass(ObjectNodeWritableComparable.class);
+		    job.get().setMapOutputValueClass(ObjectNodeWritableComparable.class);
 		    
 		    // (combiner and reducer)
 		    Optional.ofNullable(bucket.batch_enrichment_configs()).orElse(Collections.emptyList())

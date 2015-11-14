@@ -42,6 +42,7 @@ import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.UuidUtils;
 
 import fj.Unit;
 import fj.data.Either;
@@ -122,7 +123,7 @@ public class MockHadoopTestingService {
 		final String bucketReadyPath1 = bucketPath1 + subservice_suffix + date
 				.either(left -> left.map(d -> DateTimeFormatter.ofPattern("yyyy-MM-dd").format(d.toInstant())).orElse(IStorageService.NO_TIME_SUFFIX), right -> "");
 		DirUtils.createDirectory(fileContext,bucketReadyPath1);
-		DirUtils.createUTF8File(fileContext,bucketReadyPath1+"/data.json", new StringBuffer(IOUtils.toString(local_stream)));
+		DirUtils.createUTF8File(fileContext,bucketReadyPath1+"/data_" + UuidUtils.get().getRandomUuid() + ".json", new StringBuffer(IOUtils.toString(local_stream)));
 	}
 
 	/** Adds the contents of the InputStream to a file in the bucket's batch input path

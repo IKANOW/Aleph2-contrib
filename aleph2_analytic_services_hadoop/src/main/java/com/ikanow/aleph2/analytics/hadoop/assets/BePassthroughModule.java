@@ -25,7 +25,6 @@ import org.apache.logging.log4j.Logger;
 import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
@@ -66,8 +65,8 @@ public class BePassthroughModule implements IEnrichmentBatchModule {
 
 			// not sure what to do with streaming (probably binary) data - probably will have to just ignore it in default mode?
 			// (the alternative is to build Tika directly in? or maybe dump it directly in .. not sure how Jackson manages raw data?)
-			Optional<ObjectNode> streamBytes = Optional.empty();						
-			_context.emitImmutableObject(t2._1(), t2._2().getJson(), streamBytes, Optional.empty(), grouping_key);
+			
+			_context.emitImmutableObject(t2._1(), t2._2().getJson(), Optional.empty(), Optional.empty(), grouping_key);
 
 		}); // for 
 	}
@@ -79,5 +78,4 @@ public class BePassthroughModule implements IEnrichmentBatchModule {
 	public void onStageComplete(boolean is_original) {
 		logger.debug("BatchEnrichmentModule.onStageComplete()");
 	}
-
 }

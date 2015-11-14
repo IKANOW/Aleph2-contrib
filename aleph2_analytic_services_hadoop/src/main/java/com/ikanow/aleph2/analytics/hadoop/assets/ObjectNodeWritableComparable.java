@@ -45,6 +45,11 @@ public class ObjectNodeWritableComparable implements WritableComparable<Object> 
 		return _object_node;
 	}
 	
+	/** System c'tor
+	 */
+	public ObjectNodeWritableComparable() {		
+	}
+	
 	/** User c'tor
 	 * @param object_node
 	 */
@@ -59,6 +64,8 @@ public class ObjectNodeWritableComparable implements WritableComparable<Object> 
 	public void write(DataOutput out) throws IOException {
 		final Text text = new Text();
 		text.set(_object_node.toString());
+		
+		text.write(out);
 	}
 
 	/* (non-Javadoc)
@@ -68,6 +75,7 @@ public class ObjectNodeWritableComparable implements WritableComparable<Object> 
 	public void readFields(DataInput in) throws IOException {
 		final Text text = new Text();
 		text.readFields(in);
+		
 		_object_node = (ObjectNode) _mapper.readTree(text.toString()); //(object node by construction)
 	}
 

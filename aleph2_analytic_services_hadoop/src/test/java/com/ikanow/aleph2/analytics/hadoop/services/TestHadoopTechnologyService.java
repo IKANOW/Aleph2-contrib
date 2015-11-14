@@ -32,6 +32,7 @@ import java.util.concurrent.ExecutionException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.util.FileUtils;
 import org.elasticsearch.common.collect.ImmutableMap;
 import org.junit.Before;
 import org.junit.Test;
@@ -59,8 +60,7 @@ import com.typesafe.config.ConfigValueFactory;
 import fj.data.Either;
 
 public class TestHadoopTechnologyService {
-
-    private static final Logger logger = LogManager.getLogger(TestBeJobService.class);
+    private static final Logger logger = LogManager.getLogger();
 
 	@Inject
 	protected GlobalPropertiesBean _globals = null;
@@ -73,6 +73,8 @@ public class TestHadoopTechnologyService {
 		try{
 			final String temp_dir = System.getProperty("java.io.tmpdir");
 
+			FileUtils.mkdir(new File(temp_dir + "/lib"), true);
+			
 			// OK we're going to use guice, it was too painful doing this by hand...				
 			Config config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/context_local_test.properties")))
 					.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
@@ -264,8 +266,10 @@ public class TestHadoopTechnologyService {
 		final InputStream test_file = new ByteArrayInputStream("{\"testField\":\"test1\"}".getBytes(StandardCharsets.UTF_8));
 		test_service.addFileToInputDirectory(test_file, test_bucket);
 		
-		test_service.testAnalyticModule(test_bucket, Optional.of(10));
-
+		final CompletableFuture<BasicMessageBean> start_res = test_service.testAnalyticModule(test_bucket, Optional.of(10));
+		
+		assertTrue("Failed to start: " + start_res.join().message(), start_res.join().success());		
+		
 		// Wait for job to finish
 		for (int ii = 0; ii < 120; ++ii) {
 			Thread.sleep(1000L);
