@@ -48,6 +48,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.storage_service_hdfs.utils.HdfsErrorUtils;
@@ -329,20 +330,26 @@ public class HdfsStorageService implements IStorageService {
 			
 			// Check if the stage is enabled:
 			
-			return (StorageStage.transient_output == stage_job._1())
-					? 
-					Optional.of(new HfdsDataWriteService<O>(bucket, this, stage_job._1(), stage_job._2(), HdfsStorageService.this, secondary_buffer))
-					:
-					Optionals.of(() -> bucket.data_schema().storage_schema())
+			return Patterns.match(stage_job._1()).<Optional<IDataWriteService<O>>>andReturn()
+					.when(stage -> StorageStage.transient_output == stage, __ ->
+							Optional.of(new HfdsDataWriteService<O>(bucket, this, stage_job._1(), stage_job._2(), HdfsStorageService.this, secondary_buffer))
+					)
+					.when(stage -> StorageStage.transient_input == stage, __ ->
+							Optional.of(new HfdsDataWriteService<O>(bucket, this, stage_job._1(), Optional.empty(), HdfsStorageService.this, secondary_buffer))
+					)
+					.otherwise(stage -> {
+						return 	Optionals.of(() -> bucket.data_schema().storage_schema())
 								.filter(storage -> 
 											Optional.ofNullable(storage.enabled()).orElse(true))
 								.map(storage -> 
 											HfdsDataWriteService.getStorageSubSchema(storage, stage_job._1()))
 								.filter(substore -> 
-												Optional.ofNullable(substore.enabled()).orElse(true))
+											Optional.ofNullable(substore.enabled()).orElse(true))
 								.map(__ -> 
-										new HfdsDataWriteService<O>(bucket, this, stage_job._1(), Optional.empty(), HdfsStorageService.this, secondary_buffer))
+									new HfdsDataWriteService<O>(bucket, this, stage_job._1(), Optional.empty(), HdfsStorageService.this, secondary_buffer))
 								;
+
+					});
 		}
 
 		/* (non-Javadoc)

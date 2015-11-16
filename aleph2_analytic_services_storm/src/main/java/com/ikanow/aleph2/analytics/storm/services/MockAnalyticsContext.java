@@ -77,6 +77,7 @@ import com.typesafe.config.ConfigValueFactory;
 
 import fj.Unit;
 import fj.data.Either;
+import fj.data.Validation;
 
 /** A minimal implementation of the analytics context interface for test purposes
  * @author Alex
@@ -627,7 +628,7 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#sendObjectToStreamingPipeline(java.util.Optional, java.util.Optional, fj.data.Either)
 	 */
 	@Override
-	public void sendObjectToStreamingPipeline(final Optional<DataBucketBean> bucket,
+	public Validation<BasicMessageBean, JsonNode>  sendObjectToStreamingPipeline(final Optional<DataBucketBean> bucket,
 			final AnalyticThreadJobBean job, 
 			final Either<JsonNode, Map<String, Object>> object, 
 			final Optional<AnnotationBean> annotations)
@@ -637,11 +638,20 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 		}
 		final JsonNode obj_json =  object.either(__->__, map -> (JsonNode) _mapper.convertValue(map, JsonNode.class));
 
-		this.getOutputTopic(bucket, job).ifPresent(topic -> {				
+		return this.getOutputTopic(bucket, job).<Validation<BasicMessageBean, JsonNode>>map(topic -> {	
 			if (_distributed_services.doesTopicExist(topic)) {
 				// (ie someone is listening in on our output data, so duplicate it for their benefit)
 				_distributed_services.produce(topic, obj_json.toString());
+				return Validation.success(obj_json);
 			}
+			else {
+				return Validation.fail(ErrorUtils.buildSuccessMessage(this.getClass().getSimpleName(), "sendObjectToStreamingPipeline", "Bucket:job {0}:{1} topic {2} has no listeners", 
+						bucket.map(b-> b.full_name()).orElse("(unknown)"), job.name(), topic));
+			}
+		})
+		.orElseGet(() -> {
+			return  Validation.fail(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "sendObjectToStreamingPipeline", "Bucket:job {0}:{1} has no output topic", 
+					bucket.map(b-> b.full_name()).orElse("(unknown)"), job.name()));
 		});
 	}
 
@@ -675,7 +685,7 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#emitObject(java.util.Optional, com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean, fj.data.Either, java.util.Optional)
 	 */
 	@Override
-	public void emitObject(final Optional<DataBucketBean> bucket,
+	public Validation<BasicMessageBean, JsonNode> emitObject(final Optional<DataBucketBean> bucket,
 			final AnalyticThreadJobBean job,
 			final Either<JsonNode, Map<String, Object>> object, 
 			final Optional<AnnotationBean> annotations)
@@ -706,6 +716,8 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 			_distributed_services.produce(topic, obj_json.toString());
 		}
 		//(else nothing to do)
+		
+		return Validation.success(obj_json);
 	}
 
 	@Override

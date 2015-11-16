@@ -56,6 +56,9 @@ import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 
+import fj.data.Either;
+import fj.data.Validation;
+
 /** The implementation of the batch  enrichment context
  * @author Joern
  */
@@ -258,28 +261,47 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitMutableObject(long, com.fasterxml.jackson.databind.node.ObjectNode, java.util.Optional)
 	 */
 	@Override
-	public void emitMutableObject(long id, ObjectNode mutated_json,
+	public Validation<BasicMessageBean, JsonNode> emitMutableObject(long id, ObjectNode mutated_json,
 			Optional<AnnotationBean> annotation, final Optional<JsonNode> grouping_fields) {
 		if (annotation.isPresent()) {
 			throw new RuntimeException(ErrorUtils.get(HadoopErrorUtils.NOT_YET_IMPLEMENTED, "annotations"));			
 		}
+		
 		_mutable_records.add(Tuples._2T(Tuples._2T(_mutable_1up.incrementAndGet(), new BeFileInputReader.BatchRecord(mutated_json, null)), grouping_fields));
+		return Validation.success(mutated_json);
 	}
 
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitImmutableObject(long, com.fasterxml.jackson.databind.JsonNode, java.util.Optional, java.util.Optional)
 	 */
 	@Override
-	public void emitImmutableObject(long id, JsonNode original_json,
+	public Validation<BasicMessageBean, JsonNode> emitImmutableObject(long id, JsonNode original_json,
 			Optional<ObjectNode> mutations, Optional<AnnotationBean> annotations, final Optional<JsonNode> grouping_fields) {
-		final JsonNode to_emit = 
-				mutations.map(o -> StreamSupport.<Map.Entry<String, JsonNode>>stream(Spliterators.spliteratorUnknownSize(o.fields(), Spliterator.ORDERED), false)
-									.reduce(original_json, (acc, kv) -> ((ObjectNode) acc).set(kv.getKey(), kv.getValue()), (val1, val2) -> val2))
-									.orElse(original_json);
 		
-		emitMutableObject(0L, (ObjectNode)to_emit, annotations, grouping_fields);
+		final JsonNode to_emit = handleMutations(original_json, mutations);		
+		return emitMutableObject(0L, (ObjectNode)to_emit, annotations, grouping_fields);
 	}
 
+	/** Utility to mutate objects
+	 * @param original_json
+	 * @param mutations
+	 * @return
+	 */
+	protected static JsonNode handleMutations(JsonNode original_json, Optional<ObjectNode> mutations) {
+		return 	mutations.map(o -> StreamSupport.<Map.Entry<String, JsonNode>>stream(Spliterators.spliteratorUnknownSize(o.fields(), Spliterator.ORDERED), false)
+				.reduce(original_json, (acc, kv) -> ((ObjectNode) acc).set(kv.getKey(), kv.getValue()), (val1, val2) -> val2))
+				.orElse(original_json)
+				;
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#externalEmit(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, com.fasterxml.jackson.databind.JsonNode, java.util.Optional, java.util.Optional)
+	 */
+	public Validation<BasicMessageBean, JsonNode> externalEmit(final DataBucketBean bucket, final Either<JsonNode, Map<String, Object>> object, final Optional<AnnotationBean> annotations)
+	{
+		return _delegate.get().emitObject(Optional.of(bucket), _job.get(), object, annotations);
+	}	
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#storeErroredObject(long, com.fasterxml.jackson.databind.JsonNode)
 	 */
