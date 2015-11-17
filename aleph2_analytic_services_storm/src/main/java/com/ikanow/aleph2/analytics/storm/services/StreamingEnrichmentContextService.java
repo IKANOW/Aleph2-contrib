@@ -1,18 +1,18 @@
 /*******************************************************************************
-* Copyright 2015, The IKANOW Open Source Project.
-* 
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-* 
-*   http://www.apache.org/licenses/LICENSE-2.0
-* 
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-******************************************************************************/
+ * Copyright 2015, The IKANOW Open Source Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package com.ikanow.aleph2.analytics.storm.services;
 
 import java.util.Arrays;
@@ -66,6 +66,7 @@ import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
 import com.ikanow.aleph2.distributed_services.utils.KafkaUtils;
 
 import fj.data.Either;
+import fj.data.Validation;
 
 /** An enrichment context service that just wraps the analytics service
  * @author Alex
@@ -299,15 +300,16 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitMutableObject(long, com.fasterxml.jackson.databind.node.ObjectNode, java.util.Optional)
 	 */
 	@Override
-	public void emitMutableObject(final long id, final ObjectNode mutated_json, final Optional<AnnotationBean> annotation, final Optional<JsonNode> grouping_fields) {		
+	public Validation<BasicMessageBean, JsonNode> emitMutableObject(final long id, final ObjectNode mutated_json, final Optional<AnnotationBean> annotation, final Optional<JsonNode> grouping_fields) {		
 		_delegate.get().emitObject(_delegate.get().getBucket(), _job.get(), Either.left((JsonNode) mutated_json), annotation);
+		return Validation.success(mutated_json);
 	}
 
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitImmutableObject(long, com.fasterxml.jackson.databind.JsonNode, java.util.Optional, java.util.Optional)
 	 */
 	@Override
-	public void emitImmutableObject(final long id, final JsonNode original_json, final Optional<ObjectNode> mutations, final Optional<AnnotationBean> annotations, final Optional<JsonNode> grouping_fields) {
+	public Validation<BasicMessageBean, JsonNode> emitImmutableObject(final long id, final JsonNode original_json, final Optional<ObjectNode> mutations, final Optional<AnnotationBean> annotations, final Optional<JsonNode> grouping_fields) {
 		if (annotations.isPresent()) {
 			throw new RuntimeException(ErrorUtils.NOT_YET_IMPLEMENTED);			
 		}
@@ -320,8 +322,17 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 									.orElse(original_json);
 		
 		emitMutableObject(0L, (ObjectNode)to_emit, annotations, Optional.empty());
+		return Validation.success(to_emit);
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#externalEmit(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, com.fasterxml.jackson.databind.JsonNode, java.util.Optional, java.util.Optional)
+	 */
+	public Validation<BasicMessageBean, JsonNode> externalEmit(final DataBucketBean bucket, final Either<JsonNode, Map<String, Object>> object, final Optional<AnnotationBean> annotations)
+	{
+		return _delegate.get().emitObject(Optional.of(bucket), _job.get(), object, annotations);
+	}	
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#storeErroredObject(long, com.fasterxml.jackson.databind.JsonNode)
 	 */

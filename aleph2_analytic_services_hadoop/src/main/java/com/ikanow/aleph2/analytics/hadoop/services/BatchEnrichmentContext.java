@@ -1,18 +1,18 @@
 /*******************************************************************************
-* Copyright 2015, The IKANOW Open Source Project.
-* 
-* This program is free software: you can redistribute it and/or modify
-* it under the terms of the GNU Affero General Public License, version 3,
-* as published by the Free Software Foundation.
-* 
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU Affero General Public License for more details.
-* 
-* You should have received a copy of the GNU Affero General Public License
-* along with this program. If not, see <http://www.gnu.org/licenses/>.
-******************************************************************************/
+ * Copyright 2015, The IKANOW Open Source Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.services;
 
 import java.util.ArrayList;
@@ -55,6 +55,9 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+
+import fj.data.Either;
+import fj.data.Validation;
 
 /** The implementation of the batch  enrichment context
  * @author Joern
@@ -258,28 +261,47 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitMutableObject(long, com.fasterxml.jackson.databind.node.ObjectNode, java.util.Optional)
 	 */
 	@Override
-	public void emitMutableObject(long id, ObjectNode mutated_json,
+	public Validation<BasicMessageBean, JsonNode> emitMutableObject(long id, ObjectNode mutated_json,
 			Optional<AnnotationBean> annotation, final Optional<JsonNode> grouping_fields) {
 		if (annotation.isPresent()) {
 			throw new RuntimeException(ErrorUtils.get(HadoopErrorUtils.NOT_YET_IMPLEMENTED, "annotations"));			
 		}
+		
 		_mutable_records.add(Tuples._2T(Tuples._2T(_mutable_1up.incrementAndGet(), new BeFileInputReader.BatchRecord(mutated_json, null)), grouping_fields));
+		return Validation.success(mutated_json);
 	}
 
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitImmutableObject(long, com.fasterxml.jackson.databind.JsonNode, java.util.Optional, java.util.Optional)
 	 */
 	@Override
-	public void emitImmutableObject(long id, JsonNode original_json,
+	public Validation<BasicMessageBean, JsonNode> emitImmutableObject(long id, JsonNode original_json,
 			Optional<ObjectNode> mutations, Optional<AnnotationBean> annotations, final Optional<JsonNode> grouping_fields) {
-		final JsonNode to_emit = 
-				mutations.map(o -> StreamSupport.<Map.Entry<String, JsonNode>>stream(Spliterators.spliteratorUnknownSize(o.fields(), Spliterator.ORDERED), false)
-									.reduce(original_json, (acc, kv) -> ((ObjectNode) acc).set(kv.getKey(), kv.getValue()), (val1, val2) -> val2))
-									.orElse(original_json);
 		
-		emitMutableObject(0L, (ObjectNode)to_emit, annotations, grouping_fields);
+		final JsonNode to_emit = handleMutations(original_json, mutations);		
+		return emitMutableObject(0L, (ObjectNode)to_emit, annotations, grouping_fields);
 	}
 
+	/** Utility to mutate objects
+	 * @param original_json
+	 * @param mutations
+	 * @return
+	 */
+	protected static JsonNode handleMutations(JsonNode original_json, Optional<ObjectNode> mutations) {
+		return 	mutations.map(o -> StreamSupport.<Map.Entry<String, JsonNode>>stream(Spliterators.spliteratorUnknownSize(o.fields(), Spliterator.ORDERED), false)
+				.reduce(original_json, (acc, kv) -> ((ObjectNode) acc).set(kv.getKey(), kv.getValue()), (val1, val2) -> val2))
+				.orElse(original_json)
+				;
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#externalEmit(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, com.fasterxml.jackson.databind.JsonNode, java.util.Optional, java.util.Optional)
+	 */
+	public Validation<BasicMessageBean, JsonNode> externalEmit(final DataBucketBean bucket, final Either<JsonNode, Map<String, Object>> object, final Optional<AnnotationBean> annotations)
+	{
+		return _delegate.get().emitObject(Optional.of(bucket), _job.get(), object, annotations);
+	}	
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#storeErroredObject(long, com.fasterxml.jackson.databind.JsonNode)
 	 */

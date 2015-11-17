@@ -1,18 +1,18 @@
 /*******************************************************************************
-* Copyright 2015, The IKANOW Open Source Project.
-* 
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-* 
-*   http://www.apache.org/licenses/LICENSE-2.0
-* 
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-******************************************************************************/
+ * Copyright 2015, The IKANOW Open Source Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package com.ikanow.aleph2.storage_service_hdfs.services;
 
 import java.io.File;
@@ -48,6 +48,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.storage_service_hdfs.utils.HdfsErrorUtils;
@@ -329,20 +330,26 @@ public class HdfsStorageService implements IStorageService {
 			
 			// Check if the stage is enabled:
 			
-			return (StorageStage.transient_output == stage_job._1())
-					? 
-					Optional.of(new HfdsDataWriteService<O>(bucket, this, stage_job._1(), stage_job._2(), HdfsStorageService.this, secondary_buffer))
-					:
-					Optionals.of(() -> bucket.data_schema().storage_schema())
+			return Patterns.match(stage_job._1()).<Optional<IDataWriteService<O>>>andReturn()
+					.when(stage -> StorageStage.transient_output == stage, __ ->
+							Optional.of(new HfdsDataWriteService<O>(bucket, this, stage_job._1(), stage_job._2(), HdfsStorageService.this, secondary_buffer))
+					)
+					.when(stage -> StorageStage.transient_input == stage, __ ->
+							Optional.of(new HfdsDataWriteService<O>(bucket, this, stage_job._1(), Optional.empty(), HdfsStorageService.this, secondary_buffer))
+					)
+					.otherwise(stage -> {
+						return 	Optionals.of(() -> bucket.data_schema().storage_schema())
 								.filter(storage -> 
 											Optional.ofNullable(storage.enabled()).orElse(true))
 								.map(storage -> 
 											HfdsDataWriteService.getStorageSubSchema(storage, stage_job._1()))
 								.filter(substore -> 
-												Optional.ofNullable(substore.enabled()).orElse(true))
+											Optional.ofNullable(substore.enabled()).orElse(true))
 								.map(__ -> 
-										new HfdsDataWriteService<O>(bucket, this, stage_job._1(), Optional.empty(), HdfsStorageService.this, secondary_buffer))
+									new HfdsDataWriteService<O>(bucket, this, stage_job._1(), Optional.empty(), HdfsStorageService.this, secondary_buffer))
 								;
+
+					});
 		}
 
 		/* (non-Javadoc)

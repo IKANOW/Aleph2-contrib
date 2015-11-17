@@ -1,18 +1,18 @@
 /*******************************************************************************
-* Copyright 2015, The IKANOW Open Source Project.
-* 
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-* 
-*   http://www.apache.org/licenses/LICENSE-2.0
-* 
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-******************************************************************************/
+ * Copyright 2015, The IKANOW Open Source Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package com.ikanow.aleph2.storage_service_hdfs.services;
 
 import java.io.IOException;
@@ -69,6 +69,8 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 
 	public static final FsPermission DEFAULT_DIR_PERMS = FsPermission.valueOf("drwxrwxrwx");
 	
+	protected static final String SPOOL_DIR = "/.spooldir/";
+		
 	/////////////////////////////////////////////////////////////
 	
 	// TOP LEVEL SERVICE
@@ -91,7 +93,11 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 * @param bucket
 	 */
 	public HfdsDataWriteService(final DataBucketBean bucket, final IGenericDataService parent, final IStorageService.StorageStage stage, final Optional<String> job_name, final IStorageService storage_service, final Optional<String> secondary_buffer) {
-		_bucket = bucket;
+		_bucket = null == bucket.data_schema()
+					? BeanTemplateUtils.clone(bucket).with(DataBucketBean::data_schema, 
+							BeanTemplateUtils.build(DataSchemaBean.class).done().get()).done() // (makes life simpler if schema is non null)
+					: bucket
+					;
 		_stage = stage;
 		_buffer_name = secondary_buffer.orElse(IStorageService.PRIMARY_BUFFER_SUFFIX);
 		_storage_service = storage_service;
@@ -116,7 +122,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 */
 	public void initializeBasePath(final String root_path, final DataBucketBean bucket, final IStorageService.StorageStage stage, final Optional<String> job_name, final String buffer)
 	{
-		final Path p = new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, buffer));
+		final Path p = new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, buffer, false));
 		try {
 			_dfs.mkdir(p, DEFAULT_DIR_PERMS, true);
 		}
@@ -361,8 +367,6 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 */
 	public class WriterWorker implements Runnable {
 		
-		protected static final String SPOOL_DIR = "/.spooldir/";
-		
 		public class MutableState {
 			boolean terminate = false;
 			Optional<String> codec = Optional.empty();
@@ -388,7 +392,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 			
 			Runtime.getRuntime().addShutdownHook(new Thread(Lambdas.wrap_runnable_i(() -> {
 				_state.terminate = true;
-				complete_segment();
+				complete_segment(true);
 			})));
 			
 			// (Some internal mutable state - these values are _always_ overwritten)
@@ -410,9 +414,10 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 							timeout_ms = timeout_ns*1000L;
 						}
 					}
-					Object o = _writer.get()._shared_queue.poll(timeout_ns, TimeUnit.NANOSECONDS);
+					Object o = _writer.get()._shared_queue.poll(timeout_ns, TimeUnit.NANOSECONDS); //(note this returns as soon as there is anything to write)
+					
 					if (null == o) {
-						complete_segment();
+						complete_segment(false);
 						more_objects = false;
 						continue;
 					}
@@ -421,7 +426,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 					}
 					write(o);
 					if (check_segment(max_objects, size_b, timeout_ms)) {
-						complete_segment();
+						complete_segment(false);
 						more_objects = false;
 					}
 					else {
@@ -434,7 +439,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				//e.printStackTrace();
 			}
 			try { // always try to complete current segment before exiting
-				complete_segment();
+				complete_segment(true);
 			}
 			catch (Exception ee) {}
 			
@@ -521,7 +526,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 				_state.time_policy = Optional.ofNullable(getStorageSubSchema(_bucket.data_schema().storage_schema(), _stage).grouping_time_policy())
 												.orElse(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.TimeSourcePolicy.batch);
 
-				_state.curr_path = new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, _buffer_name) + "/" + SPOOL_DIR + "/" + getFilename());
+				_state.curr_path = new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, _buffer_name, true) + "/" + getFilename());
 				try { 
 					_dfs.mkdir(_state.curr_path.getParent(), DEFAULT_DIR_PERMS, true); //(note perm is & with umask)
 					try { _dfs.setPermission(_state.curr_path.getParent(), DEFAULT_DIR_PERMS); } catch (Exception e) {} // (not supported in all FS)
@@ -533,9 +538,10 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		}
 		
 		/** Completes an existing segment
+		 * @param flushed - whether this being invokes as part of an exit call, currently unused
 		 * @throws IOException 
 		 */
-		protected synchronized void complete_segment() throws IOException {
+		protected synchronized void complete_segment(boolean flushed) throws IOException {
 			try {
 				if ((null != _state.out) && (_state.curr_objects > 0)) {
 					_state.out.close();
@@ -543,7 +549,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 					_state.segment++;
 					
 					final Date batch_time = Optional.ofNullable(_state.timestamp_of_first_record_in_batch).orElseGet(Date::new);
-					final Path path =  new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, _buffer_name) + "/" + getSuffix(batch_time, _bucket, _stage) + "/" + _state.curr_path.getName());
+					final Path path =  new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, _buffer_name, false) + "/" + getSuffix(batch_time, _bucket, _stage) + "/" + _state.curr_path.getName());
 					try {
 						// create directory
 						_dfs.mkdir(path.getParent(), DEFAULT_DIR_PERMS, true); //(note perm is & with umask)
@@ -660,16 +666,28 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 * @param stage
 	 * @return
 	 */
-	public static String getBasePath(final String root_path, final DataBucketBean bucket, final IStorageService.StorageStage stage, final Optional<String> job_name, final String buffer) {
+	public static String getBasePath(final String root_path, final DataBucketBean bucket, final IStorageService.StorageStage stage, final Optional<String> job_name, final String buffer, boolean spooling) {
 		return Optional.of(Patterns.match().<String>andReturn()
 								.when(__ -> stage == IStorageService.StorageStage.raw, __ -> IStorageService.STORED_DATA_SUFFIX_RAW_SECONDARY + buffer)
 								.when(__ -> stage == IStorageService.StorageStage.json, __ -> IStorageService.STORED_DATA_SUFFIX_JSON_SECONDARY + buffer)
 								.when(__ -> stage == IStorageService.StorageStage.processed, __ -> IStorageService.STORED_DATA_SUFFIX_PROCESSED_SECONDARY  + buffer)
+								.when(__ -> stage == IStorageService.StorageStage.transient_input, __ -> IStorageService.TO_IMPORT_DATA_SUFFIX)
 								.when(__ -> stage == IStorageService.StorageStage.transient_output, __ -> IStorageService.TRANSIENT_DATA_SUFFIX_SECONDARY  + job_name.get() + "/" + buffer)
 									//(job_name exists by construction in the transient output case)
 								.otherwiseAssert()
 							)
 						.map(s -> root_path + bucket.full_name() + s)
+						.map(s -> {
+							if (spooling) {
+								if (IStorageService.StorageStage.transient_input == stage) {
+									return root_path + bucket.full_name() + IStorageService.TEMP_DATA_SUFFIX;
+								}
+								else {
+									return (s.endsWith("/") ? s.substring(0, s.length() - 1) : s) + SPOOL_DIR;
+								}
+							}
+							else return s;
+						})
 						.get();
 	}
 	
@@ -679,7 +697,10 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 * @return
 	 */
 	public static String getSuffix(final Date now, final DataBucketBean bucket, final IStorageService.StorageStage stage) {
-		return Optionals.of(() -> bucket.data_schema().storage_schema())
+		if (IStorageService.StorageStage.transient_input == stage) { //(any temporal settings ignored)
+			return "";
+		}
+		else return Optionals.of(() -> bucket.data_schema().storage_schema())
 				.map(store -> getStorageSubSchema(store, stage))
 				.map(ss -> ss.grouping_time_period())
 				.<String>map(period -> TimeUtils.getTimePeriod(period)
@@ -701,6 +722,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 						.when(__ -> stage == IStorageService.StorageStage.json, __ -> store.json())
 						.when(__ -> stage == IStorageService.StorageStage.processed, __ -> store.processed())
 						.when(__ -> stage == IStorageService.StorageStage.transient_output, __ -> getDefaultStorageSubSchema())
+						.when(__ -> stage == IStorageService.StorageStage.transient_input, __ -> getDefaultStorageSubSchema())
 						.otherwiseAssert();		
 	}
 	
