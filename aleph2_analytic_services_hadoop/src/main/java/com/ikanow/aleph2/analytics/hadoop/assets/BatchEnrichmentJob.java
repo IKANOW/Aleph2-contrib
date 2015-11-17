@@ -553,12 +553,12 @@ public class BatchEnrichmentJob{
 						_analytics_context.emitObject(Optional.empty(), _enrichment_context.getJob(), Either.left(record._1()._2().getJson()), Optional.empty());										
 					}
 				}));
-				if (!_first_element._2().getOutputRecords().isEmpty()) _first_element._2().clearOutputRecords();
 			}		
 			else { //(else we're going to do it all in the batching bit)
 				_batch.addAll(_first_element._2().getOutputRecords());
 				checkBatch(false, context);
 			}
+			if (!_first_element._2().getOutputRecords().isEmpty()) _first_element._2().clearOutputRecords();
 		}
 
 		/* (non-Javadoc)
