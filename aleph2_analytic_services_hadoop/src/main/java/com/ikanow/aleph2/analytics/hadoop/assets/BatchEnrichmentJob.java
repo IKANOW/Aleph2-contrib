@@ -56,6 +56,7 @@ import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule.ProcessingStage;
+import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
@@ -355,7 +356,7 @@ public class BatchEnrichmentJob{
 		 * @return
 		 */
 		public List<BasicMessageBean> validate() {
-			return _ec_metadata.stream().<BasicMessageBean>flatMap(t3 -> t3._1().validateModule(t3._2(), _data_bucket, t3._3()).stream()).collect(Collectors.toList());
+			return _ec_metadata.stream().<BasicMessageBean>flatMap(t3 -> t3._1().validateModule((IEnrichmentModuleContext) t3._2(), _data_bucket, t3._3()).stream()).collect(Collectors.toList());
 		}
 	}
 	
