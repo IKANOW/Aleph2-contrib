@@ -58,6 +58,7 @@ import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModul
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule.ProcessingStage;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
+import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
@@ -321,6 +322,41 @@ public class BatchEnrichmentJob{
 											: config
 				);
 		beJobConfigurable.setBatchSize(configuration.getInt(BATCH_SIZE_PARAM,100));	
+	}
+	
+	//////////////////////////////////////////////////////////////////////////////////////////////////
+	
+	// VALIDATOR
+		
+	/** Just used as an interface to validate enrichment jobs
+	 * @author Alex
+	 */
+	public static class BatchEnrichmentBaseValidator extends BatchEnrichmentBase {
+
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setEcMetadata(java.util.List)
+		 */
+		@Override
+		public void setEcMetadata(List<EnrichmentControlMetadataBean> ecMetadata) {
+			this.setEcMetadata(ecMetadata, s -> s);
+		}
+
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.analytics.hadoop.assets.BatchEnrichmentJob.BatchEnrichmentBase#completeBatchFinalStage(java.util.List, org.apache.hadoop.mapreduce.TaskInputOutputContext)
+		 */
+		@Override
+		public void completeBatchFinalStage(
+				List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> output_objects,
+				TaskInputOutputContext<?, ?, ObjectNodeWritableComparable, ObjectNodeWritableComparable> hadoop_context) {
+			//(nothing to do here)
+		}
+		
+		/** Validate the modules in this job
+		 * @return
+		 */
+		public List<BasicMessageBean> validate() {
+			return _ec_metadata.stream().flatMap(t3 -> t3._1().validateModule(t3._2(), _data_bucket, t3._3()).stream()).collect(Collectors.toList());
+		}
 	}
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////

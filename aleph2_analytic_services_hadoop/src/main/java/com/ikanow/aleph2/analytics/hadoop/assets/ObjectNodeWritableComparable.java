@@ -22,7 +22,6 @@ import java.util.Optional;
 
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.WritableComparable;
-import org.apache.hadoop.io.WritableComparator;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -86,21 +85,7 @@ public class ObjectNodeWritableComparable implements WritableComparable<Object> 
 		return toString().compareTo(o.toString());
 	}
 	
-	public static class Comparator extends WritableComparator {
-	    @Override
-	    public int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
-	        int i1 = readInt(b1, s1);
-	        int i2 = readInt(b2, s2);
-	         
-	        int comp = (i1 < i2) ? -1 : (i1 == i2) ? 0 : 1;
-	        if(0 != comp)
-	            return comp;
-	         
-	        int j1 = readInt(b1, s1+4);
-	        int j2 = readInt(b2, s2+4);
-	        comp = (j1 < j2) ? -1 : (j1 == j2) ? 0 : 1;
-	         
-	        return comp;
-	    }
+	public static class Comparator extends Text.Comparator {
+		//(nothing to do, just use the defaults - this object is transmitted as Text binary)
 	}	
 }

@@ -51,6 +51,7 @@ import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -70,8 +71,6 @@ import fj.data.Validation;
  */
 public class BeJobLauncher implements IBeJobService{
 
-	//TODO (ALEPH-12): sort out test spec
-	
 	private static final Logger logger = LogManager.getLogger(BeJobLauncher.class);
 
 	protected Configuration _configuration;
@@ -131,6 +130,24 @@ public class BeJobLauncher implements IBeJobService{
 		    
 		    final Aleph2MultiInputFormatBuilder inputBuilder = new Aleph2MultiInputFormatBuilder();
 
+		    // Validation:
+		    
+		    try {
+			    final BatchEnrichmentJob.BatchEnrichmentBaseValidator validator = new BatchEnrichmentJob.BatchEnrichmentBaseValidator();
+			    validator.setDataBucket(bucket);
+			    validator.setEnrichmentContext(_batchEnrichmentContext);
+			    validator.setEcMetadata(Optional.ofNullable(bucket.batch_enrichment_configs()).orElse(Collections.emptyList()));
+			    final List<BasicMessageBean> errs = validator.validate();
+			    if (errs.stream().anyMatch(b -> !b.success())) {
+			    	return Validation.fail(ErrorUtils.get("Validation errors for {0}: {1}", bucket.full_name(),
+			    			errs.stream().map(b -> ErrorUtils.get("{0}: {1}", b.success() ? "INFO" : "ERROR", b.message())).collect(Collectors.joining(";"))
+			    			));
+			    }
+		    }
+		    catch (Throwable t) { // we'll log but carry on in this case...(in case there's some classloading shenanigans which won't affect the operation in hadoop)
+		    	logger.error(ErrorUtils.getLongForm("Failed validation, bucket: {1} error: {0}", t, bucket.full_name()));
+		    }
+		    
 		    // Create a separate InputFormat for every input (makes testing life easier)
 		    
 			Optional.ofNullable(_batchEnrichmentContext.getJob().inputs())
