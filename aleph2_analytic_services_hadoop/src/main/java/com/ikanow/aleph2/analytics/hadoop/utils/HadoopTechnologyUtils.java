@@ -269,24 +269,26 @@ public class HadoopTechnologyUtils {
 	 * @return
 	 */
 	public static Configuration getHadoopConfig(final GlobalPropertiesBean globals) {
-		final Configuration configuration = new Configuration(false);
-		
-		if (new File(globals.local_yarn_config_dir()).exists()) {
-			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/core-site.xml"));
-			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/yarn-site.xml"));
-			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/hdfs-site.xml"));
-			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/hadoop-site.xml"));
-			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/mapred-site.xml"));
+		synchronized (Configuration.class) { // (this is not thread safe)
+			final Configuration configuration = new Configuration(false);
+			
+			if (new File(globals.local_yarn_config_dir()).exists()) {
+				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/core-site.xml"));
+				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/yarn-site.xml"));
+				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/hdfs-site.xml"));
+				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/hadoop-site.xml"));
+				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/mapred-site.xml"));
+			}
+			// These are not added by Hortonworks, so add them manually
+			configuration.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");						
+			configuration.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");									
+			configuration.set("fs.AbstractFileSystem.hdfs.impl", "org.apache.hadoop.fs.Hdfs");
+			configuration.set("fs.AbstractFileSystem.file.impl", "org.apache.hadoop.fs.local.LocalFs");
+			// Some other config defaults:
+			// (not sure if these are actually applied, or derived from the defaults - for some reason they don't appear in CDH's client config)
+			configuration.set("mapred.reduce.tasks.speculative.execution", "false");
+			
+			return configuration;
 		}
-		// These are not added by Hortonworks, so add them manually
-		configuration.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");						
-		configuration.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");									
-		configuration.set("fs.AbstractFileSystem.hdfs.impl", "org.apache.hadoop.fs.Hdfs");
-		configuration.set("fs.AbstractFileSystem.file.impl", "org.apache.hadoop.fs.local.LocalFs");
-		// Some other config defaults:
-		// (not sure if these are actually applied, or derived from the defaults - for some reason they don't appear in CDH's client config)
-		configuration.set("mapred.reduce.tasks.speculative.execution", "false");
-		
-		return configuration;
 	}
 }
