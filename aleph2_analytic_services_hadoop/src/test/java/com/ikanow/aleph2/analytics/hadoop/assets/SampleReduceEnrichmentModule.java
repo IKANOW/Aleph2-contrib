@@ -15,6 +15,8 @@
  *******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.assets;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -31,7 +33,9 @@ import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModul
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
+import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -48,6 +52,16 @@ public class SampleReduceEnrichmentModule implements IEnrichmentBatchModule {
 	};
 	
 	protected final SetOnce<List<String>> _key_fields = new SetOnce<>();
+	
+	@Override
+	public Collection<BasicMessageBean> validateModule(IEnrichmentModuleContext context,
+			DataBucketBean bucket, EnrichmentControlMetadataBean control)
+	{
+		if (bucket.full_name().startsWith("/fail/validation")) {
+			return Arrays.asList(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "validateModule", "{0}", bucket.full_name()));
+		}
+		else return Collections.emptyList();
+	}
 	
 	@Override
 	public void onStageInitialize(IEnrichmentModuleContext context,

@@ -355,7 +355,7 @@ public class BatchEnrichmentJob{
 		 * @return
 		 */
 		public List<BasicMessageBean> validate() {
-			return _ec_metadata.stream().flatMap(t3 -> t3._1().validateModule(t3._2(), _data_bucket, t3._3()).stream()).collect(Collectors.toList());
+			return _ec_metadata.stream().<BasicMessageBean>flatMap(t3 -> t3._1().validateModule(t3._2(), _data_bucket, t3._3()).stream()).collect(Collectors.toList());
 		}
 	}
 	
@@ -553,6 +553,7 @@ public class BatchEnrichmentJob{
 						_analytics_context.emitObject(Optional.empty(), _enrichment_context.getJob(), Either.left(record._1()._2().getJson()), Optional.empty());										
 					}
 				}));
+				if (!_first_element._2().getOutputRecords().isEmpty()) _first_element._2().clearOutputRecords();
 			}		
 			else { //(else we're going to do it all in the batching bit)
 				_batch.addAll(_first_element._2().getOutputRecords());
