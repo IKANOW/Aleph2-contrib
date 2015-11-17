@@ -75,7 +75,19 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 	public void onInit(IAnalyticsContext context) {
 		try {
 			if(!_config.isSet()){
-				_config.trySet(HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties()));
+				for (int i = 0; i < 60; ++i) {
+					try { 
+						_config.trySet(HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties()));
+						if (i > 0) {
+							_logger.warn(ErrorUtils.get("Needed {0} attempt(s) to get Hadoop config", i));
+						}
+						return;
+					}
+					catch (java.util.ConcurrentModificationException e) {
+						try { Thread.sleep(100L); } catch (Exception ee) {}
+						if (59 == i) throw e;
+					}
+				}
 			}
 		}
 		catch (Throwable t) {
