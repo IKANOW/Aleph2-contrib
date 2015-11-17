@@ -78,7 +78,9 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 				_config.trySet(HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties()));
 			}
 		}
-		catch (Throwable t) {}
+		catch (Throwable t) {
+			_logger.error(ErrorUtils.getLongForm("Error setting hadoop: {0}", t));
+		}
 	}
 
 	/* (non-Javadoc)
