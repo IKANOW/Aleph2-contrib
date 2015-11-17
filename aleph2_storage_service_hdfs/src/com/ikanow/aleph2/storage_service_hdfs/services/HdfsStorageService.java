@@ -158,6 +158,7 @@ public class HdfsStorageService implements IStorageService {
 	/** 
 	 * Retrieves the system configuration
 	 *  (with code to handle possible internal concurrency bug in Configuration)
+	 *  (tried putting a static synchronization around Configuration as an alternative)
 	 * @return
 	 */
 	protected Configuration getConfiguration(){		
@@ -177,34 +178,35 @@ public class HdfsStorageService implements IStorageService {
 	 * @return
 	 */
 	protected Configuration getConfiguration(int try_number){
-		Configuration config = new Configuration(false);
-		
-		if (new File(_globals.local_yarn_config_dir()).exists()) {
-			config.addResource(new Path(_globals.local_yarn_config_dir() +"/yarn-site.xml"));
-			config.addResource(new Path(_globals.local_yarn_config_dir() +"/core-site.xml"));
-			config.addResource(new Path(_globals.local_yarn_config_dir() +"/hdfs-site.xml"));
-		}
-		else {
-			final String alternative = System.getenv("HADOOP_CONF_DIR");
-
-			_logger.warn("Aleph2 yarn-config dir not found, try alternative: " + alternative);
-			// (another alternative would be HADOOP_HOME + "/conf")
+		synchronized (Configuration.class) {
+			Configuration config = new Configuration(false);
 			
-			if ((null != alternative) && new File(alternative).exists()) {
-				config.addResource(new Path(alternative +"/yarn-site.xml"));
-				config.addResource(new Path(alternative +"/core-site.xml"));
-				config.addResource(new Path(alternative +"/hdfs-site.xml"));				
+			if (new File(_globals.local_yarn_config_dir()).exists()) {
+				config.addResource(new Path(_globals.local_yarn_config_dir() +"/yarn-site.xml"));
+				config.addResource(new Path(_globals.local_yarn_config_dir() +"/core-site.xml"));
+				config.addResource(new Path(_globals.local_yarn_config_dir() +"/hdfs-site.xml"));
 			}
-			else  // last ditch - will work for local testing but never from anything remote
-				config.addResource("default_fs.xml");						
-		}
-		// These are not added by Hortonworks, so add them manually
-		config.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");									
-		config.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");									
-		config.set("fs.AbstractFileSystem.hdfs.impl", "org.apache.hadoop.fs.Hdfs");
-		config.set("fs.AbstractFileSystem.file.impl", "org.apache.hadoop.fs.local.LocalFs");
-		return config;
-		
+			else {
+				final String alternative = System.getenv("HADOOP_CONF_DIR");
+	
+				_logger.warn("Aleph2 yarn-config dir not found, try alternative: " + alternative);
+				// (another alternative would be HADOOP_HOME + "/conf")
+				
+				if ((null != alternative) && new File(alternative).exists()) {
+					config.addResource(new Path(alternative +"/yarn-site.xml"));
+					config.addResource(new Path(alternative +"/core-site.xml"));
+					config.addResource(new Path(alternative +"/hdfs-site.xml"));				
+				}
+				else  // last ditch - will work for local testing but never from anything remote
+					config.addResource("default_fs.xml");						
+			}
+			// These are not added by Hortonworks, so add them manually
+			config.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");									
+			config.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");									
+			config.set("fs.AbstractFileSystem.hdfs.impl", "org.apache.hadoop.fs.Hdfs");
+			config.set("fs.AbstractFileSystem.file.impl", "org.apache.hadoop.fs.local.LocalFs");
+			return config;
+		}		
 	}
 
 	protected URI getUri(Configuration configuration){
