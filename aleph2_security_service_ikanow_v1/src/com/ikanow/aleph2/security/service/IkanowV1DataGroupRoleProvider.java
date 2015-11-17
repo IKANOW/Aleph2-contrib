@@ -35,10 +35,11 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Curs
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 
-public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
+public class IkanowV1DataGroupRoleProvider implements IRoleProvider,IPermissionNames {
 	private ICrudService<JsonNode> personDb = null;
 	private ICrudService<JsonNode> sourceDb = null;
 	private ICrudService<JsonNode> shareDb = null;
@@ -141,30 +142,28 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 	        	    	if(type==null || "data".equalsIgnoreCase(type.asText())){
 		        	    	String communityId = community.get("_id").asText();
 		        	    	if(!SYSTEM_COMMUNITY_ID.equals(communityId)){
-		        	    	String communityName = community.get("name").asText();
-		        	    	permissions.add(communityId);
+		        	    	//String communityName = community.get("name").asText();
+		        	    	String communityPermission = PermissionExtractor.createPermission(ROOT_PERMISSION_COMMUNITY, ACTION_WILDCARD, communityId);
+		        	    	permissions.add(communityPermission);
 		        	    	Tuple2<Set<String>,Set<String>> sourceAndBucketIds = loadSourcesAndBucketIdsByCommunityId(communityId);
 		        	    	// add all sources to permissions
-		        	    	permissions.addAll(sourceAndBucketIds._1());
+		        	    	for (String sourceId : sourceAndBucketIds._1()) {
+			        	    	String sourcePermission = PermissionExtractor.createPermission(ROOT_PERMISSION_SOURCE, ACTION_WILDCARD, sourceId);
+			        	    	permissions.add(sourcePermission);
+							}
 		        	    	// add all bucketids to permissions
-		        			logger.debug(sourceAndBucketIds._2());
-		        	    	permissions.addAll(sourceAndBucketIds._2());
 		        	    	Set<String> bucketIds = sourceAndBucketIds._2();
-		        			logger.debug("Permission (SourceIds) loaded for "+principalName+",("+communityName+"):");
-		        			logger.debug(sourceAndBucketIds._1());
-		        			logger.debug("Permission (BucketIds) loaded for "+principalName+",("+communityName+"):");
 		        	    	if(!bucketIds.isEmpty()){
-		        	    		Set<String> bucketPaths  = loadBucketPathsbyIds(bucketIds);
-		        	    		Set<String> bucketPathPermissions = convertPathtoPermissions(bucketPaths);
+		        	    		Set<String> bucketPathPermissions  = loadBucketPermissions(bucketIds);
 		        	    		permissions.addAll(bucketPathPermissions);
 		        	    	}
-		        	    	Set<String> shareIds = loadShareIdsByCommunityId(communityId);
-		        	    	permissions.addAll(shareIds);
-		        			logger.debug("Permission (ShareIds) loaded for "+principalName+",("+communityName+"):");
-		        			logger.debug(shareIds);
+		        	    	Set<String> sharePermissions = loadSharePermissionsByCommunityId(communityId);
+		        	    	permissions.addAll(sharePermissions);
 		        	    	}
 	        	    	}
 					} // it
+					logger.debug("Permissions for "+principalName+":");
+					logger.debug(permissions);
 	        	}
 	        }
 		} catch (Exception e) {
@@ -175,22 +174,6 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 		return Tuple2.apply(roleNames, permissions);
 	}
 
-	/** 
-	 * Converts the Path into a wildcard format used by Shiro.
-	 * @param bucketPaths
-	 * @return
-	 */
-	private Set<String> convertPathtoPermissions(Set<String> bucketPaths) {
-		Set<String> bucketPathPermissions = new HashSet<String>();
-		for (String bucketPath : bucketPaths) {
-			String bucketPermission = bucketPath.replace("/", ":");
-			if(bucketPermission.startsWith(":")){
-				bucketPermission = bucketPermission.substring(1);
-			}
-			bucketPathPermissions.add(bucketPermission);
-		}
-		return bucketPathPermissions;
-	}
 
 	/**
 	 * Returns the sourceIds and the bucket IDs associated with the community.
@@ -223,13 +206,14 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 		return new Tuple2<Set<String>, Set<String>>(sourceIds,bucketIds);
 	}
 
-	protected Set<String> loadBucketPathsbyIds(Set<String> bucketIds) throws InterruptedException, ExecutionException {
+	protected Set<String> loadBucketPermissions(Set<String> bucketIds) throws InterruptedException, ExecutionException {
 		Set<String> bucketPaths = new HashSet<String>();
 		Cursor<DataBucketBean> cursor = getBucketDb().getObjectsBySpec(CrudUtils.anyOf(DataBucketBean.class).withAny("_id", bucketIds)).get();
 
 	        		for (Iterator<DataBucketBean> it = cursor.iterator(); it.hasNext();) {
 	        			DataBucketBean bucket = it.next();
-	        			bucketPaths.add(bucket.full_name());
+	        			bucketPaths.add(PermissionExtractor.createPathPermission(bucket, "*",bucket.full_name()));
+	        			bucketPaths.add(PermissionExtractor.createPermission(bucket, "*",bucket._id()));
 	        		}
 	        			// bucket id					
 		return bucketPaths;
@@ -242,15 +226,16 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider {
 	 * @throws ExecutionException 
 	 * @throws InterruptedException 
 	 */
-	protected Set<String> loadShareIdsByCommunityId(String communityId) throws InterruptedException, ExecutionException {
+	protected Set<String> loadSharePermissionsByCommunityId(String communityId) throws InterruptedException, ExecutionException {
 		Set<String> shareIds = new HashSet<String>();
 		ObjectId objecId = new ObjectId(communityId); 
 		Cursor<JsonNode> cursor = getShareDb().getObjectsBySpec(CrudUtils.anyOf().when("communities._id", objecId)).get();
 
 	        		for (Iterator<JsonNode> it = cursor.iterator(); it.hasNext();) {
 	        			JsonNode share = it.next();
-	        			String shareId = "v1_"+share.get("_id").asText();	
-	        			shareIds.add(shareId);	        			
+	        			String shareId = "v1_"+share.get("_id").asText();
+	        			String permission = PermissionExtractor.createPermission(SharedLibraryBean.class.getSimpleName(), "*",shareId);
+	        			shareIds.add(permission);	        			
 	        		}
 					
 		return shareIds;

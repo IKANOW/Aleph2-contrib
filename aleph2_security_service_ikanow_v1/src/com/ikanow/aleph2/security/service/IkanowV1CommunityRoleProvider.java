@@ -33,7 +33,7 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 
-public class IkanowV1CommunityRoleProvider implements IRoleProvider {
+public class IkanowV1CommunityRoleProvider implements IRoleProvider,IPermissionNames {
 	private ICrudService<JsonNode> personDb = null;
 	protected final IServiceContext _context;
 	protected IManagementDbService _core_management_db = null;
@@ -84,7 +84,8 @@ public class IkanowV1CommunityRoleProvider implements IRoleProvider {
 					}
 	        	    for (final JsonNode community : communities) {
 	        	    	String communityId = community.get("_id").asText();
-	        	    	permissions.add(communityId);
+	        	    	String communityPermission = PermissionExtractor.createPermission(ROOT_PERMISSION_COMMUNITY, ACTION_WILDCARD, communityId);
+	        	    	permissions.add(communityPermission);
 	        	    }
 	        	}
 	        }
