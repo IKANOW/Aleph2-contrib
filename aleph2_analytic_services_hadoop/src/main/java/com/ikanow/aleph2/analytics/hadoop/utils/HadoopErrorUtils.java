@@ -42,8 +42,8 @@ public class HadoopErrorUtils {
 	// Temp issues which will get addressed
 	
 	final public static String ERROR_IN_ANALYTIC_JOB_CONFIGURATION = "Currently analytic job must encapsulate a batch enrichment (with the key being the name); name must be formed of alphanumeric/_ characters, batch job = {0} (bucket:job = {1}:{2})";
-	final public static String CURR_DEPENDENCY_RESTRICTIONS = "Currently the internal Hadoop dependencies (in the analytic job _config_, not the higher level external analytic job dependencies) must either be empty, '$previous', or the reducer step (only if after it in the config list), specified dependency = {0}, batch config(s) = {1} (bucket:job = {2}:{3})";
+	final public static String CURR_DEPENDENCY_RESTRICTIONS = "Currently the internal Hadoop dependencies (in the analytic job _config_, not the higher level external analytic job dependencies) must either be empty, \"$previous\", or the reducer step (only if after it in the config list), specified dependency = {0}, batch config(s) = {1} (bucket:job = {2}:{3})";
 	final public static String CURR_INPUT_RESTRICTIONS = "Currently only supported inputs are: batch and storage_service, not: {0} (bucket:job = {1}:{2})";
 	final public static String TEMP_TRANSIENT_OUTPUTS_MUST_BE_BATCH = "Currently (will be fixed soon), transient outputs must be batch (bucket={0}, job={1}, output type={2})";
-	final public static String CURRENTLY_ONLY_ONE_REDUCE_SUPPORTED = "Currently it is only possible to specify one 'grouping_fields' (\"reduce\") stage when using the Hadoop analytic engine (and it can't be at the start): {2} (bucket={0}, job={1})";	
+	final public static String CURRENTLY_ONLY_ONE_REDUCE_SUPPORTED = "Currently it is only possible to specify one non-empty \"grouping_fields\" across the pipeline (\"reduce\") stage when using the Hadoop analytic engine (and it can't be at the start): {2} (bucket={0}, job={1})";	
 }
