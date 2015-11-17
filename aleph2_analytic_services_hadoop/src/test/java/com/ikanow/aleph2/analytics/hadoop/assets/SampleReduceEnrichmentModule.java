@@ -20,6 +20,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.logging.log4j.LogManager;
@@ -28,6 +29,8 @@ import org.apache.logging.log4j.Logger;
 import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
@@ -36,6 +39,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadat
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.JsonUtils;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -47,11 +51,15 @@ public class SampleReduceEnrichmentModule implements IEnrichmentBatchModule {
 	
 	protected SetOnce<Stage> _stage = new SetOnce<>();
 	
+	protected final ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
+	
 	public static class ConfigBean {
 		List<String> key_field_override;
 	};
 	
 	protected final SetOnce<List<String>> _key_fields = new SetOnce<>();
+	
+	protected final SetOnce<IEnrichmentModuleContext> _context = new SetOnce<>();
 	
 	@Override
 	public Collection<BasicMessageBean> validateModule(IEnrichmentModuleContext context,
@@ -69,6 +77,8 @@ public class SampleReduceEnrichmentModule implements IEnrichmentBatchModule {
 			Tuple2<ProcessingStage, ProcessingStage> previous_next,
 			Optional<List<String>> next_grouping_fields) {
 
+		_context.set(context);
+		
 		// Infer what the stage is from the grouping info
 		
 		// input -> ... -> chain (map) -> grouping -> chain (combine) -> grouping -> chain (reduce) -> ...
@@ -113,8 +123,52 @@ public class SampleReduceEnrichmentModule implements IEnrichmentBatchModule {
 		//    and emit (key, count)
 		// 2) If I'm the second stage of a combine-reduce then sum the counts
 		
-		// TODO Auto-generated method stub
-		
+		Patterns.match(_stage.get()).andAct()
+				.when(s -> s == Stage.map, __ -> {
+					batch.forEach(obj -> {
+						
+						final JsonNode new_grouping_key = 
+								_key_fields.get().stream()
+									.reduce(_mapper.createObjectNode(), 
+											(acc, v) -> {
+												final Optional<String> key_field = 
+														JsonUtils.getProperty(v, obj._2().getJson())
+																	.filter(j -> j.isTextual())
+																	.map(j -> j.asText())
+																	;
+												return key_field
+														.map(kf -> acc.put(v.replaceAll("__+", "_").replace(".", "__"), kf))
+														.orElse(acc);												
+											}, 
+											(acc1, acc2) -> acc1) // (not possible
+											;
+								
+						final ObjectNode to_output = _mapper.createObjectNode().put("count", 1);
+						
+						_context.get().emitMutableObject(obj._1(), to_output, Optional.empty(), Optional.of(new_grouping_key));
+						
+					});
+				})
+				.otherwise(s -> { // combine or reduce
+					
+					final long count = 
+							batch
+							.map(b -> Optional.ofNullable(b._2().getJson().get("count"))
+													.filter(j -> j.isLong())
+													.map(j -> j.asLong())
+												.orElse(0L)
+							)
+							.collect(Collectors.summingLong(l -> l))
+							;
+					
+					final ObjectNode to_output = ((s == Stage.reduce)
+							? ((ObjectNode)grouping_key.get().deepCopy()) 
+							: _mapper.createObjectNode()
+							)
+							.put("count", count);
+					
+					_context.get().emitMutableObject(0L, to_output, Optional.empty(), grouping_key);
+				});
 	}
 
 	@Override

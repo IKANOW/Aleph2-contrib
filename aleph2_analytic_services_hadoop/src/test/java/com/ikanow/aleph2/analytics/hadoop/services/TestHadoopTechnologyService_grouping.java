@@ -25,6 +25,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.logging.log4j.LogManager;
@@ -35,6 +36,7 @@ import org.junit.Test;
 
 import com.google.inject.Inject;
 import com.google.inject.Injector;
+import com.ikanow.aleph2.analytics.hadoop.assets.SampleReduceEnrichmentModule;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
@@ -44,6 +46,7 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
+import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
@@ -96,6 +99,77 @@ public class TestHadoopTechnologyService_grouping {
 		return false;
 	}
 	
+	
+	@Test
+	public void test_reducer_validationFails() throws InterruptedException, ExecutionException {
+		
+		// This is a duplicate of the testBeJobService but going via the full interface
+		
+		final AnalyticThreadJobInputBean test_analytic_input = 
+				BeanTemplateUtils.build(AnalyticThreadJobInputBean.class)
+					.with(AnalyticThreadJobInputBean::data_service, "batch")
+					.with(AnalyticThreadJobInputBean::resource_name_or_id, "")
+				.done().get();
+		
+		// Set passthrough topology
+		final AnalyticThreadJobBean test_analytic = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+				.with(AnalyticThreadJobBean::name, "simplejob")
+				.with(AnalyticThreadJobBean::module_name_or_id, "_module_test")
+				.with(AnalyticThreadJobBean::inputs, Arrays.asList(test_analytic_input))
+			.done().get();
+		
+		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
+												.with(DataBucketBean::full_name, "/fail/validation/reduce")
+												.with(DataBucketBean::analytic_thread,
+														BeanTemplateUtils.build(AnalyticThreadBean.class)
+															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
+														.done().get()
+														)
+												.with(DataBucketBean::batch_enrichment_configs, 
+														Arrays.asList(
+																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)																	
+																.done().get()
+																,
+																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
+																	.with(EnrichmentControlMetadataBean::grouping_fields, Arrays.asList("key"))
+																	.with(EnrichmentControlMetadataBean::entry_point, SampleReduceEnrichmentModule.class.getName())
+																.done().get()
+																))
+												.with(DataBucketBean::data_schema,
+														BeanTemplateUtils.build(DataSchemaBean.class)
+															.with(DataSchemaBean::storage_schema,
+																BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.class)
+																	.with(DataSchemaBean.StorageSchemaBean::processed,
+																			BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.class)
+																				.with(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean::target_write_settings, 
+																						BeanTemplateUtils.build(DataSchemaBean.WriteSettings.class)
+																							.with(DataSchemaBean.WriteSettings::batch_flush_interval, 5)
+																						.done().get()
+																						)
+																			.done().get()
+																			)
+																.done().get()
+															)
+															.with(DataSchemaBean::search_index_schema,
+																BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+																.done().get()
+															)
+														.done().get()
+														)
+											.done().get();
+		
+		//Need to store this bucket so that multi-input validation works later
+		final IManagementDbService mgmt_db = _service_context.getService(IManagementDbService.class, Optional.empty()).get();
+		mgmt_db.getDataBucketStore().storeObject(test_bucket, true).join();
+		
+		final MockHadoopTestingService test_service = new MockHadoopTestingService(_service_context);
+		
+		CompletableFuture<BasicMessageBean> res = test_service.testAnalyticModule(test_bucket, Optional.empty());
+		
+		System.out.println("Ret val = " + res.join().message());
+		assertEquals("Should have failed: " + res.join().message(), false, res.join().success());
+
+	}
 	
 	@Test
 	public void test_enrichment_withGrouping() throws IOException, InterruptedException, ExecutionException {
