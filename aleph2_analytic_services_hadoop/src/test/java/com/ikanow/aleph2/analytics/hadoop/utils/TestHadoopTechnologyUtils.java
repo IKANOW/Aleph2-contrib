@@ -22,6 +22,8 @@ import static org.junit.Assert.assertTrue;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.Test;
 
@@ -114,11 +116,64 @@ public class TestHadoopTechnologyUtils {
 			final BasicMessageBean res1 = HadoopTechnologyUtils.validateJobs(test_bucket1, Collections.emptyList());
 			
 			assertTrue("Validation should pass", res1.success());
-			assertEquals("Correct error message: " + res1.message(), "", res1.message());
-			
+			assertEquals("Correct error message: " + res1.message(), "", res1.message());			
 		}
 	}
 
+	@Test
+	public void test_enrichmentPipelineConversion() {
+		
+		// Standard case
+		{
+			final Map<String, Object> test1 = 
+					new LinkedHashMap<String, Object>(
+							ImmutableMap.<String, Object>builder()
+								.put("enrich_pipeline", Arrays.asList(
+										new LinkedHashMap<String, Object>(
+											ImmutableMap.<String, Object>builder()
+												.put("name", "test_element")
+												.put("config", 
+														new LinkedHashMap<String, Object>(
+																ImmutableMap.<String, Object>builder()
+																	.put("element", "1")
+																.build())
+														)
+											.build()																				
+										)))
+							.build());
+			
+			final List<EnrichmentControlMetadataBean> res = HadoopTechnologyUtils.convertAnalyticJob("test", test1);
+			assertEquals(1, res.size());
+			assertEquals("test_element", res.get(0).name());
+			assertEquals(1, res.get(0).config().size());
+		}
+		// Pipeline is object - falls back
+		{
+			final Map<String, Object> test1 = 
+					new LinkedHashMap<String, Object>(
+							ImmutableMap.<String, Object>builder()
+								.put("enrich_pipeline", 
+										new LinkedHashMap<String, Object>(
+											ImmutableMap.<String, Object>builder()
+												.put("name", "test_element")
+												.put("config", 
+														new LinkedHashMap<String, Object>(
+																ImmutableMap.<String, Object>builder()
+																	.put("element", "1")
+																.build())
+														)
+											.build()																				
+										))
+							.build());
+			
+			final List<EnrichmentControlMetadataBean> res = HadoopTechnologyUtils.convertAnalyticJob("test", test1);
+			assertEquals(1, res.size());
+			assertEquals("enrich_pipeline", res.get(0).name());
+		}
+		
+		// (other cases are tested by test_localValidation)
+	}
+	
 	@Test
 	public void test_localValidation() {
 		

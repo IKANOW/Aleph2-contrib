@@ -237,19 +237,31 @@ public class HadoopTechnologyUtils {
 	 */
 	@SuppressWarnings("unchecked")
 	public static List<EnrichmentControlMetadataBean> convertAnalyticJob(String job_name, final Map<String, Object> analytic_config) {
-		return Optional.ofNullable(analytic_config).orElse(Collections.emptyMap()).entrySet()
-				.stream()
-				.filter(kv -> kv.getValue() instanceof Map)
-				.map(kv -> BeanTemplateUtils
-								.clone(
-									BeanTemplateUtils
-										.from((Map<String, Object>)kv.getValue(), EnrichmentControlMetadataBean.class)
-										.get()
-								)
-								.with(EnrichmentControlMetadataBean::name, kv.getKey())
-							.done()
-				)
-				.collect(Collectors.toList());
+		final Object enrich_pipeline = analytic_config.get(EnrichmentControlMetadataBean.ENRICHMENT_PIPELINE);
+		
+		if ((null != enrich_pipeline) && List.class.isAssignableFrom(enrich_pipeline.getClass())) { // standard pipeline format			
+			return ((List<Object>)enrich_pipeline).stream()
+					.map(o -> BeanTemplateUtils.from((Map<String, Object>)o, EnrichmentControlMetadataBean.class).get())
+					.collect(Collectors.toList());
+		}
+		else { // old school format - ordering is a problem unless dependencies are specified
+			
+			//TODO: use core_shared.DependencyUtils to order this list
+			
+			return Optional.ofNullable(analytic_config).orElse(Collections.emptyMap()).entrySet()
+					.stream()
+					.filter(kv -> kv.getValue() instanceof Map)
+					.map(kv -> BeanTemplateUtils
+									.clone(
+										BeanTemplateUtils
+											.from((Map<String, Object>)kv.getValue(), EnrichmentControlMetadataBean.class)
+											.get()
+									)
+									.with(EnrichmentControlMetadataBean::name, kv.getKey())
+								.done()
+					)
+					.collect(Collectors.toList());
+		}
 	}
 	
 	/** Generates a Hadoop configuration object
