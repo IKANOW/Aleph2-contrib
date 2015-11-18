@@ -167,7 +167,15 @@ public class HdfsStorageService implements IStorageService {
 				return getConfiguration(i);
 			}
 			catch (java.util.ConcurrentModificationException e) {
-				try { Thread.sleep(100L); } catch (Exception ee) {}
+				final long to_sleep = Patterns.match(i).<Long>andReturn()
+						.when(ii -> ii < 15, __ -> 100L)
+						.when(ii -> ii < 30, __ -> 250L)
+						.when(ii -> ii < 45, __ -> 500L)
+						.otherwise(__ -> 1000L)
+						+ (new Date().getTime() % 100L) // (add random component)
+						;
+				
+				try { Thread.sleep(to_sleep); } catch (Exception ee) {}
 				if (59 == i) throw e;
 			}
 		}
@@ -177,7 +185,7 @@ public class HdfsStorageService implements IStorageService {
 	 * @param try_number
 	 * @return
 	 */
-	protected Configuration getConfiguration(int try_number){
+	protected Configuration getConfiguration(int attempt){
 		synchronized (Configuration.class) {
 			Configuration config = new Configuration(false);
 			
@@ -200,6 +208,11 @@ public class HdfsStorageService implements IStorageService {
 				else  // last ditch - will work for local testing but never from anything remote
 					config.addResource("default_fs.xml");						
 			}
+			if (attempt > 10) { // (try sleeping here)
+				final long to_sleep = 500L + (new Date().getTime() % 100L); // (add random component)
+				try { Thread.sleep(to_sleep); } catch (Exception e) {}
+			}
+			
 			// These are not added by Hortonworks, so add them manually
 			config.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");									
 			config.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");									

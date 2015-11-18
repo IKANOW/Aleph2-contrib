@@ -18,6 +18,7 @@ package com.ikanow.aleph2.analytics.hadoop.utils;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +37,7 @@ import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.analytics.hadoop.data_model.HadoopTechnologyOverrideBean;
 
 import java.util.Collections;
@@ -269,6 +271,31 @@ public class HadoopTechnologyUtils {
 	 * @return
 	 */
 	public static Configuration getHadoopConfig(final GlobalPropertiesBean globals) {
+		for (int i = 0; i < 60; ++i) {
+			try { 
+				return getHadoopConfig(i, globals);
+			}
+			catch (java.util.ConcurrentModificationException e) {
+				final long to_sleep = Patterns.match(i).<Long>andReturn()
+									.when(ii -> ii < 15, __ -> 100L)
+									.when(ii -> ii < 30, __ -> 250L)
+									.when(ii -> ii < 45, __ -> 500L)
+									.otherwise(__ -> 1000L)
+									+ (new Date().getTime() % 100L) // (add random component)
+									;
+				try { Thread.sleep(to_sleep); } catch (Exception ee) {}
+				if (59 == i) throw e;
+			}
+		}
+		return null; //(doesn't ever get reached)
+	}
+	
+	/** Generates a Hadoop configuration object
+	 * @param attempt - handles retries necessary because of the concurrent issues 
+	 * @param globals - the global configuration bean (containig the location of the files)
+	 * @return
+	 */
+	public static Configuration getHadoopConfig(long attempt, final GlobalPropertiesBean globals) {
 		synchronized (Configuration.class) { // (this is not thread safe)
 			final Configuration configuration = new Configuration(false);
 			
@@ -278,6 +305,10 @@ public class HadoopTechnologyUtils {
 				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/hdfs-site.xml"));
 				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/hadoop-site.xml"));
 				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/mapred-site.xml"));
+			}
+			if (attempt > 10) { // (try sleeping here)
+				final long to_sleep = 500L + (new Date().getTime() % 100L); // (add random component)
+				try { Thread.sleep(to_sleep); } catch (Exception e) {}
 			}
 			// These are not added by Hortonworks, so add them manually
 			configuration.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");						
