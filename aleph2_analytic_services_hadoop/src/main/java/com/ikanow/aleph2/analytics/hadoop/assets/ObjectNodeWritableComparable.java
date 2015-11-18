@@ -78,11 +78,24 @@ public class ObjectNodeWritableComparable implements WritableComparable<Object> 
 		_object_node = (ObjectNode) _mapper.readTree(text.toString()); //(object node by construction)
 	}
 
+	@Override
+	public String toString() {
+		return _object_node.toString();
+	}
+	
 	/* (non-Javadoc)
 	 * @see java.lang.Comparable#compareTo(java.lang.Object)
 	 */
 	@Override public int compareTo(Object o){
+		// Should never be called, if it is then just use the JSON representation
 		return toString().compareTo(o.toString());
+	}
+	
+	/* (non-Javadoc)
+	 * @see java.lang.Object#hashCode()
+	 */
+	@Override public int hashCode() {
+		return _object_node.hashCode();
 	}
 	
 	public static class Comparator extends Text.Comparator {

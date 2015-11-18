@@ -24,6 +24,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -31,6 +33,7 @@ import java.util.concurrent.ExecutionException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.util.FileUtils;
+import org.elasticsearch.common.collect.ImmutableMap;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -173,116 +176,12 @@ public class TestHadoopTechnologyService_grouping {
 	
 	@Test
 	public void test_enrichment_withGrouping() throws IOException, InterruptedException, ExecutionException {
-		if (isWindows()) return;
-		
-		// This is a duplicate of the testBeJobService but going via the full interface
-		
-		final AnalyticThreadJobInputBean test_analytic_input = 
-				BeanTemplateUtils.build(AnalyticThreadJobInputBean.class)
-					.with(AnalyticThreadJobInputBean::data_service, "batch")
-					.with(AnalyticThreadJobInputBean::resource_name_or_id, "")
-				.done().get();
-		
-		// Set passthrough topology
-		final AnalyticThreadJobBean test_analytic = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
-				.with(AnalyticThreadJobBean::name, "simplejob")
-				.with(AnalyticThreadJobBean::module_name_or_id, "_module_test")
-				.with(AnalyticThreadJobBean::inputs, Arrays.asList(test_analytic_input))
-			.done().get();
-		
-		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
-												.with(DataBucketBean::full_name, "/test/simple/reduce")
-												.with(DataBucketBean::analytic_thread,
-														BeanTemplateUtils.build(AnalyticThreadBean.class)
-															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
-														.done().get()
-														)
-												.with(DataBucketBean::batch_enrichment_configs, 
-														Arrays.asList(
-																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)																	
-																.done().get()
-																,
-																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
-																	.with(EnrichmentControlMetadataBean::grouping_fields, Arrays.asList("key"))
-																.done().get()
-																))
-												.with(DataBucketBean::data_schema,
-														BeanTemplateUtils.build(DataSchemaBean.class)
-															.with(DataSchemaBean::storage_schema,
-																BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.class)
-																	.with(DataSchemaBean.StorageSchemaBean::processed,
-																			BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.class)
-																				.with(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean::target_write_settings, 
-																						BeanTemplateUtils.build(DataSchemaBean.WriteSettings.class)
-																							.with(DataSchemaBean.WriteSettings::batch_flush_interval, 5)
-																						.done().get()
-																						)
-																			.done().get()
-																			)
-																.done().get()
-															)
-															.with(DataSchemaBean::search_index_schema,
-																BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
-																.done().get()
-															)
-														.done().get()
-														)
-											.done().get();
-		
-		//Need to store this bucket so that multi-input validation works later
-		final IManagementDbService mgmt_db = _service_context.getService(IManagementDbService.class, Optional.empty()).get();
-		mgmt_db.getDataBucketStore().storeObject(test_bucket, true).join();
-		
-		final MockHadoopTestingService test_service = new MockHadoopTestingService(_service_context);
-		
-		test_service.clearAllDataForBucket(test_bucket);
-		assertEquals(0L, test_service.getNumRecordsInSearchIndex(test_bucket));
-		assertEquals(0L, test_service.numFilesInInputDirectory(test_bucket));
-		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_RAW, Either.left(Optional.empty())));
-		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Either.left(Optional.empty())));
-		
-		final InputStream test_file1 = new ByteArrayInputStream("{\"key\":\"group1\"}".getBytes(StandardCharsets.UTF_8));
-		final InputStream test_file2 = new ByteArrayInputStream("{\"key\":\"group1\"}".getBytes(StandardCharsets.UTF_8));
-		final InputStream test_file3 = new ByteArrayInputStream("{\"key\":\"group2\"}".getBytes(StandardCharsets.UTF_8));
-		final InputStream test_file4 = new ByteArrayInputStream("{\"key\":\"group2\"}".getBytes(StandardCharsets.UTF_8));
-		test_service.addFileToInputDirectory(test_file1, test_bucket);
-		test_service.addFileToInputDirectory(test_file2, test_bucket);
-		test_service.addFileToInputDirectory(test_file3, test_bucket);
-		test_service.addFileToInputDirectory(test_file4, test_bucket);
-		
-		test_service.testAnalyticModule(test_bucket, Optional.empty());
-
-		// Wait for job to finish
-		for (int ii = 0; ii < 120; ++ii) {
-			Thread.sleep(1000L);
-			if (test_service.isJobComplete(test_bucket)) {
-				break;
-			}
-		}
-		for (int ii = 0; ii < 40; ++ii) {
-			Thread.sleep(500L);
-			if ((test_service.getNumRecordsInSearchIndex(test_bucket) > 0)
-					&&
-					(test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Either.left(Optional.empty())) > 0)	
-				)
-			{
-				break;
-			}
-		}
-		
-		// Check results:
-		
-		// (got an ES record)
-		assertEquals(4L, test_service.getNumRecordsInSearchIndex(test_bucket));
-		// (file removed from input)
-		assertEquals(0L, test_service.numFilesInInputDirectory(test_bucket));
-		// (file added to output)
-		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_RAW, Either.left(Optional.empty())));
-		assertTrue(test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Either.left(Optional.empty())) > 0);
+		test_enrichment_withGroupingBase(false, "");
+		test_enrichment_withGroupingBase(true, "/then/map");
 	}
 
-	@Test
-	public void test_enrichment_withGroupingThenMap() throws IOException, InterruptedException, ExecutionException {
+	public void test_enrichment_withGroupingBase(boolean bookend, String bucket_suffix) throws IOException, InterruptedException, ExecutionException {
+	
 		if (isWindows()) return;
 		
 		// This is a duplicate of the testBeJobService but going via the full interface
@@ -300,31 +199,32 @@ public class TestHadoopTechnologyService_grouping {
 				.with(AnalyticThreadJobBean::inputs, Arrays.asList(test_analytic_input))
 			.done().get();
 		
+		EnrichmentControlMetadataBean map = 
+				BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)																	
+				.done().get();
+		
+		EnrichmentControlMetadataBean reduce = 
+				BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
+				.with(EnrichmentControlMetadataBean::grouping_fields, Arrays.asList("key"))
+			.done().get();
+			
+		List<EnrichmentControlMetadataBean> control_list =
+				bookend
+				?
+				Arrays.asList(map, map, reduce, map, map)
+				:
+				Arrays.asList(map, reduce)
+				;
+		
+		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
-												.with(DataBucketBean::full_name, "/test/simple/reduce/then/map")
+												.with(DataBucketBean::full_name, "/test/simple/reduce" + bucket_suffix)
 												.with(DataBucketBean::analytic_thread,
 														BeanTemplateUtils.build(AnalyticThreadBean.class)
 															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
 														.done().get()
 														)
-												.with(DataBucketBean::batch_enrichment_configs, 
-														Arrays.asList(
-																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)																	
-																.done().get()
-																,
-																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)																	
-																.done().get()
-																,
-																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
-																	.with(EnrichmentControlMetadataBean::grouping_fields, Arrays.asList("key"))
-																.done().get()
-																,
-																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)																	
-																.done().get()
-																,
-																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)																	
-																.done().get()
-																))
+												.with(DataBucketBean::batch_enrichment_configs, control_list)
 												.with(DataBucketBean::data_schema,
 														BeanTemplateUtils.build(DataSchemaBean.class)
 															.with(DataSchemaBean::storage_schema,
@@ -399,6 +299,179 @@ public class TestHadoopTechnologyService_grouping {
 		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_RAW, Either.left(Optional.empty())));
 		assertTrue(test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Either.left(Optional.empty())) > 0);
 	}
+
+	
+	@Test
+	public void test_enrichment_withRealGroupingExample() throws IOException, InterruptedException, ExecutionException {
+		
+		test_enrichment_withRealGroupingExample_Base(true, false, "/combine_standalone");
+		test_enrichment_withRealGroupingExample_Base(false, false, "/nocombine_standalone");
+		test_enrichment_withRealGroupingExample_Base(true, true, "/combine_pipeline");
+		test_enrichment_withRealGroupingExample_Base(false, true, "/nocombine_pipeline");
+	}
+	public void test_enrichment_withRealGroupingExample_Base(boolean combine, boolean bookend, final String bucket_suffix) throws IOException, InterruptedException, ExecutionException {
+		if (isWindows()) return;
+		
+		// This is a duplicate of the testBeJobService but going via the full interface
+		
+		final AnalyticThreadJobInputBean test_analytic_input = 
+				BeanTemplateUtils.build(AnalyticThreadJobInputBean.class)
+					.with(AnalyticThreadJobInputBean::data_service, "batch")
+					.with(AnalyticThreadJobInputBean::resource_name_or_id, "")
+				.done().get();
+		
+		// Set passthrough topology
+		final AnalyticThreadJobBean test_analytic = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+				.with(AnalyticThreadJobBean::name, "simplejob")
+				.with(AnalyticThreadJobBean::module_name_or_id, "_module_test")
+				.with(AnalyticThreadJobBean::inputs, Arrays.asList(test_analytic_input))
+			.done().get();
+		
+		EnrichmentControlMetadataBean pass = 
+				BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)																	
+				.done().get();
+
+		EnrichmentControlMetadataBean map = 
+				BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)																	
+				.with(EnrichmentControlMetadataBean::name, "map")
+				.with(EnrichmentControlMetadataBean::entry_point, SampleReduceEnrichmentModule.class.getName())
+				.with(EnrichmentControlMetadataBean::config,
+						new LinkedHashMap<String, Object>(
+								ImmutableMap.<String, Object>builder()
+									.put("key_field_override", Arrays.asList("key"))
+								.build()
+								)
+						)
+			.done().get();
+		
+		
+		EnrichmentControlMetadataBean reduce = 
+				BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
+				.with(EnrichmentControlMetadataBean::name, "combine_reduce")
+				.with(EnrichmentControlMetadataBean::entry_point, SampleReduceEnrichmentModule.class.getName())
+				.with(EnrichmentControlMetadataBean::grouping_fields, Arrays.asList("?"))
+				.with(EnrichmentControlMetadataBean::technology_override,
+						new LinkedHashMap<String, Object>(
+								ImmutableMap.<String, Object>builder()
+									.put("use_combiner", combine)
+									.put("num_reducers", 2) //(don't need to vary this, leave at 2 to check reducing works)
+								.build()
+								)
+						)
+				.with(EnrichmentControlMetadataBean::config,
+						new LinkedHashMap<String, Object>(
+								ImmutableMap.<String, Object>builder()
+									.put("key_field_override", Arrays.asList("key"))
+								.build()
+								)
+						)
+			.done().get();
+			
+		List<EnrichmentControlMetadataBean> control_list =
+				bookend
+				?
+				Arrays.asList(pass, map, reduce, pass)
+				:
+				Arrays.asList(map, reduce)
+				;
+		
+		
+		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
+												.with(DataBucketBean::full_name, "/test/real/reduce")
+												.with(DataBucketBean::analytic_thread,
+														BeanTemplateUtils.build(AnalyticThreadBean.class)
+															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
+														.done().get()
+														)
+												.with(DataBucketBean::batch_enrichment_configs, control_list) 
+												.with(DataBucketBean::data_schema,
+														BeanTemplateUtils.build(DataSchemaBean.class)
+															.with(DataSchemaBean::storage_schema,
+																BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.class)
+																	.with(DataSchemaBean.StorageSchemaBean::processed,
+																			BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.class)
+																				.with(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean::target_write_settings, 
+																						BeanTemplateUtils.build(DataSchemaBean.WriteSettings.class)
+																							.with(DataSchemaBean.WriteSettings::batch_flush_interval, 5)
+																						.done().get()
+																						)
+																			.done().get()
+																			)
+																.done().get()
+															)
+															.with(DataSchemaBean::search_index_schema,
+																BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+																.done().get()
+															)
+														.done().get()
+														)
+											.done().get();
+		
+		//Need to store this bucket so that multi-input validation works later
+		final IManagementDbService mgmt_db = _service_context.getService(IManagementDbService.class, Optional.empty()).get();
+		mgmt_db.getDataBucketStore().storeObject(test_bucket, true).join();
+		
+		final MockHadoopTestingService test_service = new MockHadoopTestingService(_service_context);
+		
+		test_service.clearAllDataForBucket(test_bucket);
+		assertEquals(0L, test_service.getNumRecordsInSearchIndex(test_bucket));
+		assertEquals(0L, test_service.numFilesInInputDirectory(test_bucket));
+		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_RAW, Either.left(Optional.empty())));
+		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Either.left(Optional.empty())));
+		
+		final InputStream test_file1 = new ByteArrayInputStream("{\"key\":\"group0\"}".getBytes(StandardCharsets.UTF_8));
+		final InputStream test_file2 = new ByteArrayInputStream("{\"key\":\"group1\"}".getBytes(StandardCharsets.UTF_8));
+		final InputStream test_file3 = new ByteArrayInputStream("{\"key\":\"group1\"}".getBytes(StandardCharsets.UTF_8));
+		final InputStream test_file4 = new ByteArrayInputStream("{\"key\":\"group2\"}".getBytes(StandardCharsets.UTF_8));
+		final InputStream test_file5 = new ByteArrayInputStream("{\"key\":\"group2\"}".getBytes(StandardCharsets.UTF_8));
+		final InputStream test_file6 = new ByteArrayInputStream("{\"key\":\"group2\"}".getBytes(StandardCharsets.UTF_8));
+		final InputStream test_file7 = new ByteArrayInputStream("{\"key\":\"group3\"}".getBytes(StandardCharsets.UTF_8));
+		final InputStream test_file8 = new ByteArrayInputStream("{\"key\":\"group3\"}".getBytes(StandardCharsets.UTF_8));
+		final InputStream test_file9 = new ByteArrayInputStream("{\"key\":\"group3\"}".getBytes(StandardCharsets.UTF_8));
+		final InputStream test_fileA = new ByteArrayInputStream("{\"key\":\"group3\"}".getBytes(StandardCharsets.UTF_8));
+		test_service.addFileToInputDirectory(test_file1, test_bucket);
+		test_service.addFileToInputDirectory(test_file2, test_bucket);
+		test_service.addFileToInputDirectory(test_file3, test_bucket);
+		test_service.addFileToInputDirectory(test_file4, test_bucket);
+		test_service.addFileToInputDirectory(test_file4, test_bucket);
+		test_service.addFileToInputDirectory(test_file5, test_bucket);
+		test_service.addFileToInputDirectory(test_file6, test_bucket);
+		test_service.addFileToInputDirectory(test_file7, test_bucket);
+		test_service.addFileToInputDirectory(test_file8, test_bucket);
+		test_service.addFileToInputDirectory(test_file9, test_bucket);
+		test_service.addFileToInputDirectory(test_fileA, test_bucket);
+		
+		test_service.testAnalyticModule(test_bucket, Optional.empty());
+
+		// Wait for job to finish
+		for (int ii = 0; ii < 120; ++ii) {
+			Thread.sleep(1000L);
+			if (test_service.isJobComplete(test_bucket)) {
+				break;
+			}
+		}
+		for (int ii = 0; ii < 40; ++ii) {
+			Thread.sleep(500L);
+			if ((test_service.getNumRecordsInSearchIndex(test_bucket) >= 4)
+					&&
+					(test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Either.left(Optional.empty())) > 0)	
+				)
+			{
+				break;
+			}
+		}
+		
+		// Check results:
+		
+		// (got an ES record)
+		assertEquals(4L, test_service.getNumRecordsInSearchIndex(test_bucket));
+		// (file removed from input)
+		assertEquals(0L, test_service.numFilesInInputDirectory(test_bucket));
+		// (file added to output)
+		assertEquals(0L, test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_RAW, Either.left(Optional.empty())));
+		assertTrue(test_service.numFilesInBucketStorage(test_bucket, IStorageService.STORED_DATA_SUFFIX_PROCESSED, Either.left(Optional.empty())) > 0);
+	}
+	
 	
 	//TODO: now have an automated grouping stage (use the count test that is kicking around)
 }

@@ -68,6 +68,7 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.JsonUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
@@ -132,6 +133,11 @@ public class BatchEnrichmentJob{
 		
 		protected List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> _batch = new ArrayList<>();		
 		
+		/** Returns the starting stage for this element type
+		 * @return
+		 */
+		protected abstract ProcessingStage getStartingStage();
+		
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setDataBucket(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 		 */
@@ -171,11 +177,11 @@ public class BatchEnrichmentJob{
 			} catch (Exception e) {
 				throw new IOException(e);
 			}			
-			_v1_logger.ifPresent(logger -> logger.info("Setup BatchEnrichmentJob for " + this._enrichment_context.getBucket().map(b -> b.full_name()).orElse("unknown")));
-			logger.info("Setup BatchEnrichmentJob for " + this._enrichment_context.getBucket().map(b -> b.full_name()).orElse("unknown"));
+			_v1_logger.ifPresent(logger -> logger.info("Setup BatchEnrichmentJob for " + this._enrichment_context.getBucket().map(b -> b.full_name()).orElse("unknown") + " Stage: " + this.getClass().getSimpleName() + ", Grouping = " + this._grouping_element));
+			logger.info("Setup BatchEnrichmentJob for " + this._enrichment_context.getBucket().map(b -> b.full_name()).orElse("unknown") + " Stage: " + this.getClass().getSimpleName() + ", Grouping = " + this._grouping_element);
 			
 			final Iterator<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> it = _ec_metadata.iterator();
-			ProcessingStage mutable_prev_stage = ProcessingStage.input;
+			ProcessingStage mutable_prev_stage = this.getStartingStage();
 			while (it.hasNext()) {
 				final Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean> t3 = it.next();
 				
@@ -186,12 +192,20 @@ public class BatchEnrichmentJob{
 						Tuples._2T(
 							mutable_prev_stage
 							, 
-							!it.hasNext()
-								? (_grouping_element.isPresent() ? ProcessingStage.grouping : ProcessingStage.output)
-								: ProcessingStage.batch
+							Patterns.match(this).<ProcessingStage>andReturn()
+								.when(__ -> it.hasNext(), __ -> ProcessingStage.batch)
+								.when(BatchEnrichmentBaseMapper.class, __ -> _grouping_element.isPresent(), __ -> ProcessingStage.grouping)
+								.when(BatchEnrichmentBaseMapper.class, __ -> !_grouping_element.isPresent(), __ -> ProcessingStage.output)
+								.when(BatchEnrichmentBaseCombiner.class, __ -> ProcessingStage.grouping)
+								.when(BatchEnrichmentBaseReducer.class, __ -> ProcessingStage.output)
+								.otherwise(__ -> ProcessingStage.unknown)
 						),
-						_grouping_element.map(cfg -> cfg.grouping_fields())
+						_grouping_element.map(cfg -> cfg.grouping_fields().stream()
+													.filter(x -> !x.equals(EnrichmentControlMetadataBean.UNKNOWN_GROUPING_FIELDS))
+													.collect(Collectors.toList()))
 						);	
+				
+				mutable_prev_stage = ProcessingStage.batch;
 			}
 			
 		} // setup
@@ -205,11 +219,16 @@ public class BatchEnrichmentJob{
 				logger.info("Completing job");
 			}
 			
-			if((_batch.size()>= _batch_size) || flush) {
+			if((_batch.size() >= _batch_size) || (!_batch.isEmpty() && flush)) {
 				final Iterator<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> it = _ec_metadata.iterator();
 				List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> mutable_start = _batch;
+				// Note currently we're sending the output of one pipeline into the input of the other
+				// eventually we want to build the dependency graph and then perform the different stages in parallel
 				while (it.hasNext()) {
-					final Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean> t3 = it.next();				
+					final Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean> t3 = it.next();
+					
+					// Skip over the grouping element, we've already processed it
+					if (this._grouping_element.filter(g -> g == t3._3()).isPresent()) continue;
 					
 					t3._2().clearOutputRecords();
 					t3._1().onObjectBatch(mutable_start.stream().map(t2 -> t2._1()), Optional.of(mutable_start.size()), Optional.empty());
@@ -333,7 +352,8 @@ public class BatchEnrichmentJob{
 	 * @author Alex
 	 */
 	public static class BatchEnrichmentBaseValidator extends BatchEnrichmentBase {
-
+		protected ProcessingStage getStartingStage() { return ProcessingStage.unknown; }		
+		
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable#setEcMetadata(java.util.List)
 		 */
@@ -368,6 +388,7 @@ public class BatchEnrichmentJob{
 	 * @author Alex
 	 */
 	protected static class BatchEnrichmentBaseMapper extends BatchEnrichmentBase {
+		protected ProcessingStage getStartingStage() { return ProcessingStage.input; }		
  
 		/** Setup delegate
 		 * @param context
@@ -500,11 +521,9 @@ public class BatchEnrichmentJob{
 	// REDUCER (combiner below)
 			
 	protected static class BatchEnrichmentBaseReducer extends BatchEnrichmentBase {
-		protected final boolean is_combiner;
+		protected ProcessingStage getStartingStage() { return ProcessingStage.grouping; }		
+		protected boolean is_combiner = false;
 		
-		public BatchEnrichmentBaseReducer(final boolean is_combiner) {
-			this.is_combiner = is_combiner;
-		}
 		protected boolean _single_element;
 		protected Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean> _first_element;
 		protected IAnalyticsContext _analytics_context;
@@ -555,7 +574,7 @@ public class BatchEnrichmentJob{
 					}
 				}));
 			}		
-			else { //(else we're going to do it all in the batching bit)
+			else { //(else add to the batch - the non map elements get handled by the batch processing)
 				_batch.addAll(_first_element._2().getOutputRecords());
 				checkBatch(false, context);
 			}
@@ -620,7 +639,7 @@ public class BatchEnrichmentJob{
 		protected void setup(
 				Reducer<ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable>.Context context)
 				throws IOException, InterruptedException {			
-			_delegate = new BatchEnrichmentBaseReducer(false);
+			_delegate = new BatchEnrichmentBaseReducer();
 			_delegate.setup(context);
 		}
 
@@ -654,6 +673,12 @@ public class BatchEnrichmentJob{
 	
 	// COMBINER
 			
+	protected static class BatchEnrichmentBaseCombiner extends BatchEnrichmentBaseReducer {
+		public BatchEnrichmentBaseCombiner() {
+			is_combiner = true;
+		}
+	}
+	
 	/** The combiner version
 	 * @author jfreydank
 	 */
@@ -665,7 +690,7 @@ public class BatchEnrichmentJob{
 		protected void setup(
 				Reducer<ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable, ObjectNodeWritableComparable>.Context context)
 				throws IOException, InterruptedException {
-			_delegate = new BatchEnrichmentBaseReducer(true);
+			_delegate = new BatchEnrichmentBaseCombiner();
 			_delegate.setup(context);
 		}				
 	}

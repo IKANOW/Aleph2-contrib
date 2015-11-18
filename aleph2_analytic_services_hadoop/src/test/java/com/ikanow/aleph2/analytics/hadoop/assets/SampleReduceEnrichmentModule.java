@@ -95,21 +95,23 @@ public class SampleReduceEnrichmentModule implements IEnrichmentBatchModule {
 				)
 				;
 		
-		_logger.info("STAGE = " + _stage);
+		_logger.info("STAGE = " + _stage + "(from = " + previous_next);
 		
 		final ConfigBean config = BeanTemplateUtils.from(
 				Optional.ofNullable(control.config()).orElse(Collections.emptyMap()), ConfigBean.class)
 				.get()
 				;
 		
-		if (Stage.map != _stage.get()) {
-			next_grouping_fields
-				.map(Optional::of)
-				.orElseGet(() -> Optional.ofNullable(config.key_field_override))
-				.ifPresent(kf -> _key_fields.set(kf))
-				;
-		}
-	}
+		next_grouping_fields
+			.filter(ngf -> !ngf.isEmpty()) //if empty then in auto mode
+			.map(Optional::of)
+			.orElseGet(() -> Optional.ofNullable(config.key_field_override))
+			.ifPresent(kf -> _key_fields.set(kf))
+			;
+		
+		_logger.info("NEXT GROUPING FIELDS = " + _key_fields + "( from = " + next_grouping_fields);
+		
+	}	
 
 	@Override
 	public void onObjectBatch(Stream<Tuple2<Long, IBatchRecord>> batch,
@@ -145,6 +147,8 @@ public class SampleReduceEnrichmentModule implements IEnrichmentBatchModule {
 								
 						final ObjectNode to_output = _mapper.createObjectNode().put("count", 1);
 						
+						_logger.info("OUTPUT FROM MAP = " + to_output + " key " + new_grouping_key);
+						
 						_context.get().emitMutableObject(obj._1(), to_output, Optional.empty(), Optional.of(new_grouping_key));
 						
 					});
@@ -154,7 +158,7 @@ public class SampleReduceEnrichmentModule implements IEnrichmentBatchModule {
 					final long count = 
 							batch
 							.map(b -> Optional.ofNullable(b._2().getJson().get("count"))
-													.filter(j -> j.isLong())
+													.filter(j -> j.isNumber())
 													.map(j -> j.asLong())
 												.orElse(0L)
 							)
@@ -167,7 +171,9 @@ public class SampleReduceEnrichmentModule implements IEnrichmentBatchModule {
 							)
 							.put("count", count);
 					
-					_context.get().emitMutableObject(0L, to_output, Optional.empty(), grouping_key);
+					_logger.info("OUTPUT FROM COMBINE/REDUCE = " + to_output + " (stage=" + s + " key " + grouping_key);
+					
+					_context.get().emitMutableObject(0L, to_output, Optional.empty(), (s == Stage.reduce) ? Optional.empty() : grouping_key);
 				});
 	}
 
