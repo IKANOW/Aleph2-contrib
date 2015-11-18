@@ -20,16 +20,24 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+
+
 
 import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.elasticsearch.hadoop.mr.EsInputFormat;
 
+
+
 import scala.Tuple2;
+
+
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
@@ -66,16 +74,20 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 	@SuppressWarnings("unchecked")
 	@Override
 	public List<InputSplit> getSplits(JobContext context) throws IOException {
+		return getSplits(Lambdas.wrap_u(ctxt -> (List<InputSplit>)super.getSplits(ctxt)), context);
+	}
+	
+	public static List<InputSplit> getSplits(Function<JobContext, List<InputSplit>> get_splits, JobContext context) {
 		final String[] indexes = context.getConfiguration().get(ALEPH2_RESOURCE, "").split(",,");
-				
+		
 		return Arrays.stream(indexes).<InputSplit>flatMap(Lambdas.wrap_u(index -> {
 			context.getConfiguration().set("es.resource.read", index.replace(" ", "%20"));
-			return ((List<InputSplit>)super.getSplits(context)).stream();
+			return get_splits.apply(context).stream();
 		}))
 		.collect(Collectors.<InputSplit>toList())
 		;
 	}
-
+	
 	/* (non-Javadoc)
 	 * @see org.elasticsearch.hadoop.mr.EsInputFormat#createRecordReader(org.apache.hadoop.mapreduce.InputSplit, org.apache.hadoop.mapreduce.TaskAttemptContext)
 	 */
@@ -87,13 +99,13 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 	/** Record reader that wraps the ES
 	 * @author Alex
 	 */
-	public static class Aleph2EsRecordReader extends  ShardRecordReader<String, Tuple2<Long, IBatchRecord>> {
-		protected final ShardRecordReader _delegate;
+	public static class Aleph2EsRecordReader extends ShardRecordReader<String, Tuple2<Long, IBatchRecord>> {
+		protected final RecordReader _delegate;
 		
 		/** User c'tor
 		 * @param delegate
 		 */
-		Aleph2EsRecordReader(ShardRecordReader delegate) {
+		Aleph2EsRecordReader(RecordReader delegate) {
 			_delegate = delegate;
 		}
 		
@@ -103,7 +115,7 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		@Override
 		public void initialize(InputSplit split, TaskAttemptContext context)
 				throws IOException {
-			_delegate.initialize(split, context);
+			Lambdas.wrap_runnable_u(() -> _delegate.initialize(split, context)).run();
 		}
 
 		/* (non-Javadoc)
@@ -111,7 +123,7 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		 */
 		@Override
 		public boolean nextKeyValue() throws IOException {
-			return _delegate.nextKeyValue();
+			return Lambdas.wrap_u(() -> _delegate.nextKeyValue()).get();
 		}
 
 		/* (non-Javadoc)
@@ -119,10 +131,10 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		 */
 		@Override
 		public String getCurrentKey() throws IOException {
-			final Text t = (Text) _delegate.getCurrentKey();
-			return null == t 
-					? null
-					: t.toString();
+			return Lambdas.wrap_u(() -> {
+				final Text t = (Text) _delegate.getCurrentKey();
+				return Optional.ofNullable(t).map(tt -> tt.toString()).orElse(null); 
+			}).get();
 		}
 
 		/* (non-Javadoc)
@@ -130,8 +142,10 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		 */
 		@Override
 		public Tuple2<Long, IBatchRecord> getCurrentValue() {
-			final MapWritable m = (MapWritable) _delegate.getCurrentValue();
-			return Tuples._2T(0L, (IBatchRecord)new BatchRecord(JsonNodeWritableUtils.from(m), null));
+			return Lambdas.wrap_u(() -> {
+				final MapWritable m = (MapWritable) _delegate.getCurrentValue();
+				return Tuples._2T(0L, (IBatchRecord)new BatchRecord(JsonNodeWritableUtils.from(m), null));
+			}).get();
 		}
 
 		/* (non-Javadoc)
@@ -139,7 +153,7 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		 */
 		@Override
 		public float getProgress() {
-			return _delegate.getProgress();
+			return Lambdas.wrap_u(() -> _delegate.getProgress()).get();
 		}
 
 		/* (non-Javadoc)
@@ -155,7 +169,7 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		 */
 		@Override
 		public String createKey() {
-			throw new RuntimeException("Internal logic error");
+			throw new RuntimeException("Internal logic error (createKey)");
 		}
 
 		/* (non-Javadoc)
@@ -163,7 +177,7 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		 */
 		@Override
 		public Tuple2<Long, IBatchRecord> createValue() {
-			throw new RuntimeException("Internal logic error");
+			throw new RuntimeException("Internal logic error (createValue)");
 		}
 
 		/* (non-Javadoc)
@@ -171,7 +185,7 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		 */
 		@Override
 		protected String setCurrentKey(String hadoopKey, Object object) {
-			throw new RuntimeException("Internal logic error");
+			throw new RuntimeException("Internal logic error (setCurrentKey)");
 		}
 
 		/* (non-Javadoc)
@@ -180,7 +194,7 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		@Override
 		protected Tuple2<Long, IBatchRecord> setCurrentValue(
 				Tuple2<Long, IBatchRecord> hadoopValue, Object object) {
-			throw new RuntimeException("Internal logic error");
+			throw new RuntimeException("Internal logic error (setCurrentValue)");
 		}		
 	}
 }
