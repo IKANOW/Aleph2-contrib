@@ -29,11 +29,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 
-public class IkanowV1UserGroupRoleProvider implements IRoleProvider,IPermissionNames {
+public class IkanowV1UserGroupRoleProvider implements IRoleProvider{
 	private ICrudService<JsonNode> personDb = null;
 	protected final IServiceContext _context;
 	protected IManagementDbService _core_management_db = null;
@@ -88,7 +89,7 @@ public class IkanowV1UserGroupRoleProvider implements IRoleProvider,IPermissionN
 	        	    	if(type!=null && "user".equalsIgnoreCase(type.asText())){
 		        	    	String communityId = community.get("_id").asText();
 		        	    	String communityName = community.get("name").asText();
-		        	    	String communityPermission = PermissionExtractor.createPermission(ROOT_PERMISSION_COMMUNITY, ACTION_WILDCARD, communityId);
+		        	    	String communityPermission = PermissionExtractor.createPermission(ISecurityService.ROOT_PERMISSION_COMMUNITY, ISecurityService.ACTION_WILDCARD, communityId);
 		        	    	permissions.add(communityPermission);
 		        			logger.debug("Permission (ShareIds) loaded for "+principalName+",("+communityName+"):" + communityPermission);
 	        	    	}

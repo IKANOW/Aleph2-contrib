@@ -33,13 +33,14 @@ import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbServic
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 
-public class IkanowV1DataGroupRoleProvider implements IRoleProvider,IPermissionNames {
+public class IkanowV1DataGroupRoleProvider implements IRoleProvider{
 	private ICrudService<JsonNode> personDb = null;
 	private ICrudService<JsonNode> sourceDb = null;
 	private ICrudService<JsonNode> shareDb = null;
@@ -143,12 +144,12 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider,IPermissionN
 		        	    	String communityId = community.get("_id").asText();
 		        	    	if(!SYSTEM_COMMUNITY_ID.equals(communityId)){
 		        	    	//String communityName = community.get("name").asText();
-		        	    	String communityPermission = PermissionExtractor.createPermission(ROOT_PERMISSION_COMMUNITY, ACTION_WILDCARD, communityId);
+		        	    	String communityPermission = PermissionExtractor.createPermission(ISecurityService.ROOT_PERMISSION_COMMUNITY, ISecurityService.ACTION_WILDCARD, communityId);
 		        	    	permissions.add(communityPermission);
 		        	    	Tuple2<Set<String>,Set<String>> sourceAndBucketIds = loadSourcesAndBucketIdsByCommunityId(communityId);
 		        	    	// add all sources to permissions
 		        	    	for (String sourceId : sourceAndBucketIds._1()) {
-			        	    	String sourcePermission = PermissionExtractor.createPermission(ROOT_PERMISSION_SOURCE, ACTION_WILDCARD, sourceId);
+			        	    	String sourcePermission = PermissionExtractor.createPermission(ISecurityService.ROOT_PERMISSION_SOURCE, ISecurityService.ACTION_WILDCARD, sourceId);
 			        	    	permissions.add(sourcePermission);
 							}
 		        	    	// add all bucketids to permissions

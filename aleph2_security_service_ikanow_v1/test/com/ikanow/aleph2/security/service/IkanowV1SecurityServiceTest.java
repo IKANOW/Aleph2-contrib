@@ -128,7 +128,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	public void testPermission(){
 		ISubject subject = loginAsRegularUser();
 		// test personal community permission
-		String permission = IPermissionNames.ROOT_PERMISSION_COMMUNITY+":54f86d8de4b03d27d1ea0d7b";
+		String permission = ISecurityService.ROOT_PERMISSION_COMMUNITY+":*:54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
 		assertEquals(true,securityService.isPermitted(subject,permission));
 	}
@@ -139,7 +139,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		// system community
 		String runAsPrincipal = "54f86d8de4b03d27d1ea0d7b"; // casey
 		String runAsRole = "54f86d8de4b03d27d1ea0d7b";
-		String runAsPersonalPermission = "SharedLibraryBean:v1_54fa4ab9e4b0b269e3a0c837";
+		String runAsPersonalPermission = "SharedLibraryBean:read:v1_54fa4ab9e4b0b269e3a0c837";
 		
 		securityService.runAs(subject,Arrays.asList(runAsPrincipal));
 		
@@ -164,7 +164,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		ISubject subject = loginAsAdmin();
 		// system community
 		@SuppressWarnings("unused")
-		String permission = IPermissionNames.ROOT_PERMISSION_COMMUNITY+":4c927585d591d31d7b37097a";
+		String permission = ISecurityService.ROOT_PERMISSION_COMMUNITY+":*:4c927585d591d31d7b37097a";
 		@SuppressWarnings("unused")
 		String role = "admin";
 		assertEquals(true,securityService.hasRole(subject,"admin"));
@@ -184,7 +184,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	public void testCaching(){
 		ISubject subject = loginAsRegularUser();
 		// test personal community permission
-		String permission = IPermissionNames.ROOT_PERMISSION_COMMUNITY+":54f86d8de4b03d27d1ea0d7b";
+		String permission = ISecurityService.ROOT_PERMISSION_COMMUNITY+":*:54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU-permisssion0");
 		assertEquals(true,securityService.isPermitted(subject,permission));
@@ -225,7 +225,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		securityService.runAs(subject,Arrays.asList(regularUserId));
 
 		// test personal community permission
-		String permission = IPermissionNames.ROOT_PERMISSION_COMMUNITY+":54f86d8de4b03d27d1ea0d7b";
+		String permission = ISecurityService.ROOT_PERMISSION_COMMUNITY+":*:54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU-permisssion0");
 		assertEquals(true,securityService.isPermitted(subject,permission));
@@ -248,7 +248,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		securityService.runAs(subject,Arrays.asList(regularUserId));
 
 		// test personal community permission
-		String permission = IPermissionNames.ROOT_PERMISSION_COMMUNITY+":54f86d8de4b03d27d1ea0d7b";
+		String permission = ISecurityService.ROOT_PERMISSION_COMMUNITY+":*:54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU-permisssion0");
 		assertEquals(true,securityService.isPermitted(subject,permission));
@@ -290,7 +290,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	public void testBucketPermission(){
 		ISubject subject = loginAsRegularUser();
 		// test personal community permission
-		String permission = "DataBucketBean:aleph...bucket.Sample_Netflow_Ingestion_.COPY..;";
+		String permission = "DataBucketBean:read:aleph...bucket.Sample_Netflow_Ingestion_.COPY..;";
         //test a typed permission (not instance-level)
 		assertEquals(true,securityService.isPermitted(subject,permission));
 	}
