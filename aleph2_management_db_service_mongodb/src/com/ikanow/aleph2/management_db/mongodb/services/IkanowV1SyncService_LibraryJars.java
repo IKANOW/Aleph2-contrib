@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.management_db.mongodb.services;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -76,6 +77,7 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
@@ -300,7 +302,7 @@ public class IkanowV1SyncService_LibraryJars {
 	 * @param share_db
 	 * @return
 	 */
-	protected CompletableFuture<Boolean> updateV1ShareErrorStatus_top(final String id, 
+	protected static CompletableFuture<Boolean> updateV1ShareErrorStatus_top(final String id, 
 			final ManagementFuture<?> fres, 
 			final IManagementCrudService<SharedLibraryBean> library_mgmt,
 			final ICrudService<JsonNode> share_db,
@@ -446,7 +448,10 @@ public class IkanowV1SyncService_LibraryJars {
 			final GridFSDBFile file = share_fs.find(new ObjectId(binary_id));						
 			file.writeTo(out);		
 			final FileContext fs = aleph2_fs.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
-			final Path file_path = fs.makeQualified(new Path(path));
+			
+			final String adjusted_path = ModuleUtils.getGlobalProperties().distributed_root_dir() + File.separator + "library" + File.separator + path.substring("/app/aleph2/library/".length());
+			
+			final Path file_path = fs.makeQualified(new Path(adjusted_path));
 			try (FSDataOutputStream outer = fs.create(file_path, EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE), 
 					org.apache.hadoop.fs.Options.CreateOpts.createParent()))
 			{
