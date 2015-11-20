@@ -383,8 +383,9 @@ public class TestIkanowV1SyncService_Buckets {
 		assertEquals("{aleph...bucket.Template_V2_data_bucket.=May 25, 2015 01:52:01 PM UTC, aleph...bucket.Template_V2_data_bucket.3=, aleph...bucket.Template_V2_data_bucket.2=May 25, 2015 01:52:01 PM UTC}", f_res._1().toString());
 
 		assertEquals(2, f_res._2().size());
-		assertEquals(true, f_res._1().containsKey("aleph...bucket.Template_V2_data_bucket."));
-		assertEquals(true, f_res._1().containsKey("aleph...bucket.Template_V2_data_bucket.2"));		
+		//(times are sys dependent here so just check the keys)
+		assertEquals(true, f_res._2().containsKey("aleph...bucket.Template_V2_data_bucket."));
+		assertEquals(true, f_res._2().containsKey("aleph...bucket.Template_V2_data_bucket.2"));		
 	}
 	
 	////////////////////////////////////////////////////

@@ -38,6 +38,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import org.apache.curator.framework.CuratorFramework;
@@ -271,7 +272,7 @@ public class IkanowV1SyncService_LibraryJars {
 				final List<CompletableFuture<Boolean>> l2 = 
 						create_update_delete._2().stream().parallel()
 							.<Tuple2<String, ManagementFuture<?>>>map(id -> 
-								Tuples._2T(id, deleteLibraryBean(id, library_mgmt)))
+								Tuples._2T(id, deleteLibraryBean(id, library_mgmt, aleph2_fs)))
 						.<CompletableFuture<Boolean>>map(id_fres -> 
 							CompletableFuture.completedFuture(true)) 
 							.collect(Collectors.toList());
@@ -300,7 +301,7 @@ public class IkanowV1SyncService_LibraryJars {
 	 * @param fres
 	 * @param disable_on_failure
 	 * @param share_db
-	 * @return
+	 * @return true - if share updated with errors, false otherwise
 	 */
 	protected static CompletableFuture<Boolean> updateV1ShareErrorStatus_top(final String id, 
 			final ManagementFuture<?> fres, 
@@ -315,19 +316,22 @@ public class IkanowV1SyncService_LibraryJars {
 						return updateV1ShareErrorStatus(new Date(), id, res, library_mgmt, share_db, create_not_update);	
 					}
 					catch (Exception e) { // DB-side call has failed, create ad hoc error
-						final Collection<BasicMessageBean> errs = res.isEmpty()
-								? Arrays.asList(
-									new BasicMessageBean(
-											new Date(), 
-											false, 
-											"(unknown)", 
-											"(unknown)", 
-											null, 
-											ErrorUtils.getLongForm("{0}", e), 
-											null
-											)
-									)
-								: res;
+						final Collection<BasicMessageBean> errs = 
+								Stream.concat(res.stream(),
+										Stream.of(
+												new BasicMessageBean(
+														new Date(), 
+														false, 
+														"(unknown)", 
+														"(unknown)", 
+														null, 
+														ErrorUtils.getLongForm("{0}", e), 
+														null
+														)
+												)
+										)
+										.collect(Collectors.toList());
+						
 						return updateV1ShareErrorStatus(new Date(), id, errs, library_mgmt, share_db, create_not_update);											
 					}
 				});
@@ -437,27 +441,42 @@ public class IkanowV1SyncService_LibraryJars {
 	////////////////////////////////////////////////////
 	////////////////////////////////////////////////////
 
-	// FS - WRITE
+	// FS - WRITE AND DELETE
 	
 	protected static void copyFile(final String binary_id, final String path, 
 			final IStorageService aleph2_fs,
 			final GridFS share_fs
 			) throws IOException
 	{
-		try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-			final GridFSDBFile file = share_fs.find(new ObjectId(binary_id));						
-			file.writeTo(out);		
-			final FileContext fs = aleph2_fs.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
-			
-			final String adjusted_path = ModuleUtils.getGlobalProperties().distributed_root_dir() + File.separator + "library" + File.separator + path.substring("/app/aleph2/library/".length());
-			
-			final Path file_path = fs.makeQualified(new Path(adjusted_path));
-			try (FSDataOutputStream outer = fs.create(file_path, EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE), 
-					org.apache.hadoop.fs.Options.CreateOpts.createParent()))
-			{
-				outer.write(out.toByteArray());
+		if (!binary_id.isEmpty()) { //(safeGet => is "" not null)
+			try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+				final GridFSDBFile file = share_fs.find(new ObjectId(binary_id));						
+				file.writeTo(out);		
+				
+				final FileContext fs = aleph2_fs.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();			
+				final String adjusted_path = getAdjustedPath(path);
+				final Path file_path = fs.makeQualified(new Path(adjusted_path));
+				
+				try (FSDataOutputStream outer = fs.create(file_path, EnumSet.of(CreateFlag.CREATE, CreateFlag.OVERWRITE), 
+						org.apache.hadoop.fs.Options.CreateOpts.createParent()))
+				{
+					outer.write(out.toByteArray());
+				}
 			}
-		}		
+		}
+	}
+	
+	protected static void deleteFile(final String path, final IStorageService aleph2_fs) throws IOException {
+		
+		final FileContext fs = aleph2_fs.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();			
+		final String adjusted_path = getAdjustedPath(path);
+		final Path file_path = fs.makeQualified(new Path(adjusted_path));
+		
+		fs.delete(file_path, false);
+	}
+	
+	protected static String getAdjustedPath(final String in_path) {
+		return ModuleUtils.getGlobalProperties().distributed_root_dir() + File.separator + "library" + File.separator + in_path.substring("/app/aleph2/library/".length());
 	}
 	
 	////////////////////////////////////////////////////
@@ -528,19 +547,36 @@ public class IkanowV1SyncService_LibraryJars {
 	 * @return
 	 */
 	protected static ManagementFuture<Boolean> deleteLibraryBean(final String id,
-			final IManagementCrudService<SharedLibraryBean> library_mgmt)
+			final IManagementCrudService<SharedLibraryBean> library_mgmt, final IStorageService aleph2_fs)
 	{
 		_logger.info(ErrorUtils.get("Share {0} was deleted, deleting libary bean", id));
 
-		//TODO: make it delete the JAR file in deleteObjectById
-		
-		return library_mgmt.deleteObjectById("v1_" + id);
+		final String v2_id = "v1_" + id;
+		return FutureUtils.denestManagementFuture(library_mgmt.getObjectById(v2_id)
+					.<ManagementFuture<Boolean>>thenApply(maybe_bean -> {
+						
+						maybe_bean.ifPresent(bean -> {
+							
+							// If there are no more instances of this 
+							
+							library_mgmt.countObjectsBySpec(CrudUtils.allOf(SharedLibraryBean.class).when(SharedLibraryBean::path_name, bean.path_name()))
+								.thenAccept(Lambdas.wrap_consumer_u(count -> {
+									if (count <= 1) { // ie 1 which is about to be deleted
+										deleteFile(bean.path_name(), aleph2_fs);
+									}
+								}))
+								;
+							
+						});						
+						return library_mgmt.deleteObjectById(v2_id);
+					}));
 	}
 	
 	/** Takes a collection of results from the management side-channel, and uses it to update a harvest node
 	 * @param key - source key / bucket id
 	 * @param status_messages
 	 * @param source_db
+	 * @return true - if share updated with errors, false otherwise
 	 */
 	protected static CompletableFuture<Boolean> updateV1ShareErrorStatus(
 			final Date main_date,
