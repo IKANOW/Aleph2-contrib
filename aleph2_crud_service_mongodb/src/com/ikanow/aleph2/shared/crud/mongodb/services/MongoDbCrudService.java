@@ -679,6 +679,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		if (JacksonDBCollection.class == driver_class) return (Optional<T>) Optional.of(_state.coll);
 		else if (DBCollection.class == driver_class) return (Optional<T>) Optional.of(_state.orig_coll);
 		else if (IMetaModel.class == driver_class) return (Optional<T>) getMetaModel();
+		else if (ICrudService.class == driver_class) return (Optional<T>) Optional.of(this); //(useful for testing) 
 		else return Optional.empty();
 	}
 
