@@ -144,12 +144,12 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider{
 		        	    	String communityId = community.get("_id").asText();
 		        	    	if(!SYSTEM_COMMUNITY_ID.equals(communityId)){
 		        	    	//String communityName = community.get("name").asText();
-		        	    	String communityPermission = PermissionExtractor.createPermission(ISecurityService.ROOT_PERMISSION_COMMUNITY, ISecurityService.ACTION_WILDCARD, communityId);
+		        	    	String communityPermission = PermissionExtractor.createPermission(ISecurityService.ROOT_PERMISSION_COMMUNITY, Optional.of(ISecurityService.ACTION_WILDCARD), communityId);
 		        	    	permissions.add(communityPermission);
 		        	    	Tuple2<Set<String>,Set<String>> sourceAndBucketIds = loadSourcesAndBucketIdsByCommunityId(communityId);
 		        	    	// add all sources to permissions
 		        	    	for (String sourceId : sourceAndBucketIds._1()) {
-			        	    	String sourcePermission = PermissionExtractor.createPermission(ISecurityService.ROOT_PERMISSION_SOURCE, ISecurityService.ACTION_WILDCARD, sourceId);
+			        	    	String sourcePermission = PermissionExtractor.createPermission(ISecurityService.ROOT_PERMISSION_SOURCE, Optional.of(ISecurityService.ACTION_WILDCARD), sourceId);
 			        	    	permissions.add(sourcePermission);
 							}
 		        	    	// add all bucketids to permissions
@@ -213,8 +213,8 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider{
 
 	        		for (Iterator<DataBucketBean> it = cursor.iterator(); it.hasNext();) {
 	        			DataBucketBean bucket = it.next();
-	        			bucketPaths.add(PermissionExtractor.createPathPermission(bucket, "*",bucket.full_name()));
-	        			bucketPaths.add(PermissionExtractor.createPermission(bucket, "*",bucket._id()));
+	        			bucketPaths.add(PermissionExtractor.createPathPermission(bucket, Optional.of(ISecurityService.ACTION_WILDCARD),bucket.full_name()));
+	        			bucketPaths.add(PermissionExtractor.createPermission(bucket, Optional.of(ISecurityService.ACTION_WILDCARD),bucket._id()));
 	        		}
 	        			// bucket id					
 		return bucketPaths;
@@ -235,7 +235,7 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider{
 	        		for (Iterator<JsonNode> it = cursor.iterator(); it.hasNext();) {
 	        			JsonNode share = it.next();
 	        			String shareId = "v1_"+share.get("_id").asText();
-	        			String permission = PermissionExtractor.createPermission(SharedLibraryBean.class.getSimpleName(), "*",shareId);
+	        			String permission = PermissionExtractor.createPermission(SharedLibraryBean.class.getSimpleName(), Optional.of(ISecurityService.ACTION_WILDCARD),shareId);
 	        			shareIds.add(permission);	        			
 	        		}
 					

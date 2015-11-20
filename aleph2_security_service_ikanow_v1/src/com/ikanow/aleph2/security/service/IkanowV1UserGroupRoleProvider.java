@@ -89,7 +89,7 @@ public class IkanowV1UserGroupRoleProvider implements IRoleProvider{
 	        	    	if(type!=null && "user".equalsIgnoreCase(type.asText())){
 		        	    	String communityId = community.get("_id").asText();
 		        	    	String communityName = community.get("name").asText();
-		        	    	String communityPermission = PermissionExtractor.createPermission(ISecurityService.ROOT_PERMISSION_COMMUNITY, ISecurityService.ACTION_WILDCARD, communityId);
+		        	    	String communityPermission = PermissionExtractor.createPermission(ISecurityService.ROOT_PERMISSION_COMMUNITY, Optional.of(ISecurityService.ACTION_WILDCARD), communityId);
 		        	    	permissions.add(communityPermission);
 		        			logger.debug("Permission (ShareIds) loaded for "+principalName+",("+communityName+"):" + communityPermission);
 	        	    	}
