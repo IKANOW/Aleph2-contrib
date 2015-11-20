@@ -236,18 +236,25 @@ public class IkanowV1SyncService_TestBuckets {
 			//_logger.debug("Got test sources successfully, looping over any results");
 			test_sources.forEach(Lambdas.wrap_consumer_u(test_source -> {		
 				_logger.debug("Looking at test source: " + test_source._id());
-
-				final DataBucketBean to_test = Lambdas.wrap_u(() -> getBucketFromV1Source(test_source.source())).get();
-				if ( test_source.status() != null &&
-						(test_source.status() == TestStatus.in_progress || test_source.status() == TestStatus.completed || test_source.status() == TestStatus.error ) 
-						//(test_source.status().equals("in_progress") || test_source.status().equals("completed") || test_source.status().equals("error"))
-						)
-				{
-					existing_results.add(handleExistingTestSource(to_test, test_source, source_test_db));
-				} else { // in progress...
-					
-					_logger.debug("Found a new entry, setting up test");
-					new_results.add(handleNewTestSource(to_test, test_source, bucket_test_service, source_test_db));								
+				try {
+					final DataBucketBean to_test = Lambdas.wrap_u(() -> getBucketFromV1Source(test_source.source())).get();
+					if ( test_source.status() != null &&
+							(test_source.status() == TestStatus.in_progress || test_source.status() == TestStatus.completed || test_source.status() == TestStatus.error ) 
+							//(test_source.status().equals("in_progress") || test_source.status().equals("completed") || test_source.status().equals("error"))
+							)
+					{
+						existing_results.add(handleExistingTestSource(to_test, test_source, source_test_db));
+					} else { // in progress...
+						
+						_logger.debug("Found a new entry, setting up test");
+						new_results.add(handleNewTestSource(to_test, test_source, bucket_test_service, source_test_db));								
+					}
+				} catch (Exception ex ) {
+					final String error = ErrorUtils.getLongForm("error: {0}", ex);
+					_logger.error("Error when checking test source: " + error);
+					//turn off this test source
+					updateTestSourceStatus(test_source._id(), TestStatus.error, source_test_db, Optional.empty(), Optional.empty(), Optional.of(error))
+							.join();
 				}
 			}));
 			if (existing_results.isEmpty()) { // Make sure at least that we don't start a new thread until we've got all the tests from the previous sources
