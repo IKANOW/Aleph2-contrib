@@ -101,7 +101,10 @@ public class HadoopTechnologyUtils {
 		Optionals.ofNullable(job.inputs()).stream().forEach(input -> {
 			if ((!"batch".equals(input.data_service())) 
 					&&
-				(!"storage_service".equals(input.data_service())))	
+				(!"storage_service".equals(input.data_service()))
+				&&
+				(!"search_index_service".equals(input.data_service()))
+				)	
 			{
 				errors.add(ErrorUtils.get(HadoopErrorUtils.CURR_INPUT_RESTRICTIONS, input.data_service(), analytic_bucket.full_name(), job.name()));
 			}

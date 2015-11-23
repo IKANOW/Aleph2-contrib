@@ -205,7 +205,7 @@ public class TestHadoopTechnologyUtils {
 		// Test error case 1: inputs
 		
 		final AnalyticThreadJobBean.AnalyticThreadJobInputBean analytic_input1 =  BeanTemplateUtils.build(AnalyticThreadJobBean.AnalyticThreadJobInputBean.class)
-				.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::data_service, "search_index_service")
+				.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::data_service, "missing_service")
 				.done().get();
 
 		final AnalyticThreadJobBean analytic_job1 = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
@@ -219,7 +219,7 @@ public class TestHadoopTechnologyUtils {
 		{
 			final BasicMessageBean res1 = HadoopTechnologyUtils.validateJob(test_bucket1, Collections.emptyList(), analytic_job1);			
 			assertFalse("Validation should fail", res1.success());
-			assertEquals("Correct error message: " + res1.message(), ErrorUtils.get(HadoopErrorUtils.CURR_INPUT_RESTRICTIONS, "search_index_service", "/test", "analytic_job_1", "search_index_service"), res1.message());
+			assertEquals("Correct error message: " + res1.message(), ErrorUtils.get(HadoopErrorUtils.CURR_INPUT_RESTRICTIONS, "missing_service", "/test", "analytic_job_1", "search_index_service"), res1.message());
 		}
 		
 		// Test error case 2: outputs
@@ -538,7 +538,7 @@ public class TestHadoopTechnologyUtils {
 			assertFalse("Validation should fail", res2.success());
 			final String[] messages = res2.message().split("\n");
 			assertEquals(2, messages.length);
-			assertEquals("Correct error message 1: " + messages[0], ErrorUtils.get(HadoopErrorUtils.CURR_INPUT_RESTRICTIONS, "search_index_service", "/test", "analytic_job_1"), messages[0]);
+			assertEquals("Correct error message 1: " + messages[0], ErrorUtils.get(HadoopErrorUtils.CURR_INPUT_RESTRICTIONS, "missing_service", "/test", "analytic_job_1"), messages[0]);
 			assertEquals("Correct error message 2: " + messages[1], ErrorUtils.get(HadoopErrorUtils.TEMP_TRANSIENT_OUTPUTS_MUST_BE_BATCH, "/test", "analytic_job_2", "streaming"), messages[1]);
 		}
 		
