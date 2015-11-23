@@ -82,7 +82,7 @@ public class IkanowV1UserGroupRoleProvider implements IRoleProvider{
 	        	JsonNode communities = person.get("communities");
 	        	if (communities!= null && communities.isArray()) {
 					if(communities.size()>0){
-						roleNames.add(principalName+"_user_group");						
+						roleNames.add(principalName);						
 					}
 	        	    for (final JsonNode community : communities) {
 	        	    	JsonNode type = community.get("type");

@@ -55,6 +55,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	protected String adminId = "4e3706c48d26852237078005";
 	protected String regularUserId = "54f86d8de4b03d27d1ea0d7b";  //cb_user
 	protected String testUserId = "4e3706c48d26852237079004"; 	
+	protected String regularUserCommunityPermission = ISecurityService.ROOT_PERMISSION_COMMUNITY+":read:55a52aa7e4b056ae0f9bd894";
 
 	
 	@Before
@@ -128,9 +129,8 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	public void testPermission(){
 		ISubject subject = loginAsRegularUser();
 		// test personal community permission
-		String permission = ISecurityService.ROOT_PERMISSION_COMMUNITY+":*:54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
-		assertEquals(true,securityService.isPermitted(subject,permission));
+		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
 	}
 
 	@Test
@@ -139,7 +139,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		// system community
 		String runAsPrincipal = "54f86d8de4b03d27d1ea0d7b"; // casey
 		String runAsRole = "54f86d8de4b03d27d1ea0d7b";
-		String runAsPersonalPermission = "SharedLibraryBean:read:v1_54fa4ab9e4b0b269e3a0c837";
+		String runAsPersonalPermission = "SharedLibraryBean:read:v1_55a5672ce4b056ae0f9bdb1e";
 		
 		securityService.runAs(subject,Arrays.asList(runAsPrincipal));
 		
@@ -162,11 +162,6 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	public void testSessionTimeout(){
 		((IkanowV1SecurityService)securityService).setSessionTimeout(1000);
 		ISubject subject = loginAsAdmin();
-		// system community
-		@SuppressWarnings("unused")
-		String permission = ISecurityService.ROOT_PERMISSION_COMMUNITY+":*:4c927585d591d31d7b37097a";
-		@SuppressWarnings("unused")
-		String role = "admin";
 		assertEquals(true,securityService.hasRole(subject,"admin"));
 		try {
 			Thread.sleep(5000);
@@ -184,25 +179,24 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	public void testCaching(){
 		ISubject subject = loginAsRegularUser();
 		// test personal community permission
-		String permission = ISecurityService.ROOT_PERMISSION_COMMUNITY+":*:54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU-permisssion0");
-		assertEquals(true,securityService.isPermitted(subject,permission));
+		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
 		ProfilingUtility.timeStopAndLog("TU-permisssion0");
 		for (int i = 0; i < 10; i++) {
 			ProfilingUtility.timeStart("TU-permisssion"+(i+1));
-			assertEquals(true,securityService.isPermitted(subject,permission));			
+			assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));			
 			ProfilingUtility.timeStopAndLog("TU-permisssion"+(i+1));
 		}
 		subject = loginAsAdmin();
 		// test personal community permission
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("AU-permisssion0");
-		assertEquals(true,securityService.isPermitted(subject,permission));
+		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
 		ProfilingUtility.timeStopAndLog("AU-permisssion");
 		for (int i = 0; i < 10; i++) {
 			ProfilingUtility.timeStart("AU-permisssion"+i+1);
-			assertEquals(true,securityService.isPermitted(subject,permission));			
+			assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));			
 			ProfilingUtility.timeStopAndLog("AU-permisssion"+i+1);
 		}
 		
@@ -213,7 +207,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		// test personal community permission
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU2-permisssion"+(i+1));
-		assertEquals(true,securityService.isPermitted(subject,permission));
+		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
 			ProfilingUtility.timeStopAndLog("TU2-permisssion"+(i+1));
 		}
 	}
@@ -224,15 +218,13 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		
 		securityService.runAs(subject,Arrays.asList(regularUserId));
 
-		// test personal community permission
-		String permission = ISecurityService.ROOT_PERMISSION_COMMUNITY+":*:54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU-permisssion0");
-		assertEquals(true,securityService.isPermitted(subject,permission));
+		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
 		ProfilingUtility.timeStopAndLog("TU-permisssion0");
 		for (int i = 0; i < 10; i++) {
 			ProfilingUtility.timeStart("TU-permisssion"+(i+1));
-			assertEquals(true,securityService.isPermitted(subject,permission));			
+			assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));			
 			ProfilingUtility.timeStopAndLog("TU-permisssion"+(i+1));
 			if(i==5){
 				((IkanowV1SecurityService)securityService).invalidateAuthenticationCache(Arrays.asList(regularUserId));	
@@ -248,14 +240,13 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		securityService.runAs(subject,Arrays.asList(regularUserId));
 
 		// test personal community permission
-		String permission = ISecurityService.ROOT_PERMISSION_COMMUNITY+":*:54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU-permisssion0");
-		assertEquals(true,securityService.isPermitted(subject,permission));
+		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
 		ProfilingUtility.timeStopAndLog("TU-permisssion0");
 		for (int i = 0; i < 10; i++) {
 			ProfilingUtility.timeStart("TU-permisssion"+(i+1));
-			assertEquals(true,securityService.isPermitted(subject,permission));			
+			assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));			
 			ProfilingUtility.timeStopAndLog("TU-permisssion"+(i+1));
 			if(i==5){
 				((IkanowV1SecurityService)securityService).invalidateCache();	

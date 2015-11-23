@@ -121,7 +121,7 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider{
 	      return communityDb;		
 	}
 
-	@Override
+/*	@Override
 	public Tuple2<Set<String>, Set<String>> getRolesAndPermissions(String principalName) {
 		
         Set<String> roleNames = new HashSet<String>();
@@ -174,7 +174,75 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider{
 		logger.debug(roleNames);
 		return Tuple2.apply(roleNames, permissions);
 	}
+*/
+	public Tuple2<Set<String>, Set<String>> getRolesAndPermissions(String principalName) {
+		
+        Set<String> roleNames = new HashSet<String>();
+        Set<String> permissions = new HashSet<String>();
+			
+			Cursor<JsonNode> result;
+			try {
+				
+				ObjectId objecId = new ObjectId(principalName); 
+				result = getCommunityDb().getObjectsBySpec(CrudUtils.allOf().when("members._id", objecId).when("isSystemCommunity" , false)).get();
+						boolean roleAssigned = false;
+						for (Iterator<JsonNode> it = result.iterator(); it.hasNext();) {
+							if(!roleAssigned){
+								roleNames.add(principalName);
+								roleAssigned=true;
+							}
+		        	    JsonNode community = it.next();
+		        	    	JsonNode type = community.get("type");
+	        	    	if(type==null || "data".equalsIgnoreCase(type.asText())){
+		        	    	String communityId = community.get("_id").asText();
+		        	    	if(!SYSTEM_COMMUNITY_ID.equals(communityId)){
+		        	    	//String communityName = community.get("name").asText();
+		        	    	String action = determineCommunityAction(community.get("members"), principalName);
+		        	    	String communityPermission = PermissionExtractor.createPermission(ISecurityService.ROOT_PERMISSION_COMMUNITY, Optional.of(action), communityId);
+		        	    	permissions.add(communityPermission);
+		        	    	Tuple2<Set<String>,Set<String>> sourceAndBucketIds = loadSourcesAndBucketIdsByCommunityId(communityId);
+		        	    	// add all sources to permissions
+		        	    	for (String sourceId : sourceAndBucketIds._1()) {
+			        	    	String sourcePermission = PermissionExtractor.createPermission(ISecurityService.ROOT_PERMISSION_SOURCE, Optional.of(action), sourceId);
+			        	    	permissions.add(sourcePermission);
+							}
+		        	    	// add all bucketids to permissions
+		        	    	Set<String> bucketIds = sourceAndBucketIds._2();
+		        	    	if(!bucketIds.isEmpty()){
+		        	    		Set<String> bucketPathPermissions  = loadBucketPermissions(bucketIds,action);
+		        	    		permissions.addAll(bucketPathPermissions);
+		        	    	}
+		        	    	Set<String> sharePermissions = loadSharePermissionsByCommunityId(communityId);
+		        	    	permissions.addAll(sharePermissions);
+		        	    	}
+	        	    	} // type
+					} // it
+					logger.debug("Permissions for "+principalName+":");
+					logger.debug(permissions);
+	        		        
+		} catch (Exception e) {
+			logger.error("Caught Exception",e);
+		}
+		logger.debug("Roles loaded for "+principalName+":");
+		logger.debug(roleNames);
+		return Tuple2.apply(roleNames, permissions);
+	}
 
+	private String determineCommunityAction(JsonNode members, String principalName) {
+		String action = "NONE";
+		if(members!=null){
+		for (Iterator<JsonNode> it = members.iterator(); it.hasNext();) {
+			JsonNode member = it.next();
+			String id = member.get("_id").asText();
+			if(principalName.equals(id)){
+				String userType = member.get("userType").asText();
+				action = "member".equals(userType)? ISecurityService.ACTION_READ:ISecurityService.ACTION_READ_WRITE; 
+				break;
+			}
+		} 
+		}
+		return action;
+	}
 
 	/**
 	 * Returns the sourceIds and the bucket IDs associated with the community.
@@ -207,14 +275,14 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider{
 		return new Tuple2<Set<String>, Set<String>>(sourceIds,bucketIds);
 	}
 
-	protected Set<String> loadBucketPermissions(Set<String> bucketIds) throws InterruptedException, ExecutionException {
+	protected Set<String> loadBucketPermissions(Set<String> bucketIds, String action) throws InterruptedException, ExecutionException {
 		Set<String> bucketPaths = new HashSet<String>();
 		Cursor<DataBucketBean> cursor = getBucketDb().getObjectsBySpec(CrudUtils.anyOf(DataBucketBean.class).withAny("_id", bucketIds)).get();
 
 	        		for (Iterator<DataBucketBean> it = cursor.iterator(); it.hasNext();) {
 	        			DataBucketBean bucket = it.next();
-	        			bucketPaths.add(PermissionExtractor.createPathPermission(bucket, Optional.of(ISecurityService.ACTION_WILDCARD),bucket.full_name()));
-	        			bucketPaths.add(PermissionExtractor.createPermission(bucket, Optional.of(ISecurityService.ACTION_WILDCARD),bucket._id()));
+	        			bucketPaths.add(PermissionExtractor.createPathPermission(bucket, Optional.of(action),bucket.full_name()));
+	        			bucketPaths.add(PermissionExtractor.createPermission(bucket, Optional.of(action),bucket._id()));
 	        		}
 	        			// bucket id					
 		return bucketPaths;
@@ -235,7 +303,8 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider{
 	        		for (Iterator<JsonNode> it = cursor.iterator(); it.hasNext();) {
 	        			JsonNode share = it.next();
 	        			String shareId = "v1_"+share.get("_id").asText();
-	        			String permission = PermissionExtractor.createPermission(SharedLibraryBean.class.getSimpleName(), Optional.of(ISecurityService.ACTION_WILDCARD),shareId);
+	        			// shared libraries are read for now except admins
+	        			String permission = PermissionExtractor.createPermission(SharedLibraryBean.class.getSimpleName(), Optional.of(ISecurityService.ACTION_READ),shareId);
 	        			shareIds.add(permission);	        			
 	        		}
 					
