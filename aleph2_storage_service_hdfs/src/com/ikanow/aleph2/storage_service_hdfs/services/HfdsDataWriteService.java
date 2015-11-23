@@ -173,9 +173,16 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	 */
 	@Override
 	public CompletableFuture<Boolean> deleteDatastore() {
-		return _parent.handleBucketDeletionRequest(_bucket, Optional.of(_buffer_name).filter(name -> !name.equals(IStorageService.PRIMARY_BUFFER_SUFFIX)), false)
-				.thenApply(res -> res.success())
-				;
+		final Path path = new Path(getBasePath(_storage_service.getBucketRootPath(), _bucket, _stage, _job_name, _buffer_name, false));
+		try {
+			if (HdfsStorageService.doesPathExist(_dfs, path)) {			
+				_dfs.delete(path, true);			
+			}
+			return CompletableFuture.completedFuture(true);
+		}
+		catch (Exception e) {
+			return CompletableFuture.completedFuture(false);			
+		}
 	}
 
 	/* (non-Javadoc)
