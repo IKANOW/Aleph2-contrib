@@ -42,9 +42,11 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvi
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
@@ -332,6 +334,11 @@ public class HdfsStorageService implements IStorageService {
 									
 									return Tuples._2T(IStorageService.StorageStage.transient_output, Optional.of(job));
 								}
+								else if (stage.startsWith(StorageStage.transient_input.toString())) { // the second part can be the subsystem settings
+									final String[] transient_job = stage.split(":", 2);
+									return Tuples._2T(IStorageService.StorageStage.transient_input, 
+											Optional.of(transient_job).filter(tj -> tj.length > 1).<String>map(tj -> tj[1]));									
+								}
 								else {
 									return Tuples._2T(IStorageService.StorageStage.valueOf(stage), Optional.<String>empty());
 								}
@@ -343,6 +350,15 @@ public class HdfsStorageService implements IStorageService {
 						}
 					});
 			
+			// For transient input, can override the storage sub schema from the options, otherwise use sensible defaults (check for test mode)
+			
+			final DataBucketBean transient_input_bucket = Lambdas.get(() -> {
+				if (StorageStage.transient_input == stage_job._1()) {
+					return buildInputBatchSchema(bucket, stage_job._2());
+				}
+				else return bucket; // (default return normal bucket)			
+			});
+			
 			// Check if the stage is enabled:
 			
 			return Patterns.match(stage_job._1()).<Optional<IDataWriteService<O>>>andReturn()
@@ -350,7 +366,7 @@ public class HdfsStorageService implements IStorageService {
 							Optional.of(new HfdsDataWriteService<O>(bucket, this, stage_job._1(), stage_job._2(), HdfsStorageService.this, secondary_buffer))
 					)
 					.when(stage -> StorageStage.transient_input == stage, __ ->
-							Optional.of(new HfdsDataWriteService<O>(bucket, this, stage_job._1(), Optional.empty(), HdfsStorageService.this, secondary_buffer))
+							Optional.of(new HfdsDataWriteService<O>(transient_input_bucket, this, stage_job._1(), Optional.empty(), HdfsStorageService.this, secondary_buffer))
 					)
 					.otherwise(stage -> {
 						return 	Optionals.of(() -> bucket.data_schema().storage_schema())
@@ -746,4 +762,44 @@ public class HdfsStorageService implements IStorageService {
 		} 		
 	}	
 		
+	/** Create an identical bucket except with the batch input storage settings inserted into the data_schema.storage_schema.json
+	 *  (or apply the user override)
+	 * @param bucket
+	 * @param options
+	 * @return
+	 */
+	protected static DataBucketBean buildInputBatchSchema(final DataBucketBean bucket, final Optional<String> options) {
+		final Optional<DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean> 
+				sub_schema_override =
+					options.flatMap(Lambdas.maybeWrap_i(s -> BeanTemplateUtils.from(s, DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.class).get()))
+					;
+		return BeanTemplateUtils.clone(bucket) // 
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.clone(Optional.ofNullable(bucket.data_schema()).orElse(BeanTemplateUtils.build(DataSchemaBean.class).done().get()))
+							.with(DataSchemaBean::storage_schema,
+									BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.class)
+										.with(DataSchemaBean.StorageSchemaBean::json,
+												sub_schema_override.orElseGet(() -> {
+													if (BucketUtils.isTestBucket(bucket)) {
+														return BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.class)
+																	.with(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean::target_write_settings,
+																			BeanTemplateUtils.build(DataSchemaBean.WriteSettings.class)
+																				.with(DataSchemaBean.WriteSettings::batch_flush_interval, 10)
+																			.done().get()
+																			)
+																.done().get();																	
+													}
+													else { // (will just use the underlying defaults)
+														return BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.class)
+																.done().get();
+													}
+												})
+										)
+									.done().get()
+									)
+						.done()
+						)
+				.done();
+	}
+
 }

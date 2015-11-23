@@ -722,7 +722,7 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 						.when(__ -> stage == IStorageService.StorageStage.json, __ -> store.json())
 						.when(__ -> stage == IStorageService.StorageStage.processed, __ -> store.processed())
 						.when(__ -> stage == IStorageService.StorageStage.transient_output, __ -> getDefaultStorageSubSchema())
-						.when(__ -> stage == IStorageService.StorageStage.transient_input, __ -> getDefaultStorageSubSchema())
+						.when(__ -> stage == IStorageService.StorageStage.transient_input, __ -> store.json()) //(overwritten at input)
 						.otherwiseAssert();		
 	}
 	
