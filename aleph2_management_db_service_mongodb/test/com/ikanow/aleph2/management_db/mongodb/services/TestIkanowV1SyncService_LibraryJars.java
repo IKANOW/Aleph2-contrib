@@ -21,7 +21,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.Collection;
@@ -603,7 +602,6 @@ public class TestIkanowV1SyncService_LibraryJars {
 				return null;				
 			}			
 		});
-		Mockito.when(share_file.writeTo(Mockito.<OutputStream>any())).thenReturn(0L);
 		Mockito.when(share_fs.find(Mockito.<ObjectId>any())).thenReturn(share_file);
 		
 		// Create
@@ -661,7 +659,6 @@ public class TestIkanowV1SyncService_LibraryJars {
 					return null;				
 				}			
 			});
-			Mockito.when(share_file2.writeTo(Mockito.<OutputStream>any())).thenReturn(0L);
 			Mockito.when(share_fs.find(Mockito.<ObjectId>any())).thenReturn(share_file2);
 
 			final ManagementFuture<Supplier<Object>> res = IkanowV1SyncService_LibraryJars.createLibraryBean(v1_share_1.get("_id").asText(), 
