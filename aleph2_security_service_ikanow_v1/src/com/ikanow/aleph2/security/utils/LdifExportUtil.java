@@ -97,7 +97,7 @@ public class LdifExportUtil {
 			sourceDb = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of(ingestOptions)).get();
 		}
 		if (bucketDb == null) {
-			bucketDb = _core_management_db.getDataBucketStore();
+			bucketDb = _core_management_db.getDataBucketStore().readOnlyVersion();
 		}
 		if (shareDb == null) {
 			String shareOptions = "social.share";

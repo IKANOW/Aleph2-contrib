@@ -56,7 +56,7 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider{
 	@SuppressWarnings("unchecked")
 	protected void initDb() {
 		if (_core_management_db == null) {
-			_core_management_db = _context.getCoreManagementDbService();
+			_core_management_db = _context.getCoreManagementDbService().readOnlyVersion();
 		}
 		if (_underlying_management_db == null) {
 			_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
