@@ -121,60 +121,7 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider{
 	      return communityDb;		
 	}
 
-/*	@Override
-	public Tuple2<Set<String>, Set<String>> getRolesAndPermissions(String principalName) {
-		
-        Set<String> roleNames = new HashSet<String>();
-        Set<String> permissions = new HashSet<String>();
-//		Cursor<JsonNode> result;
-		Optional<JsonNode> result;
-		try {
-			
-			ObjectId objecId = new ObjectId(principalName); 
-			result = getPersonDb().getObjectBySpec(CrudUtils.anyOf().when("_id", objecId)).get();
-			roleNames.add(principalName);						
-	        if(result.isPresent()){
-	        	JsonNode person = result.get();
-	        	JsonNode communities = person.get("communities"); 
-	        	if (communities!=null && communities.isArray()) {
-					for (Iterator<JsonNode> it = communities.iterator(); it.hasNext();) {
-	        	    JsonNode community = it.next();
-	        	    	JsonNode type = community.get("type");
-	        	    	if(type==null || "data".equalsIgnoreCase(type.asText())){
-		        	    	String communityId = community.get("_id").asText();
-		        	    	if(!SYSTEM_COMMUNITY_ID.equals(communityId)){
-		        	    	//String communityName = community.get("name").asText();
-		        	    	String communityPermission = PermissionExtractor.createPermission(ISecurityService.ROOT_PERMISSION_COMMUNITY, Optional.of(ISecurityService.ACTION_WILDCARD), communityId);
-		        	    	permissions.add(communityPermission);
-		        	    	Tuple2<Set<String>,Set<String>> sourceAndBucketIds = loadSourcesAndBucketIdsByCommunityId(communityId);
-		        	    	// add all sources to permissions
-		        	    	for (String sourceId : sourceAndBucketIds._1()) {
-			        	    	String sourcePermission = PermissionExtractor.createPermission(ISecurityService.ROOT_PERMISSION_SOURCE, Optional.of(ISecurityService.ACTION_WILDCARD), sourceId);
-			        	    	permissions.add(sourcePermission);
-							}
-		        	    	// add all bucketids to permissions
-		        	    	Set<String> bucketIds = sourceAndBucketIds._2();
-		        	    	if(!bucketIds.isEmpty()){
-		        	    		Set<String> bucketPathPermissions  = loadBucketPermissions(bucketIds);
-		        	    		permissions.addAll(bucketPathPermissions);
-		        	    	}
-		        	    	Set<String> sharePermissions = loadSharePermissionsByCommunityId(communityId);
-		        	    	permissions.addAll(sharePermissions);
-		        	    	}
-	        	    	}
-					} // it
-					logger.debug("Permissions for "+principalName+":");
-					logger.debug(permissions);
-	        	}
-	        }
-		} catch (Exception e) {
-			logger.error("Caught Exception",e);
-		}
-		logger.debug("Roles loaded for "+principalName+":");
-		logger.debug(roleNames);
-		return Tuple2.apply(roleNames, permissions);
-	}
-*/
+
 	public Tuple2<Set<String>, Set<String>> getRolesAndPermissions(String principalName) {
 		
         Set<String> roleNames = new HashSet<String>();
