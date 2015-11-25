@@ -33,6 +33,7 @@
                     "technology_override_schema": {}
                 },
                 "document_schema": {
+                	"enabled": false
                 },
                 "search_index_schema": {
                     "enabled": true,
