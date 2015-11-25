@@ -830,7 +830,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		if (IAnalyticsAccessContext.class.isAssignableFrom(driver_class)) {
 			if (InputFormat.class.isAssignableFrom(AnalyticsUtils.getTypeName((Class<? extends IAnalyticsAccessContext>)driver_class))) { // INPUT FORMAT
 				return (Optional<T>) driver_options.map(json -> BeanTemplateUtils.from(json, AnalyticThreadJobBean.AnalyticThreadJobInputBean.class))
-						.map(job_input -> ElasticsearchHadoopUtils.getInputFormat(job_input.get()))
+						.map(job_input -> ElasticsearchHadoopUtils.getInputFormat(_crud_factory.getClient(), job_input.get()))
 						.map(access_context -> AnalyticsUtils.injectImplementation((Class<? extends IAnalyticsAccessContext>)driver_class, access_context))
 						;
 			}			
