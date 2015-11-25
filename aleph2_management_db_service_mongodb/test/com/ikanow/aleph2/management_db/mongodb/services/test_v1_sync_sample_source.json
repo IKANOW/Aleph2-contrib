@@ -33,10 +33,6 @@
                     "technology_override_schema": {}
                 },
                 "document_schema": {
-                    "deduplicate": true,
-                    "deduplication_fields": ["url"],
-                    "enabled": false,
-                    "technology_override_schema": {}
                 },
                 "search_index_schema": {
                     "enabled": true,
