@@ -42,6 +42,7 @@ import com.google.inject.Injector;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputBean;
@@ -198,7 +199,12 @@ public class TestHadoopTechnologyService {
 		final InputStream test_file = new ByteArrayInputStream("{\"testField\":\"test1\"}".getBytes(StandardCharsets.UTF_8));
 		test_service.addFileToInputDirectory(test_file, test_bucket);
 		
-		test_service.testAnalyticModule(test_bucket, Optional.empty());
+		// Try this twice, once will fail with a security error, then will update security and check works again
+		final CompletableFuture<BasicMessageBean> ret1 = test_service.testAnalyticModule(test_bucket, Optional.empty());
+		assertFalse("Should have failed with security error: " + ret1.join().message(), ret1.join().success());
+		((MockSecurityService)_service_context.getSecurityService()).setGlobalMockRole("admin", true);
+		final CompletableFuture<BasicMessageBean> ret2 = test_service.testAnalyticModule(test_bucket, Optional.empty());
+		assertTrue("Should have worked this time: " + ret2.join().message(), ret2.join().success());
 
 		// Wait for job to finish
 		for (int ii = 0; ii < 120; ++ii) {

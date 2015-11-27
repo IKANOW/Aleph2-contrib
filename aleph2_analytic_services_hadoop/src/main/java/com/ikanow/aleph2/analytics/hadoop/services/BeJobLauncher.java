@@ -17,6 +17,7 @@ package com.ikanow.aleph2.analytics.hadoop.services;
 
 import java.io.IOException;
 import java.io.File;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -52,6 +53,8 @@ import com.ikanow.aleph2.analytics.hadoop.data_model.HadoopTechnologyOverrideBea
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISubject;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
@@ -213,47 +216,7 @@ public class BeJobLauncher implements IBeJobService{
 		    
 			final String jobName = BucketUtils.getUniqueSignature(bucket.full_name(), Optional.ofNullable(_batchEnrichmentContext.getJob().name()));
 			
-			// Try to minimize class conflicts vs Hadoop's ancient libraries:
-			config.set("mapreduce.job.user.classpath.first", "true");
-			
-			// Get max batch size, apply that everywhere:
-			final Optional<Integer> max_requested_batch_size = 
-			    Optional.ofNullable(bucket.batch_enrichment_configs()).orElse(Collections.emptyList())
-					.stream()
-					.filter(cfg -> Optional.ofNullable(cfg.enabled()).orElse(true))
-	    			.<Integer>flatMap(cfg -> {
-	    				final HadoopTechnologyOverrideBean tech_override = 
-	    						BeanTemplateUtils.from(Optional.ofNullable(cfg.technology_override()).orElse(Collections.emptyMap()), 
-	    								HadoopTechnologyOverrideBean.class)
-	    								.get();
-	    				return Optional.ofNullable(tech_override.requested_batch_size()).map(Stream::of).orElseGet(Stream::empty);
-	    			})
-	    			.max(Integer::max)
-	    			;
-			max_requested_batch_size.ifPresent(i -> config.set(BatchEnrichmentJob.BATCH_SIZE_PARAM, Integer.toString(i)));
-			
-			// Take all the "task:" overrides and apply:
-			final Map<String, String> task_overrides =
-				    Optional.ofNullable(bucket.batch_enrichment_configs()).orElse(Collections.emptyList())
-						.stream()
-						.filter(cfg -> Optional.ofNullable(cfg.enabled()).orElse(true))
-		    			.<Map<String, String>>map(cfg -> {
-		    				final HadoopTechnologyOverrideBean tech_override = 
-		    						BeanTemplateUtils.from(Optional.ofNullable(cfg.technology_override()).orElse(Collections.emptyMap()), 
-		    								HadoopTechnologyOverrideBean.class)
-		    								.get();
-		    				return tech_override.config();
-		    			})
-		    			.collect(HashMap::new, Map::putAll, Map::putAll)
-		    			;
-			
-			if (!task_overrides.isEmpty()) {
-				logger.info(ErrorUtils.get("Hadoop-level overrides for bucket {0}: {1}", bucket.full_name(),
-						task_overrides.keySet().stream().collect(Collectors.joining(","))
-						));
-				
-				task_overrides.entrySet().forEach(kv -> config.set(kv.getKey().replace(":", "."), kv.getValue()));
-			}
+			this.handleHadoopConfigOverrides(bucket, config);
 			
 		    // do not set anything into config past this line (can set job.getConfiguration() elements though - that is what the builder does)
 		    job.set(Job.getInstance(config, jobName));
@@ -328,6 +291,68 @@ public class BeJobLauncher implements IBeJobService{
 			Thread.currentThread().setContextClassLoader(currentClassloader);
 		}
 	     		
+	}
+	
+	/** Handles confi overrides
+	 * @param bucket
+	 * @param config
+	 */
+	protected void handleHadoopConfigOverrides(final DataBucketBean bucket, final Configuration config) {
+		// Try to minimize class conflicts vs Hadoop's ancient libraries:
+		config.set("mapreduce.job.user.classpath.first", "true");		
+		
+		// Get max batch size, apply that everywhere:
+		final Optional<Integer> max_requested_batch_size = 
+		    Optional.ofNullable(bucket.batch_enrichment_configs()).orElse(Collections.emptyList())
+				.stream()
+				.filter(cfg -> Optional.ofNullable(cfg.enabled()).orElse(true))
+    			.<Integer>flatMap(cfg -> {
+    				final HadoopTechnologyOverrideBean tech_override = 
+    						BeanTemplateUtils.from(Optional.ofNullable(cfg.technology_override()).orElse(Collections.emptyMap()), 
+    								HadoopTechnologyOverrideBean.class)
+    								.get();
+    				return Optional.ofNullable(tech_override.requested_batch_size()).map(Stream::of).orElseGet(Stream::empty);
+    			})
+    			.max(Integer::max)
+    			;
+		max_requested_batch_size.ifPresent(i -> config.set(BatchEnrichmentJob.BATCH_SIZE_PARAM, Integer.toString(i)));
+		
+		// Take all the "task:" overrides and apply:
+		final Map<String, String> task_overrides =
+			    Optional.ofNullable(bucket.batch_enrichment_configs()).orElse(Collections.emptyList())
+					.stream()
+					.filter(cfg -> Optional.ofNullable(cfg.enabled()).orElse(true))
+	    			.<Map<String, String>>map(cfg -> {
+	    				final HadoopTechnologyOverrideBean tech_override = 
+	    						BeanTemplateUtils.from(Optional.ofNullable(cfg.technology_override()).orElse(Collections.emptyMap()), 
+	    								HadoopTechnologyOverrideBean.class)
+	    								.get();
+	    				return tech_override.config();
+	    			})
+	    			.collect(HashMap::new, Map::putAll, Map::putAll)
+	    			;
+		
+		if (!task_overrides.isEmpty()) {
+			// Need admin privileges:
+			//TODO (ALEPH-78): once possible, want to use RBAC for this
+			final ISecurityService security_service = _batchEnrichmentContext.getServiceContext().getSecurityService();
+			final ISubject system_user = security_service.loginAsSystem();
+			try {
+				security_service.runAs(system_user, Arrays.asList(bucket.owner_id())); // (Switch to bucket owner user)
+				if (!security_service.hasRole(system_user, "admin")) {
+					throw new RuntimeException(ErrorUtils.get("Permission error: not admin, can't set hadoop config for {0}", bucket.full_name()));
+				}
+			}
+			finally {
+				security_service.releaseRunAs(system_user);
+			}
+			
+			logger.info(ErrorUtils.get("Hadoop-level overrides for bucket {0}: {1}", bucket.full_name(),
+					task_overrides.keySet().stream().collect(Collectors.joining(","))
+					));
+			
+			task_overrides.entrySet().forEach(kv -> config.set(kv.getKey().replace(":", "."), kv.getValue()));
+		}		
 	}
 	
 	/** Cache the system and user classpaths
