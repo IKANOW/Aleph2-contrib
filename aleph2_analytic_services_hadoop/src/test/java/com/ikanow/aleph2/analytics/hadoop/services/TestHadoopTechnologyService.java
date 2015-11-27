@@ -129,9 +129,35 @@ public class TestHadoopTechnologyService {
 												.with(DataBucketBean::batch_enrichment_configs, 
 														Arrays.asList(
 																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
+																	.with(EnrichmentControlMetadataBean::technology_override,
+																			new LinkedHashMap<String, Object>(
+																					ImmutableMap.<String, Object>builder()
+																						.put("config", 
+																								new LinkedHashMap<String, Object>(
+																										ImmutableMap.<String, Object>builder()
+																											.put("mapred:task:timeout", "300")
+																										.build()
+																									)
+																								)
+																					.build()
+																				)
+																			)
 																.done().get()
 																,
 																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
+																	.with(EnrichmentControlMetadataBean::technology_override, // (same, just to check collisions doesn't break it)
+																			new LinkedHashMap<String, Object>(
+																					ImmutableMap.<String, Object>builder()
+																						.put("config", 
+																								new LinkedHashMap<String, Object>(
+																										ImmutableMap.<String, Object>builder()
+																											.put("mapred:task:timeout", "300")
+																										.build()
+																									)
+																								)
+																					.build()
+																				)
+																			)
 																.done().get()
 																))
 												.with(DataBucketBean::data_schema,

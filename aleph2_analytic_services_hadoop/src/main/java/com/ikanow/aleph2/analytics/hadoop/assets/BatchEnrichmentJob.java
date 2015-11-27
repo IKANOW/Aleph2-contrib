@@ -36,6 +36,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -78,6 +79,7 @@ import java.util.Arrays;
 
 import fj.Unit;
 import fj.data.Either;
+import fj.data.Validation;
 
 /** Encapsulates a Hadoop job intended for batch enrichment or analytics
  * @author jfreydank
@@ -220,6 +222,8 @@ public class BatchEnrichmentJob{
 			}
 			
 			if((_batch.size() >= _batch_size) || (!_batch.isEmpty() && flush)) {
+				hadoop_context.progress(); // (for little performance may in some cases prevent timeouts)
+				
 				final Iterator<Tuple3<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean>> it = _ec_metadata.iterator();
 				List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> mutable_start = _batch;
 				// Note currently we're sending the output of one pipeline into the input of the other
@@ -559,35 +563,36 @@ public class BatchEnrichmentJob{
 		{
 			// OK first up, do the reduce bit, no batching needed for this bit
 			
-			//TODO (ALEPH-78): this isn't ideal in the case of a long stream under a single key
-			// because it doesn't do anything with the output until the entire stream has finished.
-			// (This resulted in timeouts, though it's a bit odd because the calling of getNext in theory should tweak the timer
-			//  so the reported problem being in the YARN shuffle and nothing I can handle still seems valid)
-			// A couple of ideas
-			// - in _single_element mode simply get the batch enrichment to write the module out as emitObject is called
-			// - (harder..) In multi-element mode pause when the output batch gets to batch size and
-			// (Actually I think all the cases can be handled quite easily by registering a lambda inside batch 
-			//  enrichment that will override the usual processing)
+			// Set up a semi-streaming response so if there's a large number of records with a single key then we don't try to do everything at once
 			
-			_first_element._1().cloneForNewGrouping().onObjectBatch(
-					Optionals.streamOf(values, false)
-						.map(x -> Tuples._2T(0L, new BeFileInputReader.BatchRecord(x.get(), null))),
-					Optional.empty(), Optional.of(key.get()));
-			
-			if (_single_element) { // yay no need to batch
-				_first_element._2().getOutputRecords().stream().forEach(Lambdas.wrap_consumer_i(record -> {					
+			final Function<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>, Validation<BasicMessageBean, JsonNode>> handleReduceOutput = Lambdas.wrap_u(record -> {
+				if (_single_element) { // yay no need to batch
 					if (is_combiner) {
 						context.write(key, new ObjectNodeWritableComparable((ObjectNode) record._1()._2().getJson()));
 					}
 					else {
 						_analytics_context.emitObject(Optional.empty(), _enrichment_context.getJob(), Either.left(record._1()._2().getJson()), Optional.empty());										
-					}
-				}));
-			}		
-			else { //(else add to the batch - the non map elements get handled by the batch processing)
-				_batch.addAll(_first_element._2().getOutputRecords());
-				checkBatch(false, context);
-			}
+					}				
+				}
+				else { //(else add to the batch - the non map elements get handled by the batch processing)
+					_batch.add(record);
+					checkBatch(false, context);
+				}
+				return null;
+			});
+			final BatchEnrichmentContext local_enrich_context = _first_element._2();
+			local_enrich_context.overrideOutput(handleReduceOutput);
+			
+			_first_element._1().cloneForNewGrouping().onObjectBatch(
+					StreamUtils.zipWithIndex(Optionals.streamOf(values, false))
+						.map(ix -> {
+							if (0 == (ix.getIndex() % _batch_size)) context.progress(); // (every 200 records report progress to try to keep the system alive)
+							return Tuples._2T(0L, new BeFileInputReader.BatchRecord(ix.getValue().get(), null));
+						})
+						,
+					Optional.empty(), Optional.of(key.get()));
+
+			//(shouldn't be necessary, but can't do any harm either)
 			if (!_first_element._2().getOutputRecords().isEmpty()) _first_element._2().clearOutputRecords();
 		}
 

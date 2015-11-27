@@ -16,6 +16,8 @@
 package com.ikanow.aleph2.analytics.hadoop.data_model;
 
 import java.io.Serializable;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 
 /** Config bean for available technology overrides (in the enrichment metadata control bean)
@@ -43,7 +45,14 @@ public class HadoopTechnologyOverrideBean implements Serializable {
 	 */
 	public Integer requested_batch_size() { return requested_batch_size; }		
 	
+	/** Hadoop parameters (eg "mapred.task.timeout") to override where allowed (by user and system permissions)
+	 *  Note the "."s are replaced by ":"s to workaround certain DBs' key issues, eg would actually use "mapred:task:timeout" in the above example)
+	 * @return
+	 */
+	public Map<String, String> config() { return Optional.ofNullable(config).orElse(Collections.emptyMap()); }
+	
 	private Integer num_reducers;
 	private Boolean use_combiner;
 	private Integer requested_batch_size;
+	private Map<String, String> config;
 }

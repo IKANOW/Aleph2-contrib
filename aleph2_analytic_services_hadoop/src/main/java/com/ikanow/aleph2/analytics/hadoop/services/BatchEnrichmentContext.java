@@ -26,6 +26,7 @@ import java.util.Spliterators;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -72,6 +73,7 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	//(list of records to emit)
 	protected final AtomicLong _mutable_1up = new AtomicLong(0);
 	protected ArrayList<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> _mutable_records = new ArrayList<>();
+	protected Function<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>, Validation<BasicMessageBean, JsonNode>> _mutable_output_override = null;
 	
 	/** User constructor - in technology
 	 * @param analytics_context - the context to wrap
@@ -173,6 +175,14 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 	public void clearOutputRecords() {
 		_mutable_records.clear();
 	}
+
+	/** Overrides an output override necessary to handle combine/reduce correctly when you have a single large stream
+	 * @param mutable_output_override
+	 */
+	public void overrideOutput(final Function<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>, Validation<BasicMessageBean, JsonNode>> mutable_output_override)
+	{
+		_mutable_output_override = mutable_output_override; 
+	}
 	
 	///////////////////////////////////////////////////////
 	
@@ -265,10 +275,18 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 			Optional<AnnotationBean> annotation, final Optional<JsonNode> grouping_fields) {
 		if (annotation.isPresent()) {
 			throw new RuntimeException(ErrorUtils.get(HadoopErrorUtils.NOT_YET_IMPLEMENTED, "annotations"));			
-		}
+		}		
 		
-		_mutable_records.add(Tuples._2T(Tuples._2T(_mutable_1up.incrementAndGet(), new BeFileInputReader.BatchRecord(mutated_json, null)), grouping_fields));
-		return Validation.success(mutated_json);
+		final Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>> out_record = 
+				Tuples._2T(Tuples._2T(_mutable_1up.incrementAndGet(), new BeFileInputReader.BatchRecord(mutated_json, null)), grouping_fields);
+		
+		if (null != _mutable_output_override) {
+			return _mutable_output_override.apply(out_record);
+		}
+		else {
+			_mutable_records.add(out_record);
+			return Validation.success(mutated_json);
+		}
 	}
 
 	/* (non-Javadoc)

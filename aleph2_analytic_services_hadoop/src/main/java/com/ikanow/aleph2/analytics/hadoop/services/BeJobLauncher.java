@@ -19,7 +19,9 @@ import java.io.IOException;
 import java.io.File;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -229,6 +231,29 @@ public class BeJobLauncher implements IBeJobService{
 	    			.max(Integer::max)
 	    			;
 			max_requested_batch_size.ifPresent(i -> config.set(BatchEnrichmentJob.BATCH_SIZE_PARAM, Integer.toString(i)));
+			
+			// Take all the "task:" overrides and apply:
+			final Map<String, String> task_overrides =
+				    Optional.ofNullable(bucket.batch_enrichment_configs()).orElse(Collections.emptyList())
+						.stream()
+						.filter(cfg -> Optional.ofNullable(cfg.enabled()).orElse(true))
+		    			.<Map<String, String>>map(cfg -> {
+		    				final HadoopTechnologyOverrideBean tech_override = 
+		    						BeanTemplateUtils.from(Optional.ofNullable(cfg.technology_override()).orElse(Collections.emptyMap()), 
+		    								HadoopTechnologyOverrideBean.class)
+		    								.get();
+		    				return tech_override.config();
+		    			})
+		    			.collect(HashMap::new, Map::putAll, Map::putAll)
+		    			;
+			
+			if (!task_overrides.isEmpty()) {
+				logger.info(ErrorUtils.get("Hadoop-level overrides for bucket {0}: {1}", bucket.full_name(),
+						task_overrides.keySet().stream().collect(Collectors.joining(","))
+						));
+				
+				task_overrides.entrySet().forEach(kv -> config.set(kv.getKey().replace(":", "."), kv.getValue()));
+			}
 			
 		    // do not set anything into config past this line (can set job.getConfiguration() elements though - that is what the builder does)
 		    job.set(Job.getInstance(config, jobName));
