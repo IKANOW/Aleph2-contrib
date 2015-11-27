@@ -161,7 +161,6 @@ public class TestAleph2EsInputFormat {
 
 		// void Functions we don't care about as long as they don't die
 		
-		reader_under_test.initialize(null, null);
 		reader_under_test.close();
 		
 		// Functions that return something that we can pass along directly
