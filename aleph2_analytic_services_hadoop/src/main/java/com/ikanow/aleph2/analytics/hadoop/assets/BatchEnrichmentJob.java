@@ -559,6 +559,16 @@ public class BatchEnrichmentJob{
 		{
 			// OK first up, do the reduce bit, no batching needed for this bit
 			
+			//TODO (ALEPH-78): this isn't ideal in the case of a long stream under a single key
+			// because it doesn't do anything with the output until the entire stream has finished.
+			// (This resulted in timeouts, though it's a bit odd because the calling of getNext in theory should tweak the timer
+			//  so the reported problem being in the YARN shuffle and nothing I can handle still seems valid)
+			// A couple of ideas
+			// - in _single_element mode simply get the batch enrichment to write the module out as emitObject is called
+			// - (harder..) In multi-element mode pause when the output batch gets to batch size and
+			// (Actually I think all the cases can be handled quite easily by registering a lambda inside batch 
+			//  enrichment that will override the usual processing)
+			
 			_first_element._1().cloneForNewGrouping().onObjectBatch(
 					Optionals.streamOf(values, false)
 						.map(x -> Tuples._2T(0L, new BeFileInputReader.BatchRecord(x.get(), null))),

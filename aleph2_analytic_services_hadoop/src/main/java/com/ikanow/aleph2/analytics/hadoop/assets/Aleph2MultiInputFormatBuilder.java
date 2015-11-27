@@ -154,7 +154,7 @@ public class Aleph2MultiInputFormatBuilder {
 		
 		@Override
 		public void initialize(InputSplit split, TaskAttemptContext task_context) throws IOException, InterruptedException {
-			//(nothing to do here)
+			_delegate.initialize(split, task_context);
 		}
 
 		@Override

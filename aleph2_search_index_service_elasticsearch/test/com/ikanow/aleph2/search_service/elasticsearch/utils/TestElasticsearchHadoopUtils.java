@@ -98,6 +98,7 @@ public class TestElasticsearchHadoopUtils {
 			assertEquals("r__" + BucketUtils.getUniqueSignature("/test", Optional.empty()) + "*/", res.get("es.resource"));
 			assertEquals("?q=*", res.get("es.query"));
 			assertEquals("yes", res.get("es.index.read.missing.as.empty"));
+			assertEquals("service_name=Aleph2EsInputFormat options={es.resource=r__test__f911f6d77ac9*/, es.index.read.missing.as.empty=yes, es.query=?q=*}", access_context.describe());
 		}
 		
 		// No filter (added type)

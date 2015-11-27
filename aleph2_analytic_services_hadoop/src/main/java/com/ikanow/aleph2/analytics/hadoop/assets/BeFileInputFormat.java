@@ -66,12 +66,7 @@ public class BeFileInputFormat extends UpdatedCombineFileInputFormat<String, Tup
 	public RecordReader<String, Tuple2<Long, IBatchRecord>> createRecordReader(InputSplit inputSplit, TaskAttemptContext context) throws IOException {
 		logger.debug("BeFileInputFormat.createRecordReader");
 		BeFileInputReader reader = new BeFileInputReader();
-		try {
-			reader.initialize(inputSplit, context);
-		} 
-		catch (InterruptedException e) {
-			throw new IOException(e);
-		}
+		// (don't initialize - that gets called seperately by the interface)
 		return reader;
 	} // createRecordReader
 

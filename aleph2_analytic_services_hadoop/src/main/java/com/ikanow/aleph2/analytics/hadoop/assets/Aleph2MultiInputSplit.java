@@ -20,6 +20,7 @@ import java.io.DataInputStream;
 import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Optional;
 
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
@@ -121,4 +122,8 @@ public class Aleph2MultiInputSplit extends InputSplit implements Configurable, W
 		return _delegate.getLocations();
 	}
 
+	@Override
+	public String toString() {
+		return Aleph2MultiInputSplit.class.getSimpleName() + ":" + Optional.ofNullable(_name).orElse("(no name)") + ":" +  Optional.ofNullable(_delegate).map(d -> d.toString()).orElse("none");
+	}
 }

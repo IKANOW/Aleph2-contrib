@@ -32,6 +32,7 @@ import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessCo
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.search_service.elasticsearch.hadoop.assets.Aleph2EsInputFormat;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
@@ -54,7 +55,17 @@ public class ElasticsearchHadoopUtils {
 			final AnalyticThreadJobBean.AnalyticThreadJobInputBean job_input)
 	{
 		return new IAnalyticsAccessContext<InputFormat>() {
-
+			final LinkedHashMap<String, Object> _mutable_output = null;
+			
+			@Override
+			public String describe() {
+				//(return the entire thing)
+				return ErrorUtils.get("service_name={0} options={1}", 
+						this.getAccessService().right().value().getSimpleName(),
+						this.getAccessConfig().get()
+						);				
+			}
+			
 			/* (non-Javadoc)
 			 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext#getAccessService()
 			 */
@@ -68,7 +79,9 @@ public class ElasticsearchHadoopUtils {
 			 */
 			@Override
 			public Optional<Map<String, Object>> getAccessConfig() {
-
+				if (null != _mutable_output) {
+					return Optional.of(_mutable_output);
+				}				
 				final LinkedHashMap<String, Object> mutable_output = new LinkedHashMap<>();
 											
 				//TODO (XXX): going to start off with a simple version of this:

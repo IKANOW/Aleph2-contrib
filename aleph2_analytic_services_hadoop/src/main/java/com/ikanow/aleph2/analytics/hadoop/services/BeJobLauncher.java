@@ -172,10 +172,8 @@ public class BeJobLauncher implements IBeJobService{
 								logger.warn(ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input)));
 							}
 							else {
-								logger.info(ErrorUtils.get("Adding data service path for bucket {0}: {1} ({2})", bucket.full_name()),
-										input_format_info.get().getAccessService().either(l -> l.getClass().getSimpleName(), r -> r.getSimpleName()),
-										input_format_info.get().getAccessConfig().map(cfg -> cfg.size()).orElse(0)
-										);
+								logger.info(ErrorUtils.get("Adding data service path for bucket {0}: {1}", bucket.full_name(),
+										input_format_info.get().describe()));
 								
 							    final Job inputJob = Job.getInstance(config);
 							    inputJob.setInputFormatClass(input_format_info.get().getAccessService().either(l -> l.getClass(), r -> r));
