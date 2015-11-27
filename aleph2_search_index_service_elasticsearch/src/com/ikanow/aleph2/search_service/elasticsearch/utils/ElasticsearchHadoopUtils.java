@@ -55,7 +55,7 @@ public class ElasticsearchHadoopUtils {
 			final AnalyticThreadJobBean.AnalyticThreadJobInputBean job_input)
 	{
 		return new IAnalyticsAccessContext<InputFormat>() {
-			final LinkedHashMap<String, Object> _mutable_output = null;
+			private LinkedHashMap<String, Object> _mutable_output = null;
 			
 			@Override
 			public String describe() {
@@ -82,8 +82,12 @@ public class ElasticsearchHadoopUtils {
 				if (null != _mutable_output) {
 					return Optional.of(_mutable_output);
 				}				
-				final LinkedHashMap<String, Object> mutable_output = new LinkedHashMap<>();
+				_mutable_output = new LinkedHashMap<>();
 											
+				// Check for input record limit:
+				Optional.ofNullable(job_input.config()).map(cfg -> cfg.record_limit_request())
+						.ifPresent(max -> _mutable_output.put(Aleph2EsInputFormat.BE_DEBUG_MAX_SIZE, Long.toString(max)));				
+				
 				//TODO (XXX): going to start off with a simple version of this:
 
 				final String index_resource = 
@@ -114,11 +118,11 @@ public class ElasticsearchHadoopUtils {
 							.collect(Collectors.joining(","))
 							;						
 				
-				mutable_output.put("es.resource", index_resource + "/" + type_resource);  
+				_mutable_output.put("es.resource", index_resource + "/" + type_resource);  
 								
-				mutable_output.put("es.index.read.missing.as.empty", "yes");
+				_mutable_output.put("es.index.read.missing.as.empty", "yes");
 				
-				mutable_output.put("es.query",
+				_mutable_output.put("es.query",
 						Optional.ofNullable(job_input.filter())
 									.map(f -> f.get("technology_override"))
 									.map(o -> {
@@ -142,7 +146,7 @@ public class ElasticsearchHadoopUtils {
 				//config.set("es.net.proxy.http.host", "localhost");
 				//config.set("es.net.proxy.http.port", "8888");
 
-				return Optional.of(Collections.unmodifiableMap(mutable_output));
+				return Optional.of(Collections.unmodifiableMap(_mutable_output));
 			}			
 		};
 	}

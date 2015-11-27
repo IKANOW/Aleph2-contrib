@@ -62,6 +62,7 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 	public static final String ALEPH2_RESOURCE = "aleph2.es.resource";	
 	
 	/** Copy of batch enrichment config param for hadoop, annoyingly has to be duplicated based on github docs
+	 *  (Note that is can be assigned independently using input_bean.config().record_limit_request())
 	 */
 	public static final String BE_DEBUG_MAX_SIZE = "aleph2.batch.debugMaxSize";		
 	

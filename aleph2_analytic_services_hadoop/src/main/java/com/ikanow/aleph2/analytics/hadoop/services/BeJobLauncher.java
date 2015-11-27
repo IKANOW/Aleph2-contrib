@@ -50,6 +50,8 @@ import com.ikanow.aleph2.analytics.hadoop.data_model.HadoopTechnologyOverrideBea
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
@@ -154,7 +156,24 @@ public class BeJobLauncher implements IBeJobService{
 						.orElse(Collections.emptyList())
 					.stream()
 					.forEach(Lambdas.wrap_consumer_u(input -> {
-						final List<String> paths = _batchEnrichmentContext.getAnalyticsContext().getInputPaths(Optional.of(bucket), _batchEnrichmentContext.getJob(), input);
+						// In the debug case, transform the input to add the max record limit
+						final AnalyticThreadJobInputBean input_with_test_settings = debug_max
+								.map(max -> {
+									return BeanTemplateUtils.clone(input)
+											.with(AnalyticThreadJobInputBean::config,
+													BeanTemplateUtils.clone(
+															Optional.ofNullable(input.config())
+															.orElseGet(() -> BeanTemplateUtils.build(AnalyticThreadJobInputConfigBean.class)
+																								.done().get()
+																	))
+														.with(AnalyticThreadJobInputConfigBean::record_limit_request, max)
+													.done()
+													)
+											.done();
+								})
+								.orElse(input);
+						
+						final List<String> paths = _batchEnrichmentContext.getAnalyticsContext().getInputPaths(Optional.of(bucket), _batchEnrichmentContext.getJob(), input_with_test_settings);
 						
 						if (!paths.isEmpty()) {
 						
@@ -167,9 +186,9 @@ public class BeJobLauncher implements IBeJobService{
 						}
 						else { // not easily available in HDFS directory format, try getting from the context
 							
-							Optional<HadoopAccessContext> input_format_info = _batchEnrichmentContext.getAnalyticsContext().getServiceInput(HadoopAccessContext.class, Optional.of(bucket), _batchEnrichmentContext.getJob(), input);
+							Optional<HadoopAccessContext> input_format_info = _batchEnrichmentContext.getAnalyticsContext().getServiceInput(HadoopAccessContext.class, Optional.of(bucket), _batchEnrichmentContext.getJob(), input_with_test_settings);
 							if (!input_format_info.isPresent()) {
-								logger.warn(ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input)));
+								logger.warn(ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input_with_test_settings)));
 							}
 							else {
 								logger.info(ErrorUtils.get("Adding data service path for bucket {0}: {1}", bucket.full_name(),

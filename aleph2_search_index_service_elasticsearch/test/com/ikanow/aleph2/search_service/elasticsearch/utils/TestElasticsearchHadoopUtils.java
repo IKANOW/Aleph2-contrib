@@ -80,11 +80,16 @@ public class TestElasticsearchHadoopUtils {
 	@Test 
 	public void test_getAccessConfig() {
 		
-		// No filter (no type)
+		// No filter (no type), max records
 		{
 			final AnalyticThreadJobBean.AnalyticThreadJobInputBean job_input =
 					BeanTemplateUtils.build(AnalyticThreadJobBean.AnalyticThreadJobInputBean.class)
-						.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::resource_name_or_id, "/test")					
+						.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::resource_name_or_id, "/test")
+						.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::config,
+								BeanTemplateUtils.build(AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean.class)
+									.with(AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean::record_limit_request, 10L)
+								.done().get()
+								)
 					.done().get()
 					;
 			
@@ -93,12 +98,13 @@ public class TestElasticsearchHadoopUtils {
 					ElasticsearchHadoopUtils.getInputFormat(_crud_factory.getClient(), job_input); // (doesn't matter what the input is here)
 			
 			final Map<String, Object> res = access_context.getAccessConfig().get();
-			assertEquals(Arrays.asList("es.index.read.missing.as.empty", "es.query", "es.resource"), res.keySet().stream().sorted().collect(Collectors.toList()));
+			assertEquals(Arrays.asList("aleph2.batch.debugMaxSize", "es.index.read.missing.as.empty", "es.query", "es.resource"), res.keySet().stream().sorted().collect(Collectors.toList()));
 			
 			assertEquals("r__" + BucketUtils.getUniqueSignature("/test", Optional.empty()) + "*/", res.get("es.resource"));
 			assertEquals("?q=*", res.get("es.query"));
 			assertEquals("yes", res.get("es.index.read.missing.as.empty"));
-			assertEquals("service_name=Aleph2EsInputFormat options={es.resource=r__test__f911f6d77ac9*/, es.index.read.missing.as.empty=yes, es.query=?q=*}", access_context.describe());
+			assertEquals("service_name=Aleph2EsInputFormat options={aleph2.batch.debugMaxSize=10, es.resource=r__test__f911f6d77ac9*/, es.index.read.missing.as.empty=yes, es.query=?q=*}", access_context.describe());
+			assertEquals("10", res.get("aleph2.batch.debugMaxSize"));
 		}
 		
 		// No filter (added type)
@@ -122,6 +128,7 @@ public class TestElasticsearchHadoopUtils {
 			assertEquals("r__" + BucketUtils.getUniqueSignature("/test", Optional.empty()) + "*/data_object_test", res.get("es.resource"));
 			assertEquals("?q=*", res.get("es.query"));
 			assertEquals("yes", res.get("es.index.read.missing.as.empty"));
+			assertEquals(null, res.get("aleph2.batch.debugMaxSize"));
 		}
 		
 		// More complex filter ("URL query")
