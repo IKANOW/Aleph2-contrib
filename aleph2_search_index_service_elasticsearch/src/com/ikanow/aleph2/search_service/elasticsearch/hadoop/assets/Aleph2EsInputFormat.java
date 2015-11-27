@@ -25,6 +25,8 @@ import java.util.stream.Collectors;
 
 
 
+
+
 import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.RecordReader;
@@ -35,7 +37,11 @@ import org.elasticsearch.hadoop.mr.EsInputFormat;
 
 
 
+
+
 import scala.Tuple2;
+
+
 
 
 
@@ -54,6 +60,10 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 	/** ,,-separated list of <,-separated-indexes>/<,-separated-types>
 	 */
 	public static final String ALEPH2_RESOURCE = "aleph2.es.resource";	
+	
+	/** Copy of batch enrichment config param for hadoop, annoyingly has to be duplicated based on github docs
+	 */
+	public static final String BE_DEBUG_MAX_SIZE = "aleph2.batch.debugMaxSize";		
 	
 	/** Simple implementation of IBatchRecord
 	 * @author jfreydank
@@ -102,6 +112,9 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 	public static class Aleph2EsRecordReader extends ShardRecordReader<String, Tuple2<Long, IBatchRecord>> {
 		protected final RecordReader _delegate;
 		
+		protected long _max_records_per_split = Long.MAX_VALUE;
+		protected long _mutable_curr_records = 0L;
+		
 		/** User c'tor
 		 * @param delegate
 		 */
@@ -115,6 +128,12 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		@Override
 		public void initialize(InputSplit split, TaskAttemptContext context)
 				throws IOException {
+
+			// Test case:
+			_max_records_per_split = Optional.ofNullable(context.getConfiguration().get(BE_DEBUG_MAX_SIZE))
+										.map(str -> Long.parseLong(str))
+										.orElse(Long.MAX_VALUE);
+			
 			Lambdas.wrap_runnable_u(() -> _delegate.initialize(split, context)).run();
 		}
 
@@ -123,7 +142,8 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		 */
 		@Override
 		public boolean nextKeyValue() throws IOException {
-			return Lambdas.wrap_u(() -> _delegate.nextKeyValue()).get();
+			return (_mutable_curr_records++ < _max_records_per_split) // (debug version) 
+					&& Lambdas.wrap_u(() -> _delegate.nextKeyValue()).get();
 		}
 
 		/* (non-Javadoc)
@@ -153,7 +173,9 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		 */
 		@Override
 		public float getProgress() {
-			return Lambdas.wrap_u(() -> _delegate.getProgress()).get();
+			return ((_max_records_per_split != Long.MAX_VALUE) && (0 != _max_records_per_split))
+					? (float)_mutable_curr_records/(float)_max_records_per_split // (debug version)
+					: Lambdas.wrap_u(() -> _delegate.getProgress()).get();
 		}
 
 		/* (non-Javadoc)

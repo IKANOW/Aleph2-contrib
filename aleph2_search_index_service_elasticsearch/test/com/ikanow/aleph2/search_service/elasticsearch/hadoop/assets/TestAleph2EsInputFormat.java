@@ -29,6 +29,7 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.RecordReader;
+import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.junit.Test;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
@@ -93,6 +94,55 @@ public class TestAleph2EsInputFormat {
 		assertTrue("Is object: " + json_val, json_val.isObject());
 		assertEquals("val_val_text", json_val.get("val_key_text").asText());
 	}
+
+	@Test
+	public void test_Aleph2EsRecordReader_maxRecords() throws IOException, InterruptedException {
+
+		@SuppressWarnings("rawtypes")
+		final RecordReader mock_shard_record_reader = Mockito.mock(RecordReader.class);
+		Mockito.when(mock_shard_record_reader.nextKeyValue()).thenReturn(true); // (ie will keep going forever)
+		Mockito.when(mock_shard_record_reader.getProgress()).thenReturn((float)4.0); // (just return some dummy number so we can check it's working)
+
+		// Test version
+		{
+			final Configuration config = new Configuration(false);
+			config.set(Aleph2EsInputFormat.BE_DEBUG_MAX_SIZE, "10");
+			final TaskAttemptContext mock_task = Mockito.mock(TaskAttemptContext.class);
+			Mockito.when(mock_task.getConfiguration()).thenReturn(config);
+			
+			final Aleph2EsRecordReader reader_under_test = new Aleph2EsRecordReader(mock_shard_record_reader);
+			
+			try {
+				 reader_under_test.initialize(null, mock_task);
+			}
+			catch (Exception e) {} // (the _delegate init call will fail out, that's fine)
+			
+			int ii = 0;
+			for (; ii < 100 && reader_under_test.nextKeyValue(); ++ii) {
+				assertTrue("getProgress should be overridden", reader_under_test.getProgress() <= 1.0);
+			}
+			assertEquals("Should have stopped after 10 iterations", 10, ii);
+		}
+		// Normal version
+		{
+			final Configuration config = new Configuration(false);
+			final TaskAttemptContext mock_task = Mockito.mock(TaskAttemptContext.class);
+			Mockito.when(mock_task.getConfiguration()).thenReturn(config);
+			
+			final Aleph2EsRecordReader reader_under_test = new Aleph2EsRecordReader(mock_shard_record_reader);
+			
+			try {
+				 reader_under_test.initialize(null, mock_task);
+			}
+			catch (Exception e) {} // (the _delegate init call will fail out, that's fine)
+			
+			int ii = 0;
+			for (; ii < 100 && reader_under_test.nextKeyValue(); ++ii) {
+				assertTrue("getProgress should return the dummy value", reader_under_test.getProgress() == 4.0);
+			}
+			assertEquals("Should keep going for all 100 iterations", 100, ii);
+		}
+	}	
 	
 	@Test
 	public void test_Aleph2EsRecordReader_testCoverage() throws IOException, InterruptedException {

@@ -109,6 +109,8 @@ public class ElasticsearchHadoopUtils {
 							.map(obj -> (IndexMetaData)obj)
 							.flatMap(index_meta -> Optionals.streamOf(index_meta.getMappings().keysIt(), false))
 							.filter(type -> !type.equals("_default_"))
+							.collect(Collectors.toSet())
+							.stream()
 							.collect(Collectors.joining(","))
 							;						
 				
