@@ -36,6 +36,7 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hadoop.util.ReflectionUtils;
 
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 
 /** A more generic multiple input format utility than the one provided by Hadoop
@@ -154,7 +155,12 @@ public class Aleph2MultiInputFormatBuilder {
 		
 		@Override
 		public void initialize(InputSplit split, TaskAttemptContext task_context) throws IOException, InterruptedException {
-			_delegate.initialize(split, task_context);
+			//(must be an Aleph2MultiInputSplit by construction, add this bit of code for robustness)
+			final InputSplit delegate = Patterns.match(split).<InputSplit>andReturn()
+											.when(Aleph2MultiInputSplit.class, s -> s.getInputSplit())
+											.otherwise(s -> s);													
+					
+			_delegate.initialize(delegate, task_context);
 		}
 
 		@Override
