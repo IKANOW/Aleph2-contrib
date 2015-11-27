@@ -158,5 +158,12 @@
             <version>1.6.1</version>
             <scope>test</scope>
         </dependency>		
+		<dependency>
+			<!-- This just ensures that log4j won't be in the shaded jar via some transitive install -->
+			<groupId>log4j</groupId>
+			<artifactId>log4j</artifactId>
+			<version>[0,)</version>
+			<scope>provided</scope>			
+		</dependency>
 	</dependencies>	
 </project>

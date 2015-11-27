@@ -118,6 +118,13 @@
 			<version>4.12</version>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<!-- This just ensures that log4j won't be in the shaded jar via some transitive install -->
+			<groupId>log4j</groupId>
+			<artifactId>log4j</artifactId>
+			<version>[0,)</version>
+			<scope>provided</scope>			
+		</dependency>
 		<!-- Other external dependencies here -->
 		<dependency>
 			<groupId>org.apache.storm</groupId>
