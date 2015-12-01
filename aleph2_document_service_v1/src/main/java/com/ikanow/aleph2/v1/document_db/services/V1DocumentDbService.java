@@ -24,8 +24,11 @@ import org.apache.hadoop.mapreduce.InputFormat;
 
 import scala.Tuple2;
 
+import com.google.inject.Inject;
+import com.google.inject.Module;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IDocumentService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.DocumentSchemaBean;
@@ -34,6 +37,8 @@ import com.ikanow.aleph2.data_model.utils.AnalyticsUtils;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.v1.document_db.data_model.V1DocDbConfigBean;
+import com.ikanow.aleph2.v1.document_db.modules.V1DocumentDbModule;
 import com.ikanow.aleph2.v1.document_db.utils.V1DocumentDbErrorUtils;
 import com.ikanow.aleph2.v1.document_db.utils.V1DocumentDbHadoopUtils;
 
@@ -41,8 +46,25 @@ import com.ikanow.aleph2.v1.document_db.utils.V1DocumentDbHadoopUtils;
  *  Currently only usable to generate inputs to hadoop processing
  * @author Alex
  */
-public class V1DocumentService implements IDocumentService {
+public class V1DocumentDbService implements IDocumentService, IExtraDependencyLoader {
 
+	protected final V1DocDbConfigBean _config;
+	
+	/** User constructor
+	 */
+	protected V1DocumentDbService() {
+		_config = new V1DocDbConfigBean();
+	}
+
+	/** Guice constructor
+	 * @param config - the configuration for this service
+	 */
+	@Inject
+	protected V1DocumentDbService(V1DocDbConfigBean config) {
+		_config = config;
+	}
+	
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingArtefacts()
 	 */
@@ -63,7 +85,7 @@ public class V1DocumentService implements IDocumentService {
 		if (IAnalyticsAccessContext.class.isAssignableFrom(driver_class)) {
 			if (InputFormat.class.isAssignableFrom(AnalyticsUtils.getTypeName((Class<? extends IAnalyticsAccessContext>)driver_class))) { // INPUT FORMAT
 				return (Optional<T>) driver_options.map(json -> BeanTemplateUtils.from(json, AnalyticThreadJobBean.AnalyticThreadJobInputBean.class))
-						.map(job_input -> V1DocumentDbHadoopUtils.getInputFormat(job_input.get()))
+						.map(job_input -> V1DocumentDbHadoopUtils.getInputFormat(job_input.get(), _config))
 						.map(access_context -> AnalyticsUtils.injectImplementation((Class<? extends IAnalyticsAccessContext>)driver_class, access_context))
 						;
 			}			
@@ -84,6 +106,23 @@ public class V1DocumentService implements IDocumentService {
 						ErrorUtils.buildErrorMessage(this.getClass(), "validateSchema", V1DocumentDbErrorUtils.V1_DOCUMENT_DB_READ_ONLY),
 						ErrorUtils.buildErrorMessage(this.getClass(), "validateSchema", V1DocumentDbErrorUtils.V1_DOCUMENT_DB_ANALYTICS_ONLY)
 						));
+	}
+
+	/** This service needs to load some additional classes via Guice. Here's the module that defines the bindings
+	 * @return
+	 */
+	public static List<Module> getExtraDependencyModules() {
+		return Arrays.asList((Module)new V1DocumentDbModule());
+	}
+	
+	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader#youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules()
+	 */
+	@Override
+	public void youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules() {
+		//(done)
+		
 	}
 	
 	// (leave getDataService to return Optional.empty())

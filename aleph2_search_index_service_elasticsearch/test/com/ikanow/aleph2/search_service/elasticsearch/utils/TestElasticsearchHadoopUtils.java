@@ -35,6 +35,7 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.hadoop.assets.Aleph2EsInputFormat;
+import com.ikanow.aleph2.search_service.elasticsearch.services.ElasticsearchIndexService;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.MockElasticsearchCrudServiceFactory;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.CreationPolicy;
@@ -65,6 +66,10 @@ public class TestElasticsearchHadoopUtils {
 		try { Thread.sleep(1100L); } catch (Exception e) {}		
 	}
 	
+	@SuppressWarnings("rawtypes")
+	public static interface InputFormatAccessTest extends IAnalyticsAccessContext<InputFormat> {}
+	public static interface StringAccessTest extends IAnalyticsAccessContext<String> {}
+	
 	@Test
 	public void test_getAccessService() {
 
@@ -75,6 +80,11 @@ public class TestElasticsearchHadoopUtils {
 				ElasticsearchHadoopUtils.getInputFormat(null, null); // (doesn't matter what the input is here)
 		
 		assertEquals(Either.right(Aleph2EsInputFormat.class), access_context.getAccessService());
+		
+		final ElasticsearchIndexService test_service = new ElasticsearchIndexService(null, _crud_factory, null);
+		
+		assertEquals(Optional.empty(), test_service.getUnderlyingPlatformDriver(StringAccessTest.class, Optional.empty()));
+		assertTrue("Should return input format access test", test_service.getUnderlyingPlatformDriver(InputFormatAccessTest.class, Optional.of("{}")).isPresent());
 	}
 	
 	@Test 

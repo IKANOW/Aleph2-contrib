@@ -30,6 +30,9 @@ import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.v1.document_db.utils.JsonNodeBsonUtils;
 import com.ikanow.infinit.e.data_model.custom.InfiniteMongoInputFormat;
 
 /** Extends the old v1 code and places a v2 facade around it
@@ -108,11 +111,10 @@ public class Aleph2V1InputFormat extends InfiniteMongoInputFormat {
 
 		@Override
 		public Tuple2<Long, IBatchRecord> getCurrentValue() throws IOException,
-				InterruptedException {
-			// This is the only trivial bit of code here
-			
-			// TODO Auto-generated method stub
-			return null;
+				InterruptedException {			
+			return Lambdas.wrap_u(() -> {
+				return Tuples._2T(0L, (IBatchRecord)new BatchRecord(JsonNodeBsonUtils.from(_delegate.getCurrentValue()), null));
+			}).get();
 		}
 		
 	}
