@@ -33,10 +33,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.v1.document_db.data_model.V1DocDbConfigBean;
 import com.ikanow.aleph2.v1.document_db.hadoop.assets.Aleph2V1InputFormat;
 import com.mongodb.BasicDBObject;
@@ -62,8 +64,11 @@ public class V1DocumentDbHadoopUtils {
 	 */
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public static IAnalyticsAccessContext<InputFormat> getInputFormat(
-			final AnalyticThreadJobBean.AnalyticThreadJobInputBean job_input, final V1DocDbConfigBean config)
+			final String user_id,
+			final AnalyticThreadJobBean.AnalyticThreadJobInputBean job_input, final Optional<ISecurityService> maybe_security, final V1DocDbConfigBean config)
 	{
+		//TODO (ALEPH-20): need to perform security in here
+		
 		return new IAnalyticsAccessContext<InputFormat>() {
 			private LinkedHashMap<String, Object> _mutable_output = null;
 			
@@ -100,6 +105,17 @@ public class V1DocumentDbHadoopUtils {
 						Arrays.stream(job_input.resource_name_or_id().substring(BucketUtils.EXTERNAL_BUCKET_PREFIX.length()).split(","))
 								.collect(Collectors.toList())
 								; 
+				
+				// Validate communities:
+				maybe_security.ifPresent(sec -> {
+					communities.stream()
+						.filter(cid -> !sec.isUserPermitted(Optional.of(user_id), Tuples._2T("community", cid), Optional.of(ISecurityService.ACTION_READ)))
+						.findAny()
+						.ifPresent(cid -> {
+							throw new RuntimeException(ErrorUtils.get(V1DocumentDbErrorUtils.V1_DOCUMENT_USER_PERMISSIONS, user_id, cid));
+						});
+				});
+				
 				final String query = _mapper.convertValue(Optional.ofNullable(job_input.filter()).orElse(Collections.emptyMap()), 
 															JsonNode.class).toString();
 				

@@ -24,6 +24,9 @@ import org.apache.hadoop.mapreduce.InputFormat;
 import org.junit.Test;
 
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.MockServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -50,10 +53,17 @@ public class TestV1DocumentService {
 		
 		assertEquals(Optional.empty(), to_test.getUnderlyingPlatformDriver(StringAccessTest.class, Optional.empty()));
 		
+		final MockServiceContext service_context = new MockServiceContext();
+		final MockSecurityService security_service = new MockSecurityService();
+		service_context.addService(ISecurityService.class, Optional.empty(), security_service);
+		
 		final V1DocDbConfigBean config = new V1DocDbConfigBean("test:27018");
-		final V1DocumentDbService to_test_2 = new V1DocumentDbService(config);
+		final V1DocumentDbService to_test_2 = new V1DocumentDbService(service_context, config);
 
-		assertTrue("Should return input format access test", to_test_2.getUnderlyingPlatformDriver(InputFormatAccessTest.class, Optional.of("{}")).isPresent());
+		//(more functional tests performed in TestV1DocumentDbHadoopUtils, just do basic testing here)
+		assertEquals(Optional.empty(), to_test_2.getUnderlyingPlatformDriver(InputFormatAccessTest.class, Optional.empty()));
+		assertEquals(Optional.empty(), to_test_2.getUnderlyingPlatformDriver(InputFormatAccessTest.class, Optional.of("badly_formatted")));
+		assertTrue("Should return input format access test", to_test_2.getUnderlyingPlatformDriver(InputFormatAccessTest.class, Optional.of("::{}")).isPresent());
 		
 		// code coverage!		
 		to_test.youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules();		

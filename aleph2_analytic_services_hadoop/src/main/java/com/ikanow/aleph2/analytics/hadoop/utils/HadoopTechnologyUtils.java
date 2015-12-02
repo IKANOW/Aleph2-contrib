@@ -99,13 +99,7 @@ public class HadoopTechnologyUtils {
 		// Inputs
 
 		Optionals.ofNullable(job.inputs()).stream().forEach(input -> {
-			if ((!"batch".equals(input.data_service())) 
-					&&
-				(!"storage_service".equals(input.data_service()))
-				&&
-				(!"search_index_service".equals(input.data_service()))
-				)	
-			{
+			if ("streaming".equals(input.data_service())) { // anything else is now somewhat supported, will at least call getServiceInput on it and try to resolve
 				errors.add(ErrorUtils.get(HadoopErrorUtils.CURR_INPUT_RESTRICTIONS, input.data_service(), analytic_bucket.full_name(), job.name()));
 			}
 		});

@@ -70,7 +70,6 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvi
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.ISubject;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
@@ -828,8 +827,13 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 			return (Optional<T>) Optional.of(_crud_factory.getClient());
 		}
 		if (IAnalyticsAccessContext.class.isAssignableFrom(driver_class)) {
+			final String[] owner_bucket_config = driver_options.orElse("unknown:/unknown:{}").split(":", 3);
+			
+			//TODO: new format for access contexts
+			
 			if (InputFormat.class.isAssignableFrom(AnalyticsUtils.getTypeName((Class<? extends IAnalyticsAccessContext>)driver_class))) { // INPUT FORMAT
-				return (Optional<T>) driver_options.map(json -> BeanTemplateUtils.from(json, AnalyticThreadJobBean.AnalyticThreadJobInputBean.class))
+				return (Optional<T>) driver_options.filter(__ -> 3 == owner_bucket_config.length)
+						.map(__ -> BeanTemplateUtils.from(owner_bucket_config[2], AnalyticThreadJobBean.AnalyticThreadJobInputBean.class))
 						.map(job_input -> ElasticsearchHadoopUtils.getInputFormat(_crud_factory.getClient(), job_input.get()))
 						.map(access_context -> AnalyticsUtils.injectImplementation((Class<? extends IAnalyticsAccessContext>)driver_class, access_context))
 						;
@@ -879,15 +883,8 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 				((String) bucket.data_schema().search_index_schema().technology_override_schema().get(SearchIndexSchemaDefaultBean.index_name_override_)));
 			
 			if (manual_index_name.isPresent()) { // (then must be admin)
-				final ISubject system_user = _service_context.getSecurityService().loginAsSystem();
-				try {
-					_service_context.getSecurityService().runAs(system_user, Arrays.asList(bucket.owner_id())); // (Switch to bucket owner user)
-					if (!_service_context.getSecurityService().hasRole(system_user, "admin")) {
-						errors.add(ErrorUtils.buildErrorMessage(bucket.full_name(), "validateSchema", SearchIndexErrorUtils.NON_ADMIN_BUCKET_NAME_OVERRIDE));
-					}
-				}
-				finally {
-					_service_context.getSecurityService().releaseRunAs(system_user);
+				if (!_service_context.getSecurityService().hasUserRole(Optional.of(bucket.owner_id()), "admin")) {
+					errors.add(ErrorUtils.buildErrorMessage(bucket.full_name(), "validateSchema", SearchIndexErrorUtils.NON_ADMIN_BUCKET_NAME_OVERRIDE));
 				}
 			}
 			
