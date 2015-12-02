@@ -20,6 +20,8 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
+import javax.annotation.Nullable;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.shiro.authc.AccountException;
@@ -69,7 +71,7 @@ public class IkanowV1Realm extends AuthorizingRealm implements IClearableRealmCa
 	private Set<IRoleProvider> roleProviders;
 	
 	@Inject
-	public IkanowV1Realm(final IServiceContext service_context,CacheManager cacheManager, CredentialsMatcher matcher, Set<IRoleProvider> roleProviders) {		
+	public IkanowV1Realm(final IServiceContext service_context,@Nullable  CacheManager cacheManager, CredentialsMatcher matcher, Set<IRoleProvider> roleProviders) {		
 		super(cacheManager,matcher);
 		_context = service_context;
 		this.roleProviders = roleProviders;

@@ -55,7 +55,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	protected String adminId = "4e3706c48d26852237078005";
 	protected String regularUserId = "54f86d8de4b03d27d1ea0d7b";  //cb_user
 	protected String testUserId = "4e3706c48d26852237079004"; 	
-	protected String regularUserCommunityPermission = ISecurityService.ROOT_PERMISSION_COMMUNITY+":read:55a52aa7e4b056ae0f9bd894";
+	protected String regularUserCommunityPermission = ISecurityService.SECURITY_ASSET_COMMUNITY+":read:55a52aa7e4b056ae0f9bd894";
 
 	
 	@Before
