@@ -32,6 +32,14 @@ public class DBCollectionProxyFactory {
 	 * @param dbc - the collection to enhance
 	 * @return - the enhanced collection
 	 */
+	public static DBCollection get(final DBCollection dbc) {
+		return get(dbc, false);
+	}	
+	
+	/** Get the enhanced DB collection from the provided one 
+	 * @param dbc - the collection to enhance
+	 * @return - the enhanced collection
+	 */
 	public static DBCollection get(final DBCollection dbc, final boolean is_mock) {
 		return get(dbc.getDB(), dbc.getName(), is_mock);
 	}

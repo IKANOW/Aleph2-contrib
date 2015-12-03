@@ -21,6 +21,8 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
 import com.ikanow.aleph2.v1.document_db.data_model.V1DocDbConfigBean;
+import com.ikanow.infinit.e.data_model.Globals;
+import com.ikanow.infinit.e.data_model.Globals.Identity;
 import com.typesafe.config.Config;
 
 /** Guice injection
@@ -42,6 +44,11 @@ public class V1DocumentDbModule extends AbstractModule {
 					), e);
 		}
 		this.bind(V1DocDbConfigBean.class).toInstance(bean); // (for crud service)
+		
+		//(While we're here, set up some global V1 constants)
+
+		Globals.setIdentity(Identity.IDENTITY_SERVICE);
+		Globals.overrideConfigLocation(bean.infinite_config_home());
 	}
 }
 

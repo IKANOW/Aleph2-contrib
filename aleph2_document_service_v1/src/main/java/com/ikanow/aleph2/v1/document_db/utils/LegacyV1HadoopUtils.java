@@ -79,43 +79,43 @@ public class LegacyV1HadoopUtils {
 		boolean elasticsearchQuery = oldQueryObj.containsField("qt") && !isCustomTable;
 		@SuppressWarnings("unused")
 		int nLimit = 0;
-		if (oldQueryObj.containsField("$limit")) {
-			nLimit = oldQueryObj.getInt("$limit");
-			oldQueryObj.remove("$limit");
+		if (oldQueryObj.containsField(":limit")) {
+			nLimit = oldQueryObj.getInt(":limit");
+			oldQueryObj.remove(":limit");
 		}
-		if (oldQueryObj.containsField("$splits")) {
-			nSplits = oldQueryObj.getInt("$splits");
-			oldQueryObj.remove("$splits");
+		if (oldQueryObj.containsField(":splits")) {
+			nSplits = oldQueryObj.getInt(":splits");
+			oldQueryObj.remove(":splits");
 		}
-		if (oldQueryObj.containsField("$srctags")) {
-			srcTags = new BasicDBObject(SourcePojo.tags_, oldQueryObj.get("$srctags"));
-			oldQueryObj.remove("$srctags");
+		if (oldQueryObj.containsField(":srctags")) {
+			srcTags = new BasicDBObject(SourcePojo.tags_, oldQueryObj.get(":srctags"));
+			oldQueryObj.remove(":srctags");
 		}
 		if (bLocalMode) { // If in local mode, then set this to a large number so we always run inside our limit/split version
 			// (since for some reason MongoInputFormat seems to fail on large collections)
 			nSplits = InfiniteMongoSplitter.MAX_SPLITS; 
 		}
-		if (oldQueryObj.containsField("$docsPerSplit")) {
-			nDocsPerSplit = oldQueryObj.getInt("$docsPerSplit");
-			oldQueryObj.remove("$docsPerSplit");
+		if (oldQueryObj.containsField(":docsPerSplit")) {
+			nDocsPerSplit = oldQueryObj.getInt(":docsPerSplit");
+			oldQueryObj.remove(":docsPerSplit");
 		}
-		final DBObject fields = (DBObject) oldQueryObj.remove("$fields");
-		oldQueryObj.remove("$output");
-		oldQueryObj.remove("$reducers");
+		final DBObject fields = (DBObject) oldQueryObj.remove(":fields");
+		oldQueryObj.remove(":output");
+		oldQueryObj.remove(":reducers");
 		@SuppressWarnings("unused")
-		String mapperKeyClass = oldQueryObj.getString("$mapper_key_class", "");
+		String mapperKeyClass = oldQueryObj.getString(":mapper_key_class", "");
 		@SuppressWarnings("unused")
-		String mapperValueClass = oldQueryObj.getString("$mapper_value_class", "");
-		oldQueryObj.remove("$mapper_key_class");
-		oldQueryObj.remove("$mapper_value_class");
+		String mapperValueClass = oldQueryObj.getString(":mapper_value_class", "");
+		oldQueryObj.remove(":mapper_key_class");
+		oldQueryObj.remove(":mapper_value_class");
 		String cacheList = null;
-		Object cacheObj = oldQueryObj.get("$caches");
+		Object cacheObj = oldQueryObj.get(":caches");
 		if (null != cacheObj) {
 			cacheList = cacheObj.toString(); // (either array of strings, or single string)
 			if (!cacheList.startsWith("[")) {
 				cacheList = "[" + cacheList + "]"; // ("must" now be valid array)
 			}
-			oldQueryObj.remove("$caches");
+			oldQueryObj.remove(":caches");
 		}//TESTED
 
 //		if (null != nDebugLimit) { // (debug mode override)
@@ -127,8 +127,8 @@ public class LegacyV1HadoopUtils {
 		String otherCollections = null;
 		Date fromOverride = null;
 		Date toOverride = null;
-		Object fromOverrideObj = oldQueryObj.remove("$tmin");
-		Object toOverrideObj = oldQueryObj.remove("$tmax");
+		Object fromOverrideObj = oldQueryObj.remove(":tmin");
+		Object toOverrideObj = oldQueryObj.remove(":tmax");
 		if (null != fromOverrideObj) {
 			fromOverride = dateStringFromObject(fromOverrideObj, true);
 		}

@@ -36,6 +36,13 @@ public class V1DocDbConfigBean {
 	 * @return
 	 */
 	public String mongodb_connection() { return Optional.ofNullable(mongodb_connection).orElse("localhost:27017"); }
+
+	/** The location of the infinit.e properties files (defaults to sensible code)
+	 * @return
+	 */
+	public String infinite_config_home() { return Optional.ofNullable(infinite_config_home).orElse("/opt/infinite-home/config"); }
+	
 	
 	private String mongodb_connection;
+	private String infinite_config_home;
 }
