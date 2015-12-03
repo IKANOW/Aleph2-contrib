@@ -1,1 +1,2 @@
 @hourly /bin/find /opt/aleph2-home/cached-jars/ -maxdepth 1 -name "aleph2_storm_jar_*.jar" -mtime +5|xargs rm -rf
+@weekly if [ -f /usr/bin/hadoop ]; then for i in $(sh /opt/aleph2-home/etc/dir_diff.sh /app/aleph2/ 7); do runuser - hdfs -s /bin/sh -c "/usr/bin/hadoop fs -rm $i"; done; fi
