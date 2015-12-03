@@ -69,6 +69,7 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
@@ -883,7 +884,7 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 				((String) bucket.data_schema().search_index_schema().technology_override_schema().get(SearchIndexSchemaDefaultBean.index_name_override_)));
 			
 			if (manual_index_name.isPresent()) { // (then must be admin)
-				if (!_service_context.getSecurityService().hasUserRole(Optional.of(bucket.owner_id()), "admin")) {
+				if (!_service_context.getSecurityService().hasUserRole(Optional.of(bucket.owner_id()), ISecurityService.ROLE_ADMIN)) {
 					errors.add(ErrorUtils.buildErrorMessage(bucket.full_name(), "validateSchema", SearchIndexErrorUtils.NON_ADMIN_BUCKET_NAME_OVERRIDE));
 				}
 			}
