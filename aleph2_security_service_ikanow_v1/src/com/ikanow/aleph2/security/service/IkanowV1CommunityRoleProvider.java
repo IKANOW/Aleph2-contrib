@@ -85,7 +85,7 @@ public class IkanowV1CommunityRoleProvider implements IRoleProvider {
 					}
 	        	    for (final JsonNode community : communities) {
 	        	    	String communityId = community.get("_id").asText();
-	        	    	String communityPermission = PermissionExtractor.createPermission(ISecurityService.SECURITY_ASSET_COMMUNITY, Optional.of(ISecurityService.ACTION_WILDCARD), communityId);
+	        	    	String communityPermission = PermissionExtractor.createPermission(IkanowV1SecurityService.SECURITY_ASSET_COMMUNITY, Optional.of(ISecurityService.ACTION_WILDCARD), communityId);
 	        	    	permissions.add(communityPermission);
 	        	    }
 	        	}

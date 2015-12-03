@@ -145,12 +145,12 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider{
 		        	    	if(!SYSTEM_COMMUNITY_ID.equals(communityId)){
 		        	    	//String communityName = community.get("name").asText();
 		        	    	String action = determineCommunityAction(community.get("members"), principalName);
-		        	    	String communityPermission = PermissionExtractor.createPermission(ISecurityService.SECURITY_ASSET_COMMUNITY, Optional.of(action), communityId);
+		        	    	String communityPermission = PermissionExtractor.createPermission(IkanowV1SecurityService.SECURITY_ASSET_COMMUNITY, Optional.of(action), communityId);
 		        	    	permissions.add(communityPermission);
 		        	    	Tuple2<Set<String>,Set<String>> sourceAndBucketIds = loadSourcesAndBucketIdsByCommunityId(communityId);
 		        	    	// add all sources to permissions
 		        	    	for (String sourceId : sourceAndBucketIds._1()) {
-			        	    	String sourcePermission = PermissionExtractor.createPermission(ISecurityService.SECURITY_ASSET_SOURCE, Optional.of(action), sourceId);
+			        	    	String sourcePermission = PermissionExtractor.createPermission(IkanowV1SecurityService.SECURITY_ASSET_SOURCE, Optional.of(action), sourceId);
 			        	    	permissions.add(sourcePermission);
 							}
 		        	    	// add all bucketids to permissions

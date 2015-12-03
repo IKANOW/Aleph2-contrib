@@ -38,7 +38,9 @@ import com.ikanow.aleph2.security.module.IkanowV1SecurityModule;
 
 public class IkanowV1SecurityService extends SecurityService implements ISecurityService, IExtraDependencyLoader{
 	
-	
+	public static String SECURITY_ASSET_COMMUNITY="community";
+	public static String SECURITY_ASSET_SOURCE="source";
+
 	protected ISubject currentSubject = null;
 	private static final Logger logger = LogManager.getLogger(IkanowV1SecurityService.class);
 	@Inject
