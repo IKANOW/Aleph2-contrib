@@ -84,7 +84,10 @@ public class TestElasticsearchHadoopUtils {
 		final ElasticsearchIndexService test_service = new ElasticsearchIndexService(null, _crud_factory, null);
 		
 		assertEquals(Optional.empty(), test_service.getUnderlyingPlatformDriver(StringAccessTest.class, Optional.empty()));
-		assertTrue("Should return input format access test", test_service.getUnderlyingPlatformDriver(InputFormatAccessTest.class, Optional.of("{}")).isPresent());
+		// (add more functional tests below)
+		assertEquals(Optional.empty(), test_service.getUnderlyingPlatformDriver(InputFormatAccessTest.class, Optional.empty()));
+		assertEquals(Optional.empty(), test_service.getUnderlyingPlatformDriver(InputFormatAccessTest.class, Optional.of("badly_formatted")));
+		assertTrue("Should return input format access test", test_service.getUnderlyingPlatformDriver(InputFormatAccessTest.class, Optional.of("::{}")).isPresent());
 	}
 	
 	@Test 
@@ -103,10 +106,12 @@ public class TestElasticsearchHadoopUtils {
 					.done().get()
 					;
 			
-			@SuppressWarnings("rawtypes")
-			final IAnalyticsAccessContext<InputFormat> access_context =
-					ElasticsearchHadoopUtils.getInputFormat(_crud_factory.getClient(), job_input); // (doesn't matter what the input is here)
+			final ElasticsearchIndexService test_service = new ElasticsearchIndexService(null, _crud_factory, null);
 			
+			@SuppressWarnings("rawtypes")
+			final IAnalyticsAccessContext<InputFormat> access_context = test_service.getUnderlyingPlatformDriver(InputFormatAccessTest.class, 					
+					Optional.of("misc_user:/bucket_path:" + BeanTemplateUtils.toJson(job_input).toString())).get();
+					
 			final Map<String, Object> res = access_context.getAccessConfig().get();
 			assertEquals(Arrays.asList("aleph2.batch.debugMaxSize", "es.index.read.missing.as.empty", "es.query", "es.resource"), res.keySet().stream().sorted().collect(Collectors.toList()));
 			

@@ -319,6 +319,7 @@ public class TestElasticsearchIndexService {
 
 			
 			final DataBucketBean bucket_with_override = BeanTemplateUtils.clone(bucket2)
+					.with(DataBucketBean::owner_id, "misc_user")
 					.with(DataBucketBean::data_schema, 
 							BeanTemplateUtils.clone(bucket2.data_schema())
 								.with(
@@ -332,7 +333,7 @@ public class TestElasticsearchIndexService {
 			_security_service.setGlobalMockRole("admin", true);
 
 			final Collection<BasicMessageBean> res_search_yes = _index_service.validateSchema(bucket.data_schema().search_index_schema(), bucket_with_override)._2();
-			assertEquals(0, res_search_yes.size());			
+			assertEquals("Should work: " + res_search_yes.stream().map(b -> b.message()).collect(Collectors.joining(";")), 0, res_search_yes.size());			
 			
 			// Fails for non admins
 			_security_service.setGlobalMockRole("admin", false);

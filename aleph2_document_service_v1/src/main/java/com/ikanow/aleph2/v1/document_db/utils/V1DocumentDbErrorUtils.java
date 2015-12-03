@@ -22,4 +22,5 @@ public class V1DocumentDbErrorUtils {
 
 	public static final String V1_DOCUMENT_DB_ANALYTICS_ONLY = "document_service.v1 is currently only available to analytics engines";
 	public static final String V1_DOCUMENT_DB_READ_ONLY = "document_service.v1 is read-only";
+	public static final String V1_DOCUMENT_USER_PERMISSIONS = "User {0} does not have role {1}";
 }

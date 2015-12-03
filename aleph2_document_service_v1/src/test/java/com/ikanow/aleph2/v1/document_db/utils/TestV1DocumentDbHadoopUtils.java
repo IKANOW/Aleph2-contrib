@@ -15,23 +15,32 @@
  *******************************************************************************/
 package com.ikanow.aleph2.v1.document_db.utils;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
+import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.junit.Test;
 
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.MockServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.v1.document_db.data_model.V1DocDbConfigBean;
 import com.ikanow.aleph2.v1.document_db.hadoop.assets.Aleph2V1InputFormat;
+import com.ikanow.aleph2.v1.document_db.services.V1DocumentDbService;
 
 import fj.data.Either;
 
 public class TestV1DocumentDbHadoopUtils {
 
+	@SuppressWarnings("rawtypes")
+	public static interface InputFormatAccessTest extends IAnalyticsAccessContext<InputFormat> {}
+	
 	@Test
 	public void test_getAccessService() {
 
@@ -39,7 +48,7 @@ public class TestV1DocumentDbHadoopUtils {
 		
 		@SuppressWarnings("rawtypes")
 		final IAnalyticsAccessContext<InputFormat> access_context =
-				V1DocumentDbHadoopUtils.getInputFormat(null, null); // (doesn't matter what the input is here)
+				V1DocumentDbHadoopUtils.getInputFormat(null, null, null, null); // (doesn't matter what the input is here)
 		
 		assertEquals(Either.right(Aleph2V1InputFormat.class), access_context.getAccessService());
 	}
@@ -63,11 +72,44 @@ public class TestV1DocumentDbHadoopUtils {
 			
 			final V1DocDbConfigBean config = new V1DocDbConfigBean("test:27018");
 			
-			@SuppressWarnings("rawtypes")
-			final IAnalyticsAccessContext<InputFormat> access_context =
-					V1DocumentDbHadoopUtils.getInputFormat(job_input, config); // (doesn't matter what the input is here)
+			final MockSecurityService sec_service = new MockSecurityService();
 			
-			final Map<String, Object> res = access_context.getAccessConfig().get();
+			@SuppressWarnings("rawtypes")
+			IAnalyticsAccessContext<InputFormat> access_context =
+					V1DocumentDbHadoopUtils.getInputFormat("misc_user", job_input, Optional.of(sec_service), config); // (doesn't matter what the input is here)
+			
+			Map<String, Object> res;
+			try {
+				res = access_context.getAccessConfig().get();
+				fail("Should have thrown exception");
+			}
+			catch (Exception e) {}
+			
+			//(will cache second time so not fail)
+			assertEquals(Collections.emptyMap(), access_context.getAccessConfig().get());
+			
+			access_context = V1DocumentDbHadoopUtils.getInputFormat("misc_user", job_input, Optional.of(sec_service), config); // (doesn't matter what the input is here)			
+			
+			// Add me to the security role, 1/2:
+			sec_service.setUserMockRole("misc_user", "565e076a12c33214b78fd3c2", "read", true);
+			
+			try {
+				res = access_context.getAccessConfig().get();
+				fail("Should have thrown exception");
+			}
+			catch (Exception e) {}
+			
+			// Add me to the security role, 2/2:			
+			sec_service.setUserMockRole("misc_user", "565e076a12c33214b78fd3c3", "read", true);
+			
+			final MockServiceContext service_context = new MockServiceContext();
+			service_context.addService(ISecurityService.class, Optional.empty(), sec_service);			
+			final V1DocumentDbService to_test_2 = new V1DocumentDbService(service_context, config);
+
+			// (do this via the getUnderlyingPlatformDriver to test the params are wired correctly)
+			access_context = to_test_2.getUnderlyingPlatformDriver(InputFormatAccessTest.class, Optional.of("misc_user:/bucket:" + BeanTemplateUtils.toJson(job_input))).get();
+			
+			res = access_context.getAccessConfig().get();
 
 			//DEBUG
 			//System.out.println(res);			

@@ -29,6 +29,7 @@ import com.google.inject.Module;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IDocumentService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.DocumentSchemaBean;
@@ -49,10 +50,12 @@ import com.ikanow.aleph2.v1.document_db.utils.V1DocumentDbHadoopUtils;
 public class V1DocumentDbService implements IDocumentService, IExtraDependencyLoader {
 
 	protected final V1DocDbConfigBean _config;
+	protected final IServiceContext _context;
 	
 	/** User constructor
 	 */
 	protected V1DocumentDbService() {
+		_context = null;
 		_config = new V1DocDbConfigBean();
 	}
 
@@ -60,7 +63,8 @@ public class V1DocumentDbService implements IDocumentService, IExtraDependencyLo
 	 * @param config - the configuration for this service
 	 */
 	@Inject
-	protected V1DocumentDbService(V1DocDbConfigBean config) {
+	public V1DocumentDbService(final IServiceContext context, final V1DocDbConfigBean config) {
+		_context = context;
 		_config = config;
 	}
 	
@@ -84,8 +88,13 @@ public class V1DocumentDbService implements IDocumentService, IExtraDependencyLo
 
 		if (IAnalyticsAccessContext.class.isAssignableFrom(driver_class)) {
 			if (InputFormat.class.isAssignableFrom(AnalyticsUtils.getTypeName((Class<? extends IAnalyticsAccessContext>)driver_class))) { // INPUT FORMAT
-				return (Optional<T>) driver_options.map(json -> BeanTemplateUtils.from(json, AnalyticThreadJobBean.AnalyticThreadJobInputBean.class))
-						.map(job_input -> V1DocumentDbHadoopUtils.getInputFormat(job_input.get(), _config))
+				final String[] owner_bucket_config = driver_options.orElse("unknown:/unknown:{}").split(":", 3);
+				
+				return (Optional<T>) driver_options.filter(__ -> 3 == owner_bucket_config.length)
+						.map(__ -> BeanTemplateUtils.from(owner_bucket_config[2], AnalyticThreadJobBean.AnalyticThreadJobInputBean.class))
+						.map(job_input -> V1DocumentDbHadoopUtils.getInputFormat(owner_bucket_config[0], job_input.get(), 
+								Optional.ofNullable(_context).map(sc -> sc.getSecurityService()), 
+								_config))
 						.map(access_context -> AnalyticsUtils.injectImplementation((Class<? extends IAnalyticsAccessContext>)driver_class, access_context))
 						;
 			}			
