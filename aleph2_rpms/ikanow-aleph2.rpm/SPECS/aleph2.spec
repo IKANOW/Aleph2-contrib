@@ -55,6 +55,7 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 /opt/aleph2-home/
 /opt/aleph2-home/lib/
 /opt/aleph2-home/etc/
+/opt/aleph2-home/bin/
 %config /opt/aleph2-home/etc/log4j2.xml
 %config /opt/aleph2-home/etc/v1_sync_service.properties
 %dir /opt/aleph2-home/logs
