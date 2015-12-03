@@ -17,6 +17,8 @@ package com.ikanow.aleph2.v1.document_db.hadoop.assets;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,6 +36,7 @@ import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.v1.document_db.utils.JsonNodeBsonUtils;
 import com.ikanow.infinit.e.data_model.custom.InfiniteMongoInputFormat;
+import com.mongodb.hadoop.input.MongoInputSplit;
 
 /** Extends the old v1 code and places a v2 facade around it
  * @author Alex
@@ -67,6 +70,38 @@ public class Aleph2V1InputFormat extends InfiniteMongoInputFormat {
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
     public RecordReader createRecordReader(InputSplit split, TaskAttemptContext context) {
+		/**/
+		if (split instanceof MongoInputSplit) {
+			MongoInputSplit ms = (MongoInputSplit) split;
+			Method m = Lambdas.get(() -> {
+				try {
+					return MongoInputSplit.class.getMethod("getCursor");
+				}
+				catch (Throwable t) {
+					System.out.println("(needed to include this as param, heh)");
+					try {
+						return MongoInputSplit.class.getMethod("getCursor", MongoInputSplit.class);
+					}
+					catch (Throwable tt) {
+						return null;
+					}
+				}
+			});
+			if (null != m) {
+				m.setAccessible(true);
+				try {
+					System.out.println("CURSOR == " + m.invoke(ms).toString());
+				} catch (IllegalAccessException | IllegalArgumentException
+						| InvocationTargetException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+		}
+		else {
+			System.out.println("? split type = " + split.getClass().getName());
+		}
+		
 		return new V1DocumentDbRecordReader(super.createRecordReader(split, context));
 	}
 	
