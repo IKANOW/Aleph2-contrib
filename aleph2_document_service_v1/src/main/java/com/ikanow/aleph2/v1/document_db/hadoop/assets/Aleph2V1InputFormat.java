@@ -80,17 +80,26 @@ public class Aleph2V1InputFormat extends InfiniteMongoInputFormat {
 		 * @param delegate
 		 */
 		V1DocumentDbRecordReader(final RecordReader<Object, BSONObject> delegate) {
+			/**/
+			System.out.println("Calling CTOR: " + delegate.toString());
+			
 			_delegate = delegate;
 		}
 		
 		@Override
 		public void initialize(InputSplit split, TaskAttemptContext context)
 				throws IOException, InterruptedException {
+			/**/
+			System.out.println("Calling initialize");
+			
 			_delegate.initialize(split, context);
 		}
 
 		@Override
 		public boolean nextKeyValue() throws IOException, InterruptedException {
+			/**/
+			System.out.println("Calling nextValue");
+			
 			return _delegate.nextKeyValue();
 		}
 
@@ -101,17 +110,26 @@ public class Aleph2V1InputFormat extends InfiniteMongoInputFormat {
 
 		@Override
 		public void close() throws IOException {
+			/**/
+			System.out.println("Calling close");
+			
 			_delegate.close();
 		}
 
 		@Override
 		public String getCurrentKey() throws IOException, InterruptedException {
+			/**/
+			System.out.println("Calling getCurrentKey: " + _delegate.getCurrentKey().toString());
+			
 			return _delegate.getCurrentKey().toString();
 		}
 
 		@Override
 		public Tuple2<Long, IBatchRecord> getCurrentValue() throws IOException,
-				InterruptedException {			
+				InterruptedException {
+			/**/
+			System.out.println("Calling getCurrentKey: " + _delegate.getCurrentValue().toString());			
+			
 			return Lambdas.wrap_u(() -> {
 				return Tuples._2T(0L, (IBatchRecord)new BatchRecord(JsonNodeBsonUtils.from(_delegate.getCurrentValue()), null));
 			}).get();
