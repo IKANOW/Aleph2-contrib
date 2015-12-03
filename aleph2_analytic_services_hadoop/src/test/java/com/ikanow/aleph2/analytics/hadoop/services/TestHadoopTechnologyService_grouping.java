@@ -123,6 +123,7 @@ public class TestHadoopTechnologyService_grouping {
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
 												.with(DataBucketBean::full_name, "/fail/validation/reduce")
+												.with(DataBucketBean::owner_id, "misc_user")
 												.with(DataBucketBean::analytic_thread,
 														BeanTemplateUtils.build(AnalyticThreadBean.class)
 															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
@@ -219,6 +220,7 @@ public class TestHadoopTechnologyService_grouping {
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
 												.with(DataBucketBean::full_name, "/test/simple/reduce" + bucket_suffix)
+												.with(DataBucketBean::owner_id, "misc_user")
 												.with(DataBucketBean::analytic_thread,
 														BeanTemplateUtils.build(AnalyticThreadBean.class)
 															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
@@ -378,6 +380,7 @@ public class TestHadoopTechnologyService_grouping {
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
 												.with(DataBucketBean::full_name, "/test/real/reduce")
+												.with(DataBucketBean::owner_id, "misc_user")
 												.with(DataBucketBean::analytic_thread,
 														BeanTemplateUtils.build(AnalyticThreadBean.class)
 															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
