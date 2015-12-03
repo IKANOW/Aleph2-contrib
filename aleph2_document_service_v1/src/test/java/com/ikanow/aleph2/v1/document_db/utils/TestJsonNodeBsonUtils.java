@@ -26,6 +26,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.bson.types.ObjectId;
 import org.junit.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -57,6 +58,7 @@ public class TestJsonNodeBsonUtils {
 		assertEquals(mapper.convertValue(new byte[] { (byte)0xFF, (byte)0xFE }, JsonNode.class), JsonNodeBsonUtils.transform(new byte[] { (byte)0xFF, (byte)0xFE }, JsonNodeFactory.instance));
 		assertEquals(mapper.convertValue(4.0, JsonNode.class), JsonNodeBsonUtils.transform(4.0, JsonNodeFactory.instance));
 		assertEquals(mapper.convertValue(0L, JsonNode.class), JsonNodeBsonUtils.transform(new Date(0L), JsonNodeFactory.instance));
+		assertEquals(mapper.convertValue("4c927585d591d31d7b37097a", JsonNode.class), JsonNodeBsonUtils.transform(new ObjectId("4c927585d591d31d7b37097a"), JsonNodeFactory.instance));
 		//(had real trouble creating a float node!)
 		assertEquals(JsonNodeFactory.instance.numberNode(Float.valueOf((float)4.0)), JsonNodeBsonUtils.transform((float)4.0, JsonNodeFactory.instance));
 		

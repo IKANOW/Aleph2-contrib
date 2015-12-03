@@ -158,6 +158,7 @@ public class BeJobLauncher implements IBeJobService{
 			Optional.ofNullable(_batchEnrichmentContext.getJob().inputs())
 						.orElse(Collections.emptyList())
 					.stream()
+					.filter(input -> Optional.ofNullable(input.enabled()).orElse(true))
 					.forEach(Lambdas.wrap_consumer_u(input -> {
 						// In the debug case, transform the input to add the max record limit
 						final AnalyticThreadJobInputBean input_with_test_settings = debug_max

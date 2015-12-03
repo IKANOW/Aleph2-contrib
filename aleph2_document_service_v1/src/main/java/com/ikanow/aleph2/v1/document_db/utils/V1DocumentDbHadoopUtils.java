@@ -155,8 +155,9 @@ public class V1DocumentDbHadoopUtils {
 				
 				// 3) Advanced Infinit.e/MongoDB fields:				
 				//Infinit.e src tags filter [optional] --><name>infinit.e.source.tags.filter</name><value>"+srcTags.toString()
-				_mutable_output.put("infinit.e.source.tags.filter", Optional.ofNullable(horrible_object._3()).map(o -> o.toString()).orElse("{}"));
-				
+				if (null != horrible_object._3()) {
+					_mutable_output.put("infinit.e.source.tags.filter", horrible_object._3().toString());
+				}				
 				return Optional.of(Collections.unmodifiableMap(_mutable_output));
 			}			
 		};

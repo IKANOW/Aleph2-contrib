@@ -25,6 +25,7 @@ import java.util.Set;
 import org.bson.BSONObject;
 import org.bson.BasicBSONObject;
 import org.bson.types.BasicBSONList;
+import org.bson.types.ObjectId;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -53,6 +54,9 @@ public class JsonNodeBsonUtils {
 	protected static JsonNode transform(Object x, JsonNodeFactory nc) {
 		if (null == x) {
 			return nc.nullNode();
+		}
+		else if (x instanceof ObjectId) {
+			return nc.textNode(((ObjectId)x).toString());
 		}
 		else if (x instanceof Boolean) {
 			return nc.booleanNode(((Boolean)x));

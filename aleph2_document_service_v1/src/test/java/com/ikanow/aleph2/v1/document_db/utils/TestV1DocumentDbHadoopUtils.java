@@ -18,12 +18,14 @@ package com.ikanow.aleph2.v1.document_db.utils;
 import static org.junit.Assert.*;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.junit.Test;
 
+import com.google.common.collect.ImmutableMap;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService;
@@ -56,21 +58,22 @@ public class TestV1DocumentDbHadoopUtils {
 	@Test 
 	public void test_getAccessConfig() {
 		
+		final AnalyticThreadJobBean.AnalyticThreadJobInputBean job_input =
+				BeanTemplateUtils.build(AnalyticThreadJobBean.AnalyticThreadJobInputBean.class)
+					.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::resource_name_or_id, "/aleph2_external/565e076a12c33214b78fd3c2,565e076a12c33214b78fd3c3")
+					.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::config,
+							BeanTemplateUtils.build(AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean.class)
+								.with(AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean::record_limit_request, 10L)
+							.done().get()
+							)
+				.done().get()
+				;
+		
+		final V1DocDbConfigBean config = new V1DocDbConfigBean("test:27018");
+		
 		// No filter (no type), max records
 		// - all the conditional logic is encapsulated in legacy V1 code 
 		{
-			final AnalyticThreadJobBean.AnalyticThreadJobInputBean job_input =
-					BeanTemplateUtils.build(AnalyticThreadJobBean.AnalyticThreadJobInputBean.class)
-						.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::resource_name_or_id, "/aleph2_external/565e076a12c33214b78fd3c2,565e076a12c33214b78fd3c3")
-						.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::config,
-								BeanTemplateUtils.build(AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean.class)
-									.with(AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean::record_limit_request, 10L)
-								.done().get()
-								)
-					.done().get()
-					;
-			
-			final V1DocDbConfigBean config = new V1DocDbConfigBean("test:27018");
 			
 			final MockSecurityService sec_service = new MockSecurityService();
 			
@@ -114,7 +117,7 @@ public class TestV1DocumentDbHadoopUtils {
 			//DEBUG
 			//System.out.println(res);			
 			
-			assertEquals(10, res.size());
+			assertEquals(9, res.size());
 			assertEquals("unknown:/aleph2_external/565e076a12c33214b78fd3c2,565e076a12c33214b78fd3c3", res.get("mongo.job.name"));
 			assertEquals("true", res.get("mongo.job.verbose"));
 			assertEquals("false", res.get("mongo.job.background"));
@@ -124,9 +127,28 @@ public class TestV1DocumentDbHadoopUtils {
 			assertEquals("10", res.get("mongo.input.limit"));
 			assertEquals("8", res.get("max.splits"));
 			assertEquals("12500", res.get("max.docs.per.split"));
-			assertEquals("{}", res.get("infinit.e.source.tags.filter"));
+			assertEquals(null, res.get("infinit.e.source.tags.filter"));
 
-			assertEquals("service_name=Aleph2V1InputFormat options={mongo.input.limit=10, max.docs.per.split=12500, mongo.input.fields=, mongo.input.query={ \"communityId\" : { \"$in\" : [ { \"$oid\" : \"565e076a12c33214b78fd3c2\"} , { \"$oid\" : \"565e076a12c33214b78fd3c3\"}]} , \"index\" : { \"$ne\" : \"?DEL?\"}}, infinit.e.source.tags.filter={}, mongo.job.name=unknown:/aleph2_external/565e076a12c33214b78fd3c2,565e076a12c33214b78fd3c3, max.splits=8, mongo.input.uri=mongodb://test:27018/doc_metadata.metadata}", access_context.describe());
+			assertEquals("service_name=Aleph2V1InputFormat options={mongo.input.limit=10, max.docs.per.split=12500, mongo.input.fields=, mongo.input.query={ \"communityId\" : { \"$in\" : [ { \"$oid\" : \"565e076a12c33214b78fd3c2\"} , { \"$oid\" : \"565e076a12c33214b78fd3c3\"}]} , \"index\" : { \"$ne\" : \"?DEL?\"}}, mongo.job.name=unknown:/aleph2_external/565e076a12c33214b78fd3c2,565e076a12c33214b78fd3c3, max.splits=8, mongo.input.uri=mongodb://test:27018/doc_metadata.metadata}", access_context.describe());
+		}
+		// Srctags specified
+		{
+			final AnalyticThreadJobBean.AnalyticThreadJobInputBean job_input2 =
+					BeanTemplateUtils.clone(job_input)
+						.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::filter,
+								new LinkedHashMap<String, String>(
+										ImmutableMap.<String, String>builder().put(":srctags", "test").build()
+								))
+					.done();
+			
+			@SuppressWarnings("rawtypes")
+			IAnalyticsAccessContext<InputFormat> 
+				access_context = V1DocumentDbHadoopUtils.getInputFormat("misc_user", job_input2, Optional.empty(), config); // (doesn't matter what the input is here)			
+			
+			Map<String, Object> res = access_context.getAccessConfig().get();			
+			
+			assertEquals(10, res.size());
+			assertEquals("{ \"tags\" : \"test\"}", res.get("infinit.e.source.tags.filter"));			
 		}
 	}
 	
