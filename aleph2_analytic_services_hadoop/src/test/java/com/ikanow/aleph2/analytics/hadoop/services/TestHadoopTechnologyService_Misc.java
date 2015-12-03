@@ -46,6 +46,7 @@ public class TestHadoopTechnologyService_Misc {
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
 											.with(DataBucketBean::full_name, "/test/")
+											.with(DataBucketBean::owner_id, "misc_user")
 											.with(DataBucketBean::_id, "test")
 											.done().get();
 		final Collection<AnalyticThreadJobBean> jobs = Collections.emptyList();

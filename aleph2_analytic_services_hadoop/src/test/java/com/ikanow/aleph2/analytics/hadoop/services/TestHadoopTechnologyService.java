@@ -41,6 +41,7 @@ import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
@@ -122,6 +123,7 @@ public class TestHadoopTechnologyService {
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
 												.with(DataBucketBean::full_name, "/test/simple/analytics")
+												.with(DataBucketBean::owner_id, "misc_user")
 												.with(DataBucketBean::analytic_thread,
 														BeanTemplateUtils.build(AnalyticThreadBean.class)
 															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
@@ -202,7 +204,7 @@ public class TestHadoopTechnologyService {
 		// Try this twice, once will fail with a security error, then will update security and check works again
 		final CompletableFuture<BasicMessageBean> ret1 = test_service.testAnalyticModule(test_bucket, Optional.empty());
 		assertFalse("Should have failed with security error: " + ret1.join().message(), ret1.join().success());
-		((MockSecurityService)_service_context.getSecurityService()).setGlobalMockRole("admin", true);
+		((MockSecurityService)_service_context.getSecurityService()).setGlobalMockRole(ISecurityService.ROLE_ADMIN, true);
 		final CompletableFuture<BasicMessageBean> ret2 = test_service.testAnalyticModule(test_bucket, Optional.empty());
 		assertTrue("Should have worked this time: " + ret2.join().message(), ret2.join().success());
 
@@ -256,6 +258,7 @@ public class TestHadoopTechnologyService {
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
 												.with(DataBucketBean::full_name, "/test/simple/analytics")
+												.with(DataBucketBean::owner_id, "misc_user")
 												.with(DataBucketBean::analytic_thread,
 														BeanTemplateUtils.build(AnalyticThreadBean.class)
 															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
@@ -370,6 +373,7 @@ public class TestHadoopTechnologyService {
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
 												.with(DataBucketBean::full_name, "/test/simple/analytics/multi")
+												.with(DataBucketBean::owner_id, "misc_user")
 												.with(DataBucketBean::analytic_thread,
 														BeanTemplateUtils.build(AnalyticThreadBean.class)
 															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
