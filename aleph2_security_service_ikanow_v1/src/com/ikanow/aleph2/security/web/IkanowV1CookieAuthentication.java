@@ -1,12 +1,24 @@
-package com.ikanow.aleph2.security.service;
+package com.ikanow.aleph2.security.web;
+
+import java.util.Optional;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import com.google.inject.Injector;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.security.service.AuthenticationBean;
 
 public class IkanowV1CookieAuthentication {
 	public static IkanowV1CookieAuthentication instance = null;
 	protected IServiceContext serviceContext = null;
-	
+	protected IManagementDbService _underlying_management_db = null;
+	private ICrudService<CookieBean> cookieDb = null;
+	private static final Logger logger = LogManager.getLogger(IkanowV1CookieAuthentication.class);
+
 	private IkanowV1CookieAuthentication(IServiceContext serviceContext){
 		this.serviceContext = serviceContext;
 	}
@@ -18,6 +30,23 @@ public class IkanowV1CookieAuthentication {
 		}
 		return instance;
 	}
+	
+	@SuppressWarnings("unchecked")
+	protected void initDb(){
+		if(_underlying_management_db == null) {
+		_underlying_management_db = serviceContext.getService(IManagementDbService.class, Optional.empty()).get();
+		}
+		String cookieOptions = "security.authentication/"+AuthenticationBean.class.getName();
+		cookieDb = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of(cookieOptions)).get();
+		}
+
+	protected ICrudService<CookieBean> getCookieStore(){
+		if(cookieDb == null){
+			initDb();
+		}
+	      return cookieDb;		
+	}
+
 	public static String v1CookieAction(){
 		String cookie = "";
 		
@@ -83,38 +112,24 @@ public class IkanowV1CookieAuthentication {
 		return cookie;
 	}
 	
-/*	private static CookieSetting createSessionCookie(ObjectId user, boolean bSet, int nClientPort)
+	public CookieBean createCookie(String userId)
 	{
-		//Create a new objectId to map this cookie to a userid
-		String set = null;
-		if (bSet) {
-			ObjectId cookieId = RESTTools.createSession(user, multi, override);
-			if (null == cookieId) { 
-				return null;
-			}
-			set = cookieId.toString();
-		}
-		else {
-			set = "";
-		}
-		CookieSetting cs = null;
-		//store in mongo (or whatever db we need)
-		try
-		{
-			cs = new CookieSetting("infinitecookie",set);
-			cs.setPath("/");
-			cs.setAccessRestricted(true);
-			if ((443 == nClientPort) || (8443 == nClientPort)) {
-				cs.setSecure(true);
-			}
-		}
-		catch (Exception ex)
-		{
-			logger.error("Line: [" + ex.getStackTrace()[2].getLineNumber() + "] " + ex.getMessage());
-		}
-		return cs;
+		deleteSessionCookieInDb(userId);
+		CookieBean cookie = new CookieBean();
+		return cookie;
+		
 	}
-	*/
+
+	protected boolean deleteSessionCookieInDb(String userId){
+		long deleted = 0;
+		try {
+			deleted = getCookieStore().deleteObjectsBySpec(CrudUtils.allOf(CookieBean.class).when(CookieBean::getProfileId, userId)).get();
+		} catch (Exception e) {
+			logger.error("deleteSessionCookieInDb caught exception",e);
+		}
+		return deleted>0;
+	}
+
 	
 	/**
 	 * Creates a new session for a user, adding
