@@ -63,7 +63,7 @@ public class TestV1DocumentDbHadoopUtils {
 					.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::resource_name_or_id, "/aleph2_external/565e076a12c33214b78fd3c2,565e076a12c33214b78fd3c3")
 					.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::config,
 							BeanTemplateUtils.build(AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean.class)
-								.with(AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean::record_limit_request, 10L)
+								.with(AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean::test_record_limit_request, 10L)
 							.done().get()
 							)
 				.done().get()

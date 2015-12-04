@@ -100,7 +100,7 @@ public class TestElasticsearchHadoopUtils {
 						.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::resource_name_or_id, "/test")
 						.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::config,
 								BeanTemplateUtils.build(AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean.class)
-									.with(AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean::record_limit_request, 10L)
+									.with(AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean::test_record_limit_request, 10L)
 								.done().get()
 								)
 					.done().get()

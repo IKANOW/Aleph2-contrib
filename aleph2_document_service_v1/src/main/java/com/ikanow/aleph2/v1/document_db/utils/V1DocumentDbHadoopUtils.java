@@ -144,7 +144,7 @@ public class V1DocumentDbHadoopUtils {
 				_mutable_output.put("mongo.input.uri", "mongodb://" + db_server + "/doc_metadata.metadata");
 				_mutable_output.put("mongo.input.query", horrible_object._1());
 				_mutable_output.put("mongo.input.fields", Optional.ofNullable(horrible_object._4()).map(o -> o.toString()).orElse(""));
-				_mutable_output.put("mongo.input.limit", Optional.ofNullable(job_input.config()).map(cfg -> cfg.record_limit_request()).map(o -> o.toString()).orElse("0"));
+				_mutable_output.put("mongo.input.limit", Optional.ofNullable(job_input.config()).map(cfg -> cfg.test_record_limit_request()).map(o -> o.toString()).orElse("0"));
 				
 				// 2) Basic Infinit.e/MongoDB fields:
 				//Maximum number of splits [optional] --><name>max.splits</name><value>"+nSplits

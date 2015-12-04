@@ -161,21 +161,20 @@ public class BeJobLauncher implements IBeJobService{
 					.filter(input -> Optional.ofNullable(input.enabled()).orElse(true))
 					.forEach(Lambdas.wrap_consumer_u(input -> {
 						// In the debug case, transform the input to add the max record limit
-						final AnalyticThreadJobInputBean input_with_test_settings = debug_max
-								.map(max -> {
-									return BeanTemplateUtils.clone(input)
-											.with(AnalyticThreadJobInputBean::config,
-													BeanTemplateUtils.clone(
-															Optional.ofNullable(input.config())
-															.orElseGet(() -> BeanTemplateUtils.build(AnalyticThreadJobInputConfigBean.class)
-																								.done().get()
-																	))
-														.with(AnalyticThreadJobInputConfigBean::record_limit_request, max)
-													.done()
+						final AnalyticThreadJobInputBean input_with_test_settings = BeanTemplateUtils.clone(input)
+								.with(AnalyticThreadJobInputBean::config,
+										BeanTemplateUtils.clone(
+												Optional.ofNullable(input.config())
+												.orElseGet(() -> BeanTemplateUtils.build(AnalyticThreadJobInputConfigBean.class)
+																					.done().get()
+														))
+											.with(AnalyticThreadJobInputConfigBean::test_record_limit_request, //(if not test, always null; else "input override" or "output default")
+													debug_max.map(max -> Optionals.of(() -> input.config().test_record_limit_request()).orElse(max))
+													.orElse(null)
 													)
-											.done();
-								})
-								.orElse(input);
+										.done()
+										)
+								.done();						
 						
 						final List<String> paths = _batchEnrichmentContext.getAnalyticsContext().getInputPaths(Optional.of(bucket), _batchEnrichmentContext.getJob(), input_with_test_settings);
 						

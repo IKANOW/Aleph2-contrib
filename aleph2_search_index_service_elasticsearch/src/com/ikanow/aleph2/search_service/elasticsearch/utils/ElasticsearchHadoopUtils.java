@@ -85,7 +85,7 @@ public class ElasticsearchHadoopUtils {
 				_mutable_output = new LinkedHashMap<>();
 											
 				// Check for input record limit:
-				Optional.ofNullable(job_input.config()).map(cfg -> cfg.record_limit_request())
+				Optional.ofNullable(job_input.config()).map(cfg -> cfg.test_record_limit_request())
 						.ifPresent(max -> _mutable_output.put(Aleph2EsInputFormat.BE_DEBUG_MAX_SIZE, Long.toString(max)));				
 				
 				//TODO (XXX): going to start off with a simple version of this:
