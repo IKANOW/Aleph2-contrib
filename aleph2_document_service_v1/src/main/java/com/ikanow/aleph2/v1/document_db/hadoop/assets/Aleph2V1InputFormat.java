@@ -111,7 +111,7 @@ public class Aleph2V1InputFormat extends InfiniteMongoInputFormat {
 
 		@Override
 		public Tuple2<Long, IBatchRecord> getCurrentValue() throws IOException,
-				InterruptedException {			
+				InterruptedException {
 			return Lambdas.wrap_u(() -> {
 				return Tuples._2T(0L, (IBatchRecord)new BatchRecord(JsonNodeBsonUtils.from(_delegate.getCurrentValue()), null));
 			}).get();
