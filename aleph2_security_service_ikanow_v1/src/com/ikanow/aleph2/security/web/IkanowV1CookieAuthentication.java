@@ -1,12 +1,28 @@
-package com.ikanow.aleph2.security.service;
+package com.ikanow.aleph2.security.web;
+
+import java.security.SecureRandom;
+import java.util.Date;
+import java.util.Optional;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.bson.types.ObjectId;
 
 import com.google.inject.Injector;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBCollection;
+import com.mongodb.WriteResult;
+
 
 public class IkanowV1CookieAuthentication {
 	public static IkanowV1CookieAuthentication instance = null;
 	protected IServiceContext serviceContext = null;
-	
+	protected IManagementDbService _underlying_management_db = null;
+	private DBCollection cookieDb = null; 
+	private static final Logger logger = LogManager.getLogger(IkanowV1CookieAuthentication.class);
+
 	private IkanowV1CookieAuthentication(IServiceContext serviceContext){
 		this.serviceContext = serviceContext;
 	}
@@ -18,6 +34,23 @@ public class IkanowV1CookieAuthentication {
 		}
 		return instance;
 	}
+	
+	@SuppressWarnings("unchecked")
+	protected void initDb(){
+		if(_underlying_management_db == null) {
+		_underlying_management_db = serviceContext.getService(IManagementDbService.class, Optional.empty()).get();
+		}
+		String cookieOptions = "security.cookies";
+		cookieDb = _underlying_management_db.getUnderlyingPlatformDriver(DBCollection.class, Optional.of(cookieOptions)).get();
+		}
+
+	protected DBCollection getCookieStore(){
+		if(cookieDb == null){
+			initDb();
+		}
+	      return cookieDb;		
+	}
+
 	public static String v1CookieAction(){
 		String cookie = "";
 		
@@ -83,41 +116,8 @@ public class IkanowV1CookieAuthentication {
 		return cookie;
 	}
 	
-/*	private static CookieSetting createSessionCookie(ObjectId user, boolean bSet, int nClientPort)
-	{
-		//Create a new objectId to map this cookie to a userid
-		String set = null;
-		if (bSet) {
-			ObjectId cookieId = RESTTools.createSession(user, multi, override);
-			if (null == cookieId) { 
-				return null;
-			}
-			set = cookieId.toString();
-		}
-		else {
-			set = "";
-		}
-		CookieSetting cs = null;
-		//store in mongo (or whatever db we need)
-		try
-		{
-			cs = new CookieSetting("infinitecookie",set);
-			cs.setPath("/");
-			cs.setAccessRestricted(true);
-			if ((443 == nClientPort) || (8443 == nClientPort)) {
-				cs.setSecure(true);
-			}
-		}
-		catch (Exception ex)
-		{
-			logger.error("Line: [" + ex.getStackTrace()[2].getLineNumber() + "] " + ex.getMessage());
-		}
-		return cs;
-	}
-	*/
-	
 	/**
-	 * Creates a new session for a user, adding
+	 * Creates a new session cookie  for a user, adding
 	 * an entry to our cookie table (maps cookieid
 	 * to userid) and starts the clock
 	 * 
@@ -126,50 +126,65 @@ public class IkanowV1CookieAuthentication {
 	 * @param bOverride if false will fail if already logged in
 	 * @return
 	 */
-/*	public static ObjectId createSession( ObjectId userid, boolean bMulti, boolean bOverride )
+	public CookieBean createCookie(String userId)
 	{
+		deleteSessionCookieInDb(userId);
+		CookieBean cookie = new CookieBean();
+		ObjectId objectId = generateRandomId();
 		
-		try
-		{
-			DBCollection cookieColl = DbManager.getSocial().getCookies();
-			
-			if (!bMulti) { // Otherwise allow multiple cookies for this user
-				//remove any old cookie for this user
-				BasicDBObject dbQuery = new BasicDBObject();
-				dbQuery.put("profileId", userid);
-				dbQuery.put("apiKey", new BasicDBObject(DbManager.exists_, false));
-				DBCursor dbc = cookieColl.find(dbQuery);
-				if (bOverride) {
-					while (dbc.hasNext()) {
-						cookieColl.remove(dbc.next());
-					}
-				}//TESTED
-				else if (dbc.length() > 0) {
-					return null;
-				}//TESTED
-			}
-			//Find user
-			//create a new entry
-			CookiePojo cp = new CookiePojo();
-			ObjectId randomObjectId = generateRandomId();
-			
-			cp.set_id(randomObjectId); 
-			cp.setCookieId(randomObjectId);
-			cp.setLastActivity(new Date());
-			cp.setProfileId(userid);
-			cp.setStartDate(new Date());
-			cookieColl.insert(cp.toDb());
-			//return cookieid
-			return cp.getCookieId();
-		}
-		catch (Exception e )
-		{
-			logger.error("Line: [" + e.getStackTrace()[2].getLineNumber() + "] " + e.getMessage());
-			e.printStackTrace();
-		}
+		cookie.set_id(objectId.toString()); 
+		cookie.setCookieId(objectId.toString());
+		Date now = new Date();
+		cookie.setLastActivity(now);
+		cookie.setProfileId(userId);
+		cookie.setStartDate(now);
+		saveSessionCookieInDb(cookie);
+
+		return cookie;
 		
-		return null;
 	}
-*/
+	private boolean saveSessionCookieInDb(CookieBean cookie) {
+		int dwritten = 0;
+		try {
+			BasicDBObject query = new BasicDBObject();
+			query.put("_id", new ObjectId(cookie.get_id()));
+			query.put("profileId", new ObjectId(cookie.getProfileId()));
+			query.put("cookieId", new ObjectId(cookie.getCookieId()));
+			query.put("startDate", cookie.getStartDate());
+			query.put("lastActivity", cookie.getLastActivity());
+			if(cookie.getApiKey()!=null){
+			 query.put("apiKey", cookie.getApiKey());
+			}
+			WriteResult result = getCookieStore().insert(query);
+			dwritten = result.getN();
+			
+		} catch (Exception e) {
+			logger.error("saveSessionCookieInDb caught exception",e);			
+		}		
+		return dwritten>0;
+	}
+
+	public static ObjectId generateRandomId() {
+		SecureRandom randomBytes = new SecureRandom();
+		byte bytes[] = new byte[12];
+		randomBytes.nextBytes(bytes);
+		return new ObjectId(bytes); 		
+	}
+
+	protected boolean deleteSessionCookieInDb(String userId){
+		int deleted = 0;
+		try {
+			BasicDBObject query = new BasicDBObject();
+			query.put("profileId", new ObjectId(userId));
+			//deleteObjectsBySpec(CrudUtils.allOf(CookieBean.class).when(CookieBean::getProfileId, new ObjectId(userId))).get();
+			WriteResult result = getCookieStore().remove(query);
+			deleted = result.getN();
+			
+		} catch (Exception e) {
+			logger.error("deleteSessionCookieInDb caught exception",e);			
+		}
+		return deleted>0;
+	}
+
 
 }

@@ -35,14 +35,15 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 	# (All files created from the tarball)
 
 %post
+/sbin/chkconfig --add ikanow-aleph2
+/sbin/chkconfig ikanow-aleph2 on
 ###########################################################################
 # INSTALL *AND* UPGRADE
 
 %preun
 
 %postun
-###########################################################################
-# (Nothing to do)
+/sbin/chkconfig --del ikanow-aleph2
 
 %posttrans
 ###########################################################################
