@@ -18,8 +18,10 @@ package com.ikanow.aleph2.search_service.elasticsearch.utils;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.elasticsearch.common.collect.ImmutableMap;
 import org.junit.Test;
@@ -38,6 +40,11 @@ public class TestElasticsearchIndexConfigUtils {
 
 	public static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 	final ElasticsearchIndexServiceConfigBean _config = ElasticsearchIndexConfigUtils.buildConfigBean(ConfigFactory.empty());	
+	
+	@Test 
+	public void test_docSchema() {
+		assertEquals(Arrays.asList("__a"), _config.document_schema_override().keySet().stream().collect(Collectors.toList()));
+	}
 	
 	@Test 
 	public void test_configUtils() {
