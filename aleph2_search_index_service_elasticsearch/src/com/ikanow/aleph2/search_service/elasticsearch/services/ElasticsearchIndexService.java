@@ -63,6 +63,7 @@ import com.google.inject.Inject;
 import com.google.inject.Module;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IDocumentService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
@@ -75,6 +76,7 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.DocumentSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchIndexSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
@@ -110,9 +112,14 @@ import fj.data.Validation;
  * @author Alex
  *
  */
-public class ElasticsearchIndexService implements ISearchIndexService, ITemporalService, IColumnarService, IExtraDependencyLoader {
+public class ElasticsearchIndexService implements ISearchIndexService, ITemporalService, IColumnarService, IDocumentService, IExtraDependencyLoader {
 	final static protected Logger _logger = LogManager.getLogger();
 
+	//TODO (ALEPH-20): IDocumentService things to implement:
+	// - built-in mapping for doc fields
+	// - should always add _id (so it actually goes in _source - which it doesn't if it's auto generated ... arguably should just change that anyway...)
+	// - implement full CRUD
+	
 	protected final IServiceContext _service_context; // (need the security service)
 	protected final IElasticsearchCrudServiceFactory _crud_factory;
 	protected final ElasticsearchIndexServiceConfigBean _config;
@@ -830,8 +837,6 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		if (IAnalyticsAccessContext.class.isAssignableFrom(driver_class)) {
 			final String[] owner_bucket_config = driver_options.orElse("unknown:/unknown:{}").split(":", 3);
 			
-			//TODO: new format for access contexts
-			
 			if (InputFormat.class.isAssignableFrom(AnalyticsUtils.getTypeName((Class<? extends IAnalyticsAccessContext>)driver_class))) { // INPUT FORMAT
 				return (Optional<T>) driver_options.filter(__ -> 3 == owner_bucket_config.length)
 						.map(__ -> BeanTemplateUtils.from(owner_bucket_config[2], AnalyticThreadJobBean.AnalyticThreadJobInputBean.class))
@@ -856,6 +861,17 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		return Tuples._2T("", Collections.emptyList());
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IDocumentService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.DocumentSchemaBean, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
+	 */
+	@Override
+	public Tuple2<String, List<BasicMessageBean>> validateSchema(
+			DocumentSchemaBean schema, DataBucketBean bucket) {
+		// (Currently nothing doc_schema specific)
+		return Tuples._2T("", Collections.emptyList());
+	}
+	
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean)
 	 */
