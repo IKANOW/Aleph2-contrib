@@ -99,12 +99,12 @@ public class IkanowV1SyncService_TestBuckets {
 	public IkanowV1SyncService_TestBuckets(final MongoDbManagementDbConfigBean config, final IServiceContext service_context) {		
 		_config = config;
 		_context = service_context;
-		_core_management_db = _context.getCoreManagementDbService();		
-		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
-		_context.getService(ICoreDistributedServices.class, Optional.empty()).get();
-		_core_distributed_services = _context.getService(ICoreDistributedServices.class, Optional.empty()).get();
-		
 		if (Optional.ofNullable(_config.v1_enabled()).orElse(false)) {
+			_core_management_db = _context.getCoreManagementDbService();		
+			_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
+			_context.getService(ICoreDistributedServices.class, Optional.empty()).get();
+			_core_distributed_services = _context.getService(ICoreDistributedServices.class, Optional.empty()).get();
+			
 			// Launch the synchronization service
 			
 			// 1) Monitor sources
@@ -114,6 +114,12 @@ public class IkanowV1SyncService_TestBuckets {
 			_source_test_monitor_handle.set(_source_test_scheduler.scheduleWithFixedDelay(new SourceTestMonitor(), 10L, 2L, TimeUnit.SECONDS));
 				//(give it 10 seconds before starting, let everything else settle down - eg give the bucket choose handler time to register)			
 		}
+		else { // (not enabled)
+			_core_management_db = null;
+			_underlying_management_db = null;
+			_core_distributed_services = null;
+		}
+		
 	}
 	/** Immediately start (for testing)
 	 */
