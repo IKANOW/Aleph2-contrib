@@ -146,6 +146,7 @@ public class TestElasticsearchIndexService {
 		_service_context.addService(IManagementDbService.class, IManagementDbService.CORE_MANAGEMENT_DB, dummy_management_db);
 		
 		_index_service = new MockElasticsearchIndexService(_service_context, _crud_factory, _config_bean);
+		_service_context.addService(ISearchIndexService.class, Optional.empty(), _index_service);		
 	}
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -162,26 +163,8 @@ public class TestElasticsearchIndexService {
 			
 			assertFalse(_index_service.isServiceFor(bucket1, ISearchIndexService.class, Optionals.of(() -> bucket1.data_schema().search_index_schema())));
 		}
-		// correct bucket, but no service
-		{
-			final DataBucketBean bucket1 =
-					BeanTemplateUtils.build(DataBucketBean.class)
-						.with(DataBucketBean::data_schema, 
-								BeanTemplateUtils.build(DataSchemaBean.class)
-									.with(DataSchemaBean::search_index_schema,
-											BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
-											.done().get()
-											)
-								.done().get()
-								)
-					.done().get();
-			
-			assertFalse(_index_service.isServiceFor(bucket1, ISearchIndexService.class, Optionals.of(() -> bucket1.data_schema().search_index_schema())));
-		}
 		// correct bucket, service enabled
-		{
-			_service_context.addService(ISearchIndexService.class, Optional.empty(), _index_service);
-			
+		{			
 			final DataBucketBean bucket1 =
 					BeanTemplateUtils.build(DataBucketBean.class)
 						.with(DataBucketBean::data_schema, 
