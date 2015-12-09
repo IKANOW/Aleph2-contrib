@@ -72,6 +72,7 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
@@ -305,12 +306,10 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 				throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "ElasticsearchDataService.getWritableDataService, multi_bucket_children"));
 			}
 			
-			// If single bucket, is the search index service enabled?
-			if (!Optional.ofNullable(bucket.data_schema())
-					.map(ds -> ds.search_index_schema())
-						.map(sis -> Optional.ofNullable(sis.enabled())
-						.orElse(true))
-				.orElse(false))
+			// If single bucket, is a writable service enabled?
+			if (!isServiceFor(bucket, ISearchIndexService.class, Optionals.of(() -> bucket.data_schema().search_index_schema()))
+					&&
+				!isServiceFor(bucket, IDocumentService.class, Optionals.of(() -> bucket.data_schema().document_schema())))
 			{
 				return Optional.empty();
 			}
@@ -960,6 +959,29 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					.filter(b -> b.toString().equalsIgnoreCase("true") || b.toString().equals("1"))
 					.map(b -> true) // (if we're here then must be true/1)
 				.orElse(false);
+	}
+	
+	/** A slightly generic function that determines what roles this service is playing
+	 * @param bucket
+	 * @param service_clazz
+	 * @param maybe_schema
+	 * @return
+	 */
+	protected <I extends IUnderlyingService, T> boolean isServiceFor(final DataBucketBean bucket, final Class<I> service_clazz, Optional<T> maybe_schema) {
+		return maybe_schema.flatMap(Lambdas.maybeWrap_i(schema -> {
+			final JsonNode schema_map = BeanTemplateUtils.toJson(schema);
+			final JsonNode enabled = schema_map.get("enabled");
+			
+			if ((null != enabled) && enabled.isBoolean() && !enabled.asBoolean()) {
+				return false;
+			}
+			else {
+				final Optional<I> maybe_service = _service_context.getService(service_clazz, 
+						Optional.ofNullable(schema_map.get("service_name")).<String>map(j -> j.asText()));
+				
+				return maybe_service.map(service -> this.getClass().equals(service.getClass())).orElse(false);
+			}
+		})).orElse(false);
 	}
 	
 	////////////////////////////////////////////////////////////////////////////////
