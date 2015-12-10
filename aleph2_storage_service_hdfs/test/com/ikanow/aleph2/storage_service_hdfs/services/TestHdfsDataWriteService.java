@@ -656,19 +656,19 @@ public class TestHdfsDataWriteService {
 			TestBean emit = new TestBean("id" + i, "val" + i, null);
 			if (0 == (i % 2)) {
 				if (0 == ((i/2) % 2)) {
-					batch.storeObject(emit);
+					batch.storeObject(emit, true); //(use this form to maximize code coverage)
 				}
 				else {
-					CompletableFuture<Supplier<Object>> cf = write_service.storeObject(emit);
+					CompletableFuture<Supplier<Object>> cf = write_service.storeObject(emit, true);
 					assertEquals(null, cf.get().get());
 				}
 			}
 			else {
 				if (0 == ((i/2) % 2)) {
-					batch.storeObjects(Arrays.asList(emit));
+					batch.storeObjects(Arrays.asList(emit), true); //(use this form to maximize code coverage)
 				}
 				else {
-					CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> cf = write_service.storeObjects(Arrays.asList(emit));	
+					CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> cf = write_service.storeObjects(Arrays.asList(emit), true);	
 					assertEquals(Collections.emptyList(), cf.get()._1().get());
 					assertEquals(1L, cf.get()._2().get().longValue());
 				}

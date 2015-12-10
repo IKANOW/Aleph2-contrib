@@ -139,6 +139,14 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 	}	
 	
 	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#storeObject(java.lang.Object, boolean)
+	 */
+	@Override
+	public CompletableFuture<Supplier<Object>> storeObject(T new_object, final boolean replace_if_present) {
+		return this.storeObject(new_object);
+	}
+	
+	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#storeObject(java.lang.Object)
 	 */
 	@Override
@@ -148,6 +156,14 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		return CompletableFuture.completedFuture(() -> { return null; });
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#storeObjects(java.util.List, boolean)
+	 */
+	@Override
+	public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(List<T> new_objects, final boolean replace_if_present) {
+		return this.storeObjects(new_objects);
+	}
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#storeObjects(java.util.List)
 	 */
@@ -315,6 +331,13 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 			setup();
 			_shared_queue.add(new_objects);
 		}
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService.IBatchSubservice#storeObjects(java.util.List, boolean)
+		 */
+		@Override
+		public void storeObjects(List<T> new_objects, final boolean replace_if_present) {
+			this.storeObjects(new_objects);
+		}
 
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService.IBatchSubservice#storeObject(java.lang.Object)
@@ -323,6 +346,13 @@ public class HfdsDataWriteService<T> implements IDataWriteService<T> {
 		public void storeObject(T new_object) {
 			setup();
 			_shared_queue.add(new_object);
+		}
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService.IBatchSubservice#storeObject(java.lang.Object, boolean)
+		 */
+		@Override
+		public void storeObject(T new_object, final boolean replace_if_resent) {
+			this.storeObject(new_object);
 		}
 
 		////////////////////////////////////////
