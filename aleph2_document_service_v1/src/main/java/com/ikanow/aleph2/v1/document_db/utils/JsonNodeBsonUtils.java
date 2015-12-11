@@ -52,8 +52,8 @@ public class JsonNodeBsonUtils {
 	 * @return
 	 */
 	protected static JsonNode transform(Object x, JsonNodeFactory nc) {
-		if (null == x) {
-			return nc.nullNode();
+		if (null == x) { // missing => missing
+			return null;
 		}
 		else if (x instanceof ObjectId) {
 			return nc.textNode(((ObjectId)x).toString());

@@ -50,7 +50,7 @@ public class TestJsonNodeBsonUtils {
 		new JsonNodeBsonUtils(); //coverage!
 		
 		assertEquals(NullNode.instance, JsonNodeBsonUtils.transform(new HashSet<String>(), JsonNodeFactory.instance));
-		assertEquals(NullNode.instance, JsonNodeBsonUtils.transform(null, JsonNodeFactory.instance));
+		assertEquals(null, JsonNodeBsonUtils.transform(null, JsonNodeFactory.instance));
 		assertEquals(mapper.convertValue(true, JsonNode.class), JsonNodeBsonUtils.transform(true, JsonNodeFactory.instance));
 		assertEquals(mapper.convertValue("test", JsonNode.class), JsonNodeBsonUtils.transform("test", JsonNodeFactory.instance));
 		assertEquals(mapper.convertValue(4, JsonNode.class), JsonNodeBsonUtils.transform(4, JsonNodeFactory.instance));

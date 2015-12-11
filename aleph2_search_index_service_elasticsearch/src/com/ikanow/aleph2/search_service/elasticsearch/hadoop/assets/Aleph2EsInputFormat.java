@@ -158,6 +158,8 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 			}).get();
 		}
 
+		protected static final Text _ID = new Text("_id");
+		
 		/* (non-Javadoc)
 		 * @see org.elasticsearch.hadoop.mr.EsInputFormat.ShardRecordReader#getCurrentValue()
 		 */
@@ -165,6 +167,8 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		public Tuple2<Long, IBatchRecord> getCurrentValue() {
 			return Lambdas.wrap_u(() -> {
 				final MapWritable m = (MapWritable) _delegate.getCurrentValue();
+				// Add the _id
+				m.computeIfAbsent(_ID, Lambdas.wrap_u(k -> (Text) _delegate.getCurrentKey()));
 				return Tuples._2T(0L, (IBatchRecord)new BatchRecord(JsonNodeWritableUtils.from(m), null));
 			}).get();
 		}

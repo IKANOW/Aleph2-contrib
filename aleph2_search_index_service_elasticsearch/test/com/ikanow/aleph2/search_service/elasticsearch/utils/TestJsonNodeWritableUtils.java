@@ -57,7 +57,7 @@ public class TestJsonNodeWritableUtils {
 		new JsonNodeWritableUtils(); //coverage!
 		
 		assertEquals(NullNode.instance, JsonNodeWritableUtils.transform("banana", JsonNodeFactory.instance));
-		assertEquals(NullNode.instance, JsonNodeWritableUtils.transform(null, JsonNodeFactory.instance));
+		assertEquals(null, JsonNodeWritableUtils.transform(null, JsonNodeFactory.instance));
 		assertEquals(NullNode.instance, JsonNodeWritableUtils.transform(NullWritable.get(), JsonNodeFactory.instance));
 		assertEquals(mapper.convertValue(true, JsonNode.class), JsonNodeWritableUtils.transform(new BooleanWritable(true), JsonNodeFactory.instance));
 		assertEquals(mapper.convertValue("test", JsonNode.class), JsonNodeWritableUtils.transform(new Text("test"), JsonNodeFactory.instance));
