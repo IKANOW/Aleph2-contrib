@@ -436,7 +436,7 @@ public class TestBatchEnrichmentContext {
 			fail("Should have errored");
 		}
 		catch (Exception e) {
-			assertEquals(HadoopErrorUtils.SERVICE_RESTRICTIONS, e.getMessage());		
+			assertEquals(com.ikanow.aleph2.analytics.utils.ErrorUtils.SERVICE_RESTRICTIONS, e.getMessage());		
 		}
 		
 		final AnalyticThreadJobBean analytic_job1 = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
