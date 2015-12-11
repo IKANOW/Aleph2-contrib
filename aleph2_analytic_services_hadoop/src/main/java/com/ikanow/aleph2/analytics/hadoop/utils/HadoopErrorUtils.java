@@ -25,7 +25,6 @@ public class HadoopErrorUtils {
 	
 	final public static String BATCH_TOPOLOGIES_NOT_YET_SUPPORTED = "Batch topologies not yet supported";
 	final public static String TECHNOLOGY_NOT_MODULE = "Can only be called from technology, not module";
-	final public static String SERVICE_RESTRICTIONS = "Can't call getAnalyticsContextSignature with different 'services' parameter; can't call getUnderlyingArtefacts without having called getEnrichmentContextSignature.";
 
 	final public static String STREAMING_HADOOP_JOB = "Hadoop job was specified as streaming, not possible (bucket:job = {0}:{1})";
 	
