@@ -24,7 +24,6 @@ import java.util.stream.Stream;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.shiro.cache.CacheManager;
 import org.apache.shiro.mgt.SecurityManager;
 import org.apache.shiro.subject.Subject;
 
@@ -50,8 +49,8 @@ public class IkanowV1SecurityService extends SecurityService implements ISecurit
 	protected IModificationChecker modificationChecker;
 	
 	@Inject
-	public IkanowV1SecurityService(IServiceContext serviceContext, SecurityManager securityManager, CacheManager cacheManager) {
-		super(serviceContext,securityManager,cacheManager);
+	public IkanowV1SecurityService(IServiceContext serviceContext, SecurityManager securityManager) {
+		super(serviceContext,securityManager);
 
 	}
 

@@ -35,7 +35,6 @@ public class IkanowV1CookieAuthentication {
 		return instance;
 	}
 	
-	@SuppressWarnings("unchecked")
 	protected void initDb(){
 		if(_underlying_management_db == null) {
 		_underlying_management_db = serviceContext.getService(IManagementDbService.class, Optional.empty()).get();
@@ -49,71 +48,6 @@ public class IkanowV1CookieAuthentication {
 			initDb();
 		}
 	      return cookieDb;		
-	}
-
-	public static String v1CookieAction(){
-		String cookie = "";
-		
-//		if ( authuser != null )
-//		{
-			// Since logging-in isn't time critical, we'll ensure that api users have their api cookie at this point...
-		/*	if (null != authuser.getApiKey()) {
-				CookiePojo cp = new CookiePojo();
-				cp.set_id(authuser.getProfileId());
-				cp.setCookieId(cp.get_id());
-				cp.setApiKey(authuser.getApiKey());
-				cp.setStartDate(authuser.getCreated());
-				cp.setProfileId(authuser.getProfileId());
-				DbManager.getSocial().getCookies().save(cp.toDb());						 
-			}//TESTED
-*/
-/*			if ((authuser.getAccountType() == null) ||
-					!(authuser.getAccountType().equalsIgnoreCase("admin") || authuser.getAccountType().equalsIgnoreCase("admin-enabled")))
-			{
-				multi = false; // (not allowed except for admin)
-			}*/
-
-/*			CookieSetting cookieId = createSessionCookie(authuser.getProfileId(), true, response.getServerInfo().getPort());
-			if (null != cookieId) {
-
-				Series<CookieSetting> cooks = response.getCookieSettings();				 
-				cooks.add(cookieId);
-				response.setCookieSettings(cooks);
-				isLogin = true;
-				cookieLookup = cookieId.getValue();
-				boolean bAdmin = false;
-*/
-				//If this request is checking admin status, check that
-		/*		if (urlStr.contains("/admin/"))
-				{
-					isLogin = false;
-					if (authuser.getAccountType().equalsIgnoreCase("admin")) {
-						bAdmin = true;
-						isLogin = true;
-					}
-					else if (authuser.getAccountType().equalsIgnoreCase("admin-enabled")) {
-						isLogin = true;
-						if (!multi) {
-							authuser.setLastSudo(new Date());
-							MongoDbManager.getSocial().getAuthentication().save(authuser.toDb());
-							bAdmin = true;
-						}
-					}
-				}//TESTED
-*/
-/*				logMsg.setLength(0);
-				logMsg.append("auth/login");
-				logMsg.append(" user=").append(user);
-				logMsg.append(" userid=").append(authuser.getProfileId().toString());
-				if (bAdmin) logMsg.append(" admin=true");
-				logMsg.append(" success=").append(isLogin);
-				logger.info(logMsg.toString());
-				login_profile_id = authuser.getProfileId().toString();
-				
-			} */
-	//	}
-
-		return cookie;
 	}
 	
 	/**
@@ -176,7 +110,6 @@ public class IkanowV1CookieAuthentication {
 		try {
 			BasicDBObject query = new BasicDBObject();
 			query.put("profileId", new ObjectId(userId));
-			//deleteObjectsBySpec(CrudUtils.allOf(CookieBean.class).when(CookieBean::getProfileId, new ObjectId(userId))).get();
 			WriteResult result = getCookieStore().remove(query);
 			deleted = result.getN();
 			

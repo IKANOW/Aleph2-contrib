@@ -20,8 +20,6 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
-import javax.annotation.Nullable;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.shiro.authc.AccountException;
@@ -34,7 +32,7 @@ import org.apache.shiro.authz.AuthorizationException;
 import org.apache.shiro.authz.AuthorizationInfo;
 import org.apache.shiro.authz.SimpleAuthorizationInfo;
 import org.apache.shiro.cache.Cache;
-import org.apache.shiro.cache.CacheManager;
+import org.apache.shiro.cache.ehcache.EhCacheManager;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
 import org.apache.shiro.subject.SimplePrincipalCollection;
@@ -71,8 +69,8 @@ public class IkanowV1Realm extends AuthorizingRealm implements IClearableRealmCa
 	private Set<IRoleProvider> roleProviders;
 	
 	@Inject
-	public IkanowV1Realm(final IServiceContext service_context,@Nullable  CacheManager cacheManager, CredentialsMatcher matcher, Set<IRoleProvider> roleProviders) {		
-		super(cacheManager,matcher);
+	public IkanowV1Realm(final IServiceContext service_context, CredentialsMatcher matcher, Set<IRoleProvider> roleProviders) {		
+		super(CoreEhCacheManager.getInstance().getCacheManager(),matcher);
 		_context = service_context;
 		this.roleProviders = roleProviders;
 		logger.debug("IkanowV1Realm name="+getName());
