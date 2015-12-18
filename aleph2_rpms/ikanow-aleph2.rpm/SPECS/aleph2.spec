@@ -38,17 +38,13 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 ###########################################################################
 # INSTALL *AND* UPGRADE
 
-# Upgrade
-    if [ $1 -eq 2 ]; then
-        /sbin/service ikanow-aleph2 restart
-    fi
-
 %preun
 
 %postun
-###########################################################################
-# (Nothing to do)
-
+    # Upgrade
+    if [ $1 -eq 1 ]; then
+        /sbin/service ikanow-aleph2 status && /sbin/service ikanow-aleph2 restart
+    fi
 %posttrans
 ###########################################################################
 # FILE LISTS
