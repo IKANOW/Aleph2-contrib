@@ -40,16 +40,13 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 ###########################################################################
 # INSTALL *AND* UPGRADE
 
-# Upgrade
-# I think this needs to be moved to posttrans, but looks like %1==0 for both install and upgrade?
-#    if [ $1 -eq 2 ]; then
-#        /sbin/service ikanow-aleph2 restart
-#    fi
-
 %preun
 
 %postun
-/sbin/chkconfig --del ikanow-aleph2
+    # Upgrade
+    if [ $1 -eq 1 ]; then
+        /sbin/service ikanow-aleph2 status && /sbin/service ikanow-aleph2 restart
+    fi
 
 %posttrans
 ###########################################################################
