@@ -41,9 +41,10 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 # INSTALL *AND* UPGRADE
 
 # Upgrade
-    if [ $1 -eq 2 ]; then
-        /sbin/service ikanow-aleph2 restart
-    fi
+# I think this needs to be moved to posttrans, but looks like %1==0 for both install and upgrade?
+#    if [ $1 -eq 2 ]; then
+#        /sbin/service ikanow-aleph2 restart
+#    fi
 
 %preun
 
