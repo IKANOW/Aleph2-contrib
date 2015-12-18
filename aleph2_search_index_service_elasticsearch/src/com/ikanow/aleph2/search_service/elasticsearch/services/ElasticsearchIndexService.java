@@ -63,6 +63,7 @@ import com.google.inject.Inject;
 import com.google.inject.Module;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IDocumentService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
@@ -71,10 +72,12 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.DocumentSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchIndexSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
@@ -110,9 +113,14 @@ import fj.data.Validation;
  * @author Alex
  *
  */
-public class ElasticsearchIndexService implements ISearchIndexService, ITemporalService, IColumnarService, IExtraDependencyLoader {
+public class ElasticsearchIndexService implements ISearchIndexService, ITemporalService, IColumnarService, IDocumentService, IExtraDependencyLoader {
 	final static protected Logger _logger = LogManager.getLogger();
 
+	//TODO (ALEPH-20): IDocumentService things to implement:
+	// - built-in mapping for doc fields
+	// - should always add _id (so it actually goes in _source - which it doesn't if it's auto generated ... arguably should just change that anyway...)
+	// - implement full CRUD
+	
 	protected final IServiceContext _service_context; // (need the security service)
 	protected final IElasticsearchCrudServiceFactory _crud_factory;
 	protected final ElasticsearchIndexServiceConfigBean _config;
@@ -298,12 +306,10 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 				throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "ElasticsearchDataService.getWritableDataService, multi_bucket_children"));
 			}
 			
-			// If single bucket, is the search index service enabled?
-			if (!Optional.ofNullable(bucket.data_schema())
-					.map(ds -> ds.search_index_schema())
-						.map(sis -> Optional.ofNullable(sis.enabled())
-						.orElse(true))
-				.orElse(false))
+			// If single bucket, is a writable service enabled?
+			if (!isServiceFor(bucket, ISearchIndexService.class, Optionals.of(() -> bucket.data_schema().search_index_schema()))
+					&&
+				!isServiceFor(bucket, IDocumentService.class, Optionals.of(() -> bucket.data_schema().document_schema())))
 			{
 				return Optional.empty();
 			}
@@ -830,8 +836,6 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		if (IAnalyticsAccessContext.class.isAssignableFrom(driver_class)) {
 			final String[] owner_bucket_config = driver_options.orElse("unknown:/unknown:{}").split(":", 3);
 			
-			//TODO: new format for access contexts
-			
 			if (InputFormat.class.isAssignableFrom(AnalyticsUtils.getTypeName((Class<? extends IAnalyticsAccessContext>)driver_class))) { // INPUT FORMAT
 				return (Optional<T>) driver_options.filter(__ -> 3 == owner_bucket_config.length)
 						.map(__ -> BeanTemplateUtils.from(owner_bucket_config[2], AnalyticThreadJobBean.AnalyticThreadJobInputBean.class))
@@ -856,6 +860,17 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 		return Tuples._2T("", Collections.emptyList());
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IDocumentService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.DocumentSchemaBean, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
+	 */
+	@Override
+	public Tuple2<String, List<BasicMessageBean>> validateSchema(
+			DocumentSchemaBean schema, DataBucketBean bucket) {
+		// (Currently nothing doc_schema specific)
+		return Tuples._2T("", Collections.emptyList());
+	}
+	
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean)
 	 */
@@ -944,6 +959,29 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					.filter(b -> b.toString().equalsIgnoreCase("true") || b.toString().equals("1"))
 					.map(b -> true) // (if we're here then must be true/1)
 				.orElse(false);
+	}
+	
+	/** A slightly generic function that determines what roles this service is playing
+	 * @param bucket
+	 * @param service_clazz
+	 * @param maybe_schema
+	 * @return
+	 */
+	protected <I extends IUnderlyingService, T> boolean isServiceFor(final DataBucketBean bucket, final Class<I> service_clazz, Optional<T> maybe_schema) {
+		return maybe_schema.flatMap(Lambdas.maybeWrap_i(schema -> {
+			final JsonNode schema_map = BeanTemplateUtils.toJson(schema);
+			final JsonNode enabled = schema_map.get("enabled");
+			
+			if ((null != enabled) && enabled.isBoolean() && !enabled.asBoolean()) {
+				return false;
+			}
+			else {
+				final Optional<I> maybe_service = _service_context.getService(service_clazz, 
+						Optional.ofNullable(schema_map.get("service_name")).<String>map(j -> j.asText()));
+				
+				return maybe_service.map(service -> this.getClass().equals(service.getClass())).orElse(false);
+			}
+		})).orElse(false);
 	}
 	
 	////////////////////////////////////////////////////////////////////////////////

@@ -35,10 +35,12 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 	public SearchIndexSchemaDefaultBean search_technology_override() { return search_technology_override; }
 	public ColumnarSchemaDefaultBean columnar_technology_override() { return columnar_technology_override; }
 	public DataSchemaBean.TemporalSchemaBean temporal_technology_override() { return temporal_technology_override; }
+	public Map<String, Object> document_schema_override() { return document_schema_override; }
 
 	private SearchIndexSchemaDefaultBean search_technology_override;
 	private ColumnarSchemaDefaultBean columnar_technology_override;
 	private DataSchemaBean.TemporalSchemaBean temporal_technology_override;
+	private Map<String, Object> document_schema_override;
 	
 	// Can only construct this from a config element
 	

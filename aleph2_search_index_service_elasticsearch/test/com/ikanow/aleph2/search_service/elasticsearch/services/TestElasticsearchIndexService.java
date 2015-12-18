@@ -50,7 +50,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IDocumentService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
+import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
@@ -68,6 +70,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.ManagementDbUtils;
+import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
@@ -143,6 +146,102 @@ public class TestElasticsearchIndexService {
 		_service_context.addService(IManagementDbService.class, IManagementDbService.CORE_MANAGEMENT_DB, dummy_management_db);
 		
 		_index_service = new MockElasticsearchIndexService(_service_context, _crud_factory, _config_bean);
+		_service_context.addService(ISearchIndexService.class, Optional.empty(), _index_service);		
+	}
+	
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	
+	// SERVICE TEST
+	
+	@Test
+	public void test_serviceCheck() {
+		// bucket not enabled
+		{
+			final DataBucketBean bucket1 =
+					BeanTemplateUtils.build(DataBucketBean.class)
+					.done().get();
+			
+			assertFalse(_index_service.isServiceFor(bucket1, ISearchIndexService.class, Optionals.of(() -> bucket1.data_schema().search_index_schema())));
+		}
+		// correct bucket, service enabled
+		{			
+			final DataBucketBean bucket1 =
+					BeanTemplateUtils.build(DataBucketBean.class)
+						.with(DataBucketBean::data_schema, 
+								BeanTemplateUtils.build(DataSchemaBean.class)
+									.with(DataSchemaBean::search_index_schema,
+											BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+											.done().get()
+											)
+								.done().get()
+								)
+					.done().get();
+			
+			assertTrue(_index_service.isServiceFor(bucket1, ISearchIndexService.class, Optionals.of(() -> bucket1.data_schema().search_index_schema())));			
+		}
+		// (circle back round, couple of checks)
+		{
+			final DataBucketBean bucket1 =
+					BeanTemplateUtils.build(DataBucketBean.class)
+					.done().get();
+			
+			assertFalse(_index_service.isServiceFor(bucket1, ISearchIndexService.class, Optionals.of(() -> bucket1.data_schema().search_index_schema())));
+		}
+		{
+			final DataBucketBean bucket1 =
+					BeanTemplateUtils.build(DataBucketBean.class)
+						.with(DataBucketBean::data_schema, 
+								BeanTemplateUtils.build(DataSchemaBean.class)
+									.with(DataSchemaBean::search_index_schema,
+											BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+												.with(DataSchemaBean.SearchIndexSchemaBean::enabled, false)
+											.done().get()
+											)
+								.done().get()
+								)
+					.done().get();
+			
+			assertFalse(_index_service.isServiceFor(bucket1, ISearchIndexService.class, Optionals.of(() -> bucket1.data_schema().search_index_schema())));
+		}
+		{
+			final DataBucketBean bucket1 =
+					BeanTemplateUtils.build(DataBucketBean.class)
+						.with(DataBucketBean::data_schema, 
+								BeanTemplateUtils.build(DataSchemaBean.class)
+									.with(DataSchemaBean::search_index_schema,
+											BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+												.with(DataSchemaBean.SearchIndexSchemaBean::enabled, true)
+												.with(DataSchemaBean.SearchIndexSchemaBean::service_name, "test_alt")
+											.done().get()
+											)
+								.done().get()
+								)
+					.done().get();
+			
+			assertFalse(_index_service.isServiceFor(bucket1, ISearchIndexService.class, Optionals.of(() -> bucket1.data_schema().search_index_schema())));
+		}
+		// Finally check with a service name
+		{
+			final DataBucketBean bucket1 =
+					BeanTemplateUtils.build(DataBucketBean.class)
+						.with(DataBucketBean::data_schema, 
+								BeanTemplateUtils.build(DataSchemaBean.class)
+									.with(DataSchemaBean::document_schema,
+											BeanTemplateUtils.build(DataSchemaBean.DocumentSchemaBean.class)
+												.with(DataSchemaBean.DocumentSchemaBean::enabled, true)
+												.with(DataSchemaBean.DocumentSchemaBean::service_name, "test_alt")
+											.done().get()
+											)
+								.done().get()
+								)
+					.done().get();
+			
+			assertFalse(_index_service.isServiceFor(bucket1, IDocumentService.class, Optionals.of(() -> bucket1.data_schema().document_schema())));
+			
+			_service_context.addService(IDocumentService.class, Optional.of("test_alt"), _index_service);
+
+			assertTrue(_index_service.isServiceFor(bucket1, IDocumentService.class, Optionals.of(() -> bucket1.data_schema().document_schema())));
+		}
 	}
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////

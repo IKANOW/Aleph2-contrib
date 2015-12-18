@@ -55,6 +55,7 @@ import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.index.IndexRequest.OpType;
 import org.elasticsearch.action.index.IndexResponse;
+import org.elasticsearch.action.search.SearchPhaseExecutionException;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.Client;
@@ -540,7 +541,9 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				}
 			},
 			(err, future) -> {
-				if (err instanceof IndexMissingException) { // just treat this like an "object not found"
+				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				{ 
+					// just treat this like an "object not found"
 					future.complete(Optional.empty());
 				}
 				else {
@@ -601,7 +604,9 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 					}
 				},
 				(err, future) -> {
-					if (err instanceof IndexMissingException) { // just treat this like an "object not found"
+					if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+					{ 
+						// just treat this like an "object not found"
 						future.complete(Optional.empty());
 					}
 					else {
@@ -662,7 +667,9 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				return new ElasticsearchCursor(sr);
 			},
 			(err, future) -> {
-				if (err instanceof IndexMissingException) { // just treat this like an "object not found"
+				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				{ 	
+					// just treat this like an "object not found"
 					future.complete(new ElasticsearchCursor(null));
 				}
 				else {
@@ -694,7 +701,8 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				return cr.getCount();
 			},
 			(err, future) -> {
-				if (err instanceof IndexMissingException) {
+				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				{
 					future.complete(0L);
 				}
 				else {
@@ -723,7 +731,8 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				return cr.getCount();
 			},
 			(err, future) -> {
-				if (err instanceof IndexMissingException) {
+				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				{
 					future.complete(0L);
 				}
 				else {
@@ -849,7 +858,8 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 						return true;
 					},
 					(err, future) -> {
-						if (err instanceof IndexMissingException) {
+						if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+						{
 							future.complete(false);
 						}
 						else {

@@ -55,6 +55,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.inject.Inject;
+import com.google.inject.Provider;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
@@ -86,8 +87,8 @@ public class IkanowV1SyncService_Buckets {
 	
 	protected final MongoDbManagementDbConfigBean _config;
 	protected final IServiceContext _context;
-	protected final IManagementDbService _core_management_db;
-	protected final IManagementDbService _underlying_management_db;
+	protected final Provider<IManagementDbService> _core_management_db;
+	protected final Provider<IManagementDbService> _underlying_management_db;
 	protected final ICoreDistributedServices _core_distributed_services;
 	
 	protected final SetOnce<MutexMonitor> _source_mutex_monitor = new SetOnce<MutexMonitor>();
@@ -108,8 +109,9 @@ public class IkanowV1SyncService_Buckets {
 	public IkanowV1SyncService_Buckets(final MongoDbManagementDbConfigBean config, final IServiceContext service_context) {		
 		_config = config;
 		_context = service_context;
-		_core_management_db = _context.getCoreManagementDbService();		
-		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
+		
+		_core_management_db = _context.getServiceProvider(IManagementDbService.class, IManagementDbService.CORE_MANAGEMENT_DB).get();		
+		_underlying_management_db = _context.getServiceProvider(IManagementDbService.class, Optional.empty()).get();
 		_context.getService(ICoreDistributedServices.class, Optional.empty()).get();
 		
 		_core_distributed_services = _context.getService(ICoreDistributedServices.class, Optional.empty()).get();
@@ -193,7 +195,7 @@ public class IkanowV1SyncService_Buckets {
 			}
 			if (!_v1_db.isSet()) {
 				@SuppressWarnings("unchecked")
-				final ICrudService<JsonNode> v1_config_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();				
+				final ICrudService<JsonNode> v1_config_db = _underlying_management_db.get().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.source")).get();				
 				_v1_db.set(v1_config_db);
 				
 				_v1_db.get().optimizeQuery(Arrays.asList("extractType"));
@@ -202,8 +204,8 @@ public class IkanowV1SyncService_Buckets {
 			try {
 				// Synchronize
 				synchronizeSources(
-						_core_management_db.getDataBucketStore(), 
-						_underlying_management_db.getDataBucketStatusStore(), 
+						_core_management_db.get().getDataBucketStore(), 
+						_underlying_management_db.get().getDataBucketStatusStore(), 
 						_v1_db.get())
 						.get();
 					// (the get at the end just ensures that you don't get two of these scheduled results colliding - because of the 1-thread thread pool)

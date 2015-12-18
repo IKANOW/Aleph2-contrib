@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.security.service;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 import java.io.InputStreamReader;
 import java.util.Arrays;
@@ -36,6 +37,8 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISubject;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.security.utils.ProfilingUtility;
+import com.ikanow.aleph2.security.web.CookieBean;
+import com.ikanow.aleph2.security.web.IkanowV1CookieAuthentication;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
@@ -284,6 +287,14 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		String permission = "DataBucketBean:read:aleph...bucket.Sample_Netflow_Ingestion_.COPY..;";
         //test a typed permission (not instance-level)
 		assertEquals(true,securityService.isPermitted(subject,permission));
+	}
+
+	@Test
+	public void testCookieAuthentication() throws Exception{
+		
+		   IkanowV1CookieAuthentication cookieAuth = IkanowV1CookieAuthentication.getInstance(ModuleUtils.getAppInjector().get());
+		   CookieBean cb = cookieAuth.createCookie(regularUserId);
+		   assertNotNull(cb);
 	}
 
 }

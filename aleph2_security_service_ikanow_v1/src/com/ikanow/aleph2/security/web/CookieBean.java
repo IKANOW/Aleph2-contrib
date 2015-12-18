@@ -12,16 +12,6 @@ public class CookieBean implements Serializable {
 	private String profileId;
 
 	private String cookieId;
-	private Date startDate;
-	private Date lastActivity;
-	private String apiKey;
-	
-	public String getApiKey() {
-		return apiKey;
-	}
-	public void setApiKey(String apiKey) {
-		this.apiKey = apiKey;
-	}
 	public String get_id() {
 		return _id;
 	}
@@ -40,6 +30,19 @@ public class CookieBean implements Serializable {
 	public void setCookieId(String cookieId) {
 		this.cookieId = cookieId;
 	}
+	private Date startDate;
+	private Date lastActivity;
+	private String apiKey;
+	
+	public String getApiKey() {
+		return apiKey;
+	}
+	public void setApiKey(String apiKey) {
+		this.apiKey = apiKey;
+	}
+	
+	
+	
 	public Date getStartDate() {
 		return startDate;
 	}

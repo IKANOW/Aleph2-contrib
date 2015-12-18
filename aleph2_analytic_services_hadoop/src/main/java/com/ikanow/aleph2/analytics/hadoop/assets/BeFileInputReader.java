@@ -161,7 +161,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 			catch (FileNotFoundException e) { // probably: this is a spare mapper, and the original mapper has deleted this file using renameAfterParse
 				_currFile++;
 				if (_currFile < _numFiles) {
-					_inStream.close();
+					if (null != _inStream) _inStream.close();
 					_inStream = null;
 					return nextKeyValue();		// (just a lazy way of getting to the next file)		
 				}

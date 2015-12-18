@@ -93,6 +93,7 @@ public class TestAleph2EsInputFormat {
 		final JsonNode json_val = value._2().getJson();
 		assertTrue("Is object: " + json_val, json_val.isObject());
 		assertEquals("val_val_text", json_val.get("val_key_text").asText());
+		assertEquals("text_test", json_val.get("_id").asText());
 	}
 
 	@Test

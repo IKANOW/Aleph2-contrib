@@ -269,8 +269,8 @@ public class TestIkanowV1SyncService_PurgeBuckets {
 		//NOTE: see above message, this will throw an error because _underlying_core_db_man_service
 		//doesn't have purge implemented, that means we were successful
 		try {
-			sync_service.synchronizePurgeSources(sync_service._core_management_db.getDataBucketStore(), 
-				sync_service._underlying_management_db.getDataBucketStatusStore(), 
+			sync_service.synchronizePurgeSources(sync_service._core_management_db.get().getDataBucketStore(), 
+				sync_service._underlying_management_db.get().getDataBucketStatusStore(), 
 				v2_purge_q).get();
 			fail("test sync service should have thrown an exception trying to call purge");
 		} catch (Exception ex) {

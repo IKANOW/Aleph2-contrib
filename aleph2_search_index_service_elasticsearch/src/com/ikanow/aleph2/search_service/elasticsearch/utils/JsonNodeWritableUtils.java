@@ -62,7 +62,7 @@ public class JsonNodeWritableUtils {
 	 */
 	protected static JsonNode transform(Object x, JsonNodeFactory nc) {
 		if (null == x) {
-			return nc.nullNode();
+			return null; //(missing->missing)
 		}
 		else if (x instanceof NullWritable) {
 			return nc.nullNode();

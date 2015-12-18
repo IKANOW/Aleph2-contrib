@@ -17,6 +17,7 @@ package com.ikanow.aleph2.management_db.mongodb.services;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -45,8 +46,12 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.leader.LeaderLatch;
 import org.apache.hadoop.fs.CreateFlag;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileContext;
+import org.apache.hadoop.fs.ParentNotDirectoryException;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.UnsupportedFileSystemException;
+import org.apache.hadoop.security.AccessControlException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bson.types.ObjectId;
@@ -59,7 +64,9 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.google.common.io.Files;
 import com.google.inject.Inject;
+import com.google.inject.Provider;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
@@ -77,6 +84,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
+import com.ikanow.aleph2.data_model.utils.JsonUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
@@ -96,8 +104,8 @@ public class IkanowV1SyncService_LibraryJars {
 	
 	protected final MongoDbManagementDbConfigBean _config;
 	protected final IServiceContext _context;
-	protected final IManagementDbService _core_management_db;
-	protected final IManagementDbService _underlying_management_db;
+	protected final Provider<IManagementDbService> _core_management_db;
+	protected final Provider<IManagementDbService> _underlying_management_db;
 	protected final ICoreDistributedServices _core_distributed_services;
 	protected final IStorageService _storage_service;
 	protected SetOnce<GridFS> _mongodb_distributed_fs = new SetOnce<GridFS>();
@@ -120,8 +128,8 @@ public class IkanowV1SyncService_LibraryJars {
 	public IkanowV1SyncService_LibraryJars(final MongoDbManagementDbConfigBean config, final IServiceContext service_context) {		
 		_config = config;
 		_context = service_context;
-		_core_management_db = _context.getCoreManagementDbService();
-		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
+		_core_management_db = _context.getServiceProvider(IManagementDbService.class, IManagementDbService.CORE_MANAGEMENT_DB).get();		
+		_underlying_management_db = _context.getServiceProvider(IManagementDbService.class, Optional.empty()).get();
 		_core_distributed_services = _context.getService(ICoreDistributedServices.class, Optional.empty()).get();
 		_storage_service = _context.getStorageService();
 		
@@ -204,19 +212,19 @@ public class IkanowV1SyncService_LibraryJars {
 			}
 			if (!_v1_db.isSet()) {
 				@SuppressWarnings("unchecked")
-				final ICrudService<JsonNode> v1_config_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("social.share")).get();				
+				final ICrudService<JsonNode> v1_config_db = _underlying_management_db.get().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("social.share")).get();				
 				_v1_db.set(v1_config_db);				
 				_v1_db.get().optimizeQuery(Arrays.asList("title"));
 			}
 			if (!_mongodb_distributed_fs.isSet()) {
-				final GridFS fs = _underlying_management_db.getUnderlyingPlatformDriver(GridFS.class, Optional.of("file.binary_shares")).get();
+				final GridFS fs = _underlying_management_db.get().getUnderlyingPlatformDriver(GridFS.class, Optional.of("file.binary_shares")).get();
 				_mongodb_distributed_fs.set(fs);
 			}
 			
 			try {
 				// Synchronize
 				synchronizeLibraryJars(
-						_core_management_db.getSharedLibraryStore(), 
+						_core_management_db.get().getSharedLibraryStore(), 
 						_storage_service,
 						_v1_db.get(),
 						_mongodb_distributed_fs.get())
@@ -443,6 +451,13 @@ public class IkanowV1SyncService_LibraryJars {
 
 	// FS - WRITE AND DELETE
 	
+	/** MongoFS -> HDFS
+	 * @param binary_id
+	 * @param path
+	 * @param aleph2_fs
+	 * @param share_fs
+	 * @throws IOException
+	 */
 	protected static void copyFile(final String binary_id, final String path, 
 			final IStorageService aleph2_fs,
 			final GridFS share_fs
@@ -464,6 +479,32 @@ public class IkanowV1SyncService_LibraryJars {
 				}
 			}
 		}
+	}
+	
+	/** Local FS -> HDFS
+	 * @param local_path
+	 * @param remote_path
+	 * @param aleph2_fs
+	 * @throws IOException 
+	 * @throws UnsupportedFileSystemException 
+	 * @throws ParentNotDirectoryException 
+	 * @throws FileNotFoundException 
+	 * @throws AccessControlException 
+	 */
+	protected static void copyFile(final String local_path, final String remote_path, final IStorageService aleph2_fs) throws IOException {
+		final FileContext fc = aleph2_fs.getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();			
+
+		final String adjusted_path = getAdjustedPath(remote_path);
+		final Path file_path = fc.makeQualified(new Path(adjusted_path));
+				
+		try (FSDataOutputStream outer = fc.create(file_path, EnumSet.of(CreateFlag.OVERWRITE, CreateFlag.CREATE), // ie should fail if the destination file already exists 
+				org.apache.hadoop.fs.Options.CreateOpts.createParent()))
+		{
+			Files.copy(new File(local_path), outer.getWrappedStream());
+		}
+		catch (FileAlreadyExistsException e) {//(carry on - the file is versioned so it can't be out of date)
+		}
+		
 	}
 	
 	protected static void deleteFile(final String path, final IStorageService aleph2_fs) throws IOException {
@@ -515,8 +556,18 @@ public class IkanowV1SyncService_LibraryJars {
 					final SharedLibraryBean new_object = getLibraryBeanFromV1Share(jsonopt.get());
 					
 					// Try to copy the file across before going crazy (going to leave this as single threaded for now, we'll live)
-					final String binary_id = safeJsonGet("binaryId", jsonopt.get()).asText();					
-					copyFile(binary_id, new_object.path_name(), aleph2_fs, share_fs);
+					final String binary_id = safeJsonGet("binaryId", jsonopt.get()).asText();
+					if (!binary_id.isEmpty()) {
+						copyFile(binary_id, new_object.path_name(), aleph2_fs, share_fs);
+					}
+					else { // Check if it's a reference and if so copy from local to HDFS
+						final Optional<String> maybe_local_path = 
+								JsonUtils.getProperty("documentLocation.collection", jsonopt.get())
+								.filter(j -> j.isTextual())
+								.map(j -> j.asText())
+								;
+						maybe_local_path.ifPresent(Lambdas.wrap_consumer_u(local_path -> copyFile(local_path, new_object.path_name(), aleph2_fs)));
+					}
 					
 					final AuthorizationBean auth = new AuthorizationBean(new_object.owner_id()); 					
 					final ManagementFuture<Supplier<Object>> ret = library_mgmt.secured(context, auth).storeObject(new_object, !create_not_update);

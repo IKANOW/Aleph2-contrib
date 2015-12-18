@@ -123,9 +123,6 @@ public class BeJobLauncher implements IBeJobService{
 		
 		final SetOnce<Job> job = new SetOnce<>();
 		try {
-			final String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
-		    config.set(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE, contextSignature);
-			
 		    final Optional<Long> debug_max = 
 		    		testSpec.flatMap(testSpecVals -> 
 		    							Optional.ofNullable(testSpecVals.requested_num_objects()));
@@ -212,6 +209,9 @@ public class BeJobLauncher implements IBeJobService{
 			
 		    // Now do everything else
 		    
+			final String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
+		    config.set(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE, contextSignature);
+					
 			final String jobName = BucketUtils.getUniqueSignature(bucket.full_name(), Optional.ofNullable(_batchEnrichmentContext.getJob().name()));
 			
 			this.handleHadoopConfigOverrides(bucket, config);

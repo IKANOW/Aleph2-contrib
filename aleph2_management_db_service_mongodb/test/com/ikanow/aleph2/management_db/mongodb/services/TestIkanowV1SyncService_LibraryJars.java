@@ -34,6 +34,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.bson.types.ObjectId;
 import org.junit.Before;
 import org.junit.Test;
@@ -547,7 +548,8 @@ public class TestIkanowV1SyncService_LibraryJars {
 	
 	@Test
 	public void test_createDeleteLibraryBean() throws InterruptedException, ExecutionException, JsonProcessingException, IOException, ParseException {
-		
+		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
+
 		@SuppressWarnings("unchecked")
 		ICrudService<JsonNode> v1_share_db = this._service_context.getCoreManagementDbService()
 																	.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("social.share")).get();
@@ -567,11 +569,19 @@ public class TestIkanowV1SyncService_LibraryJars {
 		final ObjectNode v1_share_1 = (ObjectNode) mapper.readTree(this.getClass().getResourceAsStream("test_v1_sync_sample_share.json"));
 		final DBObject v1_share_1_dbo = (DBObject) JSON.parse(v1_share_1.toString());
 		v1_share_1_dbo.put("_id", new ObjectId(v1_share_1.get("_id").asText()));
+
+		final String fileref_share = IOUtils.toString(this.getClass().getResourceAsStream("test_v1_sync_sample_share_fileref.json"), "UTF-8")
+				.replace("XXX_TEMPDIR_XXX", temp_dir.replace("\\", "\\\\"));
+
+		final ObjectNode v1_share_1b = (ObjectNode) mapper.readTree(fileref_share);
+		final DBObject v1_share_1b_dbo = (DBObject) JSON.parse(v1_share_1b.toString());
+		v1_share_1b_dbo.put("_id", new ObjectId(v1_share_1b.get("_id").asText()));		
 		
 		assertEquals(0L, (long)v1_share_db.countObjects().get());
 		dbc.save(v1_share_1_dbo);
+		dbc.save(v1_share_1b_dbo);
 		//v1_share_db.storeObjects(Arrays.asList(v1_share_1)).get();
-		assertEquals(1L, (long)v1_share_db.countObjects().get());
+		assertEquals(2L, (long)v1_share_db.countObjects().get());
 		
 		final ObjectNode v1_share_2 = (ObjectNode) mapper.readTree(this.getClass().getResourceAsStream("test_v1_sync_sample_share.json"));
 		v1_share_2.set("_id", new TextNode("655d44e3347d336b3e8c4cbe"));		
@@ -579,11 +589,11 @@ public class TestIkanowV1SyncService_LibraryJars {
 		library_db.storeObject(share2).get();
 		assertEquals(1L, (long)library_db.countObjects().get());
 
-		final String temp_dir = System.getProperty("java.io.tmpdir") + File.separator;
 		// Create directory
 		FileUtils.forceMkdir(new File(temp_dir + "/library/"));
 		FileUtils.deleteQuietly(new File(temp_dir + "/library/misc"));
 		assertFalse(new File(temp_dir + "/library/misc").exists());
+		FileUtils.write(new File(temp_dir + "/v1_library.jar"), "test12345");
 		
 		final GridFS share_fs = Mockito.mock(GridFS.class);
 		final GridFSDBFile share_file = Mockito.mock(GridFSDBFile.class, new Answer<Void>() {
@@ -622,6 +632,24 @@ public class TestIkanowV1SyncService_LibraryJars {
 			final File f = new File(temp_dir + "/library/misc/library.jar");
 			assertTrue(f.exists());
 			assertEquals("test123", FileUtils.readFileToString(f));
+		}
+		
+		// Create - use file reference
+		{
+			final ManagementFuture<Supplier<Object>> res = IkanowV1SyncService_LibraryJars.createLibraryBean(v1_share_1b.get("_id").asText(), 
+					library_db, _service_context.getStorageService(), true, v1_share_db, share_fs, _service_context);
+			
+			assertEquals("v1_" + v1_share_1b.get("_id").asText(), res.get().get().toString());
+			
+			// Wrote DB entry
+			assertTrue(library_db.getObjectById(res.get().get().toString()).get().isPresent());
+			
+			modified_test = library_db.getObjectById(res.get().get().toString()).get().get().modified();
+			
+			// Created file:
+			final File f = new File(temp_dir + "/library/misc/v1_library.jar");
+			assertTrue(f.exists());
+			assertEquals("test12345", FileUtils.readFileToString(f));			
 		}
 		
 		// Create duplicate
