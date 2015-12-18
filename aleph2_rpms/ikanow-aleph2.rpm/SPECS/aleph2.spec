@@ -48,6 +48,10 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
         /sbin/service ikanow-aleph2 status && /sbin/service ikanow-aleph2 restart
     fi
 
+    # Uninstall
+    if [ $1 -eq 0 ]; then
+        /sbin/chkconfig --del ikanow-aleph2
+    fi
 %posttrans
 ###########################################################################
 # FILE LISTS
