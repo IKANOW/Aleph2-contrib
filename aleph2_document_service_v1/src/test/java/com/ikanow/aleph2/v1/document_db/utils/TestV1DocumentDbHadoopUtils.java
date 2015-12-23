@@ -60,7 +60,7 @@ public class TestV1DocumentDbHadoopUtils {
 		
 		final AnalyticThreadJobBean.AnalyticThreadJobInputBean job_input =
 				BeanTemplateUtils.build(AnalyticThreadJobBean.AnalyticThreadJobInputBean.class)
-					.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::resource_name_or_id, "/aleph2_external/565e076a12c33214b78fd3c2,565e076a12c33214b78fd3c3")
+					.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::resource_name_or_id, "/aleph2_external/565e076a12c33214b78fd3c2_565e076a12c33214b78fd3c3")
 					.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::config,
 							BeanTemplateUtils.build(AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean.class)
 								.with(AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean::test_record_limit_request, 10L)
@@ -118,7 +118,7 @@ public class TestV1DocumentDbHadoopUtils {
 			//System.out.println(res);			
 			
 			assertEquals(9, res.size());
-			assertEquals("unknown:/aleph2_external/565e076a12c33214b78fd3c2,565e076a12c33214b78fd3c3", res.get("mongo.job.name"));
+			assertEquals("unknown:/aleph2_external/565e076a12c33214b78fd3c2_565e076a12c33214b78fd3c3", res.get("mongo.job.name"));
 			assertEquals("true", res.get("mongo.job.verbose"));
 			assertEquals("false", res.get("mongo.job.background"));
 			assertEquals("mongodb://test:27018/doc_metadata.metadata", res.get("mongo.input.uri"));
@@ -129,7 +129,7 @@ public class TestV1DocumentDbHadoopUtils {
 			assertEquals("12500", res.get("max.docs.per.split"));
 			assertEquals(null, res.get("infinit.e.source.tags.filter"));
 
-			assertEquals("service_name=Aleph2V1InputFormat options={mongo.input.limit=10, max.docs.per.split=12500, mongo.input.fields=, mongo.input.query={ \"communityId\" : { \"$in\" : [ { \"$oid\" : \"565e076a12c33214b78fd3c2\"} , { \"$oid\" : \"565e076a12c33214b78fd3c3\"}]} , \"index\" : { \"$ne\" : \"?DEL?\"}}, mongo.job.name=unknown:/aleph2_external/565e076a12c33214b78fd3c2,565e076a12c33214b78fd3c3, max.splits=8, mongo.input.uri=mongodb://test:27018/doc_metadata.metadata}", access_context.describe());
+			assertEquals("service_name=Aleph2V1InputFormat options={mongo.input.limit=10, max.docs.per.split=12500, mongo.input.fields=, mongo.input.query={ \"communityId\" : { \"$in\" : [ { \"$oid\" : \"565e076a12c33214b78fd3c2\"} , { \"$oid\" : \"565e076a12c33214b78fd3c3\"}]} , \"index\" : { \"$ne\" : \"?DEL?\"}}, mongo.job.name=unknown:/aleph2_external/565e076a12c33214b78fd3c2_565e076a12c33214b78fd3c3, max.splits=8, mongo.input.uri=mongodb://test:27018/doc_metadata.metadata}", access_context.describe());
 		}
 		// Srctags specified
 		{

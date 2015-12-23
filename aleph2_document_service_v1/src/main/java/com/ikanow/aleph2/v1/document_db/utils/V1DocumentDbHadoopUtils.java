@@ -102,7 +102,7 @@ public class V1DocumentDbHadoopUtils {
 				// Parse various inputs:
 				
 				final List<String> communities = 
-						Arrays.stream(job_input.resource_name_or_id().substring(BucketUtils.EXTERNAL_BUCKET_PREFIX.length()).split(","))
+						Arrays.stream(job_input.resource_name_or_id().substring(BucketUtils.EXTERNAL_BUCKET_PREFIX.length()).split("_"))
 								.collect(Collectors.toList())
 								; 
 				
