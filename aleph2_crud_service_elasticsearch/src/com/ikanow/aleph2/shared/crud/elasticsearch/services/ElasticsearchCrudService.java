@@ -637,8 +637,10 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		try {
 			//TODO (ALEPH-14): Handle case where no source is present but fields are
 			
-			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(spec, _state.id_ranges_ok);
+			//TODO (ALEPH-14): if there's an obvious timestamp range then apply to getReadableIndexArray
 			
+			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(spec, _state.id_ranges_ok);
+
 			final SearchRequestBuilder srb = Optional
 						.of(
 							_state.client.prepareSearch()
