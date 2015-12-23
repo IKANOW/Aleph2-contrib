@@ -56,6 +56,7 @@ import com.ikanow.aleph2.data_model.utils.ContextUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
+import com.ikanow.aleph2.data_model.utils.UuidUtils;
 
 /** The input reader specific to batch enrichment modules
  * @author Alex
@@ -77,6 +78,8 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	
 	private static final Logger logger = LogManager.getLogger(BeJobLauncher.class);
 
+	protected final String _my_uuid = UuidUtils.get().getRandomUuid();
+	
 	protected CombineFileSplit _fileSplit;
 	protected InputStream _inStream = null;
 	protected FileSystem _fs;
@@ -156,7 +159,11 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 			// Step 1: get input stream
 			_fs = FileSystem.get(_config);
 			try {
-				_inStream = _fs.open(_fileSplit.getPath(_currFile));
+				// To ensure atomicity, first rename the file:
+				final Path in = _fileSplit.getPath(_currFile);
+				final Path renamed = in.suffix(_my_uuid);
+				_fs.rename(in, renamed);
+				_inStream = _fs.open(renamed);
 			}
 			catch (FileNotFoundException e) { // probably: this is a spare mapper, and the original mapper has deleted this file using renameAfterParse
 				_currFile++;
@@ -223,9 +230,10 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 				_fs.mkdirs(newPath);
 				
 				@SuppressWarnings("unused")
-				final boolean success = _fs.rename(currentPath, Path.mergePaths(newPath, new Path("/" + currentPath.getName())));
+				final boolean success = _fs.rename(currentPath.suffix(_my_uuid), Path.mergePaths(newPath, new Path("/" + currentPath.getName())));				
+				
 			} else {
-				_fs.delete(currentPath, false);
+				_fs.delete(currentPath.suffix(_my_uuid), false);
 			}
 		} catch (Exception e) {
 			logger.error(ErrorUtils.getLongForm(HadoopErrorUtils.EXCEPTION_CAUGHT, e));
