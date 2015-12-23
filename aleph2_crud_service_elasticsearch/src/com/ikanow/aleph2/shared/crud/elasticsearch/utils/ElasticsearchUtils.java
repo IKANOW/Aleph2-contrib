@@ -15,6 +15,7 @@
  *******************************************************************************/
 package com.ikanow.aleph2.shared.crud.elasticsearch.utils;
 
+import java.util.Date;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
@@ -34,6 +35,7 @@ import scala.Tuple2;
 import com.google.common.collect.LinkedHashMultimap;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
+import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.MultiQueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.Operator;
@@ -45,6 +47,8 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
  */
 public class ElasticsearchUtils {
 
+	final public static EnumSet<Operator> _RANGE_OP = EnumSet.of(Operator.range_open_open, Operator.range_open_closed, Operator.range_closed_closed, Operator.range_closed_open);
+	
 	//TOOD: put map comparison in here?
 	
 	//TODO: put code to check if the mapping supports _id ranges in here?
@@ -146,13 +150,12 @@ public class ElasticsearchUtils {
 				.when(op_args -> (Operator.equals == op_args._1()), op_args -> FilterBuilders.termFilter(field, op_args._2()._1()) )
 										
 				// unless id_ranges_ok, exception out here:
-				.when(op_args -> field.equals("_id") && !id_ranges_ok && 
-						EnumSet.of(Operator.range_open_open, Operator.range_open_closed, Operator.range_closed_closed, Operator.range_closed_open).contains(op_args._1()), __ -> {
+				.when(op_args -> field.equals("_id") && !id_ranges_ok && _RANGE_OP.contains(op_args._1()), __ -> {
 					throw new RuntimeException(ErrorUtils.NO_ID_RANGES_UNLESS_IDS_INDEXED);
 				})
 				.when(op_args -> field.equals("_type"),  __ -> { throw new RuntimeException(ErrorUtils.RANGES_ON_TYPES); })
 				
-				.when(op_args -> EnumSet.of(Operator.range_open_open, Operator.range_open_closed, Operator.range_closed_closed, Operator.range_closed_open).contains(op_args._1()), op_args -> {					
+				.when(op_args ->_RANGE_OP.contains(op_args._1()), op_args -> {					
 					return Optional.of(FilterBuilders.rangeFilter(field))
 								.map(f -> Optional.ofNullable(op_args._2()._1()).map(b -> 
 												f.from(b).includeLower(EnumSet.of(Operator.range_closed_closed, Operator.range_closed_open).contains(op_args._1())))
@@ -243,5 +246,57 @@ public class ElasticsearchUtils {
 							.map(entry -> operatorToFilter(entry._1(), entry._2(), id_ranges_ok))
 							.collect(Collectors.toList())
 							);
+	}
+		
+	/** If there's an obvious date range restriction on this query then return it so it can be applied to make queries more efficient
+	 * @param spec
+	 * @param maybe_time_field
+	 * @return
+	 */
+	@SuppressWarnings("unchecked")
+	public static <O> Optional<Tuple2<Long, Long>> interpretObviousDateRange(final QueryComponent<O> spec, final Optional<String> maybe_time_field) {
+		
+		return maybe_time_field.flatMap(tf -> {
+			
+			return Patterns.match(spec).<Optional<Tuple2<Long, Long>>>andReturn()
+				.when(MultiQueryComponent.class, mq -> (Operator.all_of == mq.getOp()) || (1 == mq.getElements().size()), mq -> {
+					return ((List<QueryComponent<O>>)mq.getElements())
+							.stream().limit(10).map(o -> interpretObviousDateRange(o, maybe_time_field))
+							.findAny()
+							.flatMap(o->o)
+							;
+				})
+				.when(SingleQueryComponent.class, sq -> (Operator.all_of == sq.getOp()) || (1 == sq.getAll().size()), sq -> {
+					final SingleQueryComponent<O> ssq = (SingleQueryComponent<O>)sq;
+					return ssq.getAll().get(tf).stream()
+						.filter(op_args -> _RANGE_OP.contains(op_args._1())) // must be a range query
+						.filter(op_args -> null != op_args._2()._1()) // can't be unbounded below
+						.map(op_args -> 
+								Tuples._2T(
+									toLongDate(op_args._2()._1())
+									, 
+									Optional.ofNullable(op_args._2()._2()).map(o -> toLongDate(o)).orElse(new Date().getTime()))
+						)
+						.filter(t2 -> (null != t2._1()) && (null != t2._2()))
+						.findAny()
+						;
+				})
+				.otherwise(() -> Optional.empty())
+				;
+		})
+		;
+	}
+	
+	/** Quick util to return a date from long/data/iso_string
+	 * @param obj
+	 * @return
+	 */
+	protected static Long toLongDate(Object obj) {
+		return Patterns.match(obj).<Long>andReturn()
+				.when(Long.class, l -> l)
+				.when(Date.class, d -> d.getTime())
+				.when(String.class, s -> TimeUtils.parseIsoString(s).validation(err->null, d->d.getTime()))
+				.otherwise(__ -> null)
+				;
 	}
 }
