@@ -151,6 +151,20 @@
 		<artifactId>hadoop-minicluster</artifactId>
 		<version>${aleph2.hadoop}</version>
 		<scope>test</scope>
+		<exclusions>
+			<exclusion>
+				<artifactId>servlet-api</artifactId>
+				<groupId>javax.servlet</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jetty-util</artifactId>
+				<groupId>org.mortbay.jetty</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jetty</artifactId>
+				<groupId>org.mortbay.jetty</groupId>
+			</exclusion>
+		</exclusions>
 	</dependency>
 	<!-- Test deps -->
 	<dependency>
