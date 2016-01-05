@@ -139,6 +139,14 @@
 					<artifactId>servlet-api</artifactId>
 					<groupId>javax.servlet</groupId>
 				</exclusion>
+				<exclusion>
+					<artifactId>jetty-util</artifactId>
+					<groupId>org.mortbay.jetty</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jetty</artifactId>
+					<groupId>org.mortbay.jetty</groupId>
+				</exclusion>
 			</exclusions>
 		</dependency>
 		<dependency>
