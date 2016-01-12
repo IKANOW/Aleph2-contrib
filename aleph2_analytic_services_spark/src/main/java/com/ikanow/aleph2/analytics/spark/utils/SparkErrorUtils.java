@@ -20,4 +20,5 @@ package com.ikanow.aleph2.analytics.spark.utils;
  */
 public class SparkErrorUtils {
 
+	public static String CURRENTLY_BATCH_ONLY = "Bucket {0} job {1}: currently only batch analytic jobs are supported";
 }

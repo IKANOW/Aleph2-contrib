@@ -16,30 +16,47 @@
 package com.ikanow.aleph2.analytics.spark.utils;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.apache.hadoop.fs.CreateFlag;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileAlreadyExistsException;
+import org.apache.hadoop.fs.FileContext;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.elasticsearch.common.collect.ImmutableList;
 
 import scala.Tuple2;
 
+import com.google.common.io.Files;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean.MasterEnrichmentType;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 
 /** Utilities for building spark jobs
  * @author Alex
  */
 public class SparkTechnologyUtils {
 
+	public final static String SBT_SUBMIT_BINARY = "bin/spark-submit";
+	
 	/** Creates a command line call to launch spark
 	 * @param spark_home
 	 * @param yarn_home
@@ -68,10 +85,10 @@ public class SparkTechnologyUtils {
 		
 		final List<String> command_line =
 			ImmutableList.<String>builder()
-				.add("bin/spark-submit")
+				.add(SBT_SUBMIT_BINARY)
 				.add("--name")
 				.add(job_name)
-				.add("--class ")
+				.add("--class")
 				.add(main_clazz)
 				.add("--master")
 				.add("yarn-master")
@@ -99,7 +116,63 @@ public class SparkTechnologyUtils {
 			;		
 	}
 	
-	//TODO: all the usual JAR building nonsense...
+	/** Cache the system and user classpaths and return HDFS paths
+	 * @param bucket
+	 * @param main_jar_path - my JAR path
+	 * @param context
+	 * @throws IOException 
+	 * @throws ExecutionException 
+	 * @throws InterruptedException 
+	 * @throws IllegalArgumentException 
+	 */
+	public static List<String> getCachedJarList(final DataBucketBean bucket, final String main_jar_path, final IAnalyticsContext context) throws IllegalArgumentException, InterruptedException, ExecutionException, IOException {
+	    final FileContext fc = context.getServiceContext().getStorageService().getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
+	    final String root_path = context.getServiceContext().getStorageService().getRootPath();
+	    
+	    // Aleph2 libraries: need to cache them
+	    final Stream<String> context_stream = context
+	    	.getAnalyticsContextLibraries(Optional.empty())
+	    	.stream()
+	    	.filter(jar -> !jar.equals(main_jar_path)) // (this is the service case, eg "/opt/aleph2-home/lib/aleph2_spark_analytic_services.jar")
+	    	.map(f -> new File(f))
+	    	.map(f -> Tuples._2T(f, new Path(root_path + "/" + f.getName())))
+	    	.map(Lambdas.wrap_u(f_p -> {
+	    		final FileStatus fs = Lambdas.get(() -> {
+		    		try {
+		    			return fc.getFileStatus(f_p._2());
+		    		}
+		    		catch (Exception e) { return null; }
+	    		});
+	    		if (null == fs) { //cache doesn't exist
+	    			// Local version
+	    			try (FSDataOutputStream outer = fc.create(f_p._2(), EnumSet.of(CreateFlag.CREATE), // ie should fail if the destination file already exists 
+	    					org.apache.hadoop.fs.Options.CreateOpts.createParent()))
+	    			{
+	    				Files.copy(f_p._1(), outer.getWrappedStream());
+	    			}
+	    			catch (FileAlreadyExistsException e) {//(carry on - the file is versioned so it can't be out of date)
+	    			}
+	    		}
+	    		return f_p._2();
+	    	}))
+	    	.map(p -> "hdfs://" + p.toString())
+	    	;
+	    
+	    // User libraries: this is slightly easier since one of the 2 keys
+	    // is the HDFS path (the other is the _id)
+	    final Stream<String> lib_stream = context
+			.getAnalyticsLibraries(Optional.of(bucket), bucket.analytic_thread().jobs())
+			.get()
+			.entrySet()
+			.stream()
+			.map(kv -> kv.getKey())
+	    	.filter(jar -> !jar.equals(main_jar_path)) // (this is the uploaded case, eg "/app/aleph2/library/blah.jar")
+			.filter(path -> path.startsWith(root_path))
+			.map(s -> "hdfs://" + s)
+			;	    
+			
+		return Stream.concat(context_stream, lib_stream).collect(Collectors.toList());
+	}
 	
 	public static Map<String, JavaRDD<Tuple2<Long, IBatchRecord>>> buildBatchSparkInputs(final IAnalyticsContext context) {
 		
@@ -115,12 +188,14 @@ public class SparkTechnologyUtils {
 	 */
 	public static BasicMessageBean validateJobs(final DataBucketBean new_analytic_bucket, final Collection<AnalyticThreadJobBean> jobs) {
 		
-		//TODO: currently only batch mode is supported
-		//TODO: currently enrichments not supported
+		final LinkedList<String> mutable_errs = new LinkedList<>();
 		
-		final boolean success = true;
-		final String message = "";
-		return ErrorUtils.buildMessage(success, SparkTechnologyUtils.class, "validateJobs", message);
+		jobs.stream().forEach(job -> {
+			if (MasterEnrichmentType.batch != job.analytic_type())
+				mutable_errs.push(ErrorUtils.get(SparkErrorUtils.CURRENTLY_BATCH_ONLY, new_analytic_bucket.full_name(), job.name()));
+		});
+		
+		return ErrorUtils.buildMessage(!mutable_errs.isEmpty(), SparkTechnologyUtils.class, "validateJobs", mutable_errs.stream().collect(Collectors.joining(";")));
 	}
 
 }

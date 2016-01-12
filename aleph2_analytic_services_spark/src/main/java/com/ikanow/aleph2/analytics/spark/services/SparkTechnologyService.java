@@ -16,6 +16,7 @@ package com.ikanow.aleph2.analytics.spark.services;
  *******************************************************************************/
 
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -23,12 +24,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.mapreduce.Job;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import scala.Tuple2;
+
 import com.google.inject.Module;
+import com.ikanow.aleph2.analytics.spark.data_model.GlobalSparkConfigBean;
 import com.ikanow.aleph2.analytics.spark.utils.SparkTechnologyUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyService;
@@ -38,9 +40,15 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadTrigger
 import com.ikanow.aleph2.data_model.objects.data_import.BucketDiffBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.ModuleUtils;
+import com.ikanow.aleph2.data_model.utils.ProcessUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 
@@ -52,12 +60,16 @@ import fj.data.Validation;
 public class SparkTechnologyService implements IAnalyticsTechnologyService, IExtraDependencyLoader {
 	protected static final Logger _logger = LogManager.getLogger();	
 
-	protected SetOnce<Configuration> _config = new SetOnce<>();
+	//TODO make /run/ a data_model const
+	public static String RUN_PATH_SUFFIX = "/run/";
+	
+	protected final SetOnce<GlobalSparkConfigBean> _global_spark_config = new SetOnce<>();
 	
 	/** This service needs to load some additional classes via Guice. Here's the module that defines the bindings
 	 * @return
 	 */
 	public static List<Module> getExtraDependencyModules() {
+		//TODO: need to build global spark config from the config if in guice mode
 		return Collections.emptyList();
 	}
 	
@@ -68,15 +80,17 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 
 	@Override
 	public void onInit(IAnalyticsContext context) {
-		//TODO
-//		try {
-//			if(!_config.isSet()){
-//				_config.trySet(HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties()));
-//			}
-//		}
-//		catch (Throwable t) {
-//			_logger.error(ErrorUtils.getLongForm("Error setting hadoop: {0}", t));
-//		}
+		
+		// Set up global config in normal mode
+		_global_spark_config.set(Lambdas.get(() -> {
+			try {
+				return BeanTemplateUtils.from(context.getTechnologyConfig().library_config(), GlobalSparkConfigBean.class).get();
+			}
+			catch (Exception e) {
+				return new GlobalSparkConfigBean();	//(run with defaults)
+			}
+		}));
+			 
 	}
 
 	/* (non-Javadoc)
@@ -84,20 +98,10 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 	 */
 	@Override
 	public boolean canRunOnThisNode(DataBucketBean analytic_bucket,
-			Collection<AnalyticThreadJobBean> jobs, IAnalyticsContext context) {
-				
-		// Here's a simple check if someone's made a token effort to install Hadoop:
+			Collection<AnalyticThreadJobBean> jobs, IAnalyticsContext context) {				
 		
-		//TODO
-//		try {
-//			File hadoop_installed = new File(context.getServiceContext().getGlobalProperties().local_yarn_config_dir() + File.separator + "core-site.xml");
-//			return hadoop_installed.exists();
-//		}
-//		catch (Throwable t) {
-//			return false;
-//		}
-		
-		return true;
+		// Here's a simple check if someone's made a token effort to install Spark on this node:		
+		return new File(_global_spark_config.get().spark_home() + SparkTechnologyUtils.SBT_SUBMIT_BINARY).canExecute();
 	}
 
 	/* (non-Javadoc)
@@ -223,7 +227,7 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 											(this.getClass().getName(), "startAnalyticJob", fail)
 						,
 						success -> ErrorUtils.buildSuccessMessage
-												(this.getClass().getName(), "startAnalyticJob", success.getJobID().toString())
+												(this.getClass().getName(), "startAnalyticJob", success.toString())
 						));
 	}
 	
@@ -235,15 +239,63 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 	 * @param test_spec
 	 * @return
 	 */
-	public Validation<String, Job> startAnalyticJobOrTest(
+	public Validation<String, String> startAnalyticJobOrTest(
 			DataBucketBean analytic_bucket,
 			Collection<AnalyticThreadJobBean> jobs,
 			AnalyticThreadJobBean job_to_start, IAnalyticsContext context,
 			Optional<ProcessingTestSpecBean> test_spec
 			)
 	{
-		//TODO
-		return null;
+		//TODO test vs normal mode
+				
+		try {
+			final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
+			
+			final String main_jar = 
+					Lambdas.get(() -> {
+						try {
+							return context.getTechnologyConfig().path_name();
+						}
+						catch (Exception e) { // (service mode)
+							//TODO derive this from "this" using the core shared lib util
+							return "/opt/aleph2-home/lib/aleph2_spark_analytics_services.jar";						
+						}
+					});
+			
+			final List<String> other_jars = SparkTechnologyUtils.getCachedJarList(analytic_bucket, main_jar, context);
+			
+			final ProcessBuilder pb =
+					SparkTechnologyUtils.createSparkJob(
+							BucketUtils.getUniqueSignature(analytic_bucket.full_name(), Optional.of(job_to_start.name())),
+							_global_spark_config.get().spark_home(),
+							globals.local_yarn_config_dir(), 
+							"yarn-cluster", //TODO: make this configurable 
+							job_to_start.entry_point(), //TODO: all support built in? 
+							context.getAnalyticsContextSignature(Optional.of(analytic_bucket), Optional.empty()), 
+							main_jar, 
+							other_jars, 
+							//TODO: options from somewhere?
+							Collections.emptyMap(), 
+							Collections.emptyMap());
+
+			final String run_path = globals.local_root_dir() + RUN_PATH_SUFFIX;
+			
+			// (stop the process first, in case it's running...)
+			ProcessUtils.stopProcess(this.getClass().getSimpleName(), analytic_bucket, run_path, Optional.empty());
+			
+			final Tuple2<String, String> err_pid = ProcessUtils.launchProcess(pb, this.getClass().getSimpleName(), analytic_bucket, run_path, Optional.empty());
+			//TODO (if processing test spec set then add a max length before killing)
+
+			if (null != err_pid._1()) {
+				return Validation.fail("Failed to launch Spark client: " + err_pid._1());
+			}
+			else {
+				return Validation.success("Launched Spark client: " + err_pid._2());
+			}
+		}
+		catch (Throwable e) {
+			return Validation.fail(ErrorUtils.getLongForm("startAnalyticJobOrTest: {0}", e));
+		}
 	}
 
 	/* (non-Javadoc)
@@ -255,8 +307,19 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 			Collection<AnalyticThreadJobBean> jobs,
 			AnalyticThreadJobBean job_to_stop, IAnalyticsContext context)
 	{
-		//TODO return null
-		return null;
+		final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
+		final String run_path = globals.local_root_dir() + RUN_PATH_SUFFIX;
+		
+		final Tuple2<String, Boolean> err_pid = ProcessUtils.stopProcess(this.getClass().getSimpleName(), analytic_bucket, run_path, Optional.empty());
+		if (!err_pid._2()) {
+			//failed to stop, try to cleanup script file and bail out
+			return CompletableFuture.completedFuture(
+					ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "stopAnalyticJob", "Error stopping Spark submit script (can result in script continuing to run on server, need to manually kill perhaps): "+err_pid._1, Optional.empty())
+					);
+		}		
+		return CompletableFuture.completedFuture(
+				ErrorUtils.buildSuccessMessage(this.getClass().getSimpleName(), "stopAnalyticJob", "Spark submit script stopped.")
+				);		
 	}
 
 	/* (non-Javadoc)
@@ -301,7 +364,7 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 											(this.getClass().getName(), "startAnalyticJobTest", fail)
 						,
 						success -> ErrorUtils.buildSuccessMessage
-												(this.getClass().getName(), "startAnalyticJobTest", success.getJobID().toString())
+												(this.getClass().getName(), "startAnalyticJobTest", success)
 						));
 	}
 
@@ -312,11 +375,14 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 	public ManagementFuture<Boolean> checkAnalyticJobProgress(
 			DataBucketBean analytic_bucket,
 			Collection<AnalyticThreadJobBean> jobs,
-			AnalyticThreadJobBean job_to_check, IAnalyticsContext context) {
+			AnalyticThreadJobBean job_to_check, IAnalyticsContext context)
+	{
+		final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
+		final String run_path = globals.local_root_dir() + RUN_PATH_SUFFIX;
 		
-		//TODO
-		return null;
-		
+		return FutureUtils.createManagementFuture(CompletableFuture.completedFuture(
+				ProcessUtils.isProcessRunning(this.getClass().getSimpleName(), analytic_bucket, run_path)
+				));		
 	}
 
 	/* (non-Javadoc)
