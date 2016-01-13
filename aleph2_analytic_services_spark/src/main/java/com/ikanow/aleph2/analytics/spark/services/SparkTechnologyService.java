@@ -1,4 +1,3 @@
-package com.ikanow.aleph2.analytics.spark.services;
 /*******************************************************************************
  * Copyright 2015, The IKANOW Open Source Project.
  *
@@ -15,15 +14,19 @@ package com.ikanow.aleph2.analytics.spark.services;
  * limitations under the License.
  *******************************************************************************/
 
+package com.ikanow.aleph2.analytics.spark.services;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -31,6 +34,7 @@ import scala.Tuple2;
 
 import com.google.inject.Module;
 import com.ikanow.aleph2.analytics.spark.data_model.GlobalSparkConfigBean;
+import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
 import com.ikanow.aleph2.analytics.spark.utils.SparkTechnologyUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyService;
@@ -60,6 +64,15 @@ import fj.data.Validation;
 public class SparkTechnologyService implements IAnalyticsTechnologyService, IExtraDependencyLoader {
 	protected static final Logger _logger = LogManager.getLogger();	
 
+	//TODO leave at debug normally
+	//private static Level DEBUG_LEVEL = Level.DEBUG;
+	private static Level DEBUG_LEVEL = Level.INFO;
+	
+	//TODO
+	private Optional<String> DEBUG_LOG_FILE =
+			//Optional.empty();
+			Optional.of(System.getProperty("java.io.tmpdir"));
+	
 	//TODO make /run/ a data_model const
 	public static String RUN_PATH_SUFFIX = "/run/";
 	
@@ -71,6 +84,7 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 	public static List<Module> getExtraDependencyModules() {
 		//TODO: need to build global spark config from the config if in guice mode
 		return Collections.emptyList();
+		
 	}
 	
 	@Override
@@ -80,17 +94,11 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 
 	@Override
 	public void onInit(IAnalyticsContext context) {
-		
+
 		// Set up global config in normal mode
-		_global_spark_config.set(Lambdas.get(() -> {
-			try {
-				return BeanTemplateUtils.from(context.getTechnologyConfig().library_config(), GlobalSparkConfigBean.class).get();
-			}
-			catch (Exception e) {
-				return new GlobalSparkConfigBean();	//(run with defaults)
-			}
-		}));
-			 
+		_global_spark_config.set(
+				BeanTemplateUtils.from(Optional.ofNullable(context.getTechnologyConfig().library_config()).orElse(Collections.emptyMap()), GlobalSparkConfigBean.class).get()
+				);
 	}
 
 	/* (non-Javadoc)
@@ -251,41 +259,64 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 		try {
 			final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
 			
+			_logger.log(DEBUG_LEVEL, "spark_home = " + _global_spark_config.get().spark_home());			
+			
+			final SparkTopologyConfigBean config = BeanTemplateUtils.from(job_to_start.config(), SparkTopologyConfigBean.class).get();
+
+			_logger.log(DEBUG_LEVEL, "entry_point = " + config.entry_point());			
+			
 			final String main_jar = 
 					Lambdas.get(() -> {
 						try {
-							return context.getTechnologyConfig().path_name();
+							return "hdfs:///" + context.getTechnologyConfig().path_name();
 						}
 						catch (Exception e) { // (service mode)
 							//TODO derive this from "this" using the core shared lib util
 							return "/opt/aleph2-home/lib/aleph2_spark_analytics_services.jar";						
 						}
 					});
+
+			_logger.log(DEBUG_LEVEL, "main_jars = " + main_jar);
 			
 			final List<String> other_jars = SparkTechnologyUtils.getCachedJarList(analytic_bucket, main_jar, context);
 			
+			_logger.log(DEBUG_LEVEL, "other_jars = " + other_jars.stream().collect(Collectors.joining(";")));
+			
+			final String bucket_signature = BucketUtils.getUniqueSignature(analytic_bucket.full_name(), Optional.of(job_to_start.name()));
+			
 			final ProcessBuilder pb =
 					SparkTechnologyUtils.createSparkJob(
-							BucketUtils.getUniqueSignature(analytic_bucket.full_name(), Optional.of(job_to_start.name())),
+							bucket_signature,
 							_global_spark_config.get().spark_home(),
 							globals.local_yarn_config_dir(), 
 							"yarn-cluster", //TODO: make this configurable 
-							job_to_start.entry_point(), //TODO: all support built in? 
-							context.getAnalyticsContextSignature(Optional.of(analytic_bucket), Optional.empty()), 
+							config.entry_point(), //TODO: all support built in? 
+							new String(Base64.getEncoder().encode(context.getAnalyticsContextSignature(Optional.of(analytic_bucket), Optional.empty()).getBytes())), 
 							main_jar, 
 							other_jars, 
-							//TODO: options from somewhere?
-							Collections.emptyMap(), 
-							Collections.emptyMap());
+							//TODO: combine globals and per-job options
+							config.config(), 
+							config.system_config());
 
+			DEBUG_LOG_FILE.map(x -> x + "/" + bucket_signature).ifPresent(name -> {
+				pb.inheritIO().redirectErrorStream(true).redirectOutput(new File(name));				
+			});
+			
+			_logger.log(DEBUG_LEVEL, "spark_submit_env = " + pb.environment().toString());						
+			_logger.log(DEBUG_LEVEL, "spark_submit_command_line = " + pb.command().stream().collect(Collectors.joining(" ")));						
+			
 			final String run_path = globals.local_root_dir() + RUN_PATH_SUFFIX;
 			
 			// (stop the process first, in case it's running...)
-			ProcessUtils.stopProcess(this.getClass().getSimpleName(), analytic_bucket, run_path, Optional.empty());
+			final Tuple2<String, Boolean> stop_res = ProcessUtils.stopProcess(this.getClass().getSimpleName(), analytic_bucket, run_path, Optional.empty());
+			
+			_logger.log(DEBUG_LEVEL, "stop_job_before_starting = " + stop_res);			
 			
 			final Tuple2<String, String> err_pid = ProcessUtils.launchProcess(pb, this.getClass().getSimpleName(), analytic_bucket, run_path, Optional.empty());
 			//TODO (if processing test spec set then add a max length before killing)
 
+			_logger.log(DEBUG_LEVEL, "start_job_results = " + err_pid);						
+			
 			if (null != err_pid._1()) {
 				return Validation.fail("Failed to launch Spark client: " + err_pid._1());
 			}
@@ -379,10 +410,12 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 	{
 		final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
 		final String run_path = globals.local_root_dir() + RUN_PATH_SUFFIX;
+
+		final boolean is_running = ProcessUtils.isProcessRunning(this.getClass().getSimpleName(), analytic_bucket, run_path);
 		
-		return FutureUtils.createManagementFuture(CompletableFuture.completedFuture(
-				ProcessUtils.isProcessRunning(this.getClass().getSimpleName(), analytic_bucket, run_path)
-				));		
+		_logger.log(DEBUG_LEVEL, "check_completion_results = " + is_running);						
+		
+		return FutureUtils.createManagementFuture(CompletableFuture.completedFuture(!is_running));		
 	}
 
 	/* (non-Javadoc)

@@ -5,17 +5,9 @@
     <version>${aleph2.version}</version>
     <properties>
         <aleph2.version>0.0.1-SNAPSHOT</aleph2.version>
-        <aleph2.scope>compile</aleph2.scope>
+        <aleph2.scope>provided</aleph2.scope>
         <aleph2.hadoop>2.6.0</aleph2.hadoop>
     </properties>
-
-    <repositories>
-        <repository>
-            <id>bedatadriven</id>
-            <name>bedatadriven public repo</name>
-            <url>https://nexus.bedatadriven.com/content/groups/public/</url>
-        </repository>
-    </repositories>
 
     <build>
         <plugins>
@@ -73,6 +65,18 @@
                     </execution>
                 </executions>
             </plugin>
+			<plugin>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<configuration>
+					<descriptorRefs>
+						<descriptorRef>jar-with-dependencies</descriptorRef>
+					</descriptorRefs>
+					<archive>
+						<manifest>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
 
         </plugins>
         <pluginManagement>
@@ -127,11 +131,13 @@
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_2.11</artifactId>
             <version>1.2.2</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-sql_2.11</artifactId>
             <version>1.2.2</version>
+            <scope>provided</scope>
         </dependency>
 
         <!-- Example of internal dependency (always need data model anyway) -->

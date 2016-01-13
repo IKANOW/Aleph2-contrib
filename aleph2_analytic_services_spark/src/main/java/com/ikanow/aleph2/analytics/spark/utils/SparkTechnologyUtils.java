@@ -35,10 +35,10 @@ import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
-import org.elasticsearch.common.collect.ImmutableList;
 
 import scala.Tuple2;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.io.Files;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
@@ -46,9 +46,11 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean.MasterEnrichmentType;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
 
 /** Utilities for building spark jobs
  * @author Alex
@@ -91,7 +93,7 @@ public class SparkTechnologyUtils {
 				.add("--class")
 				.add(main_clazz)
 				.add("--master")
-				.add("yarn-master")
+				.add(spark_master)
 				.add("--jars")
 				.add(other_jars.stream().collect(Collectors.joining(",")))
 				.addAll(job_options.isEmpty()
@@ -134,6 +136,7 @@ public class SparkTechnologyUtils {
 	    	.getAnalyticsContextLibraries(Optional.empty())
 	    	.stream()
 	    	.filter(jar -> !jar.equals(main_jar_path)) // (this is the service case, eg "/opt/aleph2-home/lib/aleph2_spark_analytic_services.jar")
+	/**/.filter(jar -> !jar.contains("core_distributed_services"))
 	    	.map(f -> new File(f))
 	    	.map(f -> Tuples._2T(f, new Path(root_path + "/" + f.getName())))
 	    	.map(Lambdas.wrap_u(f_p -> {
@@ -191,11 +194,19 @@ public class SparkTechnologyUtils {
 		final LinkedList<String> mutable_errs = new LinkedList<>();
 		
 		jobs.stream().forEach(job -> {
+			if (null == job.config()) {
+				mutable_errs.push(ErrorUtils.get(SparkErrorUtils.MISSING_PARAM, new_analytic_bucket.full_name(), job.name(), "config"));
+			}
+			else {
+				final SparkTopologyConfigBean config = BeanTemplateUtils.from(job.config(), SparkTopologyConfigBean.class).get();
+				if (null == config.entry_point())
+					mutable_errs.push(ErrorUtils.get(SparkErrorUtils.MISSING_PARAM, new_analytic_bucket.full_name(), job.name(), "config.entry_point"));
+			}			
 			if (MasterEnrichmentType.batch != job.analytic_type())
 				mutable_errs.push(ErrorUtils.get(SparkErrorUtils.CURRENTLY_BATCH_ONLY, new_analytic_bucket.full_name(), job.name()));
 		});
 		
-		return ErrorUtils.buildMessage(!mutable_errs.isEmpty(), SparkTechnologyUtils.class, "validateJobs", mutable_errs.stream().collect(Collectors.joining(";")));
+		return ErrorUtils.buildMessage(mutable_errs.isEmpty(), SparkTechnologyUtils.class, "validateJobs", mutable_errs.stream().collect(Collectors.joining(";")));
 	}
 
 }
