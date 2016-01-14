@@ -556,6 +556,14 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	}
 
 	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#getJob()
+	 */
+	@Override
+	public Optional<AnalyticThreadJobBean> getJob() {
+		return Optional.empty(); //(not supported since not used in Storm)
+	}
+	
+	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#getLibraryConfig()
 	 */
 	@Override
