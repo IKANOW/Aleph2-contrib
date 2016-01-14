@@ -17,6 +17,7 @@ package com.ikanow.aleph2.analytics.spark.utils;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -37,9 +38,12 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 
 import scala.Tuple2;
+import scala.Tuple3;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
+import com.ikanow.aleph2.core.shared.utils.JarBuilderUtil;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
@@ -130,33 +134,35 @@ public class SparkTechnologyUtils {
 	public static List<String> getCachedJarList(final DataBucketBean bucket, final String main_jar_path, final IAnalyticsContext context) throws IllegalArgumentException, InterruptedException, ExecutionException, IOException {
 	    final FileContext fc = context.getServiceContext().getStorageService().getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
 	    final String root_path = context.getServiceContext().getStorageService().getRootPath();
+		final String tmp_dir = System.getProperty("java.io.tmpdir");
 	    
 	    // Aleph2 libraries: need to cache them
 	    final Stream<String> context_stream = context
 	    	.getAnalyticsContextLibraries(Optional.empty())
 	    	.stream()
 	    	.filter(jar -> !jar.equals(main_jar_path)) // (this is the service case, eg "/opt/aleph2-home/lib/aleph2_spark_analytic_services.jar")
-	/**/.filter(jar -> !jar.contains("core_distributed_services"))
-	    	.map(f -> new File(f))
-	    	.map(f -> Tuples._2T(f, new Path(root_path + "/" + f.getName())))
-	    	.map(Lambdas.wrap_u(f_p -> {
-	    		final FileStatus fs = Lambdas.get(() -> {
-		    		try {
-		    			return fc.getFileStatus(f_p._2());
-		    		}
-		    		catch (Exception e) { return null; }
-	    		});
-	    		if (null == fs) { //cache doesn't exist
+	    	.map(Lambdas.wrap_u(f_str -> {
+	    		
+	    		final Tuple3<File, Path, FileStatus> f_p_fs = f_str.contains("core_distributed_services")
+	    				? removeSparkConflictsAndCache(f_str, root_path, fc)
+	    				: checkCache(f_str, root_path, fc)
+	    				;
+	    		
+	    		if (null == f_p_fs._3()) { //cache doesn't exist
 	    			// Local version
-	    			try (FSDataOutputStream outer = fc.create(f_p._2(), EnumSet.of(CreateFlag.CREATE), // ie should fail if the destination file already exists 
+	    			try (FSDataOutputStream outer = fc.create(f_p_fs._2(), EnumSet.of(CreateFlag.CREATE), // ie should fail if the destination file already exists 
 	    					org.apache.hadoop.fs.Options.CreateOpts.createParent()))
 	    			{
-	    				Files.copy(f_p._1(), outer.getWrappedStream());
+	    				Files.copy(f_p_fs._1(), outer.getWrappedStream());
 	    			}
 	    			catch (FileAlreadyExistsException e) {//(carry on - the file is versioned so it can't be out of date)
 	    			}
+		    		if (f_p_fs._1().getPath().startsWith(tmp_dir)) { // (delete tmp files)
+		    			f_p_fs._1().delete();
+		    		}
 	    		}
-	    		return f_p._2();
+	    		
+	    		return f_p_fs._2();
 	    	}))
 	    	.map(p -> "hdfs://" + p.toString())
 	    	;
@@ -175,6 +181,54 @@ public class SparkTechnologyUtils {
 			;	    
 			
 		return Stream.concat(context_stream, lib_stream).collect(Collectors.toList());
+	}
+	
+	/** Checks if an aleph2 JAR file is cached
+	 * @param local_file
+	 * @param root_path
+	 * @param fc
+	 * @return
+	 */
+	public static Tuple3<File, Path, FileStatus> checkCache(final String local_file, final String root_path, final FileContext fc) {
+		final File f = new File(local_file);
+		final Tuple2<File, Path> f_p =  Tuples._2T(f, new Path(root_path + "/" + f.getName()));
+		final FileStatus fs = Lambdas.get(() -> {
+    		try {
+    			return fc.getFileStatus(f_p._2());
+    		}
+    		catch (Exception e) { return null; }
+		});
+		return Tuples._3T(f_p._1(), f_p._2(), fs);
+	}
+	
+	/**Checks if an aleph2 JAR file with bad internal JARs is cached, does some excising if not
+	 * @param local_file
+	 * @param root_path
+	 * @param fc
+	 * @return
+	 * @throws IOException
+	 */
+	public static Tuple3<File, Path, FileStatus> removeSparkConflictsAndCache(final String local_file, final String root_path, final FileContext fc) throws IOException {
+		final String renamed_local_file = local_file.replaceFirst(".jar", "_sparkVersion.jar");
+		final File f = new File(renamed_local_file);
+		final Tuple2<File, Path> f_p =  Tuples._2T(f, new Path(root_path + "/" + f.getName()));
+		final FileStatus fs = Lambdas.get(() -> {
+    		try {
+    			return fc.getFileStatus(f_p._2());
+    		}
+    		catch (Exception e) { return null; }
+		});
+		if (null == fs) { //cache doesn't exist
+			// Create a new copy without akka in tmp
+			File f_tmp = File.createTempFile("aleph2-temp", ".jar");
+			JarBuilderUtil.mergeJars(Arrays.asList(local_file), f_tmp.toString(), 
+					ImmutableSet.of("akka", "scala", "com/typesafe/conf", "reference.conf", //(these definitely need to be removed)
+									"org/jboss/netty",  //(not sure about this, can't imagine i actually need it though? If so try putting back in)
+									"org/apache/curator", "org/apache/zookeeper")); //(not sure about these, can try putting them back in if needed)
+			
+			return Tuples._3T(f_tmp, f_p._2(), null);
+		}		
+		else return Tuples._3T(f_p._1(), f_p._2(), fs);
 	}
 	
 	public static Map<String, JavaRDD<Tuple2<Long, IBatchRecord>>> buildBatchSparkInputs(final IAnalyticsContext context) {

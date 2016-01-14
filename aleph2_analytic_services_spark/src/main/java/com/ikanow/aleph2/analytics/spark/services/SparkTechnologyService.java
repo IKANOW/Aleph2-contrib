@@ -53,6 +53,7 @@ import com.ikanow.aleph2.data_model.utils.FutureUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.ProcessUtils;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 
@@ -64,14 +65,15 @@ import fj.data.Validation;
 public class SparkTechnologyService implements IAnalyticsTechnologyService, IExtraDependencyLoader {
 	protected static final Logger _logger = LogManager.getLogger();	
 
-	//TODO leave at debug normally
-	//private static Level DEBUG_LEVEL = Level.DEBUG;
-	private static Level DEBUG_LEVEL = Level.INFO;
+	//DEBUG SETTINGS:
+	//
+	private static Level DEBUG_LEVEL = Level.DEBUG;
+	//private static Level DEBUG_LEVEL = Level.INFO;
 	
-	//TODO
 	private Optional<String> DEBUG_LOG_FILE =
-			//Optional.empty();
-			Optional.of(System.getProperty("java.io.tmpdir"));
+			Optional.empty();
+			//Optional.of(System.getProperty("java.io.tmpdir"));	
+	//(end DEBUG SETTINGS)
 	
 	//TODO make /run/ a data_model const
 	public static String RUN_PATH_SUFFIX = "/run/";
@@ -295,8 +297,9 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 							main_jar, 
 							other_jars, 
 							//TODO: combine globals and per-job options
-							config.config(), 
-							config.system_config());
+							config.config().entrySet().stream().map(kv -> Tuples._2T(kv.getKey().replace(":", "."), kv.getValue())).collect(Collectors.toMap(t2 -> t2._1(), t2 -> t2._2())), 
+							config.system_config()
+							);
 
 			DEBUG_LOG_FILE.map(x -> x + "/" + bucket_signature).ifPresent(name -> {
 				pb.inheritIO().redirectErrorStream(true).redirectOutput(new File(name));				

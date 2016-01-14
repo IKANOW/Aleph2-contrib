@@ -41,8 +41,8 @@ public class SampleSparkTopology {
 		
 		try {			
 			//TODO: pass this into method so we can check it's serializable...
-			//@SuppressWarnings("unused")
-			//final IAnalyticsContext context = ContextUtils.getAnalyticsContext(new String(Base64.getDecoder().decode(args[0].getBytes())));
+			@SuppressWarnings("unused")
+			final IAnalyticsContext context = ContextUtils.getAnalyticsContext(new String(Base64.getDecoder().decode(args[0].getBytes())));
 	
 			System.out.println("RETRIEVED ALEPH2 CONTEXT");
 	
