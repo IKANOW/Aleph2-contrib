@@ -49,7 +49,7 @@ import org.apache.hadoop.fs.Path;
  * @author Alex
  */
 public class HadoopTechnologyUtils {
-
+	
 	/** Validate a single job for this analytic technology in the context of the bucket/other jobs
 	 * @param analytic_bucket - the bucket (just for context)
 	 * @param jobs - the entire list of jobs
@@ -303,6 +303,24 @@ public class HadoopTechnologyUtils {
 				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/hadoop-site.xml"));
 				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/mapred-site.xml"));
 			}
+			else {
+				final String alternative = System.getenv("HADOOP_CONF_DIR");
+					
+				//DEBUG
+				//System.out.println("Aleph2 yarn-config dir not found, try alternative: " + alternative + " .. " + System.getenv("HADOOP_HOME"));
+				// (another alternative would be HADOOP_HOME + "/conf")
+				
+				if ((null != alternative) && new File(alternative).exists()) {
+					configuration.addResource(new Path(alternative +"/yarn-site.xml"));
+					configuration.addResource(new Path(alternative +"/core-site.xml"));
+					configuration.addResource(new Path(alternative +"/hdfs-site.xml"));				
+					configuration.addResource(new Path(alternative +"/hadoop-site.xml"));				
+					configuration.addResource(new Path(alternative +"/mapred-site.xml"));				
+				}
+				else  // last ditch - will work for local testing but never from anything remote
+					configuration.addResource("default_fs.xml");						
+			}
+			
 			if (attempt > 10) { // (try sleeping here)
 				final long to_sleep = 500L + (new Date().getTime() % 100L); // (add random component)
 				try { Thread.sleep(to_sleep); } catch (Exception e) {}

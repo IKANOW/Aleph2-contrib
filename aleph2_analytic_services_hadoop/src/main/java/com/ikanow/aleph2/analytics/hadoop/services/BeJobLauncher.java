@@ -204,8 +204,6 @@ public class BeJobLauncher implements IBeJobService{
 						}
 					}));
 					;					
-					
-			// (ALEPH-12): other input format types
 			
 		    // Now do everything else
 		    

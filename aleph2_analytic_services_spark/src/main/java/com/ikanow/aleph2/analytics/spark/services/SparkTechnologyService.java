@@ -26,6 +26,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -33,6 +34,7 @@ import org.apache.logging.log4j.Logger;
 import scala.Tuple2;
 
 import com.google.inject.Module;
+import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.spark.data_model.GlobalSparkConfigBean;
 import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
 import com.ikanow.aleph2.analytics.spark.utils.SparkTechnologyUtils;
@@ -74,9 +76,6 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 			Optional.empty();
 			//Optional.of(System.getProperty("java.io.tmpdir"));	
 	//(end DEBUG SETTINGS)
-	
-	//TODO make /run/ a data_model const
-	public static String RUN_PATH_SUFFIX = "/run/";
 	
 	protected final SetOnce<GlobalSparkConfigBean> _global_spark_config = new SetOnce<>();
 	
@@ -259,13 +258,19 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 		//TODO test vs normal mode
 				
 		try {
+			// Firstly, precalculate the inputs to ensure the right classes are copied across
+			final Configuration hadoop_config = HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties());			
+			SparkTechnologyUtils.getAleph2Inputs(context, analytic_bucket, job_to_start, hadoop_config); //(mutate the context)
+			
+			// Now do the spark stuff:
+			
 			final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
 			
 			_logger.log(DEBUG_LEVEL, "spark_home = " + _global_spark_config.get().spark_home());			
 			
-			final SparkTopologyConfigBean config = BeanTemplateUtils.from(job_to_start.config(), SparkTopologyConfigBean.class).get();
+			final SparkTopologyConfigBean spark_job_config = BeanTemplateUtils.from(job_to_start.config(), SparkTopologyConfigBean.class).get();
 
-			_logger.log(DEBUG_LEVEL, "entry_point = " + config.entry_point());			
+			_logger.log(DEBUG_LEVEL, "entry_point = " + spark_job_config.entry_point());			
 			
 			final String main_jar = 
 					Lambdas.get(() -> {
@@ -292,13 +297,13 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 							_global_spark_config.get().spark_home(),
 							globals.local_yarn_config_dir(), 
 							"yarn-cluster", //TODO: make this configurable 
-							config.entry_point(), //TODO: all support built in? 
+							spark_job_config.entry_point(), //TODO: all support built in? 
 							new String(Base64.getEncoder().encode(context.getAnalyticsContextSignature(Optional.of(analytic_bucket), Optional.empty()).getBytes())), 
 							main_jar, 
 							other_jars, 
 							//TODO: combine globals and per-job options
-							config.config().entrySet().stream().map(kv -> Tuples._2T(kv.getKey().replace(":", "."), kv.getValue())).collect(Collectors.toMap(t2 -> t2._1(), t2 -> t2._2())), 
-							config.system_config()
+							spark_job_config.config().entrySet().stream().map(kv -> Tuples._2T(kv.getKey().replace(":", "."), kv.getValue())).collect(Collectors.toMap(t2 -> t2._1(), t2 -> t2._2())), 
+							spark_job_config.system_config()
 							);
 
 			DEBUG_LOG_FILE.map(x -> x + "/" + bucket_signature).ifPresent(name -> {
@@ -308,7 +313,7 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 			_logger.log(DEBUG_LEVEL, "spark_submit_env = " + pb.environment().toString());						
 			_logger.log(DEBUG_LEVEL, "spark_submit_command_line = " + pb.command().stream().collect(Collectors.joining(" ")));						
 			
-			final String run_path = globals.local_root_dir() + RUN_PATH_SUFFIX;
+			final String run_path = globals.local_root_dir() + ProcessUtils.DEFAULT_RUN_PATH_SUFFIX;
 			
 			// (stop the process first, in case it's running...)
 			final Tuple2<String, Boolean> stop_res = ProcessUtils.stopProcess(this.getClass().getSimpleName(), analytic_bucket, run_path, Optional.empty());
@@ -342,7 +347,7 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 			AnalyticThreadJobBean job_to_stop, IAnalyticsContext context)
 	{
 		final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
-		final String run_path = globals.local_root_dir() + RUN_PATH_SUFFIX;
+		final String run_path = globals.local_root_dir() + ProcessUtils.DEFAULT_RUN_PATH_SUFFIX;
 		
 		final Tuple2<String, Boolean> err_pid = ProcessUtils.stopProcess(this.getClass().getSimpleName(), analytic_bucket, run_path, Optional.empty());
 		if (!err_pid._2()) {
@@ -412,7 +417,7 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 			AnalyticThreadJobBean job_to_check, IAnalyticsContext context)
 	{
 		final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
-		final String run_path = globals.local_root_dir() + RUN_PATH_SUFFIX;
+		final String run_path = globals.local_root_dir() + ProcessUtils.DEFAULT_RUN_PATH_SUFFIX;
 
 		final boolean is_running = ProcessUtils.isProcessRunning(this.getClass().getSimpleName(), analytic_bucket, run_path);
 		

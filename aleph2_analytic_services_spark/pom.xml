@@ -121,17 +121,19 @@
             <scope>system</scope>
 		    <systemPath>${JAVA_HOME}/lib/tools.jar</systemPath>
         </dependency>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.12</version>
-            <scope>test</scope>
-        </dependency>
+        <!-- Note these are provided - there's no spark code called to kick spark off so only need it in YARN context where we'll have it externally -->
+        <!--  (this is fortunate because there's a significant amount of JAR version conflicts here) -->
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_2.11</artifactId>
             <version>1.2.2</version>
             <scope>provided</scope>
+            <exclusions>
+            	<exclusion>
+            		<artifactId>hadoop-client</artifactId>
+            		<groupId>org.apache.hadoop</groupId>
+            	</exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
@@ -153,12 +155,44 @@
             <version>${aleph2.version}</version>
             <scope>${aleph2.scope}</scope>
         </dependency>
+	 	<dependency>
+	  		<groupId>com.ikanow.aleph2</groupId>
+	  		<artifactId>aleph2_analytic_services_hadoop</artifactId>
+	  		<version>${aleph2.version}</version>
+	  		<!-- special case - just grab duplicate all the aleph2 classes in hadoop analytic services but none of the transitive dependencies -->
+			<scope>compile</scope>  		
+            <exclusions>
+            	<exclusion>
+            		<artifactId>*</artifactId>
+            		<groupId>*</groupId>
+            	</exclusion>
+            </exclusions>
+		</dependency>  	
+        <dependency>
+            <groupId>com.ikanow.aleph2</groupId>
+            <artifactId>aleph2_hadoop_dependencies</artifactId>
+            <version>${aleph2.version}</version>
+            <scope>${aleph2.scope}</scope>
+        </dependency>
         <!-- Test deps -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.12</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Not sure which of these internal test deps we'll need
         <dependency>
             <groupId>com.ikanow.aleph2</groupId>
             <artifactId>aleph2_storage_service_hdfs</artifactId>
             <version>${aleph2.version}</version>
             <scope>test</scope>
+            <exclusions>
+            	<exclusion>
+            		<artifactId>hadoop-client</artifactId>
+            		<groupId>org.apache.hadoop</groupId>
+            	</exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.ikanow.aleph2</groupId>
@@ -178,5 +212,6 @@
             <version>${aleph2.version}</version>
             <scope>test</scope>
         </dependency>
+         -->
     </dependencies>
 </project>
