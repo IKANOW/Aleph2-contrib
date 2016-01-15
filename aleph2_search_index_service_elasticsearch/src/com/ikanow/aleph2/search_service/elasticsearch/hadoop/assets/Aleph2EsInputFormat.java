@@ -15,13 +15,13 @@
  *******************************************************************************/
 package com.ikanow.aleph2.search_service.elasticsearch.hadoop.assets;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
 
 
 
@@ -39,13 +39,15 @@ import org.elasticsearch.hadoop.mr.EsInputFormat;
 
 
 
+
 import scala.Tuple2;
 
 
 
 
 
-import com.fasterxml.jackson.databind.JsonNode;
+
+import com.ikanow.aleph2.core.shared.utils.BatchRecordUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -66,19 +68,6 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 	 */
 	public static final String BE_DEBUG_MAX_SIZE = "aleph2.batch.debugMaxSize";		
 	
-	/** Simple implementation of IBatchRecord
-	 * @author jfreydank
-	 */
-	public static class BatchRecord implements IBatchRecord {
-		public BatchRecord(final JsonNode json, final ByteArrayOutputStream content) {
-			_json = json;
-			_content = content;
-		}		
-		public JsonNode getJson() { return _json; }
-		public Optional<ByteArrayOutputStream> getContent() { return Optional.ofNullable(_content); }		
-		protected final JsonNode _json; protected final ByteArrayOutputStream _content;
-	}	
-		
 	/* (non-Javadoc)
 	 * @see org.elasticsearch.hadoop.mr.EsInputFormat#getSplits(org.apache.hadoop.mapreduce.JobContext)
 	 */
@@ -169,7 +158,7 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 				final MapWritable m = (MapWritable) _delegate.getCurrentValue();
 				// Add the _id
 				m.computeIfAbsent(_ID, Lambdas.wrap_u(k -> (Text) _delegate.getCurrentKey()));
-				return Tuples._2T(0L, (IBatchRecord)new BatchRecord(JsonNodeWritableUtils.from(m), null));
+				return Tuples._2T(0L, (IBatchRecord)new BatchRecordUtils.JsonBatchRecord(JsonNodeWritableUtils.from(m)));
 			}).get();
 		}
 

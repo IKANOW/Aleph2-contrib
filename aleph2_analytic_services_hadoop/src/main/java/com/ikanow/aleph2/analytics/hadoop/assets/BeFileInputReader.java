@@ -70,7 +70,7 @@ import com.ikanow.aleph2.data_model.utils.UuidUtils;
 public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatchRecord>> implements IBeJobConfigurable{
 
 	/** Simple implementation of IBatchRecord
-	 *  TODO: move this into core shared
+	 *  TODO: remove this
 	 * @author jfreydank
 	 */
 	public static class BatchRecord implements IBatchRecord, Serializable {
@@ -143,8 +143,6 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 
 	private Tuple2<Long, IBatchRecord> _record;
 
-	protected IEnrichmentModuleContext _enrichmentContext;
-
 	protected DataBucketBean _dataBucket;
 
 	protected static Map<String, IParser> _parsers = new HashMap<String, IParser>();
@@ -176,12 +174,13 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		this.start =  new Date();
 		final String contextSignature = context.getConfiguration().get(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE);   
 		try {
-			this._enrichmentContext = ContextUtils.getEnrichmentContext(contextSignature);
-			this._dataBucket = _enrichmentContext.getBucket().get();
+			final IEnrichmentModuleContext enrichmentContext = ContextUtils.getEnrichmentContext(contextSignature);
+			this._dataBucket = enrichmentContext.getBucket().get();
 		} catch (Exception e) {
 			/**/
 			
 			//TODO nicer to put the serialized data schema somewhere else?
+			
 			this._dataBucket = BeanTemplateUtils.build(DataBucketBean.class).done().get();
 			
 			//throw new IOException(e);

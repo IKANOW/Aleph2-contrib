@@ -134,6 +134,19 @@
   		<version>${aleph2.version}</version>
 		<scope>${aleph2.scope}</scope>
   	</dependency>
+  	<!-- NOTE CAN'T CURRENTLY USE CORE_SHARED_LIB BECAUSE OF CIRC DEPENDENCY ISSUE BECAUSE OF TEST CODE -->
+  	<dependency>
+  		<groupId>com.ikanow.aleph2</groupId>
+  		<artifactId>aleph2_core_shared_library</artifactId>
+  		<version>${aleph2.version}</version>
+		<scope>${aleph2.scope}</scope>
+		<exclusions>
+			<exclusion>
+				<artifactId>*</artifactId>
+				<groupId>*</groupId>
+			</exclusion>
+		</exclusions>							
+  	</dependency>
   	<dependency>
   		<groupId>com.ikanow.aleph2</groupId>
   		<artifactId>aleph2_hadoop_dependencies</artifactId>
