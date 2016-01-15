@@ -40,6 +40,7 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -334,7 +335,7 @@ public class SparkTechnologyUtils {
 	 * @param context
 	 * @return
 	 */
-	public static JavaRDD<Tuple2<Long, IBatchRecord>> getCombinedInput(final IAnalyticsContext context, final JavaSparkContext spark_context) {
+	public static JavaPairRDD<Object, Tuple2<Long, IBatchRecord>> getCombinedInput(final IAnalyticsContext context, final JavaSparkContext spark_context) {
 		
 	    //TODO test spec
 //	    		testSpec.flatMap(testSpecVals -> 
@@ -348,6 +349,8 @@ public class SparkTechnologyUtils {
 		final DataBucketBean bucket = context.getBucket().get();
 		final AnalyticThreadJobBean job = context.getJob().get();
 		
+		//OK this doesn't work because of the over complex split functionality used
+		
 		final Aleph2MultiInputFormatBuilder inputBuilder = getAleph2Inputs(context, bucket, job, config);
 		
 		
@@ -358,8 +361,8 @@ public class SparkTechnologyUtils {
 	    //System.out.println("CONFIG: " + Optionals.streamOf(dummy_hadoop_job.getConfiguration().iterator(), false).map(kv -> kv.getKey() + " = " + kv.getValue()).collect(Collectors.joining("\n")));
 	    
 	    @SuppressWarnings("unchecked")
-		JavaRDD<Tuple2<Long, IBatchRecord>> ret_val =
-	    		spark_context.newAPIHadoopRDD(dummy_hadoop_job.getConfiguration(), Aleph2MultiInputFormat.class, String.class, Tuple2.class).values();
+		JavaPairRDD<Object, Tuple2<Long, IBatchRecord>> ret_val =
+	    		spark_context.newAPIHadoopRDD(dummy_hadoop_job.getConfiguration(), Aleph2MultiInputFormat.class, String.class, Tuple2.class);
 	    
 	    return ret_val;
 	}

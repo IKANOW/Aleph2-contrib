@@ -60,7 +60,7 @@ public class SparkPassthroughTopology {
 			final IAnalyticsContext context = ContextUtils.getAnalyticsContext(new String(Base64.getDecoder().decode(args[0].getBytes())));
 	
 			/**/
-			System.out.println("(here 2)");
+			System.out.println("(here 3)");
 			
 			SparkConf spark_context = new SparkConf().setAppName("SparkPassthroughTopology");
 			try (JavaSparkContext jsc = new JavaSparkContext(spark_context)) {
@@ -68,28 +68,44 @@ public class SparkPassthroughTopology {
 				/**/
 				final List<String> paths = context.getInputPaths(Optional.empty(), context.getJob().get(), context.getJob().get().inputs().stream().findAny().get());
 				/**/
-				//JavaRDD<String> input = jsc.textFile(paths.stream().findAny().get());
+//				JavaRDD<String> input = jsc.textFile(paths.stream().findFirst().get());
 				//JavaPairRDD<String, String> input = jsc.newAPIHadoopFile(paths.stream().findAny().get(), CombineFileInputFormat.class, String.class, String.class, HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties()));
 				final Configuration config = HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties());
 			    final Job inputJob = Job.getInstance(config);
-				paths.stream().limit(1).forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(path))));
-				
-				@SuppressWarnings("unchecked")
-				JavaPairRDD<String, Tuple2<Long, IBatchRecord>> input = jsc.newAPIHadoopFile(paths.stream().findAny().get(), BeFileInputFormat_Pure.class, String.class, (Class<Tuple2<Long, IBatchRecord>>)(Class<?>)Tuple2.class, config);				
-
-				//TODO: note in BeFileInput Reader I handled the case where the confi sint' set...
+			    inputJob.setInputFormatClass(BeFileInputFormat_Pure.class);
+			    //mapreduce.input.fileinputformat.inputdir
+				paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(path))));
 				
 				/**/
-				//JavaRDD<Tuple2<Long, IBatchRecord>> input = SparkTechnologyUtils.getCombinedInput(context, jsc);
+				paths.stream().forEach(Lambdas.wrap_consumer_u(path -> System.out.println("??? " + path)));
+				
+//				@SuppressWarnings("unchecked")
+//				JavaPairRDD<Object, Tuple2<Long, IBatchRecord>> input = jsc.newAPIHadoopFile(paths.stream().findAny().get(), BeFileInputFormat_Pure.class, Object.class, (Class<Tuple2<Long, IBatchRecord>>)(Class<?>)Tuple2.class, config);
+				@SuppressWarnings("unchecked")
+				JavaPairRDD<String, Tuple2<Long, IBatchRecord>> input = jsc.newAPIHadoopRDD(inputJob.getConfiguration(), BeFileInputFormat_Pure.class, String.class, (Class<Tuple2<Long, IBatchRecord>>)(Class<?>)Tuple2.class);
+//				@SuppressWarnings("unchecked")
+//				JavaRDD<Tuple2<Long, IBatchRecord>> input = 
+//					jsc.newAPIHadoopFile(paths.stream().findAny().get(), BeFileInputFormat_Pure.class, String.class, (Class<Tuple2<Long, IBatchRecord>>)(Class<?>)Tuple2.class, config)
+//						.values()
+//						//.map(t2 -> t2._2())
+//						;
+
+				//TODO: note in BeFileInput Reader I handled the case where the signature isn't set in the config (also may not be an enrichment context... really shouldn't use the context at all)
+				
+				/**/
+				//OK this doesn't work and understand why...
+				// prolbme is https://github.com/apache/spark/blob/branch-1.2/core/src/main/scala/org/apache/spark/SerializableWritable.scala
+				//JavaPairRDD<Object, Tuple2<Long, IBatchRecord>> input = SparkTechnologyUtils.getCombinedInput(context, jsc);
 				
 				long written = input
+						.values()
 /**/						
-						.sample(true, 0.01)
+						.sample(true, 0.01) //TODO: add this as an option for passthrough module
 /**/					//.map(t2 -> Tuples._2T(0L, new BeFileInputReader.BatchRecord(_mapper.createObjectNode().put("test", t2), null)))
 //					.map(t2 -> Tuples._2T(0L, new BeFileInputReader.BatchRecord(_mapper.createObjectNode().put("test", t2._2()), null)))
 					
-					.map(t2 -> context.emitObject(Optional.empty(), context.getJob().get(), Either.left(t2._2()._2().getJson()), Optional.empty()))
-//					.map(t2 -> context.emitObject(Optional.empty(), context.getJob().get(), Either.left(t2._2().getJson()), Optional.empty()))
+//					.map(t2 -> context.emitObject(Optional.empty(), context.getJob().get(), Either.left(t2._2()._2().getJson()), Optional.empty()))					
+					.map(t2 -> context.emitObject(Optional.empty(), context.getJob().get(), Either.left(t2._2().getJson()), Optional.empty()))
 						//_mapper.convertValue(arg0, arg1)						
 /**/						
 //.map(t2 -> {

@@ -180,6 +180,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 			this._dataBucket = _enrichmentContext.getBucket().get();
 		} catch (Exception e) {
 			/**/
+			
 			//TODO nicer to put the serialized data schema somewhere else?
 			this._dataBucket = BeanTemplateUtils.build(DataBucketBean.class).done().get();
 			
@@ -213,10 +214,16 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 			_fs = FileSystem.get(_config);
 			try {
 				// To ensure atomicity, first rename the file:
+				// BUT ONLY IF IT'S MY FILE!
 				final Path in = _fileSplit.getPath(_currFile);
-				final Path renamed = in.suffix(_my_uuid);
-				_fs.rename(in, renamed);
-				_inStream = _fs.open(renamed);
+				if (in.toString().contains(IStorageService.TO_IMPORT_DATA_SUFFIX)) {
+					final Path renamed = in.suffix(_my_uuid);
+					_fs.rename(in, renamed);
+					_inStream = _fs.open(renamed);
+				}
+				else {
+					_inStream = _fs.open(in);
+				}
 			}
 			catch (FileNotFoundException e) { // probably: this is a spare mapper, and the original mapper has deleted this file using renameAfterParse
 				_currFile++;
