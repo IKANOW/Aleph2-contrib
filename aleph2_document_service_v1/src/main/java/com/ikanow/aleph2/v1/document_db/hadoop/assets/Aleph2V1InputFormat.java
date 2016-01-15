@@ -15,10 +15,8 @@
  *******************************************************************************/
 package com.ikanow.aleph2.v1.document_db.hadoop.assets;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
-import java.util.Optional;
 
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.JobContext;
@@ -28,7 +26,7 @@ import org.bson.BSONObject;
 
 import scala.Tuple2;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.ikanow.aleph2.core.shared.utils.BatchRecordUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -40,19 +38,6 @@ import com.ikanow.infinit.e.data_model.custom.InfiniteMongoInputFormat;
  */
 public class Aleph2V1InputFormat extends InfiniteMongoInputFormat {
 
-	/** Simple implementation of IBatchRecord
-	 * @author jfreydank
-	 */
-	public static class BatchRecord implements IBatchRecord {
-		public BatchRecord(final JsonNode json, final ByteArrayOutputStream content) {
-			_json = json;
-			_content = content;
-		}		
-		public JsonNode getJson() { return _json; }
-		public Optional<ByteArrayOutputStream> getContent() { return Optional.ofNullable(_content); }		
-		protected final JsonNode _json; protected final ByteArrayOutputStream _content;
-	}	
-		
 	/* (non-Javadoc)
 	 * @see org.elasticsearch.hadoop.mr.EsInputFormat#getSplits(org.apache.hadoop.mapreduce.JobContext)
 	 */
@@ -113,7 +98,7 @@ public class Aleph2V1InputFormat extends InfiniteMongoInputFormat {
 		public Tuple2<Long, IBatchRecord> getCurrentValue() throws IOException,
 				InterruptedException {
 			return Lambdas.wrap_u(() -> {
-				return Tuples._2T(0L, (IBatchRecord)new BatchRecord(JsonNodeBsonUtils.from(_delegate.getCurrentValue()), null));
+				return Tuples._2T(0L, (IBatchRecord)new BatchRecordUtils.JsonBatchRecord(JsonNodeBsonUtils.from(_delegate.getCurrentValue())));
 			}).get();
 		}
 		
