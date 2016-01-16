@@ -53,6 +53,7 @@ import scala.Tuple3;
 
 import com.codepoetics.protonpack.StreamUtils;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.ikanow.aleph2.core.shared.utils.BatchRecordUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
@@ -587,7 +588,7 @@ public class BatchEnrichmentJob{
 					StreamUtils.zipWithIndex(Optionals.streamOf(values, false))
 						.map(ix -> {
 							if (0 == (ix.getIndex() % _batch_size)) context.progress(); // (every 200 records report progress to try to keep the system alive)
-							return Tuples._2T(0L, new BeFileInputReader.BatchRecord(ix.getValue().get(), null));
+							return Tuples._2T(0L, new BatchRecordUtils.BatchRecord(ix.getValue().get(), null));
 						})
 						,
 					Optional.empty(), Optional.of(key.get()));

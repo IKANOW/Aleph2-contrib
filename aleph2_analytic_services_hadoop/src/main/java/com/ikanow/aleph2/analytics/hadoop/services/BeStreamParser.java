@@ -27,8 +27,8 @@ import scala.Tuple2;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.ikanow.aleph2.analytics.hadoop.assets.BeFileInputReader;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IParser;
+import com.ikanow.aleph2.core.shared.utils.BatchRecordUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 
@@ -57,7 +57,7 @@ public class BeStreamParser implements IParser {
 	            outStream.write(buf, 0, readedBytes);
 	        }
 	        outStream.close();			    	
-			t2 = new Tuple2<Long, IBatchRecord>(currentFileIndex, new BeFileInputReader.BatchRecord(node, outStream));
+			t2 = new Tuple2<Long, IBatchRecord>(currentFileIndex, new BatchRecordUtils.BatchRecord(node, outStream));
 		} catch (Exception e) {
 			logger.error("JsonParser caught exception",e);
 		}

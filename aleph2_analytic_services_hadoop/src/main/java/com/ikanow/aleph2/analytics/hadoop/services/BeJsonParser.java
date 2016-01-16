@@ -28,8 +28,8 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ikanow.aleph2.analytics.hadoop.assets.BeFileInputReader;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IParser;
+import com.ikanow.aleph2.core.shared.utils.BatchRecordUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 
@@ -68,7 +68,7 @@ public class BeJsonParser implements IParser {
 			}
 			JsonNode node = _parser.readValueAsTree();
 			
-			t2 = new Tuple2<Long, IBatchRecord>(currentFileIndex, new BeFileInputReader.BatchRecord(node, null));
+			t2 = new Tuple2<Long, IBatchRecord>(currentFileIndex, new BatchRecordUtils.BatchRecord(node, null));
 			return t2;
 			
 		} catch (Exception e) {

@@ -15,13 +15,9 @@
  *******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.assets;
 
-import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
 import java.text.SimpleDateFormat;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
@@ -42,9 +38,6 @@ import org.apache.logging.log4j.Logger;
 
 import scala.Tuple2;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IParser;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
@@ -69,62 +62,6 @@ import com.ikanow.aleph2.data_model.utils.UuidUtils;
  */
 public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatchRecord>> implements IBeJobConfigurable{
 
-	/** Simple implementation of IBatchRecord
-	 *  TODO: remove this
-	 * @author jfreydank
-	 */
-	public static class BatchRecord implements IBatchRecord, Serializable {
-		private static final long serialVersionUID = -1059865997758583525L;
-		
-		private static final ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
-		
-		/** Serialize
-		 * @param oos
-		 * @throws IOException
-		 */
-		private void writeObject(ObjectOutputStream oos) throws IOException {
-			oos.writeUTF(_json.toString());
-			if (null != _content) {
-				oos.write(_content.toByteArray());
-			}			
-		}
-		/** Deserialize
-		 * @param ois
-		 * @throws JsonProcessingException
-		 * @throws IOException
-		 */
-		private void readObject(ObjectInputStream ois) throws JsonProcessingException, IOException {
-			_json = _mapper.readTree(ois.readUTF());
-			int remaining = ois.available();
-			if (remaining > 0) {
-				_content = new ByteArrayOutputStream();
-				byte[] b = new byte[remaining];
-				ois.read(b);
-				_content.write(b);
-			}
-		}
-		
-		/** USer c'tor
-		 * @param json
-		 * @param content
-		 */
-		public BatchRecord(final JsonNode json, final ByteArrayOutputStream content) {
-			_json = json;
-			_content = content;
-		}		
-		/* (non-Javadoc)
-		 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord#getJson()
-		 */
-		public JsonNode getJson() { return _json; }
-		/* (non-Javadoc)
-		 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord#getContent()
-		 */
-		public Optional<ByteArrayOutputStream> getContent() { return Optional.ofNullable(_content); }
-		
-		protected JsonNode _json; 
-		protected ByteArrayOutputStream _content;
-	}
-	
 	private static final Logger logger = LogManager.getLogger(BeJobLauncher.class);
 
 	protected final String _my_uuid = UuidUtils.get().getRandomUuid();

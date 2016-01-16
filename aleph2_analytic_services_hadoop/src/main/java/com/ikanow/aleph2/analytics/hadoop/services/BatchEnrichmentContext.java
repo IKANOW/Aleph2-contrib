@@ -37,8 +37,8 @@ import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.ikanow.aleph2.analytics.hadoop.assets.BeFileInputReader;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopErrorUtils;
+import com.ikanow.aleph2.core.shared.utils.BatchRecordUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
@@ -278,7 +278,7 @@ public class BatchEnrichmentContext implements IEnrichmentModuleContext {
 		}		
 		
 		final Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>> out_record = 
-				Tuples._2T(Tuples._2T(_mutable_1up.incrementAndGet(), new BeFileInputReader.BatchRecord(mutated_json, null)), grouping_fields);
+				Tuples._2T(Tuples._2T(_mutable_1up.incrementAndGet(), new BatchRecordUtils.BatchRecord(mutated_json, null)), grouping_fields);
 		
 		if (null != _mutable_output_override) {
 			return _mutable_output_override.apply(out_record);
