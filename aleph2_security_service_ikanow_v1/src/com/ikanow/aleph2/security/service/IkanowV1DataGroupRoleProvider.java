@@ -38,6 +38,7 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 
 public class IkanowV1DataGroupRoleProvider implements IRoleProvider{
@@ -172,7 +173,7 @@ public class IkanowV1DataGroupRoleProvider implements IRoleProvider{
 		}
 		logger.debug("Roles loaded for "+principalName+":");
 		logger.debug(roleNames);
-		return Tuple2.apply(roleNames, permissions);
+		return Tuples._2T(roleNames, permissions);
 	}
 
 	private String determineCommunityAction(JsonNode members, String principalName) {

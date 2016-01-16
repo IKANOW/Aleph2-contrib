@@ -30,6 +30,7 @@ import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbServic
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 
@@ -92,7 +93,7 @@ public class IkanowV1AdminRoleProvider implements IRoleProvider {
 		}
 		logger.debug("Roles loaded for "+principalName+":");
 		logger.debug(roleNames);
-		return Tuple2.apply(roleNames, permissions);
+		return Tuples._2T(roleNames, permissions);
 	}
 
 	
