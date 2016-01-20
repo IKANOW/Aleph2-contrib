@@ -1018,11 +1018,13 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 													}
 													if (null != failed_json) {
 														_flush_now = true;
-														_current.add(singleObjectIndexRequest(
-																	Either.right(Tuples._2T(bir.getIndex(), 
-																			ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), bir.getType()))), 
-																	Either.right(Tuples._2T(bir.getId(), failed_json)), 
-																	false, true).request());
+														synchronized (this) {
+															_current.add(singleObjectIndexRequest(
+																		Either.right(Tuples._2T(bir.getIndex(), 
+																				ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), bir.getType()))), 
+																		Either.right(Tuples._2T(bir.getId(), failed_json)), 
+																		false, true).request());
+														}
 													}//(End got the source, so re-insert this into the stream)
 												}//(was a mapping error)
 											}//(item failed)
