@@ -1018,7 +1018,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 													}
 													if (null != failed_json) {
 														_flush_now = true;
-														synchronized (this) {
+														synchronized (ElasticsearchBatchSubsystem.this) {
 															_current.add(singleObjectIndexRequest(
 																		Either.right(Tuples._2T(bir.getIndex(), 
 																				ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), bir.getType()))), 
