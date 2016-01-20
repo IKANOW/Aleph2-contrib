@@ -913,14 +913,15 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 * @param <O> - the object type
 	 */
 	public class ElasticsearchBatchSubsystem implements IBatchSubservice<O> {
-
+		final protected Object sync_lock = new Object(); 
+		
 		protected ElasticsearchBatchSubsystem() {
 			// Kick off thread that handles higher speed flushing
 			final ExecutorService executor = Executors.newSingleThreadExecutor();
 			executor.submit(() -> {
 				for (;;) {
 					if (_flush_now) {
-						synchronized (this) {
+						synchronized (sync_lock) {
 							_current.flush(); // (must always be non-null because _flush_now can only be set if _current exists)
 							_flush_now = false;
 						}
@@ -934,7 +935,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		public void setBatchProperties(final Optional<Integer> max_objects, final Optional<Long> size_kb, final Optional<Duration> flush_interval, final Optional<Integer> write_threads)
 		{
 			BulkProcessor old = null;
-			synchronized (this) {
+			synchronized (sync_lock) {
 				old = _current;
 				_current = buildBulkProcessor(max_objects, size_kb, flush_interval, write_threads);
 			}
@@ -950,22 +951,26 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		}
 		
 		@Override
-		public synchronized void storeObjects(final List<O> new_objects, final boolean replace_if_present) {
-			if (null == _current) {
-				_current = buildBulkProcessor();
+		public void storeObjects(final List<O> new_objects, final boolean replace_if_present) {
+			synchronized (sync_lock) {
+				if (null == _current) {
+					_current = buildBulkProcessor();
+				}
+				new_objects.stream().forEach(new_object -> 			
+					_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
+						Either.left(new_object), replace_if_present, true).request()));
 			}
-			new_objects.stream().forEach(new_object -> 			
-				_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
-					Either.left(new_object), replace_if_present, true).request()));
 		}
 
 		@Override
-		public synchronized void storeObject(final O new_object, final boolean replace_if_present) {
-			if (null == _current) {
-				_current = buildBulkProcessor();
-			}			
-			_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
-							Either.left(new_object), replace_if_present, true).request());
+		public void storeObject(final O new_object, final boolean replace_if_present) {
+			synchronized (sync_lock) {
+				if (null == _current) {
+					_current = buildBulkProcessor();
+				}			
+				_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
+								Either.left(new_object), replace_if_present, true).request());
+			}
 		}
 		
 		private boolean _flush_now = false; // (_very_ simple inter-thread comms via this mutable var, NOTE: don't let it get more complex than this without refactoring)
@@ -1017,8 +1022,8 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 														failed_json = ir.source().toUtf8();
 													}
 													if (null != failed_json) {
-														_flush_now = true;
-														synchronized (ElasticsearchBatchSubsystem.this) {
+														synchronized (sync_lock) {
+															_flush_now = true;
 															_current.add(singleObjectIndexRequest(
 																		Either.right(Tuples._2T(bir.getIndex(), 
 																				ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), bir.getType()))), 
@@ -1066,7 +1071,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		 */
 		@Override
 		public CompletableFuture<?> flushOutput() {
-			synchronized (this) {
+			synchronized (sync_lock) {
 				if (null != _current) _current.flush(); 
 			}
 			// Just sleep for 1.25s
