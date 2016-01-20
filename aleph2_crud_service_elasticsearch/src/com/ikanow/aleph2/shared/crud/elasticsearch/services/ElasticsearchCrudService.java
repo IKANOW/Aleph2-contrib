@@ -996,46 +996,56 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 								{
 									final ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext auto_context = (ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext) _state.es_context.typeContext();
 									final Iterator<BulkItemResponse> it = out.iterator();
-									synchronized (this) {
-										while (it.hasNext()) {										
-											final BulkItemResponse bir = it.next();
-											if (bir.isFailed()) {								
-												final String error_message = bir.getFailure().getMessage();
+									final LinkedList<Tuple2<BulkItemResponse, String>> mutable_errs = new LinkedList<>(); 
+									while (it.hasNext()) {										
+										final BulkItemResponse bir = it.next();
+										if (bir.isFailed()) {								
+											final String error_message = bir.getFailure().getMessage();
+											
+											if (error_message.startsWith("MapperParsingException")
+													||
+												error_message.startsWith("WriteFailureException; nested: MapperParsingException"))
+											{
+												final Set<String> fixed_type_fields = auto_context.fixed_type_fields();
+												if (!fixed_type_fields.isEmpty()) {
+													// Obtain the field name from the exception (if we fail then drop the record) 
+													final String field = getFieldFromParsingException(error_message);
+													if ((null == field) || fixed_type_fields.contains(field)) {
+														continue;
+													}
+												}//(else roll on to...)																												
 												
-												if (error_message.startsWith("MapperParsingException")
-														||
-													error_message.startsWith("WriteFailureException; nested: MapperParsingException"))
-												{
-													final Set<String> fixed_type_fields = auto_context.fixed_type_fields();
-													if (!fixed_type_fields.isEmpty()) {
-														// Obtain the field name from the exception (if we fail then drop the record) 
-														final String field = getFieldFromParsingException(error_message);
-														if ((null == field) || fixed_type_fields.contains(field)) {
-															continue;
-														}
-													}//(else roll on to...)																												
-													
-													String failed_json = null;
+												final String failed_json = Lambdas.get(() -> {
 													final ActionRequest<?> ar = in.requests().get(bir.getItemId());
 													if (ar instanceof IndexRequest) {											
 														IndexRequest ir = (IndexRequest) ar;
-														failed_json = ir.source().toUtf8();
+														return ir.source().toUtf8();
 													}
-													if (null != failed_json) {
-														synchronized (sync_lock) {
-															_flush_now = true;
-															_current.add(singleObjectIndexRequest(
-																		Either.right(Tuples._2T(bir.getIndex(), 
-																				ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), bir.getType()))), 
-																		Either.right(Tuples._2T(bir.getId(), failed_json)), 
-																		false, true).request());
-														}
-													}//(End got the source, so re-insert this into the stream)
-												}//(was a mapping error)
-											}//(item failed)
-										}//(loop over iterms)
+													else return null;
+												});
+												if (null != failed_json) {
+													mutable_errs.add(Tuples._2T(bir, failed_json));
+												}
+												
+											}//(was a mapping error)
+										}//(item failed)
+									}//(loop over iterms)
 										
-									}//(synchronized)									
+									if (!mutable_errs.isEmpty()) { // Reinsert into the steam
+										CompletableFuture.runAsync(() -> {
+											synchronized (sync_lock) {
+												_flush_now = true;
+												mutable_errs.forEach(bir_json -> 
+													_current.add(singleObjectIndexRequest(
+																Either.right(Tuples._2T(bir_json._1().getIndex(), 
+																		ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), bir_json._1().getType()))), 
+																Either.right(Tuples._2T(bir_json._1().getId(), bir_json._2())), 
+																false, true).request())
+												);
+											}														
+										});
+									}
+										
 								}//(has failures AND is an auto type)
 								
 							}//(end afterBulk)
