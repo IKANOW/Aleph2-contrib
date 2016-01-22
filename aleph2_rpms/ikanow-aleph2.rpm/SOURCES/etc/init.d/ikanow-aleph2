@@ -21,7 +21,10 @@
 prog=ikanow-aleph2
 lock_file=/var/lock/subsys/$prog
 pid_file=/var/run/ikanow/$prog.pid
-exec="java -classpath '/opt/aleph2-home/etc/:/opt/aleph2-home/lib/aleph2_data_model*:/opt/aleph2-home/lib/*' com.ikanow.aleph2.data_import_manager.modules.DataImportManagerModule /opt/aleph2-home/etc/v1_sync_service.properties /opt/aleph2-home/etc/conf.d > /dev/null 2>&1 &"
+
+OPTIONS="-Dtag=aleph2 $JAVA_OPTS"
+
+exec="java $OPTIONS -classpath '/opt/aleph2-home/etc/:/opt/aleph2-home/lib/aleph2_data_model*:/opt/aleph2-home/lib/*' com.ikanow.aleph2.data_import_manager.modules.DataImportManagerModule /opt/aleph2-home/etc/v1_sync_service.properties /opt/aleph2-home/etc/conf.d > /dev/null 2>&1 &"
 
 start() {
         echo -n $"Starting $prog: "
