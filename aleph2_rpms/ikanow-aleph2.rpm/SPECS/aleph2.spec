@@ -59,6 +59,7 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 %files
 %attr(755,root,root) /etc/init.d/ikanow-aleph2
 %attr(755,root,root) /etc/cron.d/ikanow-aleph2
+%config /etc/sysconfig/ikanow-aleph2
 %defattr(-,tomcat,tomcat)
 /opt/aleph2-home/
 /opt/aleph2-home/lib/
