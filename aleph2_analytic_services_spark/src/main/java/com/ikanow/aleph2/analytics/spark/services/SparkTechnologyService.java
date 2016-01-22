@@ -67,6 +67,19 @@ import fj.data.Validation;
 public class SparkTechnologyService implements IAnalyticsTechnologyService, IExtraDependencyLoader {
 	protected static final Logger _logger = LogManager.getLogger();	
 
+	//TODO: mode - do lock to nodes
+	
+	/** Spark currently uses external processes to run, so need to lock to a single node
+	 *  Fix this longer term by using direct YARN interface
+	 * @param completed_bucket
+	 * @param context
+	 * @return
+	 */
+	@Override
+	public boolean applyNodeAffinity(final DataBucketBean completed_bucket, final IAnalyticsContext context) {
+		return true;
+	}
+	
 	//DEBUG SETTINGS:
 	//
 	private static Level DEBUG_LEVEL = Level.DEBUG;
@@ -255,8 +268,6 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 			Optional<ProcessingTestSpecBean> test_spec
 			)
 	{
-		//TODO test vs normal mode
-				
 		try {
 			// Firstly, precalculate the inputs to ensure the right classes are copied across
 			final Configuration hadoop_config = HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties());			
@@ -298,7 +309,8 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 							globals.local_yarn_config_dir(), 
 							"yarn-cluster", //TODO: make this configurable 
 							spark_job_config.entry_point(), //TODO: all support built in? 
-							new String(Base64.getEncoder().encode(context.getAnalyticsContextSignature(Optional.of(analytic_bucket), Optional.empty()).getBytes())), 
+							new String(Base64.getEncoder().encode(context.getAnalyticsContextSignature(Optional.of(analytic_bucket), Optional.empty()).getBytes())),
+							test_spec.map(ts -> new String(Base64.getEncoder().encode(BeanTemplateUtils.toJson(ts).toString().getBytes()))),
 							main_jar, 
 							other_jars, 
 							//TODO: combine globals and per-job options
@@ -321,7 +333,7 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 			_logger.log(DEBUG_LEVEL, "stop_job_before_starting = " + stop_res);			
 			
 			final Tuple2<String, String> err_pid = ProcessUtils.launchProcess(pb, this.getClass().getSimpleName(), analytic_bucket, run_path, Optional.empty());
-			//TODO (if processing test spec set then add a max length before killing)
+			// (killing this process doesn't stop the job, so don't bother adding a max time)
 
 			_logger.log(DEBUG_LEVEL, "start_job_results = " + err_pid);						
 			

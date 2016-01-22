@@ -44,6 +44,7 @@ public class SparkPassthroughTopology {
 	public static void main(String[] args) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
 
 		try {			
+			//TODO: have a routine to get IAnalyticsContext/ProcessingTestSpec from args
 			final IAnalyticsContext context = ContextUtils.getAnalyticsContext(new String(Base64.getDecoder().decode(args[0].getBytes())));
 
 			//INFO:

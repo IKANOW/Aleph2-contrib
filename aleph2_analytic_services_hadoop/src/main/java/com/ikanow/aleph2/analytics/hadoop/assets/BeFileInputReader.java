@@ -53,6 +53,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadat
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ContextUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
@@ -109,20 +110,18 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		_maxRecords = _config.getInt(BatchEnrichmentJob.BE_DEBUG_MAX_SIZE, Integer.MAX_VALUE);
 		
 		this.start =  new Date();
-		final String contextSignature = context.getConfiguration().get(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE);   
-		try {
-			final IEnrichmentModuleContext enrichmentContext = ContextUtils.getEnrichmentContext(contextSignature);
-			this._dataBucket = enrichmentContext.getBucket().get();
-		} catch (Exception e) {
-			/**/
-			
-			//TODO nicer to put the serialized data schema somewhere else?
-			
-			this._dataBucket = BeanTemplateUtils.build(DataBucketBean.class).done().get();
-			
-			//throw new IOException(e);
-		}
-
+		this._dataBucket = Lambdas.get(Lambdas.wrap_u(() -> {
+			final String contextSignature = context.getConfiguration().get(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE);
+			if (null != contextSignature) {
+				final IEnrichmentModuleContext enrichmentContext = ContextUtils.getEnrichmentContext(contextSignature);
+				return enrichmentContext.getBucket().get();				
+			}
+			else {
+				final String bucketSignature = context.getConfiguration().get(BatchEnrichmentJob.BE_BUCKET_SIGNATURE, "{}");
+				return BeanTemplateUtils.from(bucketSignature, DataBucketBean.class).get();
+			}
+		}));
+		
 		final String jobName = _config.get("mapred.job.name", "unknown");
 		logger.info(jobName + ": new split, contains " + _numFiles + " files, total size: " + _fileSplit.getLength());		
 		
