@@ -18,6 +18,10 @@
 # Source function library.
 . /etc/init.d/functions
 
+if [ -e /etc/sysconfig/ikanow-aleph2 ]; then
+    . /etc/sysconfig/ikanow-aleph2
+fi
+
 prog=ikanow-aleph2
 lock_file=/var/lock/subsys/$prog
 pid_file=/var/run/ikanow/$prog.pid
