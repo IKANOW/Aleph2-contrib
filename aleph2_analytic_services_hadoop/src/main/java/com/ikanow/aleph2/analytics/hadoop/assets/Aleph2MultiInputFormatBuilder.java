@@ -64,6 +64,13 @@ public class Aleph2MultiInputFormatBuilder {
 		return this;
 	}
 
+	/** Just returns whether this job has any inputs
+	 * @return
+	 */
+	public boolean hasInputs() {
+		return !_inputs.isEmpty();
+	}
+	
 	/** Sets the output configurations in the job 
 	 * @param job
 	 */
