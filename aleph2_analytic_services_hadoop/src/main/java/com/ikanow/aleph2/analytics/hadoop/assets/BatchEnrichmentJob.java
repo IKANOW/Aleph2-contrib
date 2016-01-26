@@ -585,6 +585,9 @@ public class BatchEnrichmentJob{
 			final BatchEnrichmentContext local_enrich_context = _first_element._2();
 			local_enrich_context.overrideOutput(handleReduceOutput);
 			
+			// Note depending on how handleReduceOutput is constructed above, this call might just batch the data output from the first pipeline element (ungrouped)
+			// or it might emit the object
+			// So worth noting that batching doesn't work well in a grouped pipeline element, you should make that a passthrough and put the batch-optmized logic behind it
 			_first_element._1().cloneForNewGrouping().onObjectBatch(
 					StreamUtils.zipWithIndex(Optionals.streamOf(values, false))
 						.map(ix -> {
