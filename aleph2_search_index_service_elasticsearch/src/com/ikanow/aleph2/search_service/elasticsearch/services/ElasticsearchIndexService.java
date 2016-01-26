@@ -452,7 +452,11 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					context,
 					Optional.empty(), 
 					CreationPolicy.OPTIMIZED, 
-					Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()));
+					Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()))
+//TODO: (ALEPH-20): need to be able to specify various transform policies, eg default add + field map					
+//				.map(crud -> CrudServiceUtils.intercept(clazz, crud, Optional.empty(), query_transform, interceptors, default_interceptor))
+					
+					;
 		}
 
 		/* (non-Javadoc)
