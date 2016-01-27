@@ -17,11 +17,19 @@ package com.ikanow.aleph2.analytics.storm.utils;
 
 import static org.junit.Assert.*;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 
 import org.junit.Test;
 
+import backtype.storm.generated.StormTopology;
+import backtype.storm.generated.TopologyInfo;
+
+import com.ikanow.aleph2.analytics.storm.data_model.IStormController;
+import com.ikanow.aleph2.core.shared.utils.JarBuilderUtil;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
@@ -203,5 +211,28 @@ public class TestStormAnalyticTechnologyUtils {
 			assertEquals("Correct error message 1: " + messages[0], ErrorUtils.get(ErrorUtils.TEMP_INPUTS_MUST_BE_STREAMING, "/test", "analytic_job_1", "search_index_service"), messages[0]);
 			assertEquals("Correct error message 2: " + messages[1], ErrorUtils.get(ErrorUtils.TEMP_TRANSIENT_OUTPUTS_MUST_BE_STREAMING, "/test", "analytic_job_2", "batch"), messages[1]);
 		}
+	}
+	
+	@Test
+	public void testRemote() throws Exception {
+		String job_name = "test";
+		
+		IStormController storm = StormControllerUtil.getRemoteStormController("api001.dev.ikanow.com", 6627, "backtype.storm.security.auth.SimpleTransportPlugin");
+		StormTopology topology = new TestTopology().getTopology();
+		List<String> jars_to_merge = new ArrayList<String>();
+		jars_to_merge.add("C:\\Users\\Burch\\Desktop\\aleph2_storm_dependencies-0.0.1-SNAPSHOT.jar");
+		jars_to_merge.add("C:\\Users\\Burch\\Desktop\\aleph2_storm_samples-0.0.1-SNAPSHOT-jar-with-dependencies.jar");
+		String path = "C:\\Users\\Burch\\Desktop\\deleteme.jar";
+		JarBuilderUtil.mergeJars(jars_to_merge, path);
+		System.out.println(storm.submitJob(job_name, path, topology, new HashMap<String, Object>()).get().message());	
+		
+		//try to get stats to check how many executors/workers were assigned if any
+		TopologyInfo info = storm.getJobStats(job_name);
+		System.out.println("NUM_EXECUTORS: " + info.get_executors_size());		
+		
+		//wait for results
+		Thread.sleep(10000);
+	 	
+		assertTrue(true);
 	}
 }

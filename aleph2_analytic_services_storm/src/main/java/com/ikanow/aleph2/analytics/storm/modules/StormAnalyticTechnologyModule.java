@@ -62,7 +62,7 @@ public class StormAnalyticTechnologyModule extends AbstractModule {
 	/** Initializes the storm instance
 	 * @return a real storm controller if possible, else a no controller
 	 */
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({ "unchecked", "deprecation" })
 	public static IStormController getController() {
 		synchronized (IStormController.class) {
 			if (null != _controller) {
@@ -92,16 +92,26 @@ public class StormAnalyticTechnologyModule extends AbstractModule {
 			}
 						
 			if ( object.containsKey(backtype.storm.Config.NIMBUS_HOST) ) {
-				_logger.info("starting in remote mode v5");
+				_logger.info("starting in remote mode v6 - pre storm 0.10.x (nimbus_host)");
 				_logger.info(object.get(backtype.storm.Config.NIMBUS_HOST));
-				//run in distributed mode
+				//run in distributed mode - hdp 2.2
 				IStormController storm_controller = StormControllerUtil.getRemoteStormController(
 						(String)object.get(backtype.storm.Config.NIMBUS_HOST), 
 						(int)object.get(backtype.storm.Config.NIMBUS_THRIFT_PORT), 
 						(String)object.get(backtype.storm.Config.STORM_THRIFT_TRANSPORT_PLUGIN));
 				
 				return (_controller = storm_controller);
-			}		
+			} else if (object.containsKey(backtype.storm.Config.NIMBUS_SEEDS)) {
+				_logger.info("starting in remote mode v6 - post storm 0.10.x (nimbus_seeds)");
+				_logger.info(object.get(backtype.storm.Config.NIMBUS_SEEDS));
+				//run in distributed mode - hdp 2.3
+				IStormController storm_controller = StormControllerUtil.getRemoteStormController(
+						(String)object.get(backtype.storm.Config.NIMBUS_SEEDS), 
+						(int)object.get(backtype.storm.Config.NIMBUS_THRIFT_PORT), 
+						(String)object.get(backtype.storm.Config.STORM_THRIFT_TRANSPORT_PLUGIN));
+				
+				return (_controller = storm_controller);
+			}
 			else {
 				return (_controller = new NoStormController());	
 			}		

@@ -18,10 +18,9 @@ package com.ikanow.aleph2.analytics.storm.assets;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URL;
 import java.util.Map;
-
-import jline.internal.InputStreamReader;
 
 import backtype.storm.spout.SpoutOutputCollector;
 import backtype.storm.task.TopologyContext;
