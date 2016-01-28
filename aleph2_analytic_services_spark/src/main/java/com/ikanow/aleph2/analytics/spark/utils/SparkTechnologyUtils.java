@@ -26,6 +26,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -78,6 +80,10 @@ import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
 
 /** Utilities for building spark jobs
  * @author Alex
+ */
+/**
+ * @author Alex
+ *
  */
 public class SparkTechnologyUtils {
 	private static final Logger _logger = LogManager.getLogger(SparkTechnologyUtils.class);
@@ -217,9 +223,31 @@ public class SparkTechnologyUtils {
 		final IAnalyticsContext context = ContextUtils.getAnalyticsContext(new String(Base64.getDecoder().decode(args[0].getBytes())));
 		
 		final Optional<ProcessingTestSpecBean> test_spec =
-				Optional.of(args).filter(a -> a.length > 1).map(a -> BeanTemplateUtils.from(a[1], ProcessingTestSpecBean.class).get());
+				Optional.of(args).filter(a -> a.length > 1).map(a -> BeanTemplateUtils.from(new String(Base64.getDecoder().decode(args[1].getBytes())), ProcessingTestSpecBean.class).get());
 		
 		return Tuples._2T(context, test_spec);
+	}
+	
+	/** Finalizes the aleph2 job - shouldn't be necessary to call, each individual context should call this
+	 * @param context
+	 */
+	public static void finalizeAleph2(final IAnalyticsContext context) {
+		context.flushBatchOutput(Optional.empty(), context.getJob().get());		
+	}
+	
+	/** Optional utility to respect the test spec's timeout
+	 * @param maybe_test_spec
+	 * @param on_timeout - mainly for testing
+	 */
+	public static void registerTestTimeout(final Optional<ProcessingTestSpecBean> maybe_test_spec, Runnable on_timeout) {
+		
+		maybe_test_spec.map(test_spec -> test_spec.max_run_time_secs()).ifPresent(max_run_time -> {
+			CompletableFuture.runAsync(Lambdas.wrap_runnable_u(() -> {
+				Thread.sleep(1500L*max_run_time); // (seconds, *1.5 for safety)
+				System.out.println("Test timeout - exiting");
+				on_timeout.run();
+			}));
+		});
 	}
 	
 	/** Checks if an aleph2 JAR file is cached
@@ -283,17 +311,18 @@ public class SparkTechnologyUtils {
 			final IAnalyticsContext context, 
 			final DataBucketBean bucket, 
 			final AnalyticThreadJobBean job,
+			final Optional<ProcessingTestSpecBean> maybe_test_spec,
 			final Configuration config,
+			final Set<String> exclude_names,
 			BiConsumer<AnalyticThreadJobInputBean, Job> per_input_action
 			)
-	{
-		
-	    final Optional<Long> debug_max =  Optional.empty();
+	{		
+	    final Optional<Long> debug_max =  maybe_test_spec.map(t -> t.requested_num_objects());
 	    
 		Optionals.ofNullable(job.inputs())
 		.stream()
 		.filter(input -> Optional.ofNullable(input.enabled()).orElse(true))
-		.forEach(Lambdas.wrap_consumer_u(input -> {
+		.map(Lambdas.wrap_u(input -> {
 			// In the debug case, transform the input to add the max record limit
 			// (also ensure the name is filled in)
 			final AnalyticThreadJobInputBean input_with_test_settings = BeanTemplateUtils.clone(input)
@@ -314,7 +343,12 @@ public class SparkTechnologyUtils {
 										)
 							.done()
 							)
-					.done();						
+					.done();								
+			
+			return input_with_test_settings;
+		}))
+		.filter(input -> !exclude_names.contains(input.name()))
+		.forEach(Lambdas.wrap_consumer_u(input_with_test_settings -> {
 			
 			final List<String> paths = context.getInputPaths(Optional.empty(), job, input_with_test_settings);
 			
@@ -329,7 +363,7 @@ public class SparkTechnologyUtils {
 			    final Job input_job = Job.getInstance(config);
 			    input_job.setInputFormatClass(BeFileInputFormat_Pure.class);				
 				paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(input_job, new Path(path))));
-				per_input_action.accept(input, input_job);
+				per_input_action.accept(input_with_test_settings, input_job);
 			}
 			else { // not easily available in HDFS directory format, try getting from the context
 				
@@ -352,7 +386,7 @@ public class SparkTechnologyUtils {
 				    input_format_info.get().getAccessConfig().ifPresent(map -> {
 				    	map.entrySet().forEach(kv -> input_job.getConfiguration().set(kv.getKey(), kv.getValue().toString()));
 				    });							    
-					per_input_action.accept(input, input_job);
+					per_input_action.accept(input_with_test_settings, input_job);
 				}
 			}
 		}))
@@ -365,17 +399,23 @@ public class SparkTechnologyUtils {
 	 * @param context the analytic context retrieved from the 
 	 * @return A multi map of Java RDDs against name (with input name built as resource_name:data_service if not present)
 	 */
-	public static Multimap<String, JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>> buildBatchSparkInputs(final IAnalyticsContext context, final JavaSparkContext spark_context) {
-		
+	public static Multimap<String, JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>> buildBatchSparkInputs(
+			final IAnalyticsContext context, 
+			final Optional<ProcessingTestSpecBean> maybe_test_spec,
+			final JavaSparkContext spark_context,
+			final Set<String> exclude_names
+			)
+	{		
 		final DataBucketBean bucket = context.getBucket().get();
 		final AnalyticThreadJobBean job = context.getJob().get();
 		
 		final Configuration config = HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties());
 		config.set(BatchEnrichmentJob.BE_BUCKET_SIGNATURE, BeanTemplateUtils.toJson(bucket).toString());
+		maybe_test_spec.ifPresent(test_spec -> Optional.ofNullable(test_spec.requested_num_objects()).ifPresent(num -> config.set(BatchEnrichmentJob.BE_DEBUG_MAX_SIZE, Long.toString(num))));
 		
 		Multimap<String, JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>> mutable_builder = HashMultimap.create();
 		
-		buildAleph2Inputs(context, bucket, job, config, 
+		buildAleph2Inputs(context, bucket, job, maybe_test_spec, config, exclude_names,
 				(input, input_job) -> {
 					try {
 						@SuppressWarnings("unchecked")
