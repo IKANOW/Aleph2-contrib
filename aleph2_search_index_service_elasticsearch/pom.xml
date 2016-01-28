@@ -93,7 +93,7 @@
   	</dependency>
 	<dependency>
 		<groupId>org.elasticsearch</groupId>
-		<artifactId>elasticsearch-spark-${aleph2.spark-es}_2.11</artifactId>
+		<artifactId>elasticsearch-spark-${aleph2.spark-es}_2.10</artifactId>
 		<version>2.1.2</version>
 		<exclusions>
 			<exclusion>
@@ -107,10 +107,22 @@
 		</exclusions>
 	</dependency>
      <dependency>
+		<artifactId>scala-library</artifactId>
+		<groupId>org.scala-lang</groupId>
+         <version>2.10.4</version>
+		<scope>provided</scope>
+	</dependency>
+     <dependency>
          <groupId>org.apache.spark</groupId>
-         <artifactId>spark-sql_2.11</artifactId>
+         <artifactId>spark-sql_2.10</artifactId>
          <version>${aleph2.spark}</version>
          <scope>provided</scope>
+         <exclusions>
+         	<exclusion>
+         		<artifactId>scala-library</artifactId>
+         		<groupId>org.scala-lang</groupId>
+         	</exclusion>
+         </exclusions>
      </dependency>
 	<dependency>
 		<groupId>org.elasticsearch</groupId>
@@ -156,6 +168,12 @@
   		<artifactId>aleph2_crud_service_elasticsearch</artifactId>
   		<version>${aleph2.version}</version>
 		<scope>${aleph2.scope}</scope>
+		<exclusions>
+			<exclusion>
+				<artifactId>scala-library</artifactId>
+				<groupId>org.scala-lang</groupId>
+			</exclusion>
+		</exclusions>
   	</dependency>
   	<dependency>
   		<groupId>com.ikanow.aleph2</groupId>
