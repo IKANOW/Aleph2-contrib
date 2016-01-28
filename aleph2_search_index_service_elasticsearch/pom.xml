@@ -4,8 +4,9 @@
   <artifactId>aleph2_search_index_service_elasticsearch</artifactId>
     <version>${aleph2.version}</version>
 	<properties>
-	<aleph2.scope>compile</aleph2.scope>
+		<aleph2.scope>compile</aleph2.scope>
         <aleph2.version>0.0.1-SNAPSHOT</aleph2.version>
+        <aleph2.spark>1.2</aleph2.spark>
     </properties>
   <build>
     <sourceDirectory>src</sourceDirectory>
@@ -89,6 +90,21 @@
   		<version>4.12</version>
   		<scope>test</scope>
   	</dependency>
+	<dependency>
+		<groupId>org.elasticsearch</groupId>
+		<artifactId>elasticsearch-spark-${aleph2.spark}_2.11</artifactId>
+		<version>2.1.2</version>
+		<exclusions>
+			<exclusion>
+				<artifactId>jackson-databind</artifactId>
+				<groupId>com.fasterxml.jackson.core</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>scala-library</artifactId>
+				<groupId>org.scala-lang</groupId>
+			</exclusion>
+		</exclusions>
+	</dependency>
 	<dependency>
 		<groupId>org.elasticsearch</groupId>
 		<artifactId>elasticsearch-hadoop</artifactId>
