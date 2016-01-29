@@ -15,16 +15,18 @@
  *******************************************************************************/
 package com.ikanow.aleph2.analytics.spark.assets;
 
-//import java.util.Arrays;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+//import org.apache.spark.repl.SparkIMain;
 
 import scala.Tuple2;
-//import scala.tools.nsc.interpreter.SparkIMain;
+
+
 
 
 
@@ -48,6 +50,7 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 /** Very simple spark topology, runs the compiled script
  * @author Alex
  */
+@SuppressWarnings("unused")
 public class SparkInterpreterTopology {
 
 	// Params:
@@ -70,7 +73,6 @@ public class SparkInterpreterTopology {
 			
 			final SparkTopologyConfigBean config = BeanTemplateUtils.from(context.getJob().map(job -> job.config()).orElse(Collections.emptyMap()), SparkTopologyConfigBean.class).get();
 			
-			@SuppressWarnings("unused")
 			final String scala_script = Optional.ofNullable(config.script()).orElse("");
 			
 			//INFO:
@@ -85,25 +87,25 @@ public class SparkInterpreterTopology {
 			
 			try (final JavaSparkContext jsc = new JavaSparkContext(spark_context)) {
 	
-				@SuppressWarnings("unused")
 				final Multimap<String, JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>> inputs = SparkTechnologyUtils.buildBatchSparkInputs(context, test_spec, jsc, Collections.emptySet());
 				
-				//TODO (ALEPH-12): Work in progress, get bytecode error when trying to create SparkIMain - likely this is due to versioning woes vs HDP2.2 so postpone until HDP2.3 
+				//TODO move this into a separate module since it's quite big
 				/*
 				final SparkIMain interpreter = new SparkIMain();
 				
 				interpreter.bind(
 						"inputs",
-						"com.google.common.collect.Multimap[String, org.apache.spark.api.java.JavaPairRDD[Object, Tuple2[Long, com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord]]",
+						"com.google.common.collect.Multimap[String, org.apache.spark.api.java.JavaPairRDD[Object, Tuple2[Long, com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord]]]",
 						inputs,
 						scala.collection.JavaConversions.asScalaBuffer(Arrays.<String>asList()).toList()
 						);
+				//TODO aleph2 context etc
 				
-				
-				interpreter.compile("scala_script");
-				//interpreter.compile("println(inputs.entries().iterator().next().getValue().count())");
-				*/
-				
+				//TODO Need to compile user code into a object with a fn taking inputs, contexts, etc and then interpret calling that function 
+				//interpreter.compile("scala_script");
+				//interpreter.compileString("object Test { def main( args:Array[String] ): Unit = println(inputs.entries().iterator().next().getValue().count()) }");
+				//interpreter.interpret("println(inputs.entries().iterator().next().getValue().count())");
+				 */				 
 				jsc.stop();
 				
 				//INFO:
