@@ -13,6 +13,7 @@ import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbServic
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
+import com.mongodb.DBObject;
 import com.mongodb.WriteResult;
 
 
@@ -21,6 +22,7 @@ public class IkanowV1CookieAuthentication {
 	protected IServiceContext serviceContext = null;
 	protected IManagementDbService _underlying_management_db = null;
 	private DBCollection cookieDb = null; 
+	private DBCollection authenticationDb = null; 
 	private static final Logger logger = LogManager.getLogger(IkanowV1CookieAuthentication.class);
 
 	private IkanowV1CookieAuthentication(IServiceContext serviceContext){
@@ -41,6 +43,8 @@ public class IkanowV1CookieAuthentication {
 		}
 		String cookieOptions = "security.cookies";
 		cookieDb = _underlying_management_db.getUnderlyingPlatformDriver(DBCollection.class, Optional.of(cookieOptions)).get();
+		String authenticationOptions = "security.authentication";
+		authenticationDb = _underlying_management_db.getUnderlyingPlatformDriver(DBCollection.class, Optional.of(authenticationOptions)).get();
 		}
 
 	protected DBCollection getCookieStore(){
@@ -49,7 +53,37 @@ public class IkanowV1CookieAuthentication {
 		}
 	      return cookieDb;		
 	}
+
+	protected DBCollection getAuthenticationStore(){
+		if(authenticationDb == null){
+			initDb();
+		}
+	      return authenticationDb;		
+	}
 	
+	public CookieBean createCookieByEmail(String email)
+	{
+		CookieBean cb = null;
+		String profileId = lookupProfileIdByEmail(email);
+		if(profileId!=null){
+			cb = 	createCookie(profileId);
+		}
+		return cb;
+	}
+
+	protected String lookupProfileIdByEmail(String email) {
+		String profileId = null;
+		try {
+			BasicDBObject query = new BasicDBObject();
+			query.put("username", email);
+			DBObject result = getAuthenticationStore().findOne(query);
+			profileId = result!=null? ""+result.get("profileId"):null;
+		} catch (Exception e) {
+			logger.error("lookupProfileIdByEmail caught exception",e);			
+		}
+		return profileId;
+	}
+
 	/**
 	 * Creates a new session cookie  for a user, adding
 	 * an entry to our cookie table (maps cookieid
