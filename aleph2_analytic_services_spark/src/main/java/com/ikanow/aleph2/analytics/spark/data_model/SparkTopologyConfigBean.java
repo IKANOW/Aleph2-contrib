@@ -47,7 +47,13 @@ public class SparkTopologyConfigBean implements Serializable {
 	 */
 	public Map<String, String> system_config() { return Optional.ofNullable(system_config).orElse(Collections.emptyMap()); }
 
+	/** For scala jobs with interpreters, run this script
+	 * @return
+	 */
+	public String script() { return script; }
+	
 	private String entry_point;
+	private String script;
 	private Map<String, String> config;
 	private Map<String, String> system_config;
 }

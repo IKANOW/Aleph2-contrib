@@ -271,7 +271,7 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 		try {
 			// Firstly, precalculate the inputs to ensure the right classes are copied across
 			final Configuration hadoop_config = HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties());			
-			SparkTechnologyUtils.buildAleph2Inputs(context, analytic_bucket, job_to_start, hadoop_config, (input, input_job) -> {}); //(mutate the context)
+			SparkTechnologyUtils.buildAleph2Inputs(context, analytic_bucket, job_to_start, test_spec, hadoop_config, Collections.emptySet(), (input, input_job) -> {}); //(mutate the context)
 			
 			// Now do the spark stuff:
 			

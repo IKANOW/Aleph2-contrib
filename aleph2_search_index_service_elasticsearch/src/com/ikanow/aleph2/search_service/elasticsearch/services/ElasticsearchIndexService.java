@@ -40,6 +40,7 @@ import com.google.common.collect.ImmutableMap;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.spark.sql.SchemaRDD;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
 import org.elasticsearch.action.admin.indices.template.delete.DeleteIndexTemplateResponse;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesRequest;
@@ -95,6 +96,7 @@ import com.ikanow.aleph2.search_service.elasticsearch.module.ElasticsearchIndexS
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchHadoopUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexUtils;
+import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchSparkUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.SearchIndexErrorUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.CreationPolicy;
@@ -786,7 +788,14 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 						.map(job_input -> ElasticsearchHadoopUtils.getInputFormat(_crud_factory.getClient(), job_input.get()))
 						.map(access_context -> AnalyticsUtils.injectImplementation((Class<? extends IAnalyticsAccessContext>)driver_class, access_context))
 						;
-			}			
+			}
+			else if (SchemaRDD.class.isAssignableFrom(AnalyticsUtils.getTypeName((Class<? extends IAnalyticsAccessContext>)driver_class))) { // SCHEMA RDD
+				return (Optional<T>) driver_options.filter(__ -> 3 == owner_bucket_config.length)
+						.map(__ -> BeanTemplateUtils.from(owner_bucket_config[2], AnalyticThreadJobBean.AnalyticThreadJobInputBean.class))
+						.map(job_input -> ElasticsearchSparkUtils.getInputFormat(_crud_factory.getClient(), job_input.get()))
+						.map(access_context -> AnalyticsUtils.injectImplementation((Class<? extends IAnalyticsAccessContext>)driver_class, access_context))
+						;				
+			}
 		}
 		return Optional.empty();
 	}
