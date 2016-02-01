@@ -173,11 +173,5 @@
 	<version>2.11</version>
 	<scope>test</scope>
 </dependency>
-  	<dependency>
-  		<groupId>aleph2_storm_samples</groupId>
-  		<artifactId>aleph2_storm_samples</artifactId>
-  		<version>${aleph2.version}</version>
-  		<scope>test</scope>
-  	</dependency>
 	</dependencies>
 </project>
