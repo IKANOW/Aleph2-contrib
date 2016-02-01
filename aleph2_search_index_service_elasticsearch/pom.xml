@@ -107,12 +107,6 @@
 		</exclusions>
 	</dependency>
      <dependency>
-		<artifactId>scala-library</artifactId>
-		<groupId>org.scala-lang</groupId>
-         <version>2.10.4</version>
-		<scope>provided</scope>
-	</dependency>
-     <dependency>
          <groupId>org.apache.spark</groupId>
          <artifactId>spark-sql_2.10</artifactId>
          <version>${aleph2.spark}</version>
