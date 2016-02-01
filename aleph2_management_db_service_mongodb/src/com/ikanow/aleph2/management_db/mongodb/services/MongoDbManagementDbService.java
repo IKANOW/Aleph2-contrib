@@ -229,7 +229,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 			}
 		});
 		
-		final ICrudService<T> intercepted_crud = CrudServiceUtils.intercept(clazz, state_crud, Optional.empty(), interceptors, Optional.empty());				
+		final ICrudService<T> intercepted_crud = CrudServiceUtils.intercept(clazz, state_crud, Optional.empty(), Optional.empty(), interceptors, Optional.empty());				
 		return intercepted_crud.readOnlyVersion(_read_only);
 	}
 	
@@ -490,7 +490,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 
 		return extra_terms
 					.<ICrudService<AssetStateDirectoryBean>>
-						map(et -> CrudServiceUtils.intercept(AssetStateDirectoryBean.class, raw_state_crud, extra_terms, Collections.emptyMap(), Optional.empty()))
+						map(et -> CrudServiceUtils.intercept(AssetStateDirectoryBean.class, raw_state_crud, extra_terms, Optional.empty(), Collections.emptyMap(), Optional.empty()))
 					.orElse(raw_state_crud)
 					.readOnlyVersion(_read_only)
 				;
