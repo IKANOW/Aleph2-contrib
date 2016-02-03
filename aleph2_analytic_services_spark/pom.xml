@@ -6,7 +6,8 @@
     <properties>
         <aleph2.version>0.0.1-SNAPSHOT</aleph2.version>
         <aleph2.scope>provided</aleph2.scope>
-        <aleph2.hadoop>2.6.0</aleph2.hadoop>
+        <aleph2.hadoop>2.7.1</aleph2.hadoop>
+        <aleph2.spark>1.2.2</aleph2.spark>
     </properties>
 
     <build>
@@ -125,29 +126,65 @@
         <!--  (this is fortunate because there's a significant amount of JAR version conflicts here) -->
         <dependency>
             <groupId>org.apache.spark</groupId>
-            <artifactId>spark-core_2.11</artifactId>
-            <version>1.2.2</version>
+            <artifactId>spark-core_2.10</artifactId>
+            <version>${aleph2.spark}</version>
             <scope>provided</scope>
             <exclusions>
             	<exclusion>
             		<artifactId>hadoop-client</artifactId>
             		<groupId>org.apache.hadoop</groupId>
             	</exclusion>
+            	<exclusion>
+            		<artifactId>scala-library</artifactId>
+            		<groupId>org.scala-lang</groupId>
+            	</exclusion>
             </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
-            <artifactId>spark-sql_2.11</artifactId>
-            <version>1.2.2</version>
+            <artifactId>spark-sql_2.10</artifactId>
+            <version>${aleph2.spark}</version>
             <scope>provided</scope>
         </dependency>
-
+        <!-- Added these to try to get the spark interpreter working, in practice should probably make an example project
+             (NOTE V DEPENDENT ON SPARK/SCALA VERSION)
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-repl_2.10</artifactId>
+            <version>${aleph2.spark}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>*</groupId>
+					<artifactId>*</artifactId>
+				</exclusion>
+			</exclusions>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+			  <groupId>org.scala-lang</groupId>
+			  <artifactId>scala-compiler</artifactId>
+			  <version>2.10.4</version>
+			  <exclusions>
+			  	<exclusion>
+			  		<artifactId>scala-library</artifactId>
+			  		<groupId>org.scala-lang</groupId>
+			  	</exclusion>
+			  </exclusions>
+        </dependency>
+ 		-->
+ 		
         <!-- Example of internal dependency (always need data model anyway) -->
         <dependency>
             <groupId>com.ikanow.aleph2</groupId>
             <artifactId>aleph2_data_model</artifactId>
             <version>${aleph2.version}</version>
             <scope>${aleph2.scope}</scope>
+            <exclusions>
+            	<exclusion>
+            		<artifactId>scala-library</artifactId>
+            		<groupId>org.scala-lang</groupId>
+            	</exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.ikanow.aleph2</groupId>
