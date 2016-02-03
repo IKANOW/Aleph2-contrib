@@ -7,6 +7,9 @@
 	<properties>
 		<aleph2.version>0.0.1-SNAPSHOT</aleph2.version>
 		<aleph2.scope>compile</aleph2.scope>
+		<!-- Overridden in test_depdendencies profile that is activated if skip 
+			tests is true -->
+		<maven.test.skip>true</maven.test.skip>
 	</properties>
 	<build>
 		<plugins>
@@ -167,11 +170,33 @@
 			<version>${aleph2.version}</version>
 			<scope>test</scope>
 		</dependency>
-  	<dependency>
-	<groupId>jline</groupId>
-	<artifactId>jline</artifactId>
-	<version>2.11</version>
-	<scope>test</scope>
-</dependency>
+		<dependency>
+			<groupId>jline</groupId>
+			<artifactId>jline</artifactId>
+			<version>2.11</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
+	<!-- Test dependencies - LocalCluster is broken in the HDP2.3 version so for testing we revert to the maven central version! -->
+	<profiles>
+		<profile>
+			<id>test_dependencies</id>
+			<activation>
+				<property>
+					<name>skipTests</name>
+					<value>!true</value>
+				</property>
+			</activation>
+			<properties>
+				<maven.test.skip>false</maven.test.skip>
+			</properties>
+			<dependencies>
+				<dependency>
+					<groupId>org.apache.storm</groupId>
+					<artifactId>storm-core</artifactId>
+					<version>0.10.0</version>
+				</dependency>
+			</dependencies>
+		</profile>
+	</profiles>	
 </project>

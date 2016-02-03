@@ -30,6 +30,7 @@ import org.yaml.snakeyaml.Yaml;
 import com.google.inject.AbstractModule;
 import com.ikanow.aleph2.analytics.storm.data_model.IStormController;
 import com.ikanow.aleph2.analytics.storm.services.NoStormController;
+import com.ikanow.aleph2.analytics.storm.services.RemoteStormController;
 import com.ikanow.aleph2.analytics.storm.utils.StormControllerUtil;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -62,7 +63,7 @@ public class StormAnalyticTechnologyModule extends AbstractModule {
 	/** Initializes the storm instance
 	 * @return a real storm controller if possible, else a no controller
 	 */
-	@SuppressWarnings({ "unchecked", "deprecation" })
+	@SuppressWarnings({ "unchecked" })
 	public static IStormController getController() {
 		synchronized (IStormController.class) {
 			if (null != _controller) {
@@ -101,12 +102,12 @@ public class StormAnalyticTechnologyModule extends AbstractModule {
 						(String)object.get(backtype.storm.Config.STORM_THRIFT_TRANSPORT_PLUGIN));
 				
 				return (_controller = storm_controller);
-			} else if (object.containsKey(backtype.storm.Config.NIMBUS_SEEDS)) {
+			} else if (object.containsKey(RemoteStormController.NIMBUS_SEEDS)) {
 				_logger.info("starting in remote mode v6 - post storm 0.10.x (nimbus_seeds)");
-				_logger.info(object.get(backtype.storm.Config.NIMBUS_SEEDS));
+				_logger.info(object.get(RemoteStormController.NIMBUS_SEEDS));
 				//run in distributed mode - hdp 2.3
 				IStormController storm_controller = StormControllerUtil.getRemoteStormController(
-						(String)object.get(backtype.storm.Config.NIMBUS_SEEDS), 
+						(String)object.get(RemoteStormController.NIMBUS_SEEDS), 
 						(int)object.get(backtype.storm.Config.NIMBUS_THRIFT_PORT), 
 						(String)object.get(backtype.storm.Config.STORM_THRIFT_TRANSPORT_PLUGIN));
 				

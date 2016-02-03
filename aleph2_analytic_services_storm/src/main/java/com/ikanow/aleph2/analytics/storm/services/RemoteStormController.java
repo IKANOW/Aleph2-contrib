@@ -60,6 +60,9 @@ public class RemoteStormController implements IStormController  {
 	final private Map<String, Object> remote_config;
 	private Client client;
 	
+	public static final String NIMBUS_SEEDS = "nimbus.seeds";
+	//(Config.NIMBUS_SEEDS with the correct version of Storm - this is an interim workaround)
+	
 	/**
 	 * Initialize the remote client.  Need the nimbus host:port and the transport plugin.
 	 * Additionally, the nimbus client will attempt to find the storm.yaml or defaults.yaml
@@ -94,8 +97,8 @@ public class RemoteStormController implements IStormController  {
 	 */
 	public RemoteStormController(String nimbus_host, int nimbus_thrift_port, String storm_thrift_transport_plugin) {
 		Map<String,Object> temp_config = new HashMap<String, Object>();
-//		temp_config.put(Config.NIMBUS_HOST, nimbus_host); //storm-0.10.x switched to seeds instead of host
-		temp_config.put(Config.NIMBUS_SEEDS, Arrays.asList(nimbus_host));
+		temp_config.put(Config.NIMBUS_HOST, nimbus_host); //storm-0.10.x switched to seeds instead of host
+		temp_config.put(NIMBUS_SEEDS, Arrays.asList(nimbus_host));
 		temp_config.put(Config.NIMBUS_THRIFT_PORT, nimbus_thrift_port);
 		temp_config.put(Config.STORM_THRIFT_TRANSPORT_PLUGIN, storm_thrift_transport_plugin);	
 		temp_config.put(Config.STORM_META_SERIALIZATION_DELEGATE, "todo"); //TODO need to find the correct file for this, throws an error in the logs currently and loads a default
