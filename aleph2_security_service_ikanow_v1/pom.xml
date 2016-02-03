@@ -39,6 +39,25 @@
 				</configuration>
 			</plugin>
 			<plugin>
+				<groupId>com.googlecode.addjars-maven-plugin</groupId>
+				<artifactId>addjars-maven-plugin</artifactId>
+				<version>1.0.5</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>add-jars</goal>
+						</goals>
+						<configuration>
+							<resources>
+								<resource>
+									<directory>${basedir}/external_libs</directory>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
 				<groupId>org.eluder.coveralls</groupId>
 				<artifactId>coveralls-maven-plugin</artifactId>
 				<version>3.1.0</version>
@@ -78,6 +97,15 @@
 						</goals>
 						<configuration>
 							<shadedArtifactAttached>true</shadedArtifactAttached>
+							<filters>
+								<filter>
+									<artifact>com.ikanow.aleph2:aleph2_document_service_v1-infinit.e.data_model.jar</artifact>
+									<excludes>
+										<!-- v1 data model and (v2) mongodb crud service have conflicting definitions for DBCollectionProxyFactory -->
+										<exclude>com/mongodb/DBCollectionProxyFactory*</exclude>
+									</excludes>
+								</filter>
+							</filters>
 						</configuration>
 					</execution>
 				</executions>
@@ -94,6 +122,21 @@
 					<configuration>
 						<lifecycleMappingMetadata>
 							<pluginExecutions>
+								<pluginExecution>
+									<pluginExecutionFilter>
+										<groupId>com.googlecode.addjars-maven-plugin</groupId>
+										<artifactId>addjars-maven-plugin</artifactId>
+										<versionRange>
+											[1.0.5,)
+										</versionRange>
+										<goals>
+											<goal>add-jars</goal>
+										</goals>
+									</pluginExecutionFilter>
+									<action>
+										<ignore></ignore>
+									</action>
+								</pluginExecution>
 								<pluginExecution>
 									<pluginExecutionFilter>
 										<groupId>org.jacoco</groupId>
@@ -199,6 +242,16 @@
 			<artifactId>log4j</artifactId>
 			<version>[0,)</version>
 			<scope>provided</scope>			
+		</dependency>
+		<!-- Other external dependencies here -->
+		<dependency>
+			<!-- This is then added to the shaded JAR's classpath via addjars plugin 
+				above -->
+			<groupId>com.ikanow.infinit.e</groupId>
+			<artifactId>infinit.e.data_model</artifactId>
+			<version>1.5</version>
+			<scope>system</scope>
+			<systemPath>${basedir}/external_libs/infinit.e.data_model.jar</systemPath>
 		</dependency>
 	</dependencies>	
 	  <profiles>
