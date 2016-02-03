@@ -21,6 +21,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.logging.log4j.LogManager;
@@ -38,6 +39,8 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.PropertiesUtils;
+
+import fj.data.Either;
 
 /** Defines guice dependencies
  *  NO TEST COVERAGE - TEST BY HAND IF CHANGED
@@ -97,7 +100,7 @@ public class StormAnalyticTechnologyModule extends AbstractModule {
 				_logger.info(object.get(backtype.storm.Config.NIMBUS_HOST));
 				//run in distributed mode - hdp 2.2
 				IStormController storm_controller = StormControllerUtil.getRemoteStormController(
-						(String)object.get(backtype.storm.Config.NIMBUS_HOST), 
+						Either.left((String)object.get(backtype.storm.Config.NIMBUS_HOST)), 
 						(int)object.get(backtype.storm.Config.NIMBUS_THRIFT_PORT), 
 						(String)object.get(backtype.storm.Config.STORM_THRIFT_TRANSPORT_PLUGIN));
 				
@@ -107,7 +110,7 @@ public class StormAnalyticTechnologyModule extends AbstractModule {
 				_logger.info(object.get(RemoteStormController.NIMBUS_SEEDS));
 				//run in distributed mode - hdp 2.3
 				IStormController storm_controller = StormControllerUtil.getRemoteStormController(
-						(String)object.get(RemoteStormController.NIMBUS_SEEDS), 
+						Either.right((List<String>)object.get(RemoteStormController.NIMBUS_SEEDS)), 
 						(int)object.get(backtype.storm.Config.NIMBUS_THRIFT_PORT), 
 						(String)object.get(backtype.storm.Config.STORM_THRIFT_TRANSPORT_PLUGIN));
 				

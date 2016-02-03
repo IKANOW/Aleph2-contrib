@@ -39,6 +39,7 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 
+import fj.data.Either;
 import backtype.storm.Config;
 import backtype.storm.StormSubmitter;
 import backtype.storm.generated.Nimbus.Client;
@@ -95,10 +96,12 @@ public class RemoteStormController implements IStormController  {
 	 * @param nimbus_thrift_port
 	 * @param storm_thrift_transport_plugin typically "backtype.storm.security.auth.SimpleTransportPlugin"
 	 */
-	public RemoteStormController(String nimbus_host, int nimbus_thrift_port, String storm_thrift_transport_plugin) {
+	public RemoteStormController(Either<String, List<String>> nimbus_seeds, int nimbus_thrift_port, String storm_thrift_transport_plugin) {
 		Map<String,Object> temp_config = new HashMap<String, Object>();
-		temp_config.put(Config.NIMBUS_HOST, nimbus_host); //storm-0.10.x switched to seeds instead of host
-		temp_config.put(NIMBUS_SEEDS, Arrays.asList(nimbus_host));
+		nimbus_seeds.either(
+				host -> temp_config.put(Config.NIMBUS_HOST, host), //HDP 2.2
+				seeds -> temp_config.put(NIMBUS_SEEDS, seeds) // HDP 2.3
+				);		
 		temp_config.put(Config.NIMBUS_THRIFT_PORT, nimbus_thrift_port);
 		temp_config.put(Config.STORM_THRIFT_TRANSPORT_PLUGIN, storm_thrift_transport_plugin);	
 		temp_config.put(Config.STORM_META_SERIALIZATION_DELEGATE, "todo"); //TODO need to find the correct file for this, throws an error in the logs currently and loads a default
