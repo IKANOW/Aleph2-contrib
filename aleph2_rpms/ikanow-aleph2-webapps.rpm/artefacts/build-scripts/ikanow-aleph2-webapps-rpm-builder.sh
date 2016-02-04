@@ -35,7 +35,7 @@ cp $HOME_DIR/aleph2_bucket_builder/stable_war/aleph2_bucket_builder.war $WEBAPPS
 export A2BB_TEMPLATES=$RPM_BUILD_DIR/opt/aleph2-home/webapps/templates/aleph2_bucket_builder/
 
 cp $HOME_DIR/aleph2_bucket_builder/assets/json/generic_bucket_templates.json $A2BB_TEMPLATES/
-cp $HOME_DIR/Aleph2-examples/enrichment_utils/assets/batch_analytics_templates.json $A2BB_TEMPLATES/
+cp $HOME_DIR/Aleph2-examples/aleph2_enrichment_utils/assets/batch_analytics_templates.json $A2BB_TEMPLATES/
 
 ###############################################
 #
@@ -67,7 +67,7 @@ mkdir BUILD  BUILDROOT  RPMS  SOURCES  SPECS  SRPMS
 export TOPDIR=$(pwd)
 cd ..
 cp ${RPM_NAME}.tar.gz rpmbuild/SOURCES/
-cp $RPM_SOURCE_DIR/SPECS/aleph2.spec rpmbuild/SPECS/
+cp $RPM_SOURCE_DIR/SPECS/aleph2-webapps.spec rpmbuild/SPECS/
 cd rpmbuild/SPECS/
 rpmbuild --define "_topdir $TOPDIR" --define "_VERSION ${VERSION}" --define "_RELEASE ${RELEASETYPE}" -ba aleph2-webapps.spec
 
