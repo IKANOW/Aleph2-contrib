@@ -19,7 +19,6 @@ import static org.junit.Assert.*;
 
 import java.util.Arrays;
 import java.util.Collections;
-
 import org.junit.Test;
 
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;

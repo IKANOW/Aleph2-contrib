@@ -15,6 +15,10 @@
  *******************************************************************************/
 package com.ikanow.aleph2.analytics.storm.services;
 
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -23,9 +27,10 @@ import java.util.concurrent.CompletableFuture;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.storm.guava.collect.ImmutableMap;
 import org.apache.thrift7.TException;
 import org.json.simple.JSONValue;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 import com.ikanow.aleph2.analytics.storm.data_model.IStormController;
 import com.ikanow.aleph2.analytics.storm.utils.StormControllerUtil;
@@ -34,6 +39,7 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 
+import fj.data.Either;
 import backtype.storm.Config;
 import backtype.storm.StormSubmitter;
 import backtype.storm.generated.Nimbus.Client;
@@ -51,8 +57,12 @@ import backtype.storm.utils.NimbusClient;
  */
 public class RemoteStormController implements IStormController  {
 	private static final Logger logger = LogManager.getLogger();
+	private static final String DEFAULT_STORM_CONFIG = "defaults.yaml";	
 	final private Map<String, Object> remote_config;
 	private Client client;
+	
+	public static final String NIMBUS_SEEDS = "nimbus.seeds";
+	//(Config.NIMBUS_SEEDS with the correct version of Storm - this is an interim workaround)
 	
 	/**
 	 * Initialize the remote client.  Need the nimbus host:port and the transport plugin.
@@ -86,12 +96,16 @@ public class RemoteStormController implements IStormController  {
 	 * @param nimbus_thrift_port
 	 * @param storm_thrift_transport_plugin typically "backtype.storm.security.auth.SimpleTransportPlugin"
 	 */
-	public RemoteStormController(String nimbus_host, int nimbus_thrift_port, String storm_thrift_transport_plugin) {
-		remote_config = new HashMap<String, Object>();
-		remote_config.put(Config.NIMBUS_HOST, nimbus_host);
-		remote_config.put(Config.NIMBUS_THRIFT_PORT, nimbus_thrift_port);
-		remote_config.put(Config.STORM_THRIFT_TRANSPORT_PLUGIN, storm_thrift_transport_plugin);	
-		remote_config.put(Config.STORM_META_SERIALIZATION_DELEGATE, "todo"); //TODO (ALEPH-10) need to find the correct file for this, throws an error in the logs currently and loads a default
+	public RemoteStormController(Either<String, List<String>> nimbus_seeds, int nimbus_thrift_port, String storm_thrift_transport_plugin) {
+		Map<String,Object> temp_config = new HashMap<String, Object>();
+		nimbus_seeds.either(
+				host -> temp_config.put(Config.NIMBUS_HOST, host), //HDP 2.2
+				seeds -> temp_config.put(NIMBUS_SEEDS, seeds) // HDP 2.3
+				);		
+		temp_config.put(Config.NIMBUS_THRIFT_PORT, nimbus_thrift_port);
+		temp_config.put(Config.STORM_THRIFT_TRANSPORT_PLUGIN, storm_thrift_transport_plugin);	
+		temp_config.put(Config.STORM_META_SERIALIZATION_DELEGATE, "todo"); //TODO need to find the correct file for this, throws an error in the logs currently and loads a default
+		remote_config = getConfigWithDefaults(temp_config);
 		logger.info("Connecting to remote storm: " + remote_config.toString() );
 		client = NimbusClient.getConfiguredClient(remote_config).getClient();
 	}
@@ -109,10 +123,11 @@ public class RemoteStormController implements IStormController  {
 		logger.info("submitting jar");		
 		
 		final String remote_jar_location = StormSubmitter.submitJar(remote_config, input_jar_location);
-		final String json_conf = JSONValue.toJSONString(ImmutableMap.<String, Object>builder()
-					.putAll(remote_config)
-					.putAll(config_override)
-				.build());
+//		final String json_conf = JSONValue.toJSONString(ImmutableMap.builder()
+//					.putAll(remote_config)
+//					.putAll(config_override)
+//				.build());
+		final String json_conf = JSONValue.toJSONString(mergeMaps(Arrays.asList(remote_config, config_override)));
 		logger.info("submitting topology");
 		try {
 			synchronized (client) {
@@ -222,5 +237,36 @@ public class RemoteStormController implements IStormController  {
 		 }	
 		 logger.info("did not find existing job with prefix");
 		 return null;
+	}
+	
+	/**
+	 * Merges any supplied config with the defaults.yaml found in storm-core.jar.  The latest versions
+	 * of store-core expect to have more config values than we need to supply so we just send all the defaults.
+	 * 
+	 * @param input_conf
+	 * @return
+	 */
+	private Map<String, Object> getConfigWithDefaults(final Map<String,Object> input_conf) {
+		final InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(DEFAULT_STORM_CONFIG);
+		Yaml yaml = new Yaml(new SafeConstructor());
+        @SuppressWarnings("unchecked")
+		Map<String, Object> default_storm = (Map<String,Object>) yaml.load(new InputStreamReader(is));
+        return mergeMaps(Arrays.asList(default_storm, input_conf));
+	}
+	
+	/**
+	 * Merges any number of maps, later maps will overwrite any previous keys e.g. if maps[0].key1=5 and maps[2].key1=12
+	 * the final map will have key1=12 because it'll overwrite the prior value.
+	 * 
+	 * Note: This does not use the google library ImmutableMap because they do not support
+	 * null values and the defaults.yaml this is commonly used to load up has many null values.
+	 * 
+	 * @param maps
+	 * @return
+	 */
+	private Map<String, Object> mergeMaps(final Collection<Map<String,Object>> maps) {		
+		final Map<String,Object> map_to_return = new HashMap<String, Object>();
+		maps.stream().forEach(map -> map_to_return.putAll(map));		
+		return map_to_return;
 	}
 }

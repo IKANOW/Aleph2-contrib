@@ -7,7 +7,7 @@
 	<properties>
 		<aleph2.version>0.0.1-SNAPSHOT</aleph2.version>
 		<aleph2.scope>compile</aleph2.scope>
-		<aleph2.hadoop>2.6.0</aleph2.hadoop>
+		<aleph2.hadoop>2.7.1</aleph2.hadoop>
 	</properties>
 	<build>
 		<plugins>
@@ -275,6 +275,13 @@
 		            <artifactId>jsp-api</artifactId>
 	        	</exclusion>
 	        </exclusions>
+		</dependency>
+		<!--  We do want servlet-api, just the right version compared to the tomcat version -->
+		<dependency>
+			<groupId>javax.servlet</groupId>
+			<artifactId>javax.servlet-api</artifactId>
+			<version>3.0.1</version>
+			<scope>compile</scope>
 		</dependency>
 		<dependency>
 			<!-- This just ensures that log4j won't be in the shaded jar via some transitive install -->

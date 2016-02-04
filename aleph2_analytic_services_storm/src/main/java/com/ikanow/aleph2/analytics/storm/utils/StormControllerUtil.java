@@ -56,6 +56,8 @@ import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 
+import fj.data.Either;
+
 /**
  * Factory for returning a local or remote storm controller.
  * 
@@ -88,8 +90,8 @@ public class StormControllerUtil {
 	 * @param storm_thrift_transport_plugin
 	 * @return
 	 */
-	public static IStormController getRemoteStormController(String nimbus_host, int nimbus_thrift_port, String storm_thrift_transport_plugin) {		
-		return new RemoteStormController(nimbus_host, nimbus_thrift_port, storm_thrift_transport_plugin);
+	public static IStormController getRemoteStormController(Either<String, List<String>> nimbus_seeds, int nimbus_thrift_port, String storm_thrift_transport_plugin) {		
+		return new RemoteStormController(nimbus_seeds, nimbus_thrift_port, storm_thrift_transport_plugin);
 	}
 	
 	/**
