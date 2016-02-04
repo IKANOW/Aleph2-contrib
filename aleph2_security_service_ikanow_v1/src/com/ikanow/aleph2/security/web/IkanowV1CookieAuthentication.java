@@ -12,6 +12,7 @@ import com.google.inject.Injector;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.infinit.e.data_model.driver.InfiniteDriver;
+import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
@@ -121,8 +122,12 @@ public class IkanowV1CookieAuthentication {
 	protected String lookupProfileIdByEmail(String email) {
 		String profileId = null;
 		try {
-			BasicDBObject query = new BasicDBObject();
-			query.put("username", email);
+			DBObject clause1 = new BasicDBObject("username", email);  
+			DBObject clause2 = new BasicDBObject("WPUserID", email);    
+			BasicDBList or = new BasicDBList();
+			or.add(clause1);
+			or.add(clause2);
+			DBObject query = new BasicDBObject("$or", or);
 			DBObject result = getAuthenticationStore().findOne(query);
 			profileId = result!=null? ""+result.get("profileId"):null;
 		} catch (Exception e) {

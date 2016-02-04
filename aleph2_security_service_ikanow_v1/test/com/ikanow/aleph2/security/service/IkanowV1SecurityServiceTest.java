@@ -297,6 +297,9 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		   assertNotNull(cb);
 		   CookieBean cb2 = cookieAuth.createCookieByEmail("jf_user@ikanow.com");
 		   assertNotNull(cb2);
+		   // this time we are using a WPUserId
+		   CookieBean cb3 = cookieAuth.createCookieByEmail("jf_user_wp@ikanow.com");
+		   assertNotNull(cb3);
 	}
 
 }
