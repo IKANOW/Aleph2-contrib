@@ -99,7 +99,7 @@
 							<shadedArtifactAttached>true</shadedArtifactAttached>
 							<filters>
 								<filter>
-									<artifact>com.ikanow.aleph2:aleph2_document_service_v1-infinit.e.data_model.jar</artifact>
+									<artifact>com.ikanow.aleph2:aleph2_security_service_ikanow_v1-infinit.e.data_model.jar</artifact>
 									<excludes>
 										<!-- v1 data model and (v2) mongodb crud service have conflicting definitions for DBCollectionProxyFactory -->
 										<exclude>com/mongodb/DBCollectionProxyFactory*</exclude>
