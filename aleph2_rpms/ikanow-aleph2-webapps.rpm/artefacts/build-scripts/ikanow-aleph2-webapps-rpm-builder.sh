@@ -35,7 +35,7 @@ cp $HOME_DIR/aleph2_bucket_builder/stable_war/aleph2_bucket_builder.war $WEBAPPS
 export A2BB_TEMPLATES=$RPM_BUILD_DIR/opt/aleph2-home/webapps/templates/aleph2_bucket_builder/
 
 cp $HOME_DIR/aleph2_bucket_builder/assets/json/generic_bucket_templates.json $A2BB_TEMPLATES/
-cp $HOME_DIR/Aleph2-examples/enrichment_utils/assets/batch_analytics_templates $A2BB_TEMPLATES/
+cp $HOME_DIR/Aleph2-examples/enrichment_utils/assets/batch_analytics_templates.json $A2BB_TEMPLATES/
 
 ###############################################
 #
@@ -59,7 +59,7 @@ cp $SSO_CONFIG_TEMPLATES/shiro.ini_template $SSO_CONFIG/shiro.ini
 #
 # Build the RPM
 
-tar --exclude='.gitignore' czvf ${RPM_NAME}.tar.gz $RPM_BUILD_DIR/
+tar --exclude='.gitignore' -czvf ${RPM_NAME}.tar.gz $RPM_BUILD_DIR/
 
 mkdir rpmbuild
 cd rpmbuild
