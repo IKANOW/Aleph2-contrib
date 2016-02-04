@@ -34,12 +34,12 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 # INSTALL *AND* UPGRADE
 	# (All files created from the tarball)
 
-	# Update the Aleph2 Bucket Builder templates:
-	sh /opt/aleph2-home/webapps/scripts/v1_inject_bucket_builder_templates.sh
-
 %post
 ###########################################################################
 # INSTALL *AND* UPGRADE
+
+	# Update the Aleph2 Bucket Builder templates:
+	sh /opt/aleph2-home/webapps/scripts/v1_inject_bucket_builder_templates.sh
 
 %preun
 
