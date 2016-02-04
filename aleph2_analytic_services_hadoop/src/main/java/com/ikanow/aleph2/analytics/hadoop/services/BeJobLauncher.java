@@ -152,6 +152,8 @@ public class BeJobLauncher implements IBeJobService{
 		    
 		    // Create a separate InputFormat for every input (makes testing life easier)
 		    
+		    //TODO: detect if there are inputs here
+		    
 			Optional.ofNullable(_batchEnrichmentContext.getJob().inputs())
 						.orElse(Collections.emptyList())
 					.stream()
@@ -204,7 +206,12 @@ public class BeJobLauncher implements IBeJobService{
 						}
 					}));
 					;					
-			
+					
+			if (!inputBuilder.hasInputs()) {
+				// No way of returning this to the bucket status, could have a Tuple2<Job, String> with the number of inputs broken down maybe)
+				logger.warn(ErrorUtils.get("No data in specified inputs for bucket {0} job {1}", bucket.full_name(), _batchEnrichmentContext.getJob()));
+			}
+					
 		    // Now do everything else
 		    
 			final String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 

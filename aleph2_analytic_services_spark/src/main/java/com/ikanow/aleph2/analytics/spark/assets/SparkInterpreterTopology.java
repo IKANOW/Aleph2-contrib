@@ -15,36 +15,45 @@
  *******************************************************************************/
 package com.ikanow.aleph2.analytics.spark.assets;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+//import org.apache.spark.repl.SparkIMain;
 
 import scala.Tuple2;
 
-import com.fasterxml.jackson.databind.JsonNode;
+
+
+
+
+
+
+//import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Multimap;
+import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
 import com.ikanow.aleph2.analytics.spark.utils.SparkTechnologyUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
-import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+//import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+//import com.ikanow.aleph2.data_model.utils.Lambdas;
 
-import fj.data.Either;
-import fj.data.Validation;
+//import fj.data.Either;
+//import fj.data.Validation;
 
-/** Very simple spark topology, writes out all received objects
+/** Very simple spark topology, runs the compiled script
  * @author Alex
  */
-public class SparkPassthroughTopology {
+@SuppressWarnings("unused")
+public class SparkInterpreterTopology {
 
 	// Params:
-	public final static String SUBSAMPLE_NORMAL = "spark.aleph2_subsample";
-	public final static String SUBSAMPLE_TEST = "spark.aleph2_subsample_test_override";	
 	
 	//(not needed)
 	//final static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
@@ -61,19 +70,16 @@ public class SparkPassthroughTopology {
 				System.exit(0);
 			});
 			
-			//INFO:
-			System.out.println("Starting SparkPassthroughTopology");
 			
-			SparkConf spark_context = new SparkConf().setAppName("SparkPassthroughTopology");
+			final SparkTopologyConfigBean config = BeanTemplateUtils.from(context.getJob().map(job -> job.config()).orElse(Collections.emptyMap()), SparkTopologyConfigBean.class).get();
+			
+			final String scala_script = Optional.ofNullable(config.script()).orElse("");
+			
+			//INFO:
+			System.out.println("Starting SparkInterpreterTopology");
+			
+			SparkConf spark_context = new SparkConf().setAppName("SparkInterpreterTopology");
 
-			final Optional<Double> sub_sample = test_spec
-												.map(__ -> Optional.ofNullable(spark_context.getDouble(SUBSAMPLE_TEST, -1)))
-												.orElseGet(() -> Optional.ofNullable(spark_context.getDouble(SUBSAMPLE_NORMAL, -1)))
-												.filter(d -> d > 0)
-												;
-			
-			//INFO:
-			sub_sample.ifPresent(d -> System.out.println("OPTIONS: sub_sample = " + d));
 			test_spec.ifPresent(spec -> System.out.println("OPTIONS: test_spec = " + BeanTemplateUtils.toJson(spec).toString()));
 			
 			//DEBUG
@@ -83,27 +89,27 @@ public class SparkPassthroughTopology {
 	
 				final Multimap<String, JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>> inputs = SparkTechnologyUtils.buildBatchSparkInputs(context, test_spec, jsc, Collections.emptySet());
 				
-				final Optional<JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>> input = inputs.values().stream().reduce((acc1, acc2) -> acc1.union(acc2));
+				//TODO move this into a separate module since it's quite big
+				/*
+				final SparkIMain interpreter = new SparkIMain();
 				
-				long written = input.map(in -> in.values())
-						.map(rdd -> sub_sample.map(sample -> rdd.sample(true, sample)).orElse(rdd))
-						.map(rdd -> {
-							return rdd
-								.map(t2 -> {
-									final Validation<BasicMessageBean, JsonNode> ret_val = context.emitObject(Optional.empty(), context.getJob().get(), Either.left(t2._2().getJson()), Optional.empty());
-									return ret_val; // (doesn't matter what I return, just want to count it up)
-								})
-								//DEBUG: (print the output JSON on success and the error message on fail)
-								//.map(val -> test_mode ? val.f().bind(f -> Validation.fail("FAIL: " + f.message())) : val)
-								.count();
-						})
-						.orElse(-1L)
-						;
+				interpreter.bind(
+						"inputs",
+						"com.google.common.collect.Multimap[String, org.apache.spark.api.java.JavaPairRDD[Object, Tuple2[Long, com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord]]]",
+						inputs,
+						scala.collection.JavaConversions.asScalaBuffer(Arrays.<String>asList()).toList()
+						);
+				//TODO aleph2 context etc
 				
+				//TODO Need to compile user code into a object with a fn taking inputs, contexts, etc and then interpret calling that function 
+				//interpreter.compile("scala_script");
+				//interpreter.compileString("object Test { def main( args:Array[String] ): Unit = println(inputs.entries().iterator().next().getValue().count()) }");
+				//interpreter.interpret("println(inputs.entries().iterator().next().getValue().count())");
+				 */				 
 				jsc.stop();
 				
 				//INFO:
-				System.out.println("Wrote: data_objects=" + written);
+				System.out.println("Finished interpreter");
 			}
 		}
 		catch (Throwable t) {

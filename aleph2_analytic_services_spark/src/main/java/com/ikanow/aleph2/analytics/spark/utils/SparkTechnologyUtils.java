@@ -18,6 +18,7 @@ package com.ikanow.aleph2.analytics.spark.utils;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -25,8 +26,11 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -44,6 +48,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SchemaRDD;
+import org.apache.spark.sql.api.java.JavaSQLContext;
+import org.apache.spark.sql.api.java.JavaSchemaRDD;
 
 import scala.Tuple2;
 import scala.Tuple3;
@@ -54,6 +61,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import com.google.common.io.Files;
 import com.ikanow.aleph2.core.shared.utils.JarBuilderUtil;
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
@@ -62,11 +70,14 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean.MasterEnrichmentType;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.ContextUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.analytics.hadoop.assets.BatchEnrichmentJob;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher.HadoopAccessContext;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.spark.assets.BeFileInputFormat_Pure;
@@ -75,10 +86,16 @@ import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
 /** Utilities for building spark jobs
  * @author Alex
  */
+/**
+ * @author Alex
+ *
+ */
 public class SparkTechnologyUtils {
 	private static final Logger _logger = LogManager.getLogger(SparkTechnologyUtils.class);
 
 	public final static String SBT_SUBMIT_BINARY = "bin/spark-submit";
+	
+	public static interface SparkSqlAccessContext extends IAnalyticsAccessContext<SchemaRDD> {}
 	
 	/** Creates a command line call to launch spark
 	 * @param spark_home
@@ -98,6 +115,7 @@ public class SparkTechnologyUtils {
 			final String spark_master,
 			final String main_clazz,
 			final String context_signature,
+			final Optional<String> test_signature,
 			final String main_jar,
 			final Collection<String> other_jars,
 			final Map<String, String> job_options,
@@ -123,8 +141,9 @@ public class SparkTechnologyUtils {
 						job_options.entrySet().stream().flatMap(kv -> Stream.of("--conf", kv.getKey() + "=" + kv.getValue())).collect(Collectors.toList())
 					)
 				.addAll(spark_options.entrySet().stream().flatMap(kv -> Stream.of(kv.getKey(), kv.getValue())).collect(Collectors.toList()))
-				.add(main_jar)
+				.add(main_jar)				
 				.add(context_signature)
+				.addAll(test_signature.map(ts -> Arrays.asList(ts)).orElse(Collections.emptyList()))
 				.build()
 				;
 
@@ -160,7 +179,7 @@ public class SparkTechnologyUtils {
 	    	.filter(jar -> !jar.equals(main_jar_path)) // (this is the service case, eg "/opt/aleph2-home/lib/aleph2_spark_analytic_services.jar")
 	    	.map(Lambdas.wrap_u(f_str -> {
 	    		
-	    		final Tuple3<File, Path, FileStatus> f_p_fs = f_str.contains("core_distributed_services")
+	    		final Tuple3<File, Path, FileStatus> f_p_fs = f_str.contains("core_distributed_services") || f_str.contains("data_model")
 	    				? removeSparkConflictsAndCache(f_str, root_path, fc)
 	    				: checkCache(f_str, root_path, fc)
 	    				;
@@ -198,6 +217,44 @@ public class SparkTechnologyUtils {
 			;	    
 			
 		return Stream.concat(context_stream, lib_stream).collect(Collectors.toList());
+	}
+	
+	/** Takes the command line args and builds the Aleph2 objects required to set up Spark within Aleph2 
+	 * @param args
+	 * @return
+	 * @throws ClassNotFoundException 
+	 * @throws IllegalAccessException 
+	 * @throws InstantiationException 
+	 */
+	public static Tuple2<IAnalyticsContext, Optional<ProcessingTestSpecBean>> initializeAleph2(final String args[]) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
+		final IAnalyticsContext context = ContextUtils.getAnalyticsContext(new String(Base64.getDecoder().decode(args[0].getBytes())));
+		
+		final Optional<ProcessingTestSpecBean> test_spec =
+				Optional.of(args).filter(a -> a.length > 1).map(a -> BeanTemplateUtils.from(new String(Base64.getDecoder().decode(args[1].getBytes())), ProcessingTestSpecBean.class).get());
+		
+		return Tuples._2T(context, test_spec);
+	}
+	
+	/** Finalizes the aleph2 job - shouldn't be necessary to call, each individual context should call this
+	 * @param context
+	 */
+	public static void finalizeAleph2(final IAnalyticsContext context) {
+		context.flushBatchOutput(Optional.empty(), context.getJob().get());		
+	}
+	
+	/** Optional utility to respect the test spec's timeout
+	 * @param maybe_test_spec
+	 * @param on_timeout - mainly for testing
+	 */
+	public static void registerTestTimeout(final Optional<ProcessingTestSpecBean> maybe_test_spec, Runnable on_timeout) {
+		
+		maybe_test_spec.map(test_spec -> test_spec.max_run_time_secs()).ifPresent(max_run_time -> {
+			CompletableFuture.runAsync(Lambdas.wrap_runnable_u(() -> {
+				Thread.sleep(1500L*max_run_time); // (seconds, *1.5 for safety)
+				System.out.println("Test timeout - exiting");
+				on_timeout.run();
+			}));
+		});
 	}
 	
 	/** Checks if an aleph2 JAR file is cached
@@ -250,6 +307,45 @@ public class SparkTechnologyUtils {
 	
 	//TODO: get processing test spec from args
 	
+	/** Util function to tidy up input bean
+	 * @param in
+	 * @param maybe_test_spec
+	 * @return
+	 */
+	protected static Stream<AnalyticThreadJobInputBean> transformInputBean(
+			final Stream<AnalyticThreadJobInputBean> in,
+			final Optional<ProcessingTestSpecBean> maybe_test_spec)
+	{
+	    final Optional<Long> debug_max =  maybe_test_spec.map(t -> t.requested_num_objects());
+		
+		return in.filter(input -> Optional.ofNullable(input.enabled()).orElse(true))
+				.map(Lambdas.wrap_u(input -> {
+					// In the debug case, transform the input to add the max record limit
+					// (also ensure the name is filled in)
+					final AnalyticThreadJobInputBean input_with_test_settings = BeanTemplateUtils.clone(input)
+							.with(AnalyticThreadJobInputBean::name,
+									Optional.ofNullable(input.name()).orElseGet(() -> {
+										return Optional.ofNullable(input.resource_name_or_id()).orElse("")
+												+ ":" + Optional.ofNullable(input.data_service()).orElse("");
+									}))
+							.with(AnalyticThreadJobInputBean::config,
+									BeanTemplateUtils.clone(
+											Optional.ofNullable(input.config())
+											.orElseGet(() -> BeanTemplateUtils.build(AnalyticThreadJobInputConfigBean.class)
+																				.done().get()
+													))
+										.with(AnalyticThreadJobInputConfigBean::test_record_limit_request, //(if not test, always null; else "input override" or "output default")
+												debug_max.map(max -> Optionals.of(() -> input.config().test_record_limit_request()).orElse(max))
+												.orElse(null)
+												)
+									.done()
+									)
+							.done();								
+					
+					return input_with_test_settings;
+				}));		
+	}
+	
 	/** Builds objects for all the aleph2 inputs and provides a method to use them in context-dependent ways 
 	 * @param context
 	 * @param bucket
@@ -261,135 +357,114 @@ public class SparkTechnologyUtils {
 			final IAnalyticsContext context, 
 			final DataBucketBean bucket, 
 			final AnalyticThreadJobBean job,
+			final Optional<ProcessingTestSpecBean> maybe_test_spec,
 			final Configuration config,
+			final Set<String> exclude_names,
 			BiConsumer<AnalyticThreadJobInputBean, Job> per_input_action
 			)
-	{
-		
-	    final Optional<Long> debug_max =  Optional.empty();
-	    
-		Optionals.ofNullable(job.inputs())
-		.stream()
-		.filter(input -> Optional.ofNullable(input.enabled()).orElse(true))
-		.forEach(Lambdas.wrap_consumer_u(input -> {
-			// In the debug case, transform the input to add the max record limit
-			// (also ensure the name is filled in)
-			final AnalyticThreadJobInputBean input_with_test_settings = BeanTemplateUtils.clone(input)
-					.with(AnalyticThreadJobInputBean::name,
-							Optional.ofNullable(input.name()).orElseGet(() -> {
-								return Optional.ofNullable(input.resource_name_or_id()).orElse("")
-										+ ":" + Optional.ofNullable(input.data_service()).orElse("");
-							}))
-					.with(AnalyticThreadJobInputBean::config,
-							BeanTemplateUtils.clone(
-									Optional.ofNullable(input.config())
-									.orElseGet(() -> BeanTemplateUtils.build(AnalyticThreadJobInputConfigBean.class)
-																		.done().get()
-											))
-								.with(AnalyticThreadJobInputConfigBean::test_record_limit_request, //(if not test, always null; else "input override" or "output default")
-										debug_max.map(max -> Optionals.of(() -> input.config().test_record_limit_request()).orElse(max))
-										.orElse(null)
-										)
-							.done()
-							)
-					.done();						
-			
-			final List<String> paths = context.getInputPaths(Optional.empty(), job, input_with_test_settings);
-			
-			if (!paths.isEmpty()) {
-			
-				_logger.info(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));
-				/**/
-				System.out.println(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));
-
+	{		
+	    transformInputBean(Optionals.ofNullable(job.inputs()).stream(), maybe_test_spec)
+			.filter(input -> !exclude_names.contains(input.name()))
+			.forEach(Lambdas.wrap_consumer_u(input_with_test_settings -> {
 				
-			    final Job input_job = Job.getInstance(config);
-			    input_job.setInputFormatClass(BeFileInputFormat_Pure.class);				
-				paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(input_job, new Path(path))));
-				per_input_action.accept(input, input_job);
-			}
-			else { // not easily available in HDFS directory format, try getting from the context
+				final List<String> paths = context.getInputPaths(Optional.empty(), job, input_with_test_settings);
 				
-				Optional<HadoopAccessContext> input_format_info = context.getServiceInput(HadoopAccessContext.class, Optional.empty(), job, input_with_test_settings);
-				if (!input_format_info.isPresent()) {
-					_logger.warn(ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input_with_test_settings)));
-					/**/
-					System.out.println(ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input_with_test_settings)));
-				}
-				else {
-					_logger.info(ErrorUtils.get("Adding data service path for bucket {0}: {1}", bucket.full_name(),
-							input_format_info.get().describe()));
-					/**/
-					System.out.println(ErrorUtils.get("Adding data service path for bucket {0}: {1}", bucket.full_name(),
-							input_format_info.get().describe()));
+				if (!paths.isEmpty()) {
+				
+					_logger.info(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));
+	
+					//DEBUG
+					//System.out.println(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));
+	
 					
 				    final Job input_job = Job.getInstance(config);
-				    input_job.setInputFormatClass(input_format_info.get().getAccessService().either(l -> l.getClass(), r -> r));
-				    input_format_info.get().getAccessConfig().ifPresent(map -> {
-				    	map.entrySet().forEach(kv -> input_job.getConfiguration().set(kv.getKey(), kv.getValue().toString()));
-				    });							    
-					per_input_action.accept(input, input_job);
+				    input_job.setInputFormatClass(BeFileInputFormat_Pure.class);				
+					paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(input_job, new Path(path))));
+					per_input_action.accept(input_with_test_settings, input_job);
 				}
-			}
-		}))
-		;			
+				else { // not easily available in HDFS directory format, try getting from the context
+					
+					Optional<HadoopAccessContext> input_format_info = context.getServiceInput(HadoopAccessContext.class, Optional.empty(), job, input_with_test_settings);
+					if (!input_format_info.isPresent()) {
+						_logger.warn(ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input_with_test_settings)));
+	
+						//DEBUG
+						//System.out.println(ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input_with_test_settings)));
+					}
+					else {
+						_logger.info(ErrorUtils.get("Adding data service path for bucket {0}: {1}", bucket.full_name(),
+								input_format_info.get().describe()));
+	
+						//DEBUG
+						//System.out.println(ErrorUtils.get("Adding data service path for bucket {0}: {1}", bucket.full_name(),input_format_info.get().describe()));
+						
+					    final Job input_job = Job.getInstance(config);
+					    input_job.setInputFormatClass(input_format_info.get().getAccessService().either(l -> l.getClass(), r -> r));
+					    input_format_info.get().getAccessConfig().ifPresent(map -> {
+					    	map.entrySet().forEach(kv -> input_job.getConfiguration().set(kv.getKey(), kv.getValue().toString()));
+					    });							    
+						per_input_action.accept(input_with_test_settings, input_job);
+					}
+				}
+			}))
+			;			
 	}
 	
-	/** Combines all inputs into a single java RDD
-	 * (this currently doesn't work because Aleph2 multi input format breaks while serializing - it's not really needed anyway)
-	 * @param context
-	 * @param spark_context
-	 * @return
+	/** Builds a multimap of named SQL inputs
+	 * @param context the analytic context retrieved from the 
+	 * @return A multi map of Java RDDs against name (with input name built as resource_name:data_service if not present)
 	 */
-//	public static JavaPairRDD<Object, Tuple2<Long, IBatchRecord>> getCombinedInput(final IAnalyticsContext context, final JavaSparkContext spark_context) {
-//		
-//	    //TODO test spec
-////	    		testSpec.flatMap(testSpecVals -> 
-////	    							Optional.ofNullable(testSpecVals.requested_num_objects()));
-////	    //then gets applied to all the inputs:
-////	    debug_max.ifPresent(val -> config.set(BatchEnrichmentJob.BE_DEBUG_MAX_SIZE, val.toString()));
-//				
-//		final Configuration config = HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties());
-//		
-//		//(these exist by construction)
-//		final DataBucketBean bucket = context.getBucket().get();
-//		final AnalyticThreadJobBean job = context.getJob().get();
-//		
-//		//OK this doesn't work because of the over complex split functionality used
-//		
-//	    final Aleph2MultiInputFormatBuilder input_builder = new Aleph2MultiInputFormatBuilder();
-//		
-//		buildAleph2Inputs(context, bucket, job, config, (input, input_job) -> input_builder.addInput(UuidUtils.get().getRandomUuid(), input_job));		
-//		
-//		final Job dummy_hadoop_job = Lambdas.wrap_u(() -> Job.getInstance(config, "dummy")).get();
-//	    input_builder.build(dummy_hadoop_job);
-//
-//	    //DEBUG
-//	    //System.out.println("CONFIG: " + Optionals.streamOf(dummy_hadoop_job.getConfiguration().iterator(), false).map(kv -> kv.getKey() + " = " + kv.getValue()).collect(Collectors.joining("\n")));
-//	    
-//	    @SuppressWarnings("unchecked")
-//		JavaPairRDD<Object, Tuple2<Long, IBatchRecord>> ret_val =
-//	    		spark_context.newAPIHadoopRDD(dummy_hadoop_job.getConfiguration(), Aleph2MultiInputFormat.class, String.class, Tuple2.class);
-//	    
-//	    return ret_val;
-//	}
+	@SuppressWarnings("unchecked")
+	public static Multimap<String, JavaSchemaRDD> buildBatchSparkSqlInputs(
+			final IAnalyticsContext context, 
+			final Optional<ProcessingTestSpecBean> maybe_test_spec,
+			final JavaSQLContext spark_sql_context,
+			final Set<String> exclude_names
+			)
+	{		
+		final AnalyticThreadJobBean job = context.getJob().get();
+		
+		final Multimap<String, JavaSchemaRDD> mutable_builder = HashMultimap.create();
+		
+	    transformInputBean(Optionals.ofNullable(job.inputs()).stream(), maybe_test_spec)
+			.filter(input -> !exclude_names.contains(input.name()))
+			.forEach(Lambdas.wrap_consumer_u(input -> {
+				Optional<SparkSqlAccessContext> maybe_input_format_info = context.getServiceInput(SparkSqlAccessContext.class, Optional.empty(), job, input);
+				maybe_input_format_info
+					.flatMap(input_format_info -> input_format_info.getAccessConfig())
+					.map(info_objects -> (Function<JavaSQLContext, JavaSchemaRDD>)info_objects.get(input.name()))
+					.ifPresent(rdd_getter -> {
+						mutable_builder.put(input.name(), rdd_getter.apply(spark_sql_context));
+					});
+			}))
+			;
+
+		return mutable_builder;
+	}
 	
-	//TODO: have a getSparkSql
+	//TODO: have a convert to SQL
 	
 	/** Builds a multimap of named inputs
 	 * @param context the analytic context retrieved from the 
 	 * @return A multi map of Java RDDs against name (with input name built as resource_name:data_service if not present)
 	 */
-	public static Multimap<String, JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>> buildBatchSparkInputs(final IAnalyticsContext context, final JavaSparkContext spark_context) {
-		
+	public static Multimap<String, JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>> buildBatchSparkInputs(
+			final IAnalyticsContext context, 
+			final Optional<ProcessingTestSpecBean> maybe_test_spec,
+			final JavaSparkContext spark_context,
+			final Set<String> exclude_names
+			)
+	{		
 		final DataBucketBean bucket = context.getBucket().get();
 		final AnalyticThreadJobBean job = context.getJob().get();
 		
 		final Configuration config = HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties());
+		config.set(BatchEnrichmentJob.BE_BUCKET_SIGNATURE, BeanTemplateUtils.toJson(bucket).toString());
+		maybe_test_spec.ifPresent(test_spec -> Optional.ofNullable(test_spec.requested_num_objects()).ifPresent(num -> config.set(BatchEnrichmentJob.BE_DEBUG_MAX_SIZE, Long.toString(num))));
 		
-		Multimap<String, JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>> mutable_builder = HashMultimap.create();
+		final Multimap<String, JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>> mutable_builder = HashMultimap.create();
 		
-		buildAleph2Inputs(context, bucket, job, config, 
+		buildAleph2Inputs(context, bucket, job, maybe_test_spec, config, exclude_names,
 				(input, input_job) -> {
 					try {
 						@SuppressWarnings("unchecked")

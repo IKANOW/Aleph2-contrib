@@ -913,14 +913,15 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 * @param <O> - the object type
 	 */
 	public class ElasticsearchBatchSubsystem implements IBatchSubservice<O> {
-
+		final protected Object sync_lock = new Object(); 
+		
 		protected ElasticsearchBatchSubsystem() {
 			// Kick off thread that handles higher speed flushing
 			final ExecutorService executor = Executors.newSingleThreadExecutor();
 			executor.submit(() -> {
 				for (;;) {
 					if (_flush_now) {
-						synchronized (this) {
+						synchronized (sync_lock) {
 							_current.flush(); // (must always be non-null because _flush_now can only be set if _current exists)
 							_flush_now = false;
 						}
@@ -934,7 +935,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		public void setBatchProperties(final Optional<Integer> max_objects, final Optional<Long> size_kb, final Optional<Duration> flush_interval, final Optional<Integer> write_threads)
 		{
 			BulkProcessor old = null;
-			synchronized (this) {
+			synchronized (sync_lock) {
 				old = _current;
 				_current = buildBulkProcessor(max_objects, size_kb, flush_interval, write_threads);
 			}
@@ -950,22 +951,26 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		}
 		
 		@Override
-		public synchronized void storeObjects(final List<O> new_objects, final boolean replace_if_present) {
-			if (null == _current) {
-				_current = buildBulkProcessor();
+		public void storeObjects(final List<O> new_objects, final boolean replace_if_present) {
+			synchronized (sync_lock) {
+				if (null == _current) {
+					_current = buildBulkProcessor();
+				}
+				new_objects.stream().forEach(new_object -> 			
+					_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
+						Either.left(new_object), replace_if_present, true).request()));
 			}
-			new_objects.stream().forEach(new_object -> 			
-				_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
-					Either.left(new_object), replace_if_present, true).request()));
 		}
 
 		@Override
-		public synchronized void storeObject(final O new_object, final boolean replace_if_present) {
-			if (null == _current) {
-				_current = buildBulkProcessor();
-			}			
-			_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
-							Either.left(new_object), replace_if_present, true).request());
+		public void storeObject(final O new_object, final boolean replace_if_present) {
+			synchronized (sync_lock) {
+				if (null == _current) {
+					_current = buildBulkProcessor();
+				}			
+				_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
+								Either.left(new_object), replace_if_present, true).request());
+			}
 		}
 		
 		private boolean _flush_now = false; // (_very_ simple inter-thread comms via this mutable var, NOTE: don't let it get more complex than this without refactoring)
@@ -991,46 +996,56 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 								{
 									final ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext auto_context = (ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext) _state.es_context.typeContext();
 									final Iterator<BulkItemResponse> it = out.iterator();
-									synchronized (this) {
-										while (it.hasNext()) {										
-											final BulkItemResponse bir = it.next();
-											if (bir.isFailed()) {								
-												final String error_message = bir.getFailure().getMessage();
+									final LinkedList<Tuple2<BulkItemResponse, String>> mutable_errs = new LinkedList<>(); 
+									while (it.hasNext()) {										
+										final BulkItemResponse bir = it.next();
+										if (bir.isFailed()) {								
+											final String error_message = bir.getFailure().getMessage();
+											
+											if (error_message.startsWith("MapperParsingException")
+													||
+												error_message.startsWith("WriteFailureException; nested: MapperParsingException"))
+											{
+												final Set<String> fixed_type_fields = auto_context.fixed_type_fields();
+												if (!fixed_type_fields.isEmpty()) {
+													// Obtain the field name from the exception (if we fail then drop the record) 
+													final String field = getFieldFromParsingException(error_message);
+													if ((null == field) || fixed_type_fields.contains(field)) {
+														continue;
+													}
+												}//(else roll on to...)																												
 												
-												if (error_message.startsWith("MapperParsingException")
-														||
-													error_message.startsWith("WriteFailureException; nested: MapperParsingException"))
-												{
-													final Set<String> fixed_type_fields = auto_context.fixed_type_fields();
-													if (!fixed_type_fields.isEmpty()) {
-														// Obtain the field name from the exception (if we fail then drop the record) 
-														final String field = getFieldFromParsingException(error_message);
-														if ((null == field) || fixed_type_fields.contains(field)) {
-															continue;
-														}
-													}//(else roll on to...)																												
-													
-													String failed_json = null;
+												final String failed_json = Lambdas.get(() -> {
 													final ActionRequest<?> ar = in.requests().get(bir.getItemId());
 													if (ar instanceof IndexRequest) {											
 														IndexRequest ir = (IndexRequest) ar;
-														failed_json = ir.source().toUtf8();
+														return ir.source().toUtf8();
 													}
-													if (null != failed_json) {
-														_flush_now = true;
-														synchronized (ElasticsearchBatchSubsystem.this) {
-															_current.add(singleObjectIndexRequest(
-																		Either.right(Tuples._2T(bir.getIndex(), 
-																				ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), bir.getType()))), 
-																		Either.right(Tuples._2T(bir.getId(), failed_json)), 
-																		false, true).request());
-														}
-													}//(End got the source, so re-insert this into the stream)
-												}//(was a mapping error)
-											}//(item failed)
-										}//(loop over iterms)
+													else return null;
+												});
+												if (null != failed_json) {
+													mutable_errs.add(Tuples._2T(bir, failed_json));
+												}
+												
+											}//(was a mapping error)
+										}//(item failed)
+									}//(loop over iterms)
 										
-									}//(synchronized)									
+									if (!mutable_errs.isEmpty()) { // Reinsert into the steam
+										CompletableFuture.runAsync(() -> {
+											synchronized (sync_lock) {
+												_flush_now = true;
+												mutable_errs.forEach(bir_json -> 
+													_current.add(singleObjectIndexRequest(
+																Either.right(Tuples._2T(bir_json._1().getIndex(), 
+																		ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), bir_json._1().getType()))), 
+																Either.right(Tuples._2T(bir_json._1().getId(), bir_json._2())), 
+																false, true).request())
+												);
+											}														
+										});
+									}
+										
 								}//(has failures AND is an auto type)
 								
 							}//(end afterBulk)
@@ -1066,7 +1081,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		 */
 		@Override
 		public CompletableFuture<?> flushOutput() {
-			synchronized (this) {
+			synchronized (sync_lock) {
 				if (null != _current) _current.flush(); 
 			}
 			// Just sleep for 1.25s

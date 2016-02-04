@@ -11,8 +11,10 @@ import org.bson.types.ObjectId;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.infinit.e.data_model.driver.InfiniteDriver;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
+import com.mongodb.DBObject;
 import com.mongodb.WriteResult;
 
 
@@ -21,6 +23,7 @@ public class IkanowV1CookieAuthentication {
 	protected IServiceContext serviceContext = null;
 	protected IManagementDbService _underlying_management_db = null;
 	private DBCollection cookieDb = null; 
+	private DBCollection authenticationDb = null; 
 	private static final Logger logger = LogManager.getLogger(IkanowV1CookieAuthentication.class);
 
 	private IkanowV1CookieAuthentication(IServiceContext serviceContext){
@@ -41,6 +44,8 @@ public class IkanowV1CookieAuthentication {
 		}
 		String cookieOptions = "security.cookies";
 		cookieDb = _underlying_management_db.getUnderlyingPlatformDriver(DBCollection.class, Optional.of(cookieOptions)).get();
+		String authenticationOptions = "security.authentication";
+		authenticationDb = _underlying_management_db.getUnderlyingPlatformDriver(DBCollection.class, Optional.of(authenticationOptions)).get();
 		}
 
 	protected DBCollection getCookieStore(){
@@ -49,7 +54,83 @@ public class IkanowV1CookieAuthentication {
 		}
 	      return cookieDb;		
 	}
+
+	protected DBCollection getAuthenticationStore(){
+		if(authenticationDb == null){
+			initDb();
+		}
+	      return authenticationDb;		
+	}
 	
+	public CookieBean createCookieByEmail(String email)
+	{
+		CookieBean cb = null;
+		String profileId = lookupProfileIdByEmail(email);
+		if(profileId!=null){
+			cb = 	createCookie(profileId);
+		}
+		return cb;
+	}
+
+	/** TODO
+	 * @return
+	 */
+	protected InfiniteDriver getRootDriver() {
+		final InfiniteDriver driver = new InfiniteDriver();
+		// create an admin cookie (get admin user by doing a query vs the DB for superuser (or whatever):true, unless we always know what it is?)
+		//driver.useExistingCookie(admin_cookie);
+		return driver; 
+		
+		// (then can use public String registerPerson(WordPressSetupPojo wpSetup, ResponseObject responseObject) to create a user)
+		// FOR PASSWORD just generate a random string so it can't be guessed
+		// Here's the driver code that shows what you can/need to fill in
+//		Date date = new Date();
+//		SimpleDateFormat formatter = new SimpleDateFormat("MMM dd, yyyy kk:mm:ss aa");
+//		String today = formatter.format(date);
+//		String encrypted_password;
+//
+//		encrypted_password = encryptWithoutEncode(password);
+//
+//		WordPressUserPojo wpuser = new WordPressUserPojo();
+//		WordPressAuthPojo wpauth = new WordPressAuthPojo();
+//
+//		wpuser.setCreated(today);
+//		wpuser.setModified(today);
+//		wpuser.setFirstname(first_name);
+//		wpuser.setLastname(last_name);
+//		wpuser.setPhone(phone);
+//
+//		ArrayList<String> emailArray = new ArrayList<String>();
+//		emailArray.add(email);
+//		wpuser.setEmail(emailArray);
+//
+//		//wpauth.setWPUserID(email); CHANGE THIS TO USE ACTUAL WPUSERID
+//		wpauth.setPassword(encrypted_password);
+//		wpauth.setAccountType(accountType);
+//		wpauth.setCreated(today);
+//		wpauth.setModified(today);
+//		
+//		WordPressSetupPojo wpSetup = new WordPressSetupPojo();
+//		wpSetup.setAuth(wpauth);
+//		wpSetup.setUser(wpuser);
+//
+//		return registerPerson(wpSetup, responseObject);
+		
+	}
+	
+	protected String lookupProfileIdByEmail(String email) {
+		String profileId = null;
+		try {
+			BasicDBObject query = new BasicDBObject();
+			query.put("username", email);
+			DBObject result = getAuthenticationStore().findOne(query);
+			profileId = result!=null? ""+result.get("profileId"):null;
+		} catch (Exception e) {
+			logger.error("lookupProfileIdByEmail caught exception",e);			
+		}
+		return profileId;
+	}
+
 	/**
 	 * Creates a new session cookie  for a user, adding
 	 * an entry to our cookie table (maps cookieid

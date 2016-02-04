@@ -130,23 +130,28 @@ public class HdfsStorageService implements IStorageService {
 		T driver = null;
 		try {
 			if(driver_class!=null){
-				final Configuration config = getConfiguration();
-				URI uri = driver_options.isPresent() ? new URI(driver_options.get()) : getUri(config);
-				
-				if (driver_class.isAssignableFrom(AbstractFileSystem.class)) {
-	
-					AbstractFileSystem fs = AbstractFileSystem.createFileSystem(uri, config);
+				if (driver_class.isAssignableFrom(AbstractFileSystem.class) ||
+						driver_class.isAssignableFrom(FileContext.class)
+						)
+				{
+					final Configuration config = getConfiguration();
+					URI uri = driver_options.isPresent() ? new URI(driver_options.get()) : getUri(config);
 					
-					return (Optional<T>) Optional.of(fs);
-				}			
-				else if(driver_class.isAssignableFrom(FileContext.class)){					
-					if (driver_options.equals(IStorageService.LOCAL_FS)) {
-						FileContext fs = FileContext.getLocalFSFileContext(config);
+					if (driver_class.isAssignableFrom(AbstractFileSystem.class)) {
+		
+						AbstractFileSystem fs = AbstractFileSystem.createFileSystem(uri, config);
+						
 						return (Optional<T>) Optional.of(fs);
-					}
-					else {
-						FileContext fs = FileContext.getFileContext(AbstractFileSystem.createFileSystem(uri, config), config);
-						return (Optional<T>) Optional.of(fs);
+					}			
+					else if(driver_class.isAssignableFrom(FileContext.class)){					
+						if (driver_options.equals(IStorageService.LOCAL_FS)) {
+							FileContext fs = FileContext.getLocalFSFileContext(config);
+							return (Optional<T>) Optional.of(fs);
+						}
+						else {
+							FileContext fs = FileContext.getFileContext(AbstractFileSystem.createFileSystem(uri, config), config);
+							return (Optional<T>) Optional.of(fs);
+						}
 					}
 				}
 			} // !=null

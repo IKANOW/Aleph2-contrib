@@ -88,7 +88,8 @@ import fj.data.Validation;
 public class BatchEnrichmentJob{
 
 	public static String BATCH_SIZE_PARAM = "aleph2.batch.batchSize";
-	public static String BE_CONTEXT_SIGNATURE = "aleph2.batch.beContextSignature";
+	public static String BE_CONTEXT_SIGNATURE = "aleph2.batch.beContextSignature"; //(one of context signature or bucket signature must be filled in)
+	public static String BE_BUCKET_SIGNATURE = "aleph2.batch.beBucketSignature";  //(one of context signature or bucket signature must be filled in)
 	public static String BE_DEBUG_MAX_SIZE = "aleph2.batch.debugMaxSize";
 
 	private static final Logger logger = LogManager.getLogger(BatchEnrichmentJob.class);
@@ -584,6 +585,9 @@ public class BatchEnrichmentJob{
 			final BatchEnrichmentContext local_enrich_context = _first_element._2();
 			local_enrich_context.overrideOutput(handleReduceOutput);
 			
+			// Note depending on how handleReduceOutput is constructed above, this call might just batch the data output from the first pipeline element (ungrouped)
+			// or it might emit the object
+			// So worth noting that batching doesn't work well in a grouped pipeline element, you should make that a passthrough and put the batch-optmized logic behind it
 			_first_element._1().cloneForNewGrouping().onObjectBatch(
 					StreamUtils.zipWithIndex(Optionals.streamOf(values, false))
 						.map(ix -> {

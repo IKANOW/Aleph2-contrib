@@ -477,7 +477,10 @@ public class TestHdfsDataWriteService {
 			HfdsDataWriteService<JsonNode> write_service_json = (HfdsDataWriteService<JsonNode> )write_service.getRawService();
 			assertEquals(write_service_json._bucket, write_service._bucket);
 			
+			// Get underlying platform drivers with various options
+			
 			assertEquals(Optional.empty(), write_service.getUnderlyingPlatformDriver(String.class, Optional.empty()));
+			assertEquals(Optional.empty(), write_service.getUnderlyingPlatformDriver(String.class, Optional.of("{}")));
 		}
 
 		// Check the batch service isn't loaded

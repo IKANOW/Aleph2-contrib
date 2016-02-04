@@ -295,6 +295,8 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		   IkanowV1CookieAuthentication cookieAuth = IkanowV1CookieAuthentication.getInstance(ModuleUtils.getAppInjector().get());
 		   CookieBean cb = cookieAuth.createCookie(regularUserId);
 		   assertNotNull(cb);
+		   CookieBean cb2 = cookieAuth.createCookieByEmail("jf_user@ikanow.com");
+		   assertNotNull(cb2);
 	}
 
 }

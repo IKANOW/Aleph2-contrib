@@ -89,6 +89,7 @@ public class TestMockHdfsStorageSystem {
 		
 		assertFalse("Not found", storageService.getUnderlyingPlatformDriver(null, Optional.empty()).isPresent());
 		assertFalse("Not found", storageService.getUnderlyingPlatformDriver(String.class, Optional.empty()).isPresent());			
+		assertFalse("Not found", storageService.getUnderlyingPlatformDriver(String.class, Optional.of("{}")).isPresent());			
 	}
 
 	@Test
