@@ -119,7 +119,7 @@ public class HadoopTechnologyUtils {
 		
 		try {
 			if (null != job.config()) {
-				final List<EnrichmentControlMetadataBean> configs = convertAnalyticJob(job.name(), job.config());
+				final List<EnrichmentControlMetadataBean> configs = convertAnalyticJob(job.name(), Optional.ofNullable(job.config()).orElse(Collections.emptyMap()));
 				
 				// Is there a reducer step?
 				final Set<String> reducer_steps =
