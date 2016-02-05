@@ -94,11 +94,12 @@ public class SparkSqlTopology {
 				System.out.println("Registered tables = " + inputs.keySet().toString());
 
 				final DataFrame filtered_df = sql_context.sql(sql_string);
+				final String[] columns = filtered_df.columns(); // (have to do this here because columns() depends on transient code)
 				
 				final long written = filtered_df.javaRDD().map(row -> {
-					final ObjectNode j = _mapper.createObjectNode().put("message", row.toString());
+					final ObjectNode j = _mapper.createObjectNode(); //.put("message", row.toString()); (Don't think we want this now that we're using the columns)
 					for (int ii = 0; ii < row.length(); ++ii) {
-						j.set(filtered_df.columns()[ii], _mapper.convertValue(row.get(ii), JsonNode.class));						
+						j.set(columns[ii], _mapper.convertValue(row.get(ii), JsonNode.class));						
 					}					
 					return context.emitObject(Optional.empty(), context.getJob().get(), Either.left(j), Optional.empty());
 				})

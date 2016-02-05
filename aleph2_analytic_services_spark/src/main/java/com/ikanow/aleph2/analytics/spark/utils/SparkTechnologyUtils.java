@@ -134,6 +134,16 @@ public class SparkTechnologyUtils {
 				.add(spark_master)
 				.add("--jars")
 				.add(other_jars.stream().collect(Collectors.joining(",")))
+				.addAll(Optional.ofNullable(System.getProperty("hdp.version")).map(hdp_version -> { // Set HDP version from whatever I'm set to
+					return (List<String>)ImmutableList.<String>of(
+							"--conf", "spark.executor.extraJavaOptions=-Dhdp.version=" + hdp_version,
+							"--conf", "spark.driver.extraJavaOptions=-Dhdp.version=" + hdp_version,
+							"--conf", "spark.yarn.am.extraJavaOption=-Dhdp.version=" + hdp_version
+							);
+					})
+					.orElse(Collections.emptyList())
+				)
+				.add("--conf").add("spark.executor.extraJavaOptions=-Dhdp.version=" + System.getProperty("hdp.version"))
 				.addAll(job_options.isEmpty()
 						? Collections.emptyList()
 						: 							
