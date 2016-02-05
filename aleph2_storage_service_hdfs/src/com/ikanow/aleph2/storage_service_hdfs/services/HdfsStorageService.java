@@ -475,8 +475,12 @@ public class HdfsStorageService implements IStorageService {
 				return Optional.of(new_name_for_ex_primary.orElse(IStorageService.EX_PRIMARY_BUFFER_SUFFIX))
 						.filter(name -> !name.isEmpty())
 						.map(Lambdas.wrap_e((name -> {
+							// force delete destination, otherwise can run into problems
+							final Path dst_path = Path.mergePaths(path, new Path(name.startsWith("/") ? name : "/" + name));
+							try { fc.delete(dst_path, true); } catch (Exception e) {} // (happy if dir doesn't exist)
+							
 							//(NOTE ABOUT MERGE PATHS - IF STARTS WITH // THEN ASSUMES IS FS PROTOCOL AND IGNORES) 
-							fc.rename(path_to_move, Path.mergePaths(path, new Path(name.startsWith("/") ? name : "/" + name)), Rename.OVERWRITE);					
+							fc.rename(path_to_move, dst_path, Rename.OVERWRITE);					
 							return path;
 						})))
 						.orElseGet(Lambdas.wrap_e(() -> { // just delete it
@@ -521,8 +525,10 @@ public class HdfsStorageService implements IStorageService {
 				
 				final Validation<Throwable, Path> err1a = moveOrDeleteDir.apply(raw_top_level);
 				final Validation<Throwable, Path> err1b = moveToPrimary.apply(raw_top_level);
+				
 				final Validation<Throwable, Path> err2a = moveOrDeleteDir.apply(json_top_level);
 				final Validation<Throwable, Path> err2b = moveToPrimary.apply(json_top_level);
+				
 				final Validation<Throwable, Path> err3a = moveOrDeleteDir.apply(px_top_level);
 				final Validation<Throwable, Path> err3b = moveToPrimary.apply(px_top_level);
 				
