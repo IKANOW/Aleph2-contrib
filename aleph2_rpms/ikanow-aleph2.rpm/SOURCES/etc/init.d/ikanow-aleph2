@@ -28,7 +28,7 @@ pid_file=/var/run/ikanow/$prog.pid
 
 OPTIONS="-Dtag=$prog $JAVA_OPTS"
 
-exec="java $OPTIONS -classpath '/opt/aleph2-home/etc/:/opt/aleph2-home/lib/aleph2_data_model*:/opt/aleph2-home/lib/*' com.ikanow.aleph2.data_import_manager.modules.DataImportManagerModule /opt/aleph2-home/etc/v1_sync_service.properties /opt/aleph2-home/etc/conf.d > /dev/null 2>&1 &"
+exec="java $OPTIONS -classpath '/opt/aleph2-home/etc/:/opt/aleph2-home/lib/aleph2_data_model*:/opt/aleph2-home/lib/*:/opt/aleph2-home/server/lib/*' com.ikanow.aleph2.data_import_manager.modules.DataImportManagerModule /opt/aleph2-home/etc/v1_sync_service.properties /opt/aleph2-home/etc/conf.d > /dev/null 2>&1 &"
 
 start() {
         echo -n $"Starting $prog: "
