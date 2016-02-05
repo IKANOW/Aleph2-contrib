@@ -48,9 +48,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.SchemaRDD;
-import org.apache.spark.sql.api.java.JavaSQLContext;
-import org.apache.spark.sql.api.java.JavaSchemaRDD;
+import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.SQLContext;
 
 import scala.Tuple2;
 import scala.Tuple3;
@@ -95,7 +94,7 @@ public class SparkTechnologyUtils {
 
 	public final static String SBT_SUBMIT_BINARY = "bin/spark-submit";
 	
-	public static interface SparkSqlAccessContext extends IAnalyticsAccessContext<SchemaRDD> {}
+	public static interface SparkSqlAccessContext extends IAnalyticsAccessContext<DataFrame> {}
 	
 	/** Creates a command line call to launch spark
 	 * @param spark_home
@@ -415,16 +414,16 @@ public class SparkTechnologyUtils {
 	 * @return A multi map of Java RDDs against name (with input name built as resource_name:data_service if not present)
 	 */
 	@SuppressWarnings("unchecked")
-	public static Multimap<String, JavaSchemaRDD> buildBatchSparkSqlInputs(
+	public static Multimap<String, DataFrame> buildBatchSparkSqlInputs(
 			final IAnalyticsContext context, 
 			final Optional<ProcessingTestSpecBean> maybe_test_spec,
-			final JavaSQLContext spark_sql_context,
+			final SQLContext spark_sql_context,
 			final Set<String> exclude_names
 			)
 	{		
 		final AnalyticThreadJobBean job = context.getJob().get();
 		
-		final Multimap<String, JavaSchemaRDD> mutable_builder = HashMultimap.create();
+		final Multimap<String, DataFrame> mutable_builder = HashMultimap.create();
 		
 	    transformInputBean(Optionals.ofNullable(job.inputs()).stream(), maybe_test_spec)
 			.filter(input -> !exclude_names.contains(input.name()))
@@ -432,7 +431,7 @@ public class SparkTechnologyUtils {
 				Optional<SparkSqlAccessContext> maybe_input_format_info = context.getServiceInput(SparkSqlAccessContext.class, Optional.empty(), job, input);
 				maybe_input_format_info
 					.flatMap(input_format_info -> input_format_info.getAccessConfig())
-					.map(info_objects -> (Function<JavaSQLContext, JavaSchemaRDD>)info_objects.get(input.name()))
+					.map(info_objects -> (Function<SQLContext, DataFrame>)info_objects.get(input.name()))
 					.ifPresent(rdd_getter -> {
 						mutable_builder.put(input.name(), rdd_getter.apply(spark_sql_context));
 					});
