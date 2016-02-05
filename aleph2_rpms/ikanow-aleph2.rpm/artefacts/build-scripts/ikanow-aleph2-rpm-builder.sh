@@ -26,7 +26,7 @@ mkdir -p ikanow-aleph2-${VERSION}-${RELEASETYPE}/opt/aleph2-home/lib
 mkdir -p ikanow-aleph2-${VERSION}-${RELEASETYPE}/opt/aleph2-home/server/lib
 mv ikanow-aleph2-${VERSION}-${RELEASETYPE}/*.jar ikanow-aleph2-${VERSION}-${RELEASETYPE}/opt/aleph2-home/lib
 #SPECIAL CASE: move this one file into server/lib (so tomcat doesn't have access to it)
-mv ikanow-aleph2-${VERSION}-${RELEASETYPE}/opt/aleph2-home/lib/aleph2_server_only_depedendencies* ikanow-aleph2-${VERSION}-${RELEASETYPE}/opt/aleph2-home/server/lib 
+mv ikanow-aleph2-${VERSION}-${RELEASETYPE}/opt/aleph2-home/lib/aleph2_server_only_dependencies* ikanow-aleph2-${VERSION}-${RELEASETYPE}/opt/aleph2-home/server/lib 
 mkdir -p ikanow-aleph2-${VERSION}-${RELEASETYPE}/opt/aleph2-home/etc
 mkdir -p ikanow-aleph2-${VERSION}-${RELEASETYPE}/opt/aleph2-home/etc/conf.d
 mkdir -p ikanow-aleph2-${VERSION}-${RELEASETYPE}/opt/aleph2-home/etc/sysconfig/
