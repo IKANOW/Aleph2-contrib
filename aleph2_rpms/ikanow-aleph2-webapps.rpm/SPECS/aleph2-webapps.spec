@@ -34,12 +34,12 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 # INSTALL *AND* UPGRADE
 	# (All files created from the tarball)
 
-	# Update the Aleph2 Bucket Builder templates:
-	sh /opt/aleph2-home/webapps/scripts/v1_inject_bucket_builder_templates.sh
-
 %post
 ###########################################################################
 # INSTALL *AND* UPGRADE
+
+	# Update the Aleph2 Bucket Builder templates:
+	sh /opt/aleph2-home/webapps/scripts/v1_inject_bucket_builder_templates.sh
 
 %preun
 
@@ -51,10 +51,10 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 
 %files
 %defattr(-,tomcat,tomcat)
-%dir /opt/aleph2-home/webapps/
-%dir /opt/aleph2-home/webapps/scripts
-%dir /opt/aleph2-home/webapps/lib
-%dir /opt/aleph2-home/webapps/templates
+/opt/aleph2-home/webapps/
+/opt/aleph2-home/webapps/scripts/
+/opt/aleph2-home/webapps/lib/
+/opt/aleph2-home/webapps/templates/
 /opt/tomcat-infinite/interface-engine/webapps/aleph2_bucket_builder.war 
 /opt/tomcat-infinite/interface-engine/webapps/aleph2_web_sso.war
 

@@ -20,13 +20,14 @@ import java.util.Optional;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.api.java.JavaSQLContext;
-import org.apache.spark.sql.api.java.JavaSchemaRDD;
+import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.SQLContext;
 
 import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.Multimap;
 import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
 import com.ikanow.aleph2.analytics.spark.utils.SparkTechnologyUtils;
@@ -85,15 +86,21 @@ public class SparkSqlTopology {
 			
 			try (final JavaSparkContext jsc = new JavaSparkContext(spark_context)) {
 	
-				JavaSQLContext sql_context = new JavaSQLContext(jsc);
+				SQLContext sql_context = new SQLContext(jsc);
 				
-				final Multimap<String, JavaSchemaRDD> inputs = SparkTechnologyUtils.buildBatchSparkSqlInputs(context, test_spec, sql_context, Collections.emptySet());
+				final Multimap<String, DataFrame> inputs = SparkTechnologyUtils.buildBatchSparkSqlInputs(context, test_spec, sql_context, Collections.emptySet());
 				
 				//INFO
 				System.out.println("Registered tables = " + inputs.keySet().toString());
+
+				final DataFrame filtered_df = sql_context.sql(sql_string);
+				final String[] columns = filtered_df.columns(); // (have to do this here because columns() depends on transient code)
 				
-				final long written = sql_context.sql(sql_string).map(row -> {
-					final JsonNode j = _mapper.createObjectNode().put("message", row.toString());
+				final long written = filtered_df.javaRDD().map(row -> {
+					final ObjectNode j = _mapper.createObjectNode(); //.put("message", row.toString()); (Don't think we want this now that we're using the columns)
+					for (int ii = 0; ii < row.length(); ++ii) {
+						j.set(columns[ii], _mapper.convertValue(row.get(ii), JsonNode.class));						
+					}					
 					return context.emitObject(Optional.empty(), context.getJob().get(), Either.left(j), Optional.empty());
 				})
 				.count();

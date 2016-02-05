@@ -40,7 +40,7 @@ import com.google.common.collect.ImmutableMap;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.spark.sql.SchemaRDD;
+import org.apache.spark.sql.DataFrame;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
 import org.elasticsearch.action.admin.indices.template.delete.DeleteIndexTemplateResponse;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesRequest;
@@ -789,10 +789,10 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 						.map(access_context -> AnalyticsUtils.injectImplementation((Class<? extends IAnalyticsAccessContext>)driver_class, access_context))
 						;
 			}
-			else if (SchemaRDD.class.isAssignableFrom(AnalyticsUtils.getTypeName((Class<? extends IAnalyticsAccessContext>)driver_class))) { // SCHEMA RDD
+			else if (DataFrame.class.isAssignableFrom(AnalyticsUtils.getTypeName((Class<? extends IAnalyticsAccessContext>)driver_class))) { // SCHEMA RDD
 				return (Optional<T>) driver_options.filter(__ -> 3 == owner_bucket_config.length)
 						.map(__ -> BeanTemplateUtils.from(owner_bucket_config[2], AnalyticThreadJobBean.AnalyticThreadJobInputBean.class))
-						.map(job_input -> ElasticsearchSparkUtils.getInputFormat(_crud_factory.getClient(), job_input.get()))
+						.map(job_input -> ElasticsearchSparkUtils.getDataFrame(_crud_factory.getClient(), job_input.get()))
 						.map(access_context -> AnalyticsUtils.injectImplementation((Class<? extends IAnalyticsAccessContext>)driver_class, access_context))
 						;				
 			}

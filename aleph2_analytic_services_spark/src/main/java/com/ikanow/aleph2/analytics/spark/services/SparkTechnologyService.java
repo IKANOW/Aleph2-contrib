@@ -67,8 +67,6 @@ import fj.data.Validation;
 public class SparkTechnologyService implements IAnalyticsTechnologyService, IExtraDependencyLoader {
 	protected static final Logger _logger = LogManager.getLogger();	
 
-	//TODO: mode - do lock to nodes
-	
 	/** Spark currently uses external processes to run, so need to lock to a single node
 	 *  Fix this longer term by using direct YARN interface
 	 * @param completed_bucket

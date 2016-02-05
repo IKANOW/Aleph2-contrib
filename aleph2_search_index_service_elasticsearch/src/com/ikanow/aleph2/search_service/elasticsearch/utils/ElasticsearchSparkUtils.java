@@ -22,9 +22,8 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.apache.spark.sql.SchemaRDD;
-import org.apache.spark.sql.api.java.JavaSQLContext;
-import org.apache.spark.sql.api.java.JavaSchemaRDD;
+import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.SQLContext;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.common.collect.ImmutableMap;
@@ -51,13 +50,13 @@ public class ElasticsearchSparkUtils {
 	 * @param input_config - the input settings
 	 * @return
 	 */
-	public static IAnalyticsAccessContext<SchemaRDD> getInputFormat(
+	public static IAnalyticsAccessContext<DataFrame> getDataFrame(
 			final Client client,
 			final AnalyticThreadJobBean.AnalyticThreadJobInputBean job_input)
 	{
 		final SetOnce<Map<String, String>> _es_options = new SetOnce<>();
 		
-		return new IAnalyticsAccessContext<SchemaRDD>() {
+		return new IAnalyticsAccessContext<DataFrame>() {
 			
 			@Override
 			public String describe() {
@@ -73,8 +72,8 @@ public class ElasticsearchSparkUtils {
 			 */
 			@SuppressWarnings("unchecked")
 			@Override
-			public Either<SchemaRDD, Class<SchemaRDD>> getAccessService() {
-				return Either.right((Class<SchemaRDD>)(Class<?>)SchemaRDD.class);
+			public Either<DataFrame, Class<DataFrame>> getAccessService() {
+				return Either.right((Class<DataFrame>)(Class<?>)DataFrame.class);
 			}
 
 			@Override
@@ -124,10 +123,10 @@ public class ElasticsearchSparkUtils {
 				_es_options.set(es_options);
 				final String table_name = Optional.ofNullable(job_input.name()).orElse(BucketUtils.getUniqueSignature(job_input.resource_name_or_id(), Optional.empty()));
 
-				Function<JavaSQLContext, JavaSchemaRDD> f = sql_context -> {					
-					JavaSchemaRDD rdd = JavaEsSparkSQL.esRDD(sql_context, es_options);
-					sql_context.registerRDDAsTable(rdd, table_name);
-					return rdd;
+				Function<SQLContext, DataFrame> f = sql_context -> {					
+					DataFrame df = JavaEsSparkSQL.esDF(sql_context, es_options);
+					df.registerTempTable(table_name);
+					return df;
 				}
 				;
 				return Optional.of(ImmutableMap.of(table_name, (Object)f));

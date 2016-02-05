@@ -121,8 +121,11 @@ public class Aleph2MultiInputFormatBuilder {
 								return stringifier.fromString(id_cfg._2());
 							}							
 						}));
-						config.addResource(job_context.getConfiguration()); //(ie add everything else)
 						InputFormat format = (InputFormat) ReflectionUtils.newInstance(Class.forName(config.get(ALEPH2_MULTI_INPUT_FORMAT_CLAZZ)), config);
+						config.addResource(new Configuration(job_context.getConfiguration()));
+							//(have seen ConcurrentModificationExceptions in subsequent operations (in 2.7.1 - which fixed some known 2.6.0 exceptions), very unclear why
+							// so try to make more robust by cloning the "global" state)
+							//(ie then add everything else ready for the delegated getSplits call)
 						
 						return ((List<InputSplit>)format.getSplits(createJobContext(job_context, config)))
 								.stream()

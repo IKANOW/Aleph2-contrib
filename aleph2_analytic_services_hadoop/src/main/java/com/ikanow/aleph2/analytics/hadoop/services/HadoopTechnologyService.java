@@ -254,7 +254,10 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 				? analytic_bucket
 				: BeanTemplateUtils.clone(analytic_bucket)
 										.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.batch)
-										.with(DataBucketBean::batch_enrichment_configs, HadoopTechnologyUtils.convertAnalyticJob(job_to_start.name(), job_to_start.config()))
+										.with(DataBucketBean::batch_enrichment_configs, 
+												HadoopTechnologyUtils.convertAnalyticJob(
+														job_to_start.name(), 
+														Optional.ofNullable(job_to_start.config()).orElse(Collections.emptyMap())))
 									.done();
 		
 		wrapped_context.setBucket(converted_bucket);
