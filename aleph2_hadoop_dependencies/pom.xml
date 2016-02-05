@@ -278,10 +278,10 @@
 		</dependency>
 		<!--  We do want servlet-api, just the right version compared to the tomcat version -->
 		<dependency>
-			<groupId>javax.servlet</groupId>
-			<artifactId>javax.servlet-api</artifactId>
-			<version>3.0.1</version>
-			<scope>compile</scope>
+	  		<groupId>com.ikanow.aleph2</groupId>
+	  		<artifactId>aleph2_server_only_dependencies</artifactId>
+	  		<version>${aleph2.version}</version>
+			<scope>${aleph2.scope}</scope>  		
 		</dependency>
 		<dependency>
 			<!-- This just ensures that log4j won't be in the shaded jar via some transitive install -->

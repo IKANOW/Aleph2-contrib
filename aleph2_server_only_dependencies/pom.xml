@@ -2,7 +2,7 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.ikanow.aleph2</groupId>
-	<artifactId>aleph2_storm_dependencies</artifactId>
+	<artifactId>aleph2_server_only_dependencies</artifactId>
 	<version>${aleph2.version}</version>
 	<properties>
 		<aleph2.version>0.0.1-SNAPSHOT</aleph2.version>
@@ -62,16 +62,6 @@
 							<goal>shade</goal>
 						</goals>
 						<configuration>
-						    <filters>
-						        <filter>
-						            <artifact>*:*</artifact>
-						            <excludes>
-						                <exclude>META-INF/*.SF</exclude>
-						                <exclude>META-INF/*.DSA</exclude>
-						                <exclude>META-INF/*.RSA</exclude>
-						            </excludes>
-						        </filter>
-						    </filters>						
 							<shadedArtifactAttached>true</shadedArtifactAttached>
 						</configuration>
 					</execution>
@@ -111,35 +101,9 @@
 						</lifecycleMappingMetadata>
 					</configuration>
 				</plugin>
-				<plugin>
-                <groupId>com.googlecode.addjars-maven-plugin</groupId>
-                <artifactId>addjars-maven-plugin</artifactId>
-                <version>1.0.5</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>add-jars</goal>
-                        </goals>
-                        <configuration>
-                            <resources>
-                                <resource>
-                                    <directory>${basedir}/external_libs</directory>
-                                </resource>
-                            </resources>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
 			</plugins>
 		</pluginManagement>
 	</build>
-	<repositories>
-    <repository>
-      <id>hdp_repo</id>
-      <name>hortonworks repo</name>
-      <url>http://repo.hortonworks.com/content/repositories/releases</url>
-    </repository>
-  </repositories>
 	<dependencies>
 		<dependency>
 			<groupId>jdk.tools</groupId>
@@ -154,46 +118,12 @@
 			<version>4.12</version>
 			<scope>test</scope>
 		</dependency>
+		<!-- This is needed when not running inside tomcat, _can't_ be present otherwise -->
 		<dependency>
-			<!-- This just ensures that log4j won't be in the shaded jar via some transitive install -->
-			<groupId>log4j</groupId>
-			<artifactId>log4j</artifactId>
-			<version>[0,)</version>
-			<scope>provided</scope>			
-		</dependency>
-		<!-- Other external dependencies here -->
-		<dependency>
-			<groupId>org.yaml</groupId>
-			<artifactId>snakeyaml</artifactId>
-			<version>1.15</version>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.storm</groupId>
-			<artifactId>storm-core</artifactId>
-			<!-- This is selected to match HDP 2.3 -->
-			<version>0.10.0.2.3.0.0-2557</version>
- 			<exclusions> 
- 				<exclusion> 
- 					<artifactId>log4j-over-slf4j</artifactId> 
- 					<groupId>org.slf4j</groupId> 
- 				</exclusion> 
- 				<exclusion> 
- 					<artifactId>servlet-api</artifactId> 
- 					<groupId>javax.servlet</groupId> 
- 				</exclusion> 
- 				<exclusion> 
- 					<artifactId>jetty-util</artifactId> 
- 					<groupId>org.mortbay.jetty</groupId> 
- 				</exclusion> 
- 				<exclusion> 
- 					<artifactId>jetty</artifactId> 
- 					<groupId>org.mortbay.jetty</groupId> 
- 				</exclusion>
- 				<exclusion>
- 					<artifactId>javax.servlet</artifactId>
- 					<groupId>org.eclipse.jetty.orbit</groupId>
- 				</exclusion>
- 			</exclusions> 
+			<groupId>javax.servlet</groupId>
+			<artifactId>javax.servlet-api</artifactId>
+			<version>3.0.1</version>
+			<scope>compile</scope>
 		</dependency>
 	</dependencies>
 </project>
