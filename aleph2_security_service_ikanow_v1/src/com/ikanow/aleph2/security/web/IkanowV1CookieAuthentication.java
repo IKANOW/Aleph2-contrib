@@ -119,8 +119,9 @@ public class IkanowV1CookieAuthentication {
 		wpSetup.setUser(wpuser);
 
 		 InfiniteDriver infiniteDriver = getRootDriver();
-		ResponseObject responseObject = null;
-		infiniteDriver.registerPerson(wpSetup, responseObject);
+		ResponseObject responseObject = new ResponseObject("WP Register User",true,"User Registered Successfully");
+		String message = infiniteDriver.registerPerson(wpSetup, responseObject);
+		logger.debug(message);
 		} catch (Exception e) {
 			logger.error("createUser caught exception",e);			
 		}
@@ -138,6 +139,9 @@ public class IkanowV1CookieAuthentication {
 	 * @return
 	 */
 	protected InfiniteDriver getRootDriver() {
+		// testing only
+		InfiniteDriver.setDefaultApiRoot("http://api001.dev.ikanow.com:8080/api/");
+
 		final InfiniteDriver driver = new InfiniteDriver();
 		
 		String adminUsername = System.getProperty(ISecurityService.IKANOW_SYSTEM_LOGIN, "4e3706c48d26852237078005");
