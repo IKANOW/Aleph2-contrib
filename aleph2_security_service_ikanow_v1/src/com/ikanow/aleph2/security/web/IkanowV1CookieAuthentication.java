@@ -236,5 +236,18 @@ public class IkanowV1CookieAuthentication {
 		return deleted>0;
 	}
 
+	public boolean deleteSessionCookieInDbById(String cookieId){
+		int deleted = 0;
+		try {
+			BasicDBObject query = new BasicDBObject();
+			query.put("_id", new ObjectId(cookieId));
+			WriteResult result = getCookieStore().remove(query);
+			deleted = result.getN();
+			
+		} catch (Exception e) {
+			logger.error("deleteSessionCookieInDbById caught exception",e);			
+		}
+		return deleted>0;
+	}
 
 }
