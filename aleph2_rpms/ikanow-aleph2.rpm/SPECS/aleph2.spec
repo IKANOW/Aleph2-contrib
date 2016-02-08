@@ -63,6 +63,8 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 %defattr(-,tomcat,tomcat)
 /opt/aleph2-home/
 /opt/aleph2-home/lib/
+/opt/aleph2-home/server/
+/opt/aleph2-home/server/lib/
 /opt/aleph2-home/etc/
 /opt/aleph2-home/bin/
 %config /opt/aleph2-home/etc/log4j2.xml
