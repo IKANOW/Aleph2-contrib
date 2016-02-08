@@ -1,6 +1,6 @@
 #/bin/sh
 
-echo "Inject new Aleph2 bucket builder templates"
+echo "Inject or update Aleph2 bucket builder templates"
 
 #############################
 
@@ -51,8 +51,7 @@ share={
 	} ] 
 }
 
-var x = db.share.findOne({_id: id}, {_id:1});
-if (!x) db.share.insert(share);
+db.share.save(share);
 
 /////////////////////////////////////////////////////////////
 //
@@ -81,7 +80,6 @@ share={
 	} ] 
 }
 
-var x = db.share.findOne({_id: id}, {_id:1});
-if (!x) db.share.insert(share);
+db.share.save(share);
 
 EOF
