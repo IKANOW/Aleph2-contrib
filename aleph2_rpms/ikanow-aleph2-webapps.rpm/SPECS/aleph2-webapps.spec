@@ -66,3 +66,5 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 %dir /opt/aleph2-home/etc/aleph2_web_sso
 %config /opt/aleph2-home/etc/aleph2_web_sso/aleph2_web_sso.properties
 %config /opt/aleph2-home/etc/aleph2_web_sso/shiro.ini
+%config /opt/aleph2-home/etc/aleph2_web_sso/idp-metadata.xml
+/opt/aleph2-home/etc/aleph2_web_sso/dummySamlKeystore.jks

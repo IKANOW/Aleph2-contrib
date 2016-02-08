@@ -52,6 +52,10 @@ cp $WEB_UTILS_HOME/target/aleph2_web_utils-*-shaded.jar $WEBAPPS_LIB_DIR
 export SSO_CONFIG=$RPM_BUILD_DIR/opt/aleph2-home/etc/aleph2_web_sso/
 export SSO_CONFIG_TEMPLATES=$WEB_SSO_HOME/src/main/resources/
 
+#classpath:
+cp $SSO_CONFIG_TEMPLATES/idp-metadata.xml_template $SSO_CONFIG/idp-metadata.xml
+cp $SSO_CONFIG_TEMPLATES/samlKeystore.jks_template $SSO_CONFIG/dummySamlKeystore.jks
+#config dir:
 cp $SSO_CONFIG_TEMPLATES/aleph2_web_sso.properties_template $SSO_CONFIG/aleph2_web_sso.properties
 cp $SSO_CONFIG_TEMPLATES/shiro.ini_template $SSO_CONFIG/shiro.ini
 
