@@ -304,12 +304,12 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	}
 
 	@Test
-	@Ignore
+	@Ignore 
 	public void testUserCreation() throws Exception{
 		
 		   IkanowV1CookieAuthentication cookieAuth = IkanowV1CookieAuthentication.getInstance(ModuleUtils.getAppInjector().get());
 		   
-		   cookieAuth.createUser("test_user123@ikanow.com", "TFirst TLast", "TFirst", "TLast", "555-555-5555");
+		   cookieAuth.createUser("test_user123","test_user123@ikanow.com", "TFirst TLast", "TFirst", "TLast", "555-555-5555");
 	}
 
 }
