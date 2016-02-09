@@ -26,10 +26,10 @@ mongo <<EOF
 
 /////////////////////////////////////////////////////////////
 //
-// Generic bucket templates
+// Batch analytics templates
 
-var json = cat('/opt/aleph2-home/webapps/templates/aleph2_bucket_builder/generic_bucket_templates.json');
-var id = ObjectId("52f43a111111111000000010");
+var json = cat('/opt/aleph2-home/apps/templates/aleph2_bucket_builder/batch_analytics_templates.json');
+var id = ObjectId("52f43a111111111000000020");
 
 use social;
 var share={ 
@@ -41,14 +41,15 @@ var share={
 "endorsed" : [  ObjectId("4c927585d591d31d7b37097a") ], 
 "type" : "aleph2-bucket-template",
 "share": json, 
-"title" : "Generic Aleph2 bucket builder templates", 
-"description" : "Contains forms for building core Aleph2 functions into V2 buckets (via the V1 source editor)", 
+"title" : "Batch analytics Aleph2 bucket builder templates", 
+"description" : "Contains forms for building batch analytics and enrichment utilities", 
 "communities" : [ { 
 		"_id" : ObjectId("4c927585d591d31d7b37097a"), 
 		"name" : "Infinit.e System Community", 	
 		"comment" : "Added by addWidgetsToMongo.sh" 
 	} ] 
 }
+
 var curr = db.share.findOne( { "_id" : id } , { _id : 1 } );
 if (curr) db.share.update( { "_id" : id } , { \$set: { share: json } }, false, false );
 if (!curr) db.share.save(share);
