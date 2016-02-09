@@ -100,6 +100,14 @@ public class IkanowV1CookieAuthentication {
 		return cb;
 	}
 
+	/**
+	 *  This function needs to be called once before using the api, e.g. before creating a user.
+	 * @param apiRootUrl
+	 */
+	public void setApiRootUrl(String apiRootUrl){
+		InfiniteDriver.setDefaultApiRoot(apiRootUrl);
+	}
+	
 	public CookieBean createUser(String uid, String email, String firstName, String lastName, String phone) {
 		CookieBean userCookieBean = null;
 		if (uid != null && !uid.isEmpty() && email != null && ! email.isEmpty() && firstName != null && !firstName.isEmpty() && lastName != null && !lastName.isEmpty()) {
