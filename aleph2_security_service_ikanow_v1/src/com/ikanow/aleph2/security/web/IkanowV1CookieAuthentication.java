@@ -8,6 +8,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -83,7 +84,7 @@ public class IkanowV1CookieAuthentication {
 		return cb;
 	}
 
-	public CookieBean createUser(String email,String fullName, String firstName, String lastName, String phone){
+	public CookieBean createUser(String uid, String email,String fullName, String firstName, String lastName, String phone){
 		CookieBean userCookieBean=null;
 		try{
 				// (then can use public String registerPerson(WordPressSetupPojo wpSetup, ResponseObject responseObject) to create a user)
@@ -92,7 +93,8 @@ public class IkanowV1CookieAuthentication {
 		Date date = new Date();
 		SimpleDateFormat formatter = new SimpleDateFormat("MMM dd, yyyy kk:mm:ss aa");
 		String today = formatter.format(date);
-		String password = firstName+"."+lastName+today; // firstName.lastName
+		String password = UUID.randomUUID().toString();
+		 
 		String encryptedPassword = encryptWithoutEncode(password);
 
 		WordPressUserPojo wpuser = new WordPressUserPojo();
@@ -107,8 +109,9 @@ public class IkanowV1CookieAuthentication {
 		ArrayList<String> emailArray = new ArrayList<String>();
 		emailArray.add(email);
 		wpuser.setEmail(emailArray);
+		wpuser.setWPUserID(uid);
 
-		//wpauth.setWPUserID(email); CHANGE THIS TO USE ACTUAL WPUSERID
+		wpauth.setWPUserID(uid); //CHANGE THIS TO USE ACTUAL WPUSERID
 		wpauth.setPassword(encryptedPassword);
 		//wpauth.setAccountType(accountType);
 		wpauth.setCreated(today);
@@ -119,8 +122,12 @@ public class IkanowV1CookieAuthentication {
 		wpSetup.setUser(wpuser);
 
 		 InfiniteDriver infiniteDriver = getRootDriver();
-		ResponseObject responseObject = null;
-		infiniteDriver.registerPerson(wpSetup, responseObject);
+		ResponseObject responseObject = new ResponseObject("WP Register User",true,"User Registered Successfully");
+		String message = infiniteDriver.registerPerson(wpSetup, responseObject);
+		if(responseObject.isSuccess()){
+			userCookieBean = createCookieByEmail(uid);
+		}
+		logger.debug(message);
 		} catch (Exception e) {
 			logger.error("createUser caught exception",e);			
 		}
@@ -138,6 +145,9 @@ public class IkanowV1CookieAuthentication {
 	 * @return
 	 */
 	protected InfiniteDriver getRootDriver() {
+		// testing only
+		InfiniteDriver.setDefaultApiRoot("http://api001.dev.ikanow.com:8080/api/");
+
 		final InfiniteDriver driver = new InfiniteDriver();
 		
 		String adminUsername = System.getProperty(ISecurityService.IKANOW_SYSTEM_LOGIN, "4e3706c48d26852237078005");

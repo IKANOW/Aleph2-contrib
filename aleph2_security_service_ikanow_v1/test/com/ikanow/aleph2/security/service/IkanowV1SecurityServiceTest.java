@@ -27,6 +27,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.shiro.authc.AuthenticationException;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.inject.Inject;
@@ -300,6 +301,15 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		   // this time we are using a WPUserId
 		   CookieBean cb3 = cookieAuth.createCookieByEmail("jf_user_wp@ikanow.com");
 		   assertNotNull(cb3);
+	}
+
+	@Test
+	@Ignore 
+	public void testUserCreation() throws Exception{
+		
+		   IkanowV1CookieAuthentication cookieAuth = IkanowV1CookieAuthentication.getInstance(ModuleUtils.getAppInjector().get());
+		   
+		   cookieAuth.createUser("test_user123","test_user123@ikanow.com", "TFirst TLast", "TFirst", "TLast", "555-555-5555");
 	}
 
 }
