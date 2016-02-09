@@ -49,7 +49,7 @@ var share={
 "description" : "com.ikanow.aleph2.DummyEntryPoint", 
 "mediaType" : "application/java-archive", 
 "documentLocation" : 
-	{ "collection" : $ENRICH_FILE }, 
+	{ "collection" : "$ENRICH_FILE" }, 
 "communities" : [ { 
 		"_id" : ObjectId("4c927585d591d31d7b37097a"), 
 		"name" : "Infinit.e System Community", 	
@@ -58,7 +58,7 @@ var share={
 }
 
 var curr = db.share.findOne( { "_id" : id } , { _id : 1 } );
-if (curr) db.share.update( { "_id" : id } , { \$set: { documentLocation: { "collection" : $ENRICH_FILE } } }, false, false );
+if (curr) db.share.update( { "_id" : id } , { \$set: { title: share.title, modified: share.modified, documentLocation: { "collection" : share.documentLocation.collection } } }, false, false );
 if (!curr) db.share.save(share);
 
 /////////////////////////////////////////////////////////////
@@ -80,7 +80,7 @@ var share={
 "description" : "com.ikanow.aleph2.example.flume_harvester.services.FlumeHarvestTechnology", 
 "mediaType" : "application/java-archive", 
 "documentLocation" : 
-	{ "collection" : $FLUME_FILE }, 
+	{ "collection" : "$FLUME_FILE" }, 
 "communities" : [ { 
 		"_id" : ObjectId("4c927585d591d31d7b37097a"), 
 		"name" : "Infinit.e System Community", 	
@@ -89,7 +89,7 @@ var share={
 }
 
 var curr = db.share.findOne( { "_id" : id } , { _id : 1 } );
-if (curr) db.share.update( { "_id" : id } , { \$set: { documentLocation: { "collection" : $FLUME_FILE } } }, false, false );
+if (curr) db.share.update( { "_id" : id } , { \$set: { title: share.title, modified: share.modified, documentLocation: { "collection" : share.documentLocation.collection } } }, false, false );
 if (!curr) db.share.save(share);
 
 /////////////////////////////////////////////////////////////
@@ -111,7 +111,7 @@ var share={
 "description" : "com.ikanow.aleph2.harvest.logstash.services.LogstashHarvestService", 
 "mediaType" : "application/java-archive", 
 "documentLocation" : 
-	{ "collection" : $LOGSTASH_FILE }, 
+	{ "collection" : "$LOGSTASH_FILE" }, 
 "communities" : [ { 
 		"_id" : ObjectId("4c927585d591d31d7b37097a"), 
 		"name" : "Infinit.e System Community", 	
@@ -120,7 +120,7 @@ var share={
 }
 
 var curr = db.share.findOne( { "_id" : id } , { _id : 1 } );
-if (curr) db.share.update( { "_id" : id } , { \$set: { documentLocation: { "collection" : $LOGSTASH_FILE } } }, false, false );
+if (curr) db.share.update( { "_id" : id } , { \$set: { title: share.title, modified: share.modified, documentLocation: { "collection" : share.documentLocation.collection } } }, false, false );
 if (!curr) db.share.save(share);
 
 /////////////////////////////////////////////////////////////
@@ -142,7 +142,7 @@ var share={
 "description" : "com.ikanow.aleph2.harvest.script.services.ScriptHarvestService", 
 "mediaType" : "application/java-archive", 
 "documentLocation" : 
-	{ "collection" : $SCRIPT_FILE }, 
+	{ "collection" : "$SCRIPT_FILE" }, 
 "communities" : [ { 
 		"_id" : ObjectId("4c927585d591d31d7b37097a"), 
 		"name" : "Infinit.e System Community", 	
@@ -151,7 +151,7 @@ var share={
 }
 
 var curr = db.share.findOne( { "_id" : id } , { _id : 1 } );
-if (curr) db.share.update( { "_id" : id } , { \$set: { documentLocation: { "collection" : $SCRIPT_FILE } } }, false, false );
+if (curr) db.share.update( { "_id" : id } , { \$set: { title: share.title, modified: share.modified, documentLocation: { "collection" : share.documentLocation.collection } } }, false, false );
 if (!curr) db.share.save(share);
 
 /////////////////////////////////////////////////////////////
@@ -173,7 +173,7 @@ var share={
 "description" : "com.ikanow.aleph2.storm.samples.topology.JavaScriptTopology2", 
 "mediaType" : "application/java-archive", 
 "documentLocation" : 
-	{ "collection" : $STORM_FILE }, 
+	{ "collection" : "$STORM_FILE" }, 
 "communities" : [ { 
 		"_id" : ObjectId("4c927585d591d31d7b37097a"), 
 		"name" : "Infinit.e System Community", 	
@@ -182,7 +182,7 @@ var share={
 }
 
 var curr = db.share.findOne( { "_id" : id } , { _id : 1 } );
-if (curr) db.share.update( { "_id" : id } , { \$set: { documentLocation: { "collection" : $STORM_FILE } } }, false, false );
+if (curr) db.share.update( { "_id" : id } , { \$set: { title: share.title, modified: share.modified, documentLocation: { "collection" : share.documentLocation.collection } } }, false, false );
 if (!curr) db.share.save(share);
 
 EOF
