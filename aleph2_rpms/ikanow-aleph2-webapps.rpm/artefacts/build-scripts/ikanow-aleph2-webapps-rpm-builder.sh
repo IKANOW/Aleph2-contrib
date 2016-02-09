@@ -64,9 +64,9 @@ cp $SSO_CONFIG_TEMPLATES/shiro.ini_template $SSO_CONFIG/shiro.ini
 
 tar --exclude='.gitignore' -czvf ${RPM_NAME}.tar.gz $RPM_BUILD_DIR/
 
-mkdir rpmbuild
+mkdir -p rpmbuild
 cd rpmbuild
-mkdir BUILD  BUILDROOT  RPMS  SOURCES  SPECS  SRPMS
+mkdir -p BUILD  BUILDROOT  RPMS  SOURCES  SPECS  SRPMS
 export TOPDIR=$(pwd)
 cd ..
 cp ${RPM_NAME}.tar.gz rpmbuild/SOURCES/

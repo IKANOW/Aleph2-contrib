@@ -48,9 +48,9 @@ cp $HOME_DIR/Aleph2-examples/aleph2_storm_script_topo/target/*-shaded.jar $PLUGI
 
 tar --exclude='.gitignore' -czvf ${RPM_NAME}.tar.gz $RPM_BUILD_DIR/
 
-mkdir rpmbuild
+mkdir -p rpmbuild
 cd rpmbuild
-mkdir BUILD  BUILDROOT  RPMS  SOURCES  SPECS  SRPMS
+mkdir -p BUILD  BUILDROOT  RPMS  SOURCES  SPECS  SRPMS
 export TOPDIR=$(pwd)
 cd ..
 cp ${RPM_NAME}.tar.gz rpmbuild/SOURCES/
