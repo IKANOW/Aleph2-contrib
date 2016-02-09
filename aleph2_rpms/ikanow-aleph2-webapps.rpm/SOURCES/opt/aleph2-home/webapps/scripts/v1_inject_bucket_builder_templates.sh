@@ -32,7 +32,7 @@ var json = cat('/opt/aleph2-home/webapps/templates/aleph2_bucket_builder/generic
 var id = ObjectId("52f43a111111111000000010");
 
 use social;
-share={ 
+var share={ 
 "_id" : id, 
 "created" : ISODate("$cur_date"), 
 "modified" : ISODate("$cur_date"), 
@@ -50,8 +50,9 @@ share={
 		"comment" : "Added by addWidgetsToMongo.sh" 
 	} ] 
 }
-
-db.share.save(share);
+var curr = db.share.findOne( { "_id" : id } , { _id : 1 } );
+if (curr) db.share.update( { "_id" : id } , { \$set: { share: json } }, false, false );
+if (!curr) db.share.save(share);
 
 /////////////////////////////////////////////////////////////
 //
@@ -61,7 +62,7 @@ var json = cat('/opt/aleph2-home/webapps/templates/aleph2_bucket_builder/batch_a
 var id = ObjectId("52f43a111111111000000020");
 
 use social;
-share={ 
+var share={ 
 "_id" : id, 
 "created" : ISODate("$cur_date"), 
 "modified" : ISODate("$cur_date"), 
@@ -80,6 +81,8 @@ share={
 	} ] 
 }
 
-db.share.save(share);
+var curr = db.share.findOne( { "_id" : id } , { _id : 1 } );
+if (curr) db.share.update( { "_id" : id } , { \$set: { share: json } }, false, false );
+if (!curr) db.share.save(share);
 
 EOF
