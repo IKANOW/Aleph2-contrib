@@ -146,8 +146,10 @@ public class IkanowV1CookieAuthentication {
 				String message = infiniteDriver.registerPerson(wpSetup, responseObject);
 				if (responseObject.isSuccess()) {
 					userCookieBean = createCookieByEmail(uid);
+					logger.debug(message);
+				}else{
+					logger.error("CreateUser failed:"+message);					
 				}
-				logger.debug(message);
 			} catch (Exception e) {
 				logger.error("createUser caught exception", e);
 			}
