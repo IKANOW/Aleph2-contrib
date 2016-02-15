@@ -78,4 +78,12 @@ public class BeJsonParser implements IParser {
 		}
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IParser#handleThisPath(java.lang.String)
+	 */
+	@Override
+	public boolean handleThisPath(String path) {
+		return path.endsWith(".json");
+	}
+
 }

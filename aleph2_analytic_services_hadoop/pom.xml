@@ -121,7 +121,21 @@
   		<artifactId>aleph2_data_model</artifactId>
   		<version>${aleph2.version}</version>
 		<scope>${aleph2.scope}</scope>
-	</dependency>
+		<exclusions>
+			<exclusion>
+				<artifactId>jackson-core</artifactId>
+				<groupId>com.fasterxml.jackson.core</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jackson-annotations</artifactId>
+				<groupId>com.fasterxml.jackson.core</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jackson-databind</artifactId>
+				<groupId>com.fasterxml.jackson.core</groupId>
+			</exclusion>
+		</exclusions>
+  	</dependency>
 	<dependency>
 		<groupId>com.ikanow.aleph2</groupId>
 		<artifactId>aleph2_core_distributed_services_library</artifactId>
@@ -147,6 +161,25 @@
 		<scope>${aleph2.scope}</scope>
   	</dependency>
 	<!-- Other external dependencies here -->
+	<dependency>
+		<groupId>com.fasterxml.jackson.dataformat</groupId>
+		<artifactId>jackson-dataformat-xml</artifactId>
+		<version>2.3.1</version>
+		<exclusions>
+			<exclusion>
+				<artifactId>jackson-core</artifactId>
+				<groupId>com.fasterxml.jackson.core</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jackson-annotations</artifactId>
+				<groupId>com.fasterxml.jackson.core</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jackson-databind</artifactId>
+				<groupId>com.fasterxml.jackson.core</groupId>
+			</exclusion>
+		</exclusions>
+	</dependency>
 	<dependency>
 		<groupId>org.apache.hadoop</groupId>
 		<artifactId>hadoop-minicluster</artifactId>

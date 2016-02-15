@@ -389,6 +389,8 @@ public class SparkTechnologyUtils {
 				    final Job input_job = Job.getInstance(config);
 				    input_job.setInputFormatClass(BeFileInputFormat_Pure.class);				
 					paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(input_job, new Path(path))));
+					// (Add the input config in)
+					input_job.getConfiguration().set(BatchEnrichmentJob.BE_BUCKET_INPUT_CONFIG, BeanTemplateUtils.toJson(input_with_test_settings).toString());
 					per_input_action.accept(input_with_test_settings, input_job);
 				}
 				else { // not easily available in HDFS directory format, try getting from the context

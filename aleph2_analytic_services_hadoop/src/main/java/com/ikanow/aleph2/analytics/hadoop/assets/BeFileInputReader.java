@@ -21,10 +21,11 @@ import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -38,16 +39,19 @@ import org.apache.logging.log4j.Logger;
 
 import scala.Tuple2;
 
+import com.ikanow.aleph2.analytics.hadoop.data_model.BeFileInputConfigBean;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IParser;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher;
+import com.ikanow.aleph2.analytics.hadoop.services.BeXmlParser;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJsonParser;
 import com.ikanow.aleph2.analytics.hadoop.services.BeStreamParser;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -83,12 +87,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 
 	protected DataBucketBean _dataBucket;
 
-	protected static Map<String, IParser> _parsers = new HashMap<String, IParser>();
-	static{
-		_parsers.put("JSON", new BeJsonParser());
-		_parsers.put("BIN", new BeStreamParser());
-	}
-	
+	protected List<IParser> _parsers = null; // (initialized in Initialize method) 	
 	protected Date start = null;
 	
 	/** User c'tor
@@ -101,13 +100,35 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	/* (non-Javadoc)
 	 * @see org.apache.hadoop.mapreduce.RecordReader#initialize(org.apache.hadoop.mapreduce.InputSplit, org.apache.hadoop.mapreduce.TaskAttemptContext)
 	 */
+	@SuppressWarnings("unchecked")
 	@Override
 	public void initialize(InputSplit inputSplit, TaskAttemptContext context) throws IOException, InterruptedException{				
 		_config = context.getConfiguration();
 		_fileSplit = (CombineFileSplit) inputSplit;
 		_numFiles = _fileSplit.getNumPaths();
 		
+		// (can also get this from the input below, but leave this for legacy reasons)
 		_maxRecords = _config.getInt(BatchEnrichmentJob.BE_DEBUG_MAX_SIZE, Integer.MAX_VALUE);
+		
+		// Get input configuration...
+		final AnalyticThreadJobInputBean input_settings = BeanTemplateUtils.from(context.getConfiguration().get(BatchEnrichmentJob.BE_BUCKET_INPUT_CONFIG, "{}"), AnalyticThreadJobInputBean.class).get();		
+		// ... Convert to parsers		
+		_parsers = Stream.concat(
+				Optionals.of(() -> input_settings.filter().get("technology_override"))
+							.filter(o -> o instanceof Map)
+							.map(m -> BeanTemplateUtils.from((Map<String, Object>)m, BeFileInputConfigBean.class).get())
+							.map(b -> Optionals.ofNullable(b.parsers())
+										.stream()
+										.<IParser>flatMap(p -> {
+											if (null != p.xml()) return Stream.of(new BeXmlParser(p.xml())); else return Stream.empty();
+										})
+								)
+							.orElse(Stream.empty())
+				,
+				Stream.of(new BeJsonParser(), new BeStreamParser()) // (Always dump these 2 defaults on the end)
+				)
+				.collect(Collectors.toList())
+				;
 		
 		this.start =  new Date();
 		this._dataBucket = Lambdas.get(Lambdas.wrap_u(() -> {
@@ -260,25 +281,16 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	}
 
 	/** Returns the parser
-	 * @param fileName
+	 * @param path
 	 * @return
 	 */
-	protected  IParser getParser(String fileName) {
-		IParser parser = null;
-		
-		if(fileName!=null){
-			 int dotPos =  fileName.lastIndexOf("."); 
-			 if (dotPos >= 0) {
-				String ext = fileName.substring(dotPos+1).toUpperCase();  
-				parser = _parsers.get(ext);
-			 }
-			// default to binary
-			if(parser == null){
-				parser = _parsers.get("BIN");
+	protected  IParser getParser(String path) {
+		for (IParser parser: _parsers) {
+			if (parser.handleThisPath(path)) {
+				return parser;
 			}
 		}
-		
-		return parser;
+		return null; //(dead code because default StreamParser can always handle this)
 	}
 
 	/* (non-Javadoc)

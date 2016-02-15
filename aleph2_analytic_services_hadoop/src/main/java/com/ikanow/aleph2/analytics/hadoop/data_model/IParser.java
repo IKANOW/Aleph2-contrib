@@ -23,6 +23,12 @@ import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 
 public interface IParser {
 
+	/** Returns true if this parser should be used to handle the filename pointer to by this path
+	 * @param path
+	 * @return
+	 */
+	boolean handleThisPath(String path);
+	
 	/** Get the next record in a list
 	 *  Returns null when done
 	 * @param currentFileIndex

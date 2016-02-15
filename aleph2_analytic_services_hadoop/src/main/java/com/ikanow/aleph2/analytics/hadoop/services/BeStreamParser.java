@@ -64,4 +64,11 @@ public class BeStreamParser implements IParser {
 		return t2;
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.analytics.hadoop.data_model.IParser#handleThisPath(java.lang.String)
+	 */
+	@Override
+	public boolean handleThisPath(String path) {
+		return true;
+	}
 }

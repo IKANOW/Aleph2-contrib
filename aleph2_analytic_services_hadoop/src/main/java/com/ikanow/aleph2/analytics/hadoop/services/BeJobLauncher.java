@@ -184,6 +184,8 @@ public class BeJobLauncher implements IBeJobService{
 						    final Job inputJob = Job.getInstance(config);
 						    inputJob.setInputFormatClass(BeFileInputFormat.class);				
 							paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(path))));
+							// (Add the input config in)
+							inputJob.getConfiguration().set(BatchEnrichmentJob.BE_BUCKET_INPUT_CONFIG, BeanTemplateUtils.toJson(input_with_test_settings).toString());
 							inputBuilder.addInput(UuidUtils.get().getRandomUuid(), inputJob);
 						}
 						else { // not easily available in HDFS directory format, try getting from the context
@@ -216,7 +218,7 @@ public class BeJobLauncher implements IBeJobService{
 		    
 			final String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
 		    config.set(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE, contextSignature);
-					
+		    
 			final String jobName = BucketUtils.getUniqueSignature(bucket.full_name(), Optional.ofNullable(_batchEnrichmentContext.getJob().name()));
 			
 			this.handleHadoopConfigOverrides(bucket, config);
