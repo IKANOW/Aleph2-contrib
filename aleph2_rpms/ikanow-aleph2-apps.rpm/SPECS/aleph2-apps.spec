@@ -38,15 +38,15 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 ###########################################################################
 # INSTALL *AND* UPGRADE
 
-	# Update the Aleph2 Bucket Builder templates:
-	sh /opt/aleph2-home/apps/scripts/v1_inject_bucket_builder_templates.sh
-	sh /opt/aleph2-home/apps/scripts/v1_inject_app_templates.sh
-
 %preun
 
 %postun
 
 %posttrans
+	# Update the Aleph2 Bucket Builder templates:
+	sh /opt/aleph2-home/apps/scripts/v1_inject_bucket_builder_templates.sh
+	sh /opt/aleph2-home/apps/scripts/v1_inject_app_templates.sh
+
 ###########################################################################
 # FILE LISTS
 

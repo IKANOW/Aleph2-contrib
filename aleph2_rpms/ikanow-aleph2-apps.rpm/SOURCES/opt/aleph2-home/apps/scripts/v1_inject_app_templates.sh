@@ -1,6 +1,6 @@
 #/bin/sh
 
-echo "Inject or update Aleph2 bucket builder templates"
+echo "Inject or update Aleph2 app templates"
 
 #############################
 
