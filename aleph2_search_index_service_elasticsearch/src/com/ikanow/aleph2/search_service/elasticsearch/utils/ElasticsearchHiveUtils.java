@@ -60,7 +60,7 @@ public class ElasticsearchHiveUtils {
 								Validation.success(prefix_string + (top_level ? "(" : "STRUCT<"))
 								, 
 								(acc, kv) -> {
-									return acc.validation(
+									return acc.<Validation<String, String>>validation(
 											fail -> Validation.fail(fail),
 											success -> {
 												final String pre_prefix = Lambdas.get(() -> {
@@ -87,7 +87,7 @@ public class ElasticsearchHiveUtils {
 									Validation.success(prefix_string + "UNIONTYPE<")
 									,
 									(acc, j) -> {
-										return acc.validation(
+										return acc.<Validation<String, String>>validation(
 												fail -> Validation.fail(fail),
 												success -> {
 													final String pre_prefix = Lambdas.get(() -> {
