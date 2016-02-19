@@ -46,28 +46,28 @@ public class ElasticsearchHiveUtils {
 	 * @param structure
 	 * @return
 	 */
-	public Validation<String, String> generateHiveSchema(final String prefix_string, final JsonNode structure, final boolean top_level) {
+	public static Validation<String, String> generateHiveSchema(final String prefix_string, final JsonNode structure, final boolean top_level) {
 		
 		return Patterns.match(structure).<Validation<String, String>>andReturn()
-			.when(TextNode.class, t -> _allowed_types.contains(t), t -> { //TODO: handle decimal with precision
-				return Validation.success(prefix_string + (top_level ? " " : ": ") + t);
+			.when(TextNode.class, t -> _allowed_types.contains(t.asText()), t -> { //TODO: handle decimal with precision
+				return Validation.success(prefix_string + t.asText()); 
 			})
-			//TODO: ugh this is different between struct and table...
 			.when(ObjectNode.class, o -> { // struct, format
 				
+				final String start_prefix = prefix_string + (top_level ? "(" : "STRUCT<");
 				return Optionals.streamOf(o.fields(), false)
 							.<Validation<String, String>>reduce(
-								Validation.success(prefix_string + (top_level ? "(" : "STRUCT<"))
+								Validation.success(start_prefix)
 								, 
 								(acc, kv) -> {
 									return acc.<Validation<String, String>>validation(
 											fail -> Validation.fail(fail),
 											success -> {
 												final String pre_prefix = Lambdas.get(() -> {
-													if (success.length() == prefix_string.length()) return "";
+													if (success.length() == start_prefix.length()) return "";
 													else return ",";
 												});
-												return generateHiveSchema(pre_prefix + prefix_string + kv.getKey() + " ", kv.getValue(), false);
+												return generateHiveSchema(success + pre_prefix + kv.getKey() + (top_level ? " " : ": "), kv.getValue(), false);
 											}
 											)
 											;
@@ -82,19 +82,20 @@ public class ElasticsearchHiveUtils {
 				return generateHiveSchema(prefix_string + "ARRAY<", a.get(0), false).map(success -> success + ">");
 			})
 			.when(ArrayNode.class, a -> (a.size() > 1) && a.get(0).isObject(), a -> { // union, format [ {} data_type_1 ... ]
-				Optionals.streamOf(a.iterator(), false).skip(1)
+				final String start_prefix = prefix_string + "UNIONTYPE<";
+				return Optionals.streamOf(a.iterator(), false).skip(1)
 							.<Validation<String, String>>reduce(
-									Validation.success(prefix_string + "UNIONTYPE<")
+									Validation.success(start_prefix)
 									,
 									(acc, j) -> {
 										return acc.<Validation<String, String>>validation(
 												fail -> Validation.fail(fail),
 												success -> {
 													final String pre_prefix = Lambdas.get(() -> {
-														if (success.length() == prefix_string.length()) return "";
+														if (success.length() == start_prefix.length()) return "";
 														else return ",";
 													});
-													return generateHiveSchema(pre_prefix + prefix_string + " ", j, false);													
+													return generateHiveSchema(success + pre_prefix + " ", j, false);													
 												});										
 									}
 									,
@@ -102,7 +103,6 @@ public class ElasticsearchHiveUtils {
 									)
 									.map(success -> success + ">")
 									;
-				return null;
 			})
 			.when(ArrayNode.class, a -> (2 == a.size()) && a.get(0).isTextual(), a -> { // map, format [ key value ]
 				return generateHiveSchema(prefix_string + "MAP<", a.get(0), false)
