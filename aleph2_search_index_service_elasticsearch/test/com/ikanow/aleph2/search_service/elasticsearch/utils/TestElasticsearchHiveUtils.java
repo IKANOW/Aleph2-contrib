@@ -44,7 +44,7 @@ public class TestElasticsearchHiveUtils {
 		final String hive_schema = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/sample_hive_schema.json"), Charsets.UTF_8);
 		final JsonNode hive_schema_json = _mapper.readTree(hive_schema);
 		
-		final Validation<String, String> test_success = ElasticsearchHiveUtils.generateHiveSchema("PREFIX-", hive_schema_json, true);
+		final Validation<String, String> test_success = ElasticsearchHiveUtils.generatePartialHiveSchema("PREFIX-", hive_schema_json, true);
 		assertTrue("Failed: " + (test_success.isFail() ? test_success.fail() : "(no error)"), test_success.isSuccess());
 		final String hand_checked_results = "PREFIX-(primitive_field BIGINT,raw_struct STRUCT<raw_field_1: VARCHAR,raw_field_2: DATE>,raw_map MAP<STRING, TIMESTAMP>,raw_array ARRAY<TINYINT>,raw_union_1 UNIONTYPE< SMALLINT>,raw_union_2 UNIONTYPE< INT, BOOLEAN>,nested_struct STRUCT<raw_field_1: FLOAT,nested_field2: STRUCT<nested_raw_1: DOUBLE,nested_nested_2: ARRAY<BINARY>>>,nested_map MAP<STRING, STRUCT<raw_field_1: CHAR,nested_nested_2: UNIONTYPE< STRING, STRING, DATE>>>,nested_array_1 ARRAY<ARRAY<STRING>>,nested_array_2 ARRAY<STRUCT<raw_field_1: STRING>>,nested_union UNIONTYPE< STRUCT<raw_field_1: STRING>>)";
 		assertEquals(hand_checked_results, test_success.success());		
