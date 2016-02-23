@@ -40,6 +40,7 @@ public class HadoopErrorUtils {
 
 	// Temp issues which will get addressed
 	
+	final public static String ERROR_IN_ANALYTIC_JOB_CONFIGURATION_UNIQUENESS = "Enrichment elements within a batch enrichment job must have unique names, non-unique = {0} (bucket:job = {1}:{2})";
 	final public static String ERROR_IN_ANALYTIC_JOB_CONFIGURATION = "Currently analytic job must encapsulate a batch enrichment (with the key being the name); name must be formed of alphanumeric/_ characters, batch job = {0} (bucket:job = {1}:{2})";
 	final public static String CURR_DEPENDENCY_RESTRICTIONS = "Currently the internal Hadoop dependencies (in the analytic job _config_, not the higher level external analytic job dependencies) must either be empty, \"$previous\", or the reducer step (only if after it in the config list), specified dependency = {0}, batch config(s) = {1} (bucket:job = {2}:{3})";
 	final public static String CURR_INPUT_RESTRICTIONS = "Currently {0} is not a supported data service (bucket:job = {1}:{2})";

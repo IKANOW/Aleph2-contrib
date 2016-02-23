@@ -196,8 +196,8 @@ public class HadoopTechnologyUtils {
 						.map(kv -> kv.getKey())
 						.collect(Collectors.toList())
 						;
-				if (!dup_job_names.isEmpty()) {
-					errors.add(ErrorUtils.get(HadoopErrorUtils.ERROR_IN_ANALYTIC_JOB_CONFIGURATION, 
+				if (!dup_job_names.isEmpty()) { 
+					errors.add(ErrorUtils.get(HadoopErrorUtils.ERROR_IN_ANALYTIC_JOB_CONFIGURATION_UNIQUENESS, 
 							dup_job_names.stream().collect(Collectors.joining(";")), 
 							analytic_bucket.full_name(), job.name()));										
 				}
