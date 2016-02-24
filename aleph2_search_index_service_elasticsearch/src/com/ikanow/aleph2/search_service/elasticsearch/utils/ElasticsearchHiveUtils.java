@@ -26,6 +26,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -48,6 +50,7 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
 
 import fj.data.Validation;
@@ -94,6 +97,10 @@ public class ElasticsearchHiveUtils {
 				if (Optional.ofNullable(schema.main_table().table_format()).orElse(Collections.emptyMap()).isEmpty()) {
 					mutable_errs.add(ErrorUtils.get(ERROR_AUTO_SCHEMA_NOT_YET_SUPPORTED, bucket.full_name(), "main_table"));					
 				}
+				else { // check the schema is well formed
+					final Validation<String, String> schema_str = generateFullHiveSchema(bucket, schema);
+					schema_str.validation(fail -> mutable_errs.add(ErrorUtils.get(ERROR_SCHEMA_ERROR, bucket.full_name(), "main_table", fail)), success -> true);
+				}
 				
 				// Currently: sql query not supported
 				if (Optional.ofNullable(schema.main_table().sql_query()).isPresent()) {
@@ -102,9 +109,8 @@ public class ElasticsearchHiveUtils {
 				
 				// Can't specify view name for main table
 				if (Optional.ofNullable(schema.main_table().view_name()).isPresent()) {
-					mutable_errs.add(ErrorUtils.get(ERROR_INVALID_MAIN_TABLE_FIELD, bucket.full_name()));										
-				}
-				
+					mutable_errs.add(ErrorUtils.get(ERROR_INVALID_MAIN_TABLE_FIELD, bucket.full_name(), "view_name"));										
+				}								
 			}
 			// Currently: no views allowed
 			
@@ -112,30 +118,29 @@ public class ElasticsearchHiveUtils {
 				mutable_errs.add(ErrorUtils.get(ERROR_NO_VIEWS_ALLOWED_YET, bucket.full_name()));				
 			}
 			
-			// Finally, check that the schema is well formed:
-			
-			final Validation<String, String> schema_str = generateFullHiveSchema(bucket, schema);
-			schema_str.validation(fail -> mutable_errs.add(ErrorUtils.get(ERROR_SCHEMA_ERROR, bucket.full_name(), "main_table", fail)), success -> true);
-			
 			//TODO (ALEPH-17): need permission to specify table name (wait for security service API to calm down)
 		}		
 		return mutable_errs;
 	}
 
+	protected final static String getTableName(final DataBucketBean bucket, final DataSchemaBean.DataWarehouseSchemaBean schema) {
+		return Optional.ofNullable(schema.main_table().database_name()).map(s -> s + ".").orElse("") + 					
+				Optional.ofNullable(schema.main_table().name_override())
+						.orElseGet(() -> BucketUtils.getUniqueSignature(bucket.full_name(), Optional.empty()));
+	}
+	
 	/** Generates the command to drop a table to enable it to be updated
 	 * @param bucket
 	 * @param schema
 	 * @return
 	 */
-	public final String deleteHiveSchema(final DataBucketBean bucket, final DataSchemaBean.DataWarehouseSchemaBean schema) {
-		return ErrorUtils.get("DROP TABLE IF EXISTS {0}",
-				Optional.ofNullable(schema.main_table().database_name()).map(s -> s + ".") + 					
-				Optional.ofNullable(schema.main_table().name_override())
-				.orElseGet(() -> BucketUtils.getUniqueSignature(bucket.full_name(), Optional.empty()))
+	public final static String deleteHiveSchema(final DataBucketBean bucket, final DataSchemaBean.DataWarehouseSchemaBean schema) {
+		return ErrorUtils.get("DROP TABLE IF EXISTS {0}", getTableName(bucket, schema)
 				);
 	}
 	
 	/** Handles the prefix and suffix of the full hive schema
+	 *  https://www.elastic.co/guide/en/elasticsearch/hadoop/current/hive.html
 	 * @param bucket
 	 * @param schema
 	 * @param partial_hive_schema
@@ -145,11 +150,7 @@ public class ElasticsearchHiveUtils {
 		
 		// (ignore views for the moment)
 
-		final String prefix = ErrorUtils.get("CREATE EXTERNAL TABLE {0} ",
-				Optional.ofNullable(schema.main_table().database_name()).map(s -> s + ".") + 					
-				Optional.ofNullable(schema.main_table().name_override())
-						.orElseGet(() -> BucketUtils.getUniqueSignature(bucket.full_name(), Optional.empty()))
-						);
+		final String prefix = ErrorUtils.get("CREATE EXTERNAL TABLE {0} ", getTableName(bucket, schema));
 		
 		final JsonNode user_schema = _mapper.convertValue(schema.main_table().table_format(), JsonNode.class);
 		
@@ -165,7 +166,7 @@ public class ElasticsearchHiveUtils {
 		final String suffix = 
 				Optional.
 				of(" STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler' ")
-				.map(s -> s + ErrorUtils.get("TBLPROPERTIES('es.resource' = '{0}/{1}') ", index, type)) 				
+				.map(s -> s + ErrorUtils.get("TBLPROPERTIES(''es.resource'' = ''{0}/{1}'') ", index, type)) 				
 				.get(); 
 		
 		return partial_main_table.map(s -> s + suffix);
@@ -294,39 +295,28 @@ public class ElasticsearchHiveUtils {
 		return create_new_results;	
 	}	
 
-//  <property>
-//  <name>javax.jdo.option.ConnectionUserName</name>
-//  <value>hive</value>
-//</property>
-	// (not sure where the password comes in)
+	private static final Pattern hive_extractor = Pattern.compile("^.*[^/]+:[/][/]([^/]+)[/]([^/]+).*$");
 	
-	// org.apache.hive.jdbc.HiveDriver
-	
-	// org.apache.hive.jdbc.HiveDriver
-	
-	//jdbc:hive2://api002.nst.ikanow.com:10000
-	
-//  <property>
-//  <name>hive.server2.thrift.port</name>
-//  <value>10000</value>
-//</property>
-
-	
-	// ugh I think the best that can be done is
-	//     <property>
-//  <name>javax.jdo.option.ConnectionURL</name>
-  //<value>jdbc:mysql://api002.nst.ikanow.com/hive?createDatabaseIfNotExist=true</value>
-//</property>
-	// something like "[^/]+:[/][/]([^/]+)[/]([^/]+)" to get the hostname and db name
-
-	
-	
-	/**
+	/** Pull out parameters from configuration
 	 * @param config
 	 * @return
 	 */
 	protected static Tuple3<String, String, String> getParamsFromHiveConfig(final Configuration config) {
-		return null; //TODO
+		
+		final String username = config.get("javax.jdo.option.ConnectionUserName", "");
+		final String password = "";
+		final Matcher m = hive_extractor.matcher(config.get("javax.jdo.option.ConnectionURL", ""));
+		
+		final int port = config.getInt("hive.server2.thrift.port", 10000);
+		
+		final String connection = Lambdas.get(() -> {
+			if (m.matches()) {
+				//(table name is not needed when connecting this way)
+				return  ErrorUtils.get("jdbc:hive2://{0}:{2,number,#}", m.group(1), m.group(2), port);
+			}
+			else return "";
+		});		
+		return Tuples._3T(connection, username, password);
 	}
 	
 	/** 
