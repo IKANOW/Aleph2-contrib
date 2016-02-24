@@ -18,13 +18,18 @@ package com.ikanow.aleph2.search_service.elasticsearch.utils;
 
 import static org.junit.Assert.*;
 
+import java.io.File;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
 import org.apache.hadoop.conf.Configuration;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import scala.Tuple3;
 
@@ -35,6 +40,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
+import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 
@@ -309,13 +315,116 @@ public class TestElasticsearchHiveUtils {
 	}
 	
 	@Test 
-	public void test_getHiveConfiguration() {
-		//TODO
+	public void test_getHiveConfiguration() throws IOException {
+		
+		//(this is a pretty minimal test)
+		
+		{
+			final GlobalPropertiesBean globals = BeanTemplateUtils.build(GlobalPropertiesBean.class).done().get();
+			
+			try {
+				ElasticsearchHiveUtils.getHiveConfiguration(globals);
+				fail("Should have errored");
+			}
+			catch (Exception e) {} //success
+		}
+		
+		{
+			final String tmp_dir = System.getProperty("java.io.tmpdir");
+			final File dummy_config = new File(tmp_dir + "/hive-site.xml");
+			if (!dummy_config.exists()) {
+				dummy_config.createNewFile();
+			}
+			final GlobalPropertiesBean globals = BeanTemplateUtils.build(GlobalPropertiesBean.class)
+					.with(GlobalPropertiesBean::local_yarn_config_dir, dummy_config.toString())
+					.done().get();
+			
+			final Configuration config = ElasticsearchHiveUtils.getHiveConfiguration(globals);
+			
+			assertTrue("config should contain: " + dummy_config.toString() + " vs " + config.toString(), config.toString().contains("/hive-site.xml"));
+		}
 	}
 	
 	@Test
-	public void test_registerHiveTable() {
-		//TODO
+	public void test_registerHiveTable() throws SQLException {
+		
+		// Basic end-end success
+		{
+			final Statement mock_statement_works = Mockito.mock(Statement.class);
+			Mockito.when(mock_statement_works.execute(Mockito.anyString())).thenReturn(true);
+			
+			final Connection mock_cxn_works = Mockito.mock(Connection.class);
+			Mockito.when(mock_cxn_works.createStatement()).thenReturn(mock_statement_works);
+			
+			Validation<String, Boolean> res = ElasticsearchHiveUtils.registerHiveTable(Optional.of(mock_cxn_works), new Configuration(), Optional.of("dummy delete"), Optional.of("dummy create"));
+			
+			assertTrue("Should succeed: " + res.f().toArray(), res.isSuccess());
+			assertTrue(res.success());
+		}
+		// Check only executes the delete if the create is not specified
+		{
+			final Statement mock_statement_works = Mockito.mock(Statement.class);
+			Mockito.when(mock_statement_works.execute("dummy delete")).thenReturn(true);
+			
+			final Connection mock_cxn_works = Mockito.mock(Connection.class);
+			Mockito.when(mock_cxn_works.createStatement()).thenReturn(mock_statement_works);
+			
+			Validation<String, Boolean> res = ElasticsearchHiveUtils.registerHiveTable(Optional.of(mock_cxn_works), new Configuration(), Optional.of("dummy delete"), Optional.empty());
+			
+			assertTrue("Should succeed: " + res.f().toArray(), res.isSuccess());
+			assertTrue(res.success());
+		}
+		// Check only executes the delete if the create is not specified - else returns false
+		{
+			final Statement mock_statement_works = Mockito.mock(Statement.class);
+			Mockito.when(mock_statement_works.execute("dummy delete")).thenReturn(true);
+			
+			final Connection mock_cxn_works = Mockito.mock(Connection.class);
+			Mockito.when(mock_cxn_works.createStatement()).thenReturn(mock_statement_works);
+			
+			Validation<String, Boolean> res = ElasticsearchHiveUtils.registerHiveTable(Optional.of(mock_cxn_works), new Configuration(), Optional.of("dummy delete"), Optional.of("dummy create"));
+			
+			assertTrue("Should succeed: " + res.f().toArray(), res.isSuccess());
+			assertFalse(res.success());
+		}
+		// Check error case #1
+		{
+			final Statement mock_statement_works = Mockito.mock(Statement.class);
+			Mockito.when(mock_statement_works.execute("dummy delete")).thenThrow(new RuntimeException("fail"));
+			Mockito.when(mock_statement_works.execute("dummy create")).thenReturn(true);
+			
+			final Connection mock_cxn_works = Mockito.mock(Connection.class);
+			Mockito.when(mock_cxn_works.createStatement()).thenReturn(mock_statement_works);
+			
+			Validation<String, Boolean> res = ElasticsearchHiveUtils.registerHiveTable(Optional.of(mock_cxn_works), new Configuration(), Optional.of("dummy delete"), Optional.empty());
+			
+			assertTrue(res.isFail());
+		}
+		// Check error case #2
+		{
+			final Statement mock_statement_works = Mockito.mock(Statement.class);
+			Mockito.when(mock_statement_works.execute("dummy create")).thenThrow(new RuntimeException("fail"));
+			
+			final Connection mock_cxn_works = Mockito.mock(Connection.class);
+			Mockito.when(mock_cxn_works.createStatement()).thenReturn(mock_statement_works);
+			
+			Validation<String, Boolean> res = ElasticsearchHiveUtils.registerHiveTable(Optional.of(mock_cxn_works), new Configuration(), Optional.of("dummy delete"), Optional.of("dummy create"));
+			
+			assertTrue(res.isFail());
+		}
+		// Check error case #3
+		{
+			final Statement mock_statement_works = Mockito.mock(Statement.class);
+			Mockito.when(mock_statement_works.execute("dummy delete")).thenThrow(new RuntimeException("fail"));
+			Mockito.when(mock_statement_works.execute("dummy create")).thenReturn(true);
+			
+			final Connection mock_cxn_works = Mockito.mock(Connection.class);
+			Mockito.when(mock_cxn_works.createStatement()).thenReturn(mock_statement_works);
+			
+			Validation<String, Boolean> res = ElasticsearchHiveUtils.registerHiveTable(Optional.of(mock_cxn_works), new Configuration(), Optional.of("dummy delete"), Optional.of("dummy create"));
+			
+			assertTrue(res.isFail());
+		}
 	}
 	
 }

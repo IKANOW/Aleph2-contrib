@@ -258,41 +258,46 @@ public class ElasticsearchHiveUtils {
 	 * @throws SQLException
 	 * @throws ClassNotFoundException 
 	 */
-	public static Validation<String, Boolean> registerHiveTable(final Configuration config, Optional<String> delete_prev, Optional<String> create_new) throws SQLException, ClassNotFoundException {
+	public static Validation<String, Boolean> registerHiveTable(final Optional<Connection> maybe_hive_cxn, final Configuration config, Optional<String> delete_prev, Optional<String> create_new)  {
 		
 		final Tuple3<String, String, String> params = getParamsFromHiveConfig(config);
 		final String connection_url = params._1();
 		final String user_name = params._2();
 		final String password = params._3();
-				
-		Class.forName("org.apache.hive.jdbc.HiveDriver");
-		
-		final Connection hive_cxn = DriverManager.getConnection(connection_url, user_name, password);
-		
-		final Validation<String, Boolean> delete_prev_results = 
-				delete_prev.<Validation<String, Boolean>>map(sql -> {
+						
+		try {	
+			Class.forName("org.apache.hive.jdbc.HiveDriver");
+
+			final Connection hive_cxn = maybe_hive_cxn.orElseGet(Lambdas.wrap_u(() -> DriverManager.getConnection(connection_url, user_name, password)));
+			
+			final Validation<String, Boolean> delete_prev_results = 
+					delete_prev.<Validation<String, Boolean>>map(sql -> {
+						try {
+							return Validation.success(hive_cxn.createStatement().execute(sql));
+						}
+						catch (Throwable t) {
+							return Validation.fail(ErrorUtils.getLongForm("delete hive table, error = {0}", t));
+						}
+					})
+					.orElse(Validation.success(true));
+			
+			final Validation<String, Boolean> create_new_results = delete_prev_results.bind(b -> {
+				return create_new.<Validation<String, Boolean>>map(sql -> {
 					try {
 						return Validation.success(hive_cxn.createStatement().execute(sql));
 					}
 					catch (Throwable t) {
-						return Validation.fail(ErrorUtils.getLongForm("delete hive table, error = {0}", t));
+						return Validation.fail(ErrorUtils.getLongForm("create hive table, error = {0}", t));
 					}
 				})
-				.orElse(Validation.success(true));
-		
-		final Validation<String, Boolean> create_new_results = delete_prev_results.bind(b -> {
-			return create_new.<Validation<String, Boolean>>map(sql -> {
-				try {
-					return Validation.success(hive_cxn.createStatement().execute(sql));
-				}
-				catch (Throwable t) {
-					return Validation.fail(ErrorUtils.getLongForm("create hive table, error = {0}", t));
-				}
-			})
-			.orElse(Validation.success(b));			
-		});
-		
-		return create_new_results;	
+				.orElse(Validation.success(b));			
+			});
+			
+			return create_new_results;
+		}
+		catch (Throwable t) {
+			return Validation.fail(ErrorUtils.getLongForm("connect to hive, error = {0}", t));
+		}
 	}	
 
 	private static final Pattern hive_extractor = Pattern.compile("^.*[^/]+:[/][/]([^/]+)[/]([^/]+).*$");
@@ -328,7 +333,7 @@ public class ElasticsearchHiveUtils {
 	protected static Configuration getHiveConfiguration(final GlobalPropertiesBean globals){		
 		for (int i = 0; i < 60; ++i) {
 			try { 
-				return getHiveConfiguration(globals);
+				return getHiveConfiguration(i, globals);
 			}
 			catch (java.util.ConcurrentModificationException e) {
 				final long to_sleep = Patterns.match(i).<Long>andReturn()
