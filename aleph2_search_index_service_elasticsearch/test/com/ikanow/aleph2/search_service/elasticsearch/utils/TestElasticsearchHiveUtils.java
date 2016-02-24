@@ -107,7 +107,7 @@ public class TestElasticsearchHiveUtils {
 			
 			final List<String> l = ElasticsearchHiveUtils.validateSchema(test_schema, base_bucket, null);
 			assertEquals(2, l.size());
-			assertEquals(l.get(0), ErrorUtils.get(ElasticsearchHiveUtils.ERROR_SCHEMA_ERROR, base_bucket.full_name(), "main_table", "Unrecognized element in schema declaration after CREATE EXTERNAL TABLE Optional.emptytest__f911f6d77ac9 (test : \"NOT_VALID_FIELD\""));			
+			assertEquals(l.get(0), ErrorUtils.get(ElasticsearchHiveUtils.ERROR_SCHEMA_ERROR, base_bucket.full_name(), "main_table", "Unrecognized element in schema declaration after CREATE EXTERNAL TABLE test__f911f6d77ac9 (test : \"NOT_VALID_FIELD\""));			
 			assertEquals(l.get(1), ErrorUtils.get(ElasticsearchHiveUtils.ERROR_NO_VIEWS_ALLOWED_YET, base_bucket.full_name()));			
 		}		
 		
