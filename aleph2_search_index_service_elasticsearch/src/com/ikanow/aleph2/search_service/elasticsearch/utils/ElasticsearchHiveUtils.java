@@ -123,7 +123,7 @@ public class ElasticsearchHiveUtils {
 		return mutable_errs;
 	}
 
-	protected final static String getTableName(final DataBucketBean bucket, final DataSchemaBean.DataWarehouseSchemaBean schema) {
+	public final static String getTableName(final DataBucketBean bucket, final DataSchemaBean.DataWarehouseSchemaBean schema) {
 		return Optional.ofNullable(schema.main_table().database_name()).map(s -> s + ".").orElse("") + 					
 				Optional.ofNullable(schema.main_table().name_override())
 						.orElseGet(() -> BucketUtils.getUniqueSignature(bucket.full_name(), Optional.empty()));
@@ -330,7 +330,7 @@ public class ElasticsearchHiveUtils {
 	 *  (tried putting a static synchronization around Configuration as an alternative)
 	 * @return
 	 */
-	protected static Configuration getHiveConfiguration(final GlobalPropertiesBean globals){		
+	public static Configuration getHiveConfiguration(final GlobalPropertiesBean globals){		
 		for (int i = 0; i < 60; ++i) {
 			try { 
 				return getHiveConfiguration(i, globals);

@@ -37,6 +37,7 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -63,6 +64,7 @@ import com.google.inject.Inject;
 import com.google.inject.Module;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IDataWarehouseService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IDocumentService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService;
@@ -77,6 +79,7 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.DataWarehouseSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.DocumentSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchIndexSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
@@ -94,6 +97,7 @@ import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIn
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
 import com.ikanow.aleph2.search_service.elasticsearch.module.ElasticsearchIndexServiceModule;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchHadoopUtils;
+import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchHiveUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchSparkUtils;
@@ -112,7 +116,7 @@ import fj.data.Validation;
  * @author Alex
  *
  */
-public class ElasticsearchIndexService implements ISearchIndexService, ITemporalService, IColumnarService, IDocumentService, IExtraDependencyLoader {
+public class ElasticsearchIndexService implements IDataWarehouseService, ISearchIndexService, ITemporalService, IColumnarService, IDocumentService, IExtraDependencyLoader {
 	final static protected Logger _logger = LogManager.getLogger();
 
 	//TODO (ALEPH-20): IDocumentService things to implement:
@@ -808,6 +812,22 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean)
 	 */
 	@Override
+	public Tuple2<String, List<BasicMessageBean>> validateSchema(final DataWarehouseSchemaBean schema, final DataBucketBean bucket) {
+		
+		List<String> errors = ElasticsearchHiveUtils.validateSchema(schema, bucket, _service_context.getSecurityService());
+		
+		if (errors.isEmpty()) {
+			return Tuples._2T(ElasticsearchHiveUtils.getTableName(bucket, schema), Collections.emptyList());			
+		}
+		else {
+			return Tuples._2T("", errors.stream().map(err -> ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "IDataWarehouseService.validateSchema", err)).collect(Collectors.toList()));
+		}
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean)
+	 */
+	@Override
 	public Tuple2<String, List<BasicMessageBean>> validateSchema(final ColumnarSchemaBean schema, final DataBucketBean bucket) {
 		// (Performed under search index schema)
 		return Tuples._2T("", Collections.emptyList());
@@ -956,6 +976,49 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
 		return Arrays.asList(this, _crud_factory);
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider#onPublishOrUpdate(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Optional, boolean, java.util.Set, java.util.Set)
+	 */
+	@Override
+	public CompletableFuture<Collection<BasicMessageBean>> onPublishOrUpdate(
+			DataBucketBean bucket, Optional<DataBucketBean> old_bucket,
+			boolean suspended, Set<String> data_services,
+			Set<String> previous_data_services)
+	{
+		final LinkedList<BasicMessageBean> mutable_errors = new LinkedList<>();
+		
+		// If search_index_service or document_service is enabled then update mapping
+
+		if ((data_services.contains(DataSchemaBean.SearchIndexSchemaBean.name)) || data_services.contains(DataSchemaBean.DocumentSchemaBean.name)) {
+			
+			final Tuple3<ElasticsearchIndexServiceConfigBean, String, Optional<String>> schema_index_type = getSchemaConfigAndIndexAndType(bucket, _config);
+			
+			handlePotentiallyNewIndex(bucket, Optional.empty(), true, schema_index_type._1(), schema_index_type._2());
+		}		
+		
+		// If data_warehouse_service is enabled then update Hive table (remove and reinsert super quick)
+		// If data_warehouse_service _was_ enabled then remove Hive table
+		
+		if ((data_services.contains(DataSchemaBean.DataWarehouseSchemaBean.name)) || previous_data_services.contains(DataSchemaBean.DataWarehouseSchemaBean.name))
+		{
+			
+			final Configuration hive_config = ElasticsearchHiveUtils.getHiveConfiguration(_service_context.getGlobalProperties());
+			final String delete_string = ElasticsearchHiveUtils.deleteHiveSchema(bucket, bucket.data_schema().data_warehouse_schema());
+			final Validation<String, String> maybe_recreate_string = 
+					data_services.contains(DataSchemaBean.DataWarehouseSchemaBean.name)
+					? ElasticsearchHiveUtils.generateFullHiveSchema(bucket, bucket.data_schema().data_warehouse_schema())
+					: Validation.success(null)
+					;
+					
+			final Validation<String, Boolean> ret_val = maybe_recreate_string.bind(recreate_string -> ElasticsearchHiveUtils.registerHiveTable(Optional.empty(), hive_config, Optional.of(delete_string), Optional.ofNullable(recreate_string)));
+			
+			if (ret_val.isFail()) {
+				mutable_errors.add(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "onPublishOrUpdate", ret_val.fail()));
+			}			
+		}		
+		return CompletableFuture.completedFuture(mutable_errors);
 	}
 
 }
