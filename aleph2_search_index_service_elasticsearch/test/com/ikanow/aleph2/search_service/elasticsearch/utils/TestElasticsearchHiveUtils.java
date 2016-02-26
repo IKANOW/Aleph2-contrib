@@ -333,10 +333,11 @@ public class TestElasticsearchHiveUtils {
 			final String tmp_dir = System.getProperty("java.io.tmpdir");
 			final File dummy_config = new File(tmp_dir + "/hive-site.xml");
 			if (!dummy_config.exists()) {
+				System.out.println("CREATED file: " + dummy_config.toString());
 				dummy_config.createNewFile();
 			}
 			final GlobalPropertiesBean globals = BeanTemplateUtils.build(GlobalPropertiesBean.class)
-					.with(GlobalPropertiesBean::local_yarn_config_dir, dummy_config.toString())
+					.with(GlobalPropertiesBean::local_yarn_config_dir, tmp_dir)
 					.done().get();
 			
 			final Configuration config = ElasticsearchHiveUtils.getHiveConfiguration(globals);
