@@ -195,7 +195,7 @@
 					<groupId>org.apache.storm</groupId>
 					<artifactId>storm-core</artifactId>
 					<version>0.9.5</version>
-					<scope>test</scope>
+					<!-- THIS NEEDS TO BE LEFT LIFE THIS BECAUSE OF ODD TRAVIS SETTING -->
 				</dependency>
 			</dependencies>
 		</profile>
