@@ -987,49 +987,55 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 			boolean suspended, Set<String> data_services,
 			Set<String> previous_data_services)
 	{
-		final LinkedList<BasicMessageBean> mutable_errors = new LinkedList<>();
+		try {
 		
-		// If search_index_service or document_service is enabled then update mapping
-
-		if ((data_services.contains(DataSchemaBean.SearchIndexSchemaBean.name)) || data_services.contains(DataSchemaBean.DocumentSchemaBean.name)) {
+			final LinkedList<BasicMessageBean> mutable_errors = new LinkedList<>();
 			
-			final Tuple3<ElasticsearchIndexServiceConfigBean, String, Optional<String>> schema_index_type = getSchemaConfigAndIndexAndType(bucket, _config);
+			// If search_index_service or document_service is enabled then update mapping
+	
+			if ((data_services.contains(DataSchemaBean.SearchIndexSchemaBean.name)) || data_services.contains(DataSchemaBean.DocumentSchemaBean.name)) {
+				
+				final Tuple3<ElasticsearchIndexServiceConfigBean, String, Optional<String>> schema_index_type = getSchemaConfigAndIndexAndType(bucket, _config);
+				
+				handlePotentiallyNewIndex(bucket, Optional.empty(), true, schema_index_type._1(), schema_index_type._2());
+			}		
 			
-			handlePotentiallyNewIndex(bucket, Optional.empty(), true, schema_index_type._1(), schema_index_type._2());
-		}		
-		
-		// If data_warehouse_service is enabled then update Hive table (remove and reinsert super quick)
-		// If data_warehouse_service _was_ enabled then remove Hive table
-		
-		final boolean old_data_service_matches_dw = previous_data_services.contains(DataSchemaBean.DataWarehouseSchemaBean.name);
-		if ((data_services.contains(DataSchemaBean.DataWarehouseSchemaBean.name)) || old_data_service_matches_dw)
-		{			
-			final Configuration hive_config = ElasticsearchHiveUtils.getHiveConfiguration(_service_context.getGlobalProperties());
+			// If data_warehouse_service is enabled then update Hive table (remove and reinsert super quick)
+			// If data_warehouse_service _was_ enabled then remove Hive table
 			
-			final DataBucketBean delete_bucket = old_bucket.filter(__-> old_data_service_matches_dw).orElse(bucket);			
-			final String delete_string = ElasticsearchHiveUtils.deleteHiveSchema(delete_bucket, delete_bucket.data_schema().data_warehouse_schema());
-			
-			final Validation<String, String> maybe_recreate_string = 
-					data_services.contains(DataSchemaBean.DataWarehouseSchemaBean.name)
-					? ElasticsearchHiveUtils.generateFullHiveSchema(bucket, bucket.data_schema().data_warehouse_schema())
-					: Validation.success(null)
-					;
-					
-			final Validation<String, Boolean> ret_val = maybe_recreate_string
-					.bind(recreate_string -> ElasticsearchHiveUtils.registerHiveTable(Optional.empty(), hive_config, Optional.of(delete_string), Optional.ofNullable(recreate_string)));
-			
-			if (ret_val.isFail()) {
-				mutable_errors.add(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "onPublishOrUpdate", ret_val.fail()));
-			}
-			else {
-				_logger.info(ErrorUtils.get("Register/update/delete hive ({2}) table for bucket {0}: {1}"), 
-												bucket.full_name(), 
-												delete_string + "/" + maybe_recreate_string.success(),
-												ElasticsearchHiveUtils.getParamsFromHiveConfig(hive_config))
-												;
-			}
-		}		
-		return CompletableFuture.completedFuture(mutable_errors);
+			final boolean old_data_service_matches_dw = previous_data_services.contains(DataSchemaBean.DataWarehouseSchemaBean.name);
+			if ((data_services.contains(DataSchemaBean.DataWarehouseSchemaBean.name)) || old_data_service_matches_dw)
+			{			
+				final Configuration hive_config = ElasticsearchHiveUtils.getHiveConfiguration(_service_context.getGlobalProperties());
+				
+				final DataBucketBean delete_bucket = old_bucket.filter(__-> old_data_service_matches_dw).orElse(bucket);			
+				final String delete_string = ElasticsearchHiveUtils.deleteHiveSchema(delete_bucket, delete_bucket.data_schema().data_warehouse_schema());
+				
+				final Validation<String, String> maybe_recreate_string = 
+						data_services.contains(DataSchemaBean.DataWarehouseSchemaBean.name)
+						? ElasticsearchHiveUtils.generateFullHiveSchema(bucket, bucket.data_schema().data_warehouse_schema())
+						: Validation.success(null)
+						;
+						
+				final Validation<String, Boolean> ret_val = maybe_recreate_string
+						.bind(recreate_string -> ElasticsearchHiveUtils.registerHiveTable(Optional.empty(), hive_config, Optional.of(delete_string), Optional.ofNullable(recreate_string)));
+				
+				if (ret_val.isFail()) {
+					mutable_errors.add(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "onPublishOrUpdate", ret_val.fail()));
+				}
+				else {
+					_logger.info(ErrorUtils.get("Register/update/delete hive ({2}) table for bucket {0}: {1}", 
+													bucket.full_name(), 
+													delete_string + "/" + maybe_recreate_string.success(),
+													ElasticsearchHiveUtils.getParamsFromHiveConfig(hive_config)))
+													;
+				}
+			}		
+			return CompletableFuture.completedFuture(mutable_errors);
+		}
+		catch (Throwable t) {
+			return CompletableFuture.completedFuture(Arrays.asList(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "onPublishOrUpdate", ErrorUtils.getLongForm("{0}", t))));
+		}
 	}
 
 }

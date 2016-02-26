@@ -358,8 +358,10 @@ public class ElasticsearchHiveUtils {
 		synchronized (Configuration.class) {
 			Configuration config = new Configuration(false);
 			
-			if (new File(globals.local_yarn_config_dir()).exists()) {
-				config.addResource(new Path(globals.local_yarn_config_dir() +"/hive-site.xml"));
+			final String hive_config_file = globals.local_yarn_config_dir() +"/hive-site.xml";
+			if (new File(hive_config_file).exists())
+			{
+				config.addResource(new Path(hive_config_file));
 			}
 			else {
 				throw new RuntimeException(ERROR_HIVE_NOT_CONFIGURED);
