@@ -306,7 +306,7 @@ public class ElasticsearchHiveUtils {
 	 * @param config
 	 * @return
 	 */
-	protected static Tuple3<String, String, String> getParamsFromHiveConfig(final Configuration config) {
+	public static Tuple3<String, String, String> getParamsFromHiveConfig(final Configuration config) {
 		
 		final String username = config.get("javax.jdo.option.ConnectionUserName", "");
 		final String password = "";
