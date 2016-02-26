@@ -161,6 +161,7 @@ public class ElasticsearchHiveUtils {
 										.orElseGet(() -> "r__" + BucketUtils.getUniqueSignature(bucket.full_name(), Optional.empty()));
 		
 		//TODO (ALEPH-17): default to _all but allow a technology override to specify a single type
+		//TOD: hmm ok this doesn't appear to work....
 		final String type = "_all";
 		
 		final String suffix = 
