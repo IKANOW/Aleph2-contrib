@@ -396,6 +396,11 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 				}				
 			});
 			
+			//TODO (ALEPH-17): need some injectable logic to invoke user code here whenever a new type is created so can update hive schema
+			// (if possible - eg if the fields are part of the user schema then it will fail - probably in that case should just treat the field
+			//  as empty, ie remove from hive schema, unless a techn override is set - will need to see if it's necessary, or if hive will silently error 
+			//  on that field with the same effect)
+			
 			// Type
 			final ElasticsearchContext.TypeContext.ReadWriteTypeContext type_context =
 					(auto_type && user_mapping.isPresent())
@@ -814,7 +819,7 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 	@Override
 	public Tuple2<String, List<BasicMessageBean>> validateSchema(final DataWarehouseSchemaBean schema, final DataBucketBean bucket) {
 		
-		List<String> errors = ElasticsearchHiveUtils.validateSchema(schema, bucket, _service_context.getSecurityService());
+		List<String> errors = ElasticsearchHiveUtils.validateSchema(schema, bucket, Optional.empty(), _config, _service_context.getSecurityService());
 		
 		if (errors.isEmpty()) {
 			return Tuples._2T(ElasticsearchHiveUtils.getTableName(bucket, schema), Collections.emptyList());			
@@ -1013,7 +1018,7 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 				
 				final Validation<String, String> maybe_recreate_string = 
 						data_services.contains(DataSchemaBean.DataWarehouseSchemaBean.name)
-						? ElasticsearchHiveUtils.generateFullHiveSchema(bucket, bucket.data_schema().data_warehouse_schema())
+						? ElasticsearchHiveUtils.generateFullHiveSchema(bucket, bucket.data_schema().data_warehouse_schema(), Optional.of(_crud_factory.getClient()), _config)
 						: Validation.success(null)
 						;
 						

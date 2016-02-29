@@ -70,7 +70,7 @@ public class TestElasticsearchHiveUtils {
 		
 		// No main table at all		
 		{
-			final List<String> l = ElasticsearchHiveUtils.validateSchema(base_schema, base_bucket, null);
+			final List<String> l = ElasticsearchHiveUtils.validateSchema(base_schema, base_bucket, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null), null);
 			assertEquals(1, l.size());
 			assertEquals(l.get(0), ErrorUtils.get(ElasticsearchHiveUtils.ERROR_INVALID_MAIN_TABLE, base_bucket.full_name()));
 		}
@@ -88,7 +88,7 @@ public class TestElasticsearchHiveUtils {
 						.with(DataSchemaBean.DataWarehouseSchemaBean::main_table, test_table)
 					.done();			
 			
-			final List<String> l = ElasticsearchHiveUtils.validateSchema(test_schema, base_bucket, null);
+			final List<String> l = ElasticsearchHiveUtils.validateSchema(test_schema, base_bucket, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null), null);
 			assertEquals(3, l.size());
 			assertEquals(l.get(0), ErrorUtils.get(ElasticsearchHiveUtils.ERROR_AUTO_SCHEMA_NOT_YET_SUPPORTED, base_bucket.full_name(), "main_table"));			
 			assertEquals(l.get(1), ErrorUtils.get(ElasticsearchHiveUtils.ERROR_SQL_QUERY_NOT_YET_SUPPORTED, base_bucket.full_name()));			
@@ -111,7 +111,7 @@ public class TestElasticsearchHiveUtils {
 						.with(DataSchemaBean.DataWarehouseSchemaBean::views, Arrays.asList(test_table))
 					.done();			
 			
-			final List<String> l = ElasticsearchHiveUtils.validateSchema(test_schema, base_bucket, null);
+			final List<String> l = ElasticsearchHiveUtils.validateSchema(test_schema, base_bucket, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null), null);
 			assertEquals(2, l.size());
 			assertEquals(l.get(0), ErrorUtils.get(ElasticsearchHiveUtils.ERROR_SCHEMA_ERROR, base_bucket.full_name(), "main_table", "Unrecognized element in schema declaration after CREATE EXTERNAL TABLE test__f911f6d77ac9 (test : \"NOT_VALID_FIELD\""));			
 			assertEquals(l.get(1), ErrorUtils.get(ElasticsearchHiveUtils.ERROR_NO_VIEWS_ALLOWED_YET, base_bucket.full_name()));			
@@ -132,7 +132,7 @@ public class TestElasticsearchHiveUtils {
 						.with(DataSchemaBean.DataWarehouseSchemaBean::views, Arrays.asList())
 					.done();			
 			
-			final List<String> l = ElasticsearchHiveUtils.validateSchema(test_schema, base_bucket, null);
+			final List<String> l = ElasticsearchHiveUtils.validateSchema(test_schema, base_bucket, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null), null);
 			assertEquals(0, l.size());
 		}		
 	}
@@ -237,7 +237,7 @@ public class TestElasticsearchHiveUtils {
 				BeanTemplateUtils.build(DataSchemaBean.DataWarehouseSchemaBean.class)
 				.done().get();
 		
-		// Normal case
+		// Normal case (no type overrides)
 		{
 			final DataSchemaBean.DataWarehouseSchemaBean.Table test_table =
 					BeanTemplateUtils.build(DataSchemaBean.DataWarehouseSchemaBean.Table.class)
@@ -251,12 +251,48 @@ public class TestElasticsearchHiveUtils {
 						.with(DataSchemaBean.DataWarehouseSchemaBean::views, Arrays.asList())
 					.done();			
 			
-			Validation<String, String> res = ElasticsearchHiveUtils.generateFullHiveSchema(base_bucket, test_schema);
+			Validation<String, String> res = ElasticsearchHiveUtils.generateFullHiveSchema(base_bucket, test_schema, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null));
 			
 			assertTrue(res.isSuccess());
-			final String expected = "CREATE EXTERNAL TABLE test__f911f6d77ac9 (test STRING) STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler' TBLPROPERTIES('es.resource' = 'r__test__f911f6d77ac9/_all') ";
+			final String expected = "CREATE EXTERNAL TABLE test__f911f6d77ac9 (test STRING) STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler' TBLPROPERTIES('es.resource' = 'r__test__f911f6d77ac9/type_0,type_1,type_2,type_3,type_4,type_5,type_6,type_7,type_8,type_9') ";
 			assertEquals(expected, res.success());
 		}
+		// (fixed type)
+		{
+			final DataBucketBean single_type_bucket = 
+					BeanTemplateUtils.clone(base_bucket)
+						.with(DataBucketBean::data_schema,
+								BeanTemplateUtils.build(DataSchemaBean.class)
+									.with(DataSchemaBean::search_index_schema,
+											BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+												.with(DataSchemaBean.SearchIndexSchemaBean::technology_override_schema,
+														ImmutableMap.of("collide_policy", "error", "type_name_or_prefix", "my_data_type")
+														)
+											.done().get()
+											)
+								.done().get()
+								)
+					.done();
+			
+			final DataSchemaBean.DataWarehouseSchemaBean.Table test_table =
+					BeanTemplateUtils.build(DataSchemaBean.DataWarehouseSchemaBean.Table.class)
+						.with(DataSchemaBean.DataWarehouseSchemaBean.Table::table_format, 
+								ImmutableMap.<String, Object>of("test", "STRING"))
+					.done().get();
+			
+			final DataSchemaBean.DataWarehouseSchemaBean test_schema =
+					BeanTemplateUtils.clone(base_schema)
+						.with(DataSchemaBean.DataWarehouseSchemaBean::main_table, test_table)
+						.with(DataSchemaBean.DataWarehouseSchemaBean::views, Arrays.asList())
+					.done();			
+			
+			Validation<String, String> res = ElasticsearchHiveUtils.generateFullHiveSchema(single_type_bucket, test_schema, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null));
+			
+			assertTrue(res.isSuccess());
+			final String expected = "CREATE EXTERNAL TABLE test__f911f6d77ac9 (test STRING) STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler' TBLPROPERTIES('es.resource' = 'r__test__f911f6d77ac9/my_data_type') ";
+			assertEquals(expected, res.success());
+		}
+		//TODO: some other type specification instances
 		
 		// Just check that an errored case fails out normally
 		{
@@ -272,7 +308,7 @@ public class TestElasticsearchHiveUtils {
 						.with(DataSchemaBean.DataWarehouseSchemaBean::views, Arrays.asList())
 					.done();			
 			
-			Validation<String, String> res = ElasticsearchHiveUtils.generateFullHiveSchema(base_bucket, test_schema);
+			Validation<String, String> res = ElasticsearchHiveUtils.generateFullHiveSchema(base_bucket, test_schema, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null));
 			
 			assertTrue(res.isFail());			
 		}

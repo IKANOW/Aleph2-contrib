@@ -25,12 +25,11 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchConfi
  *
  */
 public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurationBean {
-
+	protected ElasticsearchIndexServiceConfigBean() {}
+	
 	final public static String PROPERTIES_ROOT = "ElasticsearchIndexService";
 	
 	final public static String DEFAULT_FIXED_TYPE_NAME = "data_object";
-	
-	protected ElasticsearchIndexServiceConfigBean() {}
 	
 	public SearchIndexSchemaDefaultBean search_technology_override() { return search_technology_override; }
 	public ColumnarSchemaDefaultBean columnar_technology_override() { return columnar_technology_override; }

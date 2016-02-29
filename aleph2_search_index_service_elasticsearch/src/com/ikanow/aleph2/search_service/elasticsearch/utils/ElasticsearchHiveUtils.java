@@ -26,11 +26,15 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.elasticsearch.client.Client;
 
 import scala.Tuple3;
 
@@ -51,7 +55,10 @@ import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
+import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
+import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 
 import fj.data.Validation;
 
@@ -84,7 +91,11 @@ public class ElasticsearchHiveUtils {
 	 * @param security_service
 	 * @return
 	 */
-	public static List<String> validateSchema(final DataSchemaBean.DataWarehouseSchemaBean schema, final DataBucketBean bucket, final ISecurityService security_service) {
+	public static List<String> validateSchema(final DataSchemaBean.DataWarehouseSchemaBean schema, 
+			final DataBucketBean bucket, 
+			Optional<Client> maybe_client, ElasticsearchIndexServiceConfigBean config,
+			final ISecurityService security_service)
+	{
 		final LinkedList<String> mutable_errs = new LinkedList<>();
 		
 		if (Optional.ofNullable(schema.enabled()).orElse(true)) {
@@ -98,7 +109,7 @@ public class ElasticsearchHiveUtils {
 					mutable_errs.add(ErrorUtils.get(ERROR_AUTO_SCHEMA_NOT_YET_SUPPORTED, bucket.full_name(), "main_table"));					
 				}
 				else { // check the schema is well formed
-					final Validation<String, String> schema_str = generateFullHiveSchema(bucket, schema);
+					final Validation<String, String> schema_str = generateFullHiveSchema(bucket, schema, maybe_client, config);
 					schema_str.validation(fail -> mutable_errs.add(ErrorUtils.get(ERROR_SCHEMA_ERROR, bucket.full_name(), "main_table", fail)), success -> true);
 				}
 				
@@ -146,8 +157,11 @@ public class ElasticsearchHiveUtils {
 	 * @param partial_hive_schema
 	 * @return
 	 */
-	public static Validation<String, String> generateFullHiveSchema(final DataBucketBean bucket, final DataSchemaBean.DataWarehouseSchemaBean schema) {
-		
+	public static Validation<String, String> generateFullHiveSchema(
+			final DataBucketBean bucket, final DataSchemaBean.DataWarehouseSchemaBean schema, 
+			Optional<Client> maybe_client, ElasticsearchIndexServiceConfigBean config
+			)
+	{		
 		// (ignore views for the moment)
 
 		final String prefix = ErrorUtils.get("CREATE EXTERNAL TABLE {0} ", getTableName(bucket, schema));
@@ -160,14 +174,36 @@ public class ElasticsearchHiveUtils {
 		final String index = Optionals.of(() -> bucket.data_schema().search_index_schema().technology_override_schema().get(SearchIndexSchemaDefaultBean.index_name_override_).toString())
 										.orElseGet(() -> "r__" + BucketUtils.getUniqueSignature(bucket.full_name(), Optional.empty()));
 		
-		//TODO (ALEPH-17): default to _all but allow a technology override to specify a single type
-		//TOD: hmm ok this doesn't appear to work....
-		final String type = "_all";
+		// OK all this horrible code is intended to sort out the list of types to apply in the hive query
+		//TODO (ALEPH-17): also support a simple override to bypass all this....
+		final Set<String> mutable_type_set = new TreeSet<String>(maybe_client.map(client -> ElasticsearchIndexUtils.getTypesForIndex(client, index)).orElse(Collections.emptySet()));
+		
+		final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, config, _mapper);
+		final CollidePolicy collide_policy = Optionals.of(() -> schema_config.search_technology_override().collide_policy()).orElse(CollidePolicy.new_type);
+		
+		Optionals.of(() -> schema_config.search_technology_override().type_name_or_prefix()).map(Optional::of)
+			.orElseGet(() -> Optional.of((collide_policy == CollidePolicy.new_type) 
+					? ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext.DEFAULT_PREFIX 
+					: ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME)
+			)
+			.ifPresent(type_or_prefix -> {
+				if (collide_policy == CollidePolicy.new_type) { // add a few types
+					//TODO (ALEPH-17): need to make this get auto populated as new types are added, see the ALEPH-17 comment in ElasticsearchIndexService
+					if (mutable_type_set.size() < 10) { //TODO (ALEPH-17) (and also if the types aren't set?) 
+						IntStream.rangeClosed(1, 10).boxed().map(i -> type_or_prefix + i.toString()).forEach(type -> mutable_type_set.add(type));
+					}
+				}
+				else { // OK in this case just make sure the default type is represented
+					mutable_type_set.add(type_or_prefix);					
+				}
+			})
+			;
 		
 		final String suffix = 
 				Optional.
 				of(" STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler' ")
-				.map(s -> s + ErrorUtils.get("TBLPROPERTIES(''es.resource'' = ''{0}/{1}'') ", index, type)) 				
+				.map(s -> s + ErrorUtils.get("TBLPROPERTIES(''es.resource'' = ''{0}/{1}'') ", index, mutable_type_set.stream().collect(Collectors.joining(",")))) 				
+				//TODO (ALEPH-17): allow ES query override
 				.get(); 
 		
 		return partial_main_table.map(s -> s + suffix);
