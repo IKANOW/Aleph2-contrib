@@ -251,10 +251,10 @@ public class TestElasticsearchHiveUtils {
 						.with(DataSchemaBean.DataWarehouseSchemaBean::views, Arrays.asList())
 					.done();			
 			
-			Validation<String, String> res = ElasticsearchHiveUtils.generateFullHiveSchema(base_bucket, test_schema, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null));
+			Validation<String, String> res = ElasticsearchHiveUtils.generateFullHiveSchema(Optional.empty(), base_bucket, test_schema, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null));
 			
 			assertTrue(res.isSuccess());
-			final String expected = "CREATE EXTERNAL TABLE test__f911f6d77ac9 (test STRING) STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler' TBLPROPERTIES('es.resource' = 'r__test__f911f6d77ac9/type_0,type_1,type_2,type_3,type_4,type_5,type_6,type_7,type_8,type_9') ";
+			final String expected = "CREATE EXTERNAL TABLE test__f911f6d77ac9 (test STRING) STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler' TBLPROPERTIES('es.index.auto.create' = 'false', 'es.resource' = 'r__test__f911f6d77ac9/type_1,type_10,type_2,type_3,type_4,type_5,type_6,type_7,type_8,type_9') ";
 			assertEquals(expected, res.success());
 		}
 		// (fixed type)
@@ -286,13 +286,104 @@ public class TestElasticsearchHiveUtils {
 						.with(DataSchemaBean.DataWarehouseSchemaBean::views, Arrays.asList())
 					.done();			
 			
-			Validation<String, String> res = ElasticsearchHiveUtils.generateFullHiveSchema(single_type_bucket, test_schema, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null));
+			Validation<String, String> res = ElasticsearchHiveUtils.generateFullHiveSchema(Optional.empty(), single_type_bucket, test_schema, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null));
 			
 			assertTrue(res.isSuccess());
-			final String expected = "CREATE EXTERNAL TABLE test__f911f6d77ac9 (test STRING) STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler' TBLPROPERTIES('es.resource' = 'r__test__f911f6d77ac9/my_data_type') ";
+			final String expected = "CREATE EXTERNAL TABLE test__f911f6d77ac9 (test STRING) STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler' TBLPROPERTIES('es.index.auto.create' = 'false', 'es.resource' = 'r__test__f911f6d77ac9/my_data_type') ";
 			assertEquals(expected, res.success());
 		}
-		//TODO: some other type specification instances
+		// user override in the DW schema...
+		{
+			final DataSchemaBean.DataWarehouseSchemaBean.Table test_table =
+					BeanTemplateUtils.build(DataSchemaBean.DataWarehouseSchemaBean.Table.class)
+						.with(DataSchemaBean.DataWarehouseSchemaBean.Table::table_format, 
+								ImmutableMap.<String, Object>of("test", "STRING"))
+					.done().get();
+			
+			final DataSchemaBean.DataWarehouseSchemaBean test_schema =
+					BeanTemplateUtils.clone(base_schema)
+						.with(DataSchemaBean.DataWarehouseSchemaBean::main_table, test_table)
+						.with(DataSchemaBean.DataWarehouseSchemaBean::views, Arrays.asList())
+						.with(DataSchemaBean.DataWarehouseSchemaBean::technology_override_schema, 
+								ImmutableMap.of("table_overrides", 
+										ImmutableMap.of("main_table", 
+												ImmutableMap.of("types", Arrays.asList("test1", "test2")))))
+					.done();			
+			
+			Validation<String, String> res = ElasticsearchHiveUtils.generateFullHiveSchema(Optional.empty(), base_bucket, test_schema, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null));
+			
+			assertTrue(res.isSuccess());
+			final String expected = "CREATE EXTERNAL TABLE test__f911f6d77ac9 (test STRING) STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler' TBLPROPERTIES('es.index.auto.create' = 'false', 'es.resource' = 'r__test__f911f6d77ac9/test1,test2') ";
+			assertEquals(expected, res.success());
+		}
+		// (URL) query and mapping override
+		{
+			final DataBucketBean single_type_bucket = 
+					BeanTemplateUtils.clone(base_bucket)
+						.with(DataBucketBean::data_schema,
+								BeanTemplateUtils.build(DataSchemaBean.class)
+									.with(DataSchemaBean::search_index_schema,
+											BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+												.with(DataSchemaBean.SearchIndexSchemaBean::technology_override_schema,
+														ImmutableMap.of("collide_policy", "error", "type_name_or_prefix", "my_data_type")
+														)
+											.done().get()
+											)
+								.done().get()
+								)
+					.done();
+			
+			final DataSchemaBean.DataWarehouseSchemaBean.Table test_table =
+					BeanTemplateUtils.build(DataSchemaBean.DataWarehouseSchemaBean.Table.class)
+						.with(DataSchemaBean.DataWarehouseSchemaBean.Table::table_format, 
+								ImmutableMap.<String, Object>of("test", "STRING"))
+					.done().get();
+			
+			final DataSchemaBean.DataWarehouseSchemaBean test_schema =
+					BeanTemplateUtils.clone(base_schema)
+						.with(DataSchemaBean.DataWarehouseSchemaBean::main_table, test_table)
+						.with(DataSchemaBean.DataWarehouseSchemaBean::views, Arrays.asList())
+						.with(DataSchemaBean.DataWarehouseSchemaBean::technology_override_schema, 
+								ImmutableMap.of("table_overrides", 
+										ImmutableMap.of("main_table", 
+												ImmutableMap.of("name_mappings", ImmutableMap.of("date", "@timestamp", "other", "other_map"),
+														"url_query", "q=field1:query"
+														))))
+					.done();			
+			
+			Validation<String, String> res = ElasticsearchHiveUtils.generateFullHiveSchema(Optional.empty(), single_type_bucket, test_schema, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null));
+			
+			assertTrue(res.isSuccess());
+			final String expected = "CREATE EXTERNAL TABLE test__f911f6d77ac9 (test STRING) STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler' TBLPROPERTIES('es.index.auto.create' = 'false', 'es.resource' = 'r__test__f911f6d77ac9/my_data_type', 'es.mapping.names' = 'date:@timestamp,other:other_map', 'es.query' = '?q=field1:query') ";
+			assertEquals(expected, res.success());
+			
+		}
+		// query object override
+		{
+			final DataSchemaBean.DataWarehouseSchemaBean.Table test_table =
+					BeanTemplateUtils.build(DataSchemaBean.DataWarehouseSchemaBean.Table.class)
+						.with(DataSchemaBean.DataWarehouseSchemaBean.Table::table_format, 
+								ImmutableMap.<String, Object>of("test", "STRING"))
+					.done().get();
+			
+			final DataSchemaBean.DataWarehouseSchemaBean test_schema =
+					BeanTemplateUtils.clone(base_schema)
+						.with(DataSchemaBean.DataWarehouseSchemaBean::main_table, test_table)
+						.with(DataSchemaBean.DataWarehouseSchemaBean::views, Arrays.asList())
+						.with(DataSchemaBean.DataWarehouseSchemaBean::technology_override_schema, 
+								ImmutableMap.of("table_overrides", 
+										ImmutableMap.of("main_table", 
+												ImmutableMap.of(
+														"json_query", ImmutableMap.of("test", "json")
+														))))
+					.done();			
+			
+			Validation<String, String> res = ElasticsearchHiveUtils.generateFullHiveSchema(Optional.empty(), base_bucket, test_schema, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null));
+			
+			assertTrue(res.isSuccess());
+			final String expected = "CREATE EXTERNAL TABLE test__f911f6d77ac9 (test STRING) STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler' TBLPROPERTIES('es.index.auto.create' = 'false', 'es.resource' = 'r__test__f911f6d77ac9/type_1,type_10,type_2,type_3,type_4,type_5,type_6,type_7,type_8,type_9', 'es.query' = '{\"test\":\"json\"}') ";
+			assertEquals(expected, res.success());
+		}
 		
 		// Just check that an errored case fails out normally
 		{
@@ -308,7 +399,7 @@ public class TestElasticsearchHiveUtils {
 						.with(DataSchemaBean.DataWarehouseSchemaBean::views, Arrays.asList())
 					.done();			
 			
-			Validation<String, String> res = ElasticsearchHiveUtils.generateFullHiveSchema(base_bucket, test_schema, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null));
+			Validation<String, String> res = ElasticsearchHiveUtils.generateFullHiveSchema(Optional.empty(), base_bucket, test_schema, Optional.empty(), ElasticsearchIndexConfigUtils.buildConfigBean(null));
 			
 			assertTrue(res.isFail());			
 		}

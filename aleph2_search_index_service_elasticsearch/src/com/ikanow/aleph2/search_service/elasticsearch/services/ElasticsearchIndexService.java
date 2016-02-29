@@ -1018,7 +1018,7 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 				
 				final Validation<String, String> maybe_recreate_string = 
 						data_services.contains(DataSchemaBean.DataWarehouseSchemaBean.name)
-						? ElasticsearchHiveUtils.generateFullHiveSchema(bucket, bucket.data_schema().data_warehouse_schema(), Optional.of(_crud_factory.getClient()), _config)
+						? ElasticsearchHiveUtils.generateFullHiveSchema(Optional.empty(), bucket, bucket.data_schema().data_warehouse_schema(), Optional.of(_crud_factory.getClient()), _config)
 						: Validation.success(null)
 						;
 						
