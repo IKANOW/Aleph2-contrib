@@ -1,23 +1,24 @@
 /*******************************************************************************
  * Copyright 2015, The IKANOW Open Source Project.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ *******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.utils;
 
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +37,7 @@ import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.analytics.hadoop.data_model.HadoopTechnologyOverrideBean;
 
 import java.util.Collections;
@@ -47,7 +49,7 @@ import org.apache.hadoop.fs.Path;
  * @author Alex
  */
 public class HadoopTechnologyUtils {
-
+	
 	/** Validate a single job for this analytic technology in the context of the bucket/other jobs
 	 * @param analytic_bucket - the bucket (just for context)
 	 * @param jobs - the entire list of jobs
@@ -97,10 +99,7 @@ public class HadoopTechnologyUtils {
 		// Inputs
 
 		Optionals.ofNullable(job.inputs()).stream().forEach(input -> {
-			if ((!"batch".equals(input.data_service())) 
-					&&
-				(!"storage_service".equals(input.data_service())))	
-			{
+			if ("streaming".equals(input.data_service())) { // anything else is now somewhat supported, will at least call getServiceInput on it and try to resolve
 				errors.add(ErrorUtils.get(HadoopErrorUtils.CURR_INPUT_RESTRICTIONS, input.data_service(), analytic_bucket.full_name(), job.name()));
 			}
 		});
@@ -120,7 +119,7 @@ public class HadoopTechnologyUtils {
 		
 		try {
 			if (null != job.config()) {
-				final List<EnrichmentControlMetadataBean> configs = convertAnalyticJob(job.name(), job.config());
+				final List<EnrichmentControlMetadataBean> configs = convertAnalyticJob(job.name(), Optional.ofNullable(job.config()).orElse(Collections.emptyMap()));
 				
 				// Is there a reducer step?
 				final Set<String> reducer_steps =
@@ -197,8 +196,8 @@ public class HadoopTechnologyUtils {
 						.map(kv -> kv.getKey())
 						.collect(Collectors.toList())
 						;
-				if (!dup_job_names.isEmpty()) {
-					errors.add(ErrorUtils.get(HadoopErrorUtils.ERROR_IN_ANALYTIC_JOB_CONFIGURATION, 
+				if (!dup_job_names.isEmpty()) { 
+					errors.add(ErrorUtils.get(HadoopErrorUtils.ERROR_IN_ANALYTIC_JOB_CONFIGURATION_UNIQUENESS, 
 							dup_job_names.stream().collect(Collectors.joining(";")), 
 							analytic_bucket.full_name(), job.name()));										
 				}
@@ -237,19 +236,31 @@ public class HadoopTechnologyUtils {
 	 */
 	@SuppressWarnings("unchecked")
 	public static List<EnrichmentControlMetadataBean> convertAnalyticJob(String job_name, final Map<String, Object> analytic_config) {
-		return Optional.ofNullable(analytic_config).orElse(Collections.emptyMap()).entrySet()
-				.stream()
-				.filter(kv -> kv.getValue() instanceof Map)
-				.map(kv -> BeanTemplateUtils
-								.clone(
-									BeanTemplateUtils
-										.from((Map<String, Object>)kv.getValue(), EnrichmentControlMetadataBean.class)
-										.get()
-								)
-								.with(EnrichmentControlMetadataBean::name, kv.getKey())
-							.done()
-				)
-				.collect(Collectors.toList());
+		final Object enrich_pipeline = analytic_config.get(EnrichmentControlMetadataBean.ENRICHMENT_PIPELINE);
+		
+		if ((null != enrich_pipeline) && List.class.isAssignableFrom(enrich_pipeline.getClass())) { // standard pipeline format			
+			return ((List<Object>)enrich_pipeline).stream()
+					.map(o -> BeanTemplateUtils.from((Map<String, Object>)o, EnrichmentControlMetadataBean.class).get())
+					.collect(Collectors.toList());
+		}
+		else { // old school format - ordering is a problem unless dependencies are specified
+			
+			//TODO: use core_shared.DependencyUtils to order this list
+			
+			return Optional.ofNullable(analytic_config).orElse(Collections.emptyMap()).entrySet()
+					.stream()
+					.filter(kv -> kv.getValue() instanceof Map)
+					.map(kv -> BeanTemplateUtils
+									.clone(
+										BeanTemplateUtils
+											.from((Map<String, Object>)kv.getValue(), EnrichmentControlMetadataBean.class)
+											.get()
+									)
+									.with(EnrichmentControlMetadataBean::name, kv.getKey())
+								.done()
+					)
+					.collect(Collectors.toList());
+		}
 	}
 	
 	/** Generates a Hadoop configuration object
@@ -257,24 +268,73 @@ public class HadoopTechnologyUtils {
 	 * @return
 	 */
 	public static Configuration getHadoopConfig(final GlobalPropertiesBean globals) {
-		final Configuration configuration = new Configuration(false);
-		
-		if (new File(globals.local_yarn_config_dir()).exists()) {
-			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/core-site.xml"));
-			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/yarn-site.xml"));
-			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/hdfs-site.xml"));
-			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/hadoop-site.xml"));
-			configuration.addResource(new Path(globals.local_yarn_config_dir() +"/mapred-site.xml"));
+		for (int i = 0; i < 60; ++i) {
+			try { 
+				return getHadoopConfig(i, globals);
+			}
+			catch (java.util.ConcurrentModificationException e) {
+				final long to_sleep = Patterns.match(i).<Long>andReturn()
+									.when(ii -> ii < 15, __ -> 100L)
+									.when(ii -> ii < 30, __ -> 250L)
+									.when(ii -> ii < 45, __ -> 500L)
+									.otherwise(__ -> 1000L)
+									+ (new Date().getTime() % 100L) // (add random component)
+									;
+				try { Thread.sleep(to_sleep); } catch (Exception ee) {}
+				if (59 == i) throw e;
+			}
 		}
-		// These are not added by Hortonworks, so add them manually
-		configuration.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");						
-		configuration.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");									
-		configuration.set("fs.AbstractFileSystem.hdfs.impl", "org.apache.hadoop.fs.Hdfs");
-		configuration.set("fs.AbstractFileSystem.file.impl", "org.apache.hadoop.fs.local.LocalFs");
-		// Some other config defaults:
-		// (not sure if these are actually applied, or derived from the defaults - for some reason they don't appear in CDH's client config)
-		configuration.set("mapred.reduce.tasks.speculative.execution", "false");
-		
-		return configuration;
+		return null; //(doesn't ever get reached)
+	}
+	
+	/** Generates a Hadoop configuration object
+	 * @param attempt - handles retries necessary because of the concurrent issues 
+	 * @param globals - the global configuration bean (containig the location of the files)
+	 * @return
+	 */
+	public static Configuration getHadoopConfig(long attempt, final GlobalPropertiesBean globals) {
+		synchronized (Configuration.class) { // (this is not thread safe)
+			final Configuration configuration = new Configuration(false);
+			
+			if (new File(globals.local_yarn_config_dir()).exists()) {
+				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/core-site.xml"));
+				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/yarn-site.xml"));
+				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/hdfs-site.xml"));
+				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/hadoop-site.xml"));
+				configuration.addResource(new Path(globals.local_yarn_config_dir() +"/mapred-site.xml"));
+			}
+			else {
+				final String alternative = System.getenv("HADOOP_CONF_DIR");
+					
+				//DEBUG
+				//System.out.println("Aleph2 yarn-config dir not found, try alternative: " + alternative + " .. " + System.getenv("HADOOP_HOME"));
+				// (another alternative would be HADOOP_HOME + "/conf")
+				
+				if ((null != alternative) && new File(alternative).exists()) {
+					configuration.addResource(new Path(alternative +"/yarn-site.xml"));
+					configuration.addResource(new Path(alternative +"/core-site.xml"));
+					configuration.addResource(new Path(alternative +"/hdfs-site.xml"));				
+					configuration.addResource(new Path(alternative +"/hadoop-site.xml"));				
+					configuration.addResource(new Path(alternative +"/mapred-site.xml"));				
+				}
+				else  // last ditch - will work for local testing but never from anything remote
+					configuration.addResource("default_fs.xml");						
+			}
+			
+			if (attempt > 10) { // (try sleeping here)
+				final long to_sleep = 500L + (new Date().getTime() % 100L); // (add random component)
+				try { Thread.sleep(to_sleep); } catch (Exception e) {}
+			}
+			// These are not added by Hortonworks, so add them manually
+			configuration.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");						
+			configuration.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");									
+			configuration.set("fs.AbstractFileSystem.hdfs.impl", "org.apache.hadoop.fs.Hdfs");
+			configuration.set("fs.AbstractFileSystem.file.impl", "org.apache.hadoop.fs.local.LocalFs");
+			// Some other config defaults:
+			// (not sure if these are actually applied, or derived from the defaults - for some reason they don't appear in CDH's client config)
+			configuration.set("mapred.reduce.tasks.speculative.execution", "false");
+			
+			return configuration;
+		}
 	}
 }

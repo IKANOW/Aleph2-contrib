@@ -1,18 +1,18 @@
 /*******************************************************************************
  * Copyright 2015, The IKANOW Open Source Project.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ *******************************************************************************/
 package com.ikanow.aleph2.search_service.elasticsearch.utils;
 
 import java.io.IOException;
@@ -230,7 +230,7 @@ public class ElasticsearchIndexUtils {
 					.map(p -> {
 						return StreamSupport.stream(Spliterators.spliteratorUnknownSize(p.fields(), Spliterator.ORDERED), false)
 							.map(kv -> {
-								if (!kv.getValue().has("type")) throw new RuntimeException("type must have a field");
+								if (!kv.getValue().has("type") && !kv.getValue().has("properties")) throw new RuntimeException(SearchIndexErrorUtils.get("field {0} must have a 'type' or 'properties' sub-field", kv.getKey()));
 								return kv;
 							})
 							.collect(Collectors.
@@ -380,6 +380,7 @@ public class ElasticsearchIndexUtils {
 														final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups,
 														final JsonNode enabled_not_analyzed, final JsonNode enabled_analyzed,
 														final JsonNode default_not_analyzed, final JsonNode default_analyzed,
+														final Optional<JsonNode> doc_schema,
 														final ObjectMapper mapper, final String index_type)
 	{
 		try {
@@ -458,7 +459,18 @@ public class ElasticsearchIndexUtils {
 							// overwrite with version built using columns if it exists
 							.map(kv -> Tuples._2T(kv.getKey(), column_lookups.getOrDefault(kv.getKey(), kv.getValue())))
 							.reduce(
-								start.startObject("properties"), 
+								Optional.of(start.startObject("properties")) // add doc_schema if it exists
+										.map(props -> 
+												doc_schema.map(ds -> 
+													Optionals.streamOf(ds.fields(), false)
+														.reduce(props,
+																Lambdas.wrap_u((acc, kv) -> acc.rawField(kv.getKey(), kv.getValue().toString().getBytes())),
+																(acc1, acc2) -> acc1 // shouldn't be possible
+																)
+												)
+										.orElse(props))
+										.get()
+								, 
 								Lambdas.wrap_u((acc, t2) -> acc.rawField(t2._1().left().value(), t2._2().toString().getBytes())), // (left by construction) 
 								(acc1, acc2) -> acc1) // (not actually possible)
 							.endObject();
@@ -681,7 +693,7 @@ public class ElasticsearchIndexUtils {
 											.orElse(mapper.createObjectNode());
 			
 			if (is_primary) { // add the "read only" prefix alias
-				aliases.put(ElasticsearchContext.READ_PREFIX + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()), mapper.createObjectNode());
+				aliases.set(ElasticsearchContext.READ_PREFIX + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()), mapper.createObjectNode());
 			}
 			
 			// Settings
@@ -801,11 +813,12 @@ public class ElasticsearchIndexUtils {
 			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups,
 			final JsonNode enabled_not_analyzed, final JsonNode enabled_analyzed,
 			final JsonNode default_not_analyzed, final JsonNode default_analyzed,
+			final Optional<JsonNode> doc_schema,
 			final ObjectMapper mapper, final String index_type)
 	{
 		return Lambdas.wrap_u(__ -> getTemplateMapping(bucket, secondary_buffer))
 				.andThen(json -> getSearchServiceMapping(bucket, secondary_buffer, is_primary, schema_config, Optional.of(json), mapper))
-				.andThen(json -> getColumnarMapping(bucket, Optional.of(json), field_lookups, enabled_not_analyzed, enabled_analyzed, default_not_analyzed, default_analyzed, mapper, index_type))
+				.andThen(json -> getColumnarMapping(bucket, Optional.of(json), field_lookups, enabled_not_analyzed, enabled_analyzed, default_not_analyzed, default_analyzed, doc_schema, mapper, index_type))
 				.andThen(Lambdas.wrap_u(json -> json.endObject().endObject())) // (close the objects from the search service mapping)
 				.andThen(json -> getTemporalMapping(bucket, Optional.of(json)))
 			.apply(null);
@@ -831,12 +844,19 @@ public class ElasticsearchIndexUtils {
 					.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
 					.isPresent();
 		
+		final boolean doc_enabled =
+				Optional.ofNullable(bucket.data_schema())
+				.map(DataSchemaBean::document_schema)
+				.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
+				.isPresent();
+		
 		// (these can't be null by construction)
 		final JsonNode enabled_analyzed_field = 
 				columnar_enabled ? mapper.convertValue(schema_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class) : mapper.createObjectNode();
 		final JsonNode enabled_not_analyzed_field = columnar_enabled ? mapper.convertValue(schema_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class) : mapper.createObjectNode();
 		final JsonNode default_analyzed_field = columnar_enabled ? mapper.convertValue(schema_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class) : mapper.createObjectNode();
 		final JsonNode default_not_analyzed_field = columnar_enabled ? mapper.convertValue(schema_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class) : mapper.createObjectNode();
+		final Optional<JsonNode> doc_schema = doc_enabled ? Optional.ofNullable(mapper.convertValue(schema_config.document_schema_override(), JsonNode.class)) : Optional.empty();
 		
 		// Get a list of field overrides Either<String,Tuple2<String,String>> for dynamic/real fields
 		
@@ -867,7 +887,8 @@ public class ElasticsearchIndexUtils {
 		final XContentBuilder test_result = getFullMapping(
 				bucket, secondary_buffer, is_primary, schema_config, field_lookups, 
 				enabled_not_analyzed_field, enabled_analyzed_field, 
-				default_not_analyzed_field, default_analyzed_field,  
+				default_not_analyzed_field, default_analyzed_field,
+				doc_schema,
 				mapper, index_type);		
 
 		return test_result;

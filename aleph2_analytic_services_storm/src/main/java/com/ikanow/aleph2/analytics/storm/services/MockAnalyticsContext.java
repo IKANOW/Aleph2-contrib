@@ -1,18 +1,18 @@
 /*******************************************************************************
-* Copyright 2015, The IKANOW Open Source Project.
-* 
-* This program is free software: you can redistribute it and/or modify
-* it under the terms of the GNU Affero General Public License, version 3,
-* as published by the Free Software Foundation.
-* 
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU Affero General Public License for more details.
-* 
-* You should have received a copy of the GNU Affero General Public License
-* along with this program. If not, see <http://www.gnu.org/licenses/>.
-******************************************************************************/
+ * Copyright 2015, The IKANOW Open Source Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package com.ikanow.aleph2.analytics.storm.services;
 
 import java.util.ArrayList;
@@ -77,6 +77,7 @@ import com.typesafe.config.ConfigValueFactory;
 
 import fj.Unit;
 import fj.data.Either;
+import fj.data.Validation;
 
 /** A minimal implementation of the analytics context interface for test purposes
  * @author Alex
@@ -555,6 +556,14 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	}
 
 	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#getJob()
+	 */
+	@Override
+	public Optional<AnalyticThreadJobBean> getJob() {
+		return Optional.empty(); //(not supported since not used in Storm)
+	}
+	
+	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#getLibraryConfig()
 	 */
 	@Override
@@ -627,7 +636,7 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#sendObjectToStreamingPipeline(java.util.Optional, java.util.Optional, fj.data.Either)
 	 */
 	@Override
-	public void sendObjectToStreamingPipeline(final Optional<DataBucketBean> bucket,
+	public Validation<BasicMessageBean, JsonNode>  sendObjectToStreamingPipeline(final Optional<DataBucketBean> bucket,
 			final AnalyticThreadJobBean job, 
 			final Either<JsonNode, Map<String, Object>> object, 
 			final Optional<AnnotationBean> annotations)
@@ -637,11 +646,20 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 		}
 		final JsonNode obj_json =  object.either(__->__, map -> (JsonNode) _mapper.convertValue(map, JsonNode.class));
 
-		this.getOutputTopic(bucket, job).ifPresent(topic -> {				
+		return this.getOutputTopic(bucket, job).<Validation<BasicMessageBean, JsonNode>>map(topic -> {	
 			if (_distributed_services.doesTopicExist(topic)) {
 				// (ie someone is listening in on our output data, so duplicate it for their benefit)
 				_distributed_services.produce(topic, obj_json.toString());
+				return Validation.success(obj_json);
 			}
+			else {
+				return Validation.fail(ErrorUtils.buildSuccessMessage(this.getClass().getSimpleName(), "sendObjectToStreamingPipeline", "Bucket:job {0}:{1} topic {2} has no listeners", 
+						bucket.map(b-> b.full_name()).orElse("(unknown)"), job.name(), topic));
+			}
+		})
+		.orElseGet(() -> {
+			return  Validation.fail(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "sendObjectToStreamingPipeline", "Bucket:job {0}:{1} has no output topic", 
+					bucket.map(b-> b.full_name()).orElse("(unknown)"), job.name()));
 		});
 	}
 
@@ -675,7 +693,7 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#emitObject(java.util.Optional, com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean, fj.data.Either, java.util.Optional)
 	 */
 	@Override
-	public void emitObject(final Optional<DataBucketBean> bucket,
+	public Validation<BasicMessageBean, JsonNode> emitObject(final Optional<DataBucketBean> bucket,
 			final AnalyticThreadJobBean job,
 			final Either<JsonNode, Map<String, Object>> object, 
 			final Optional<AnnotationBean> annotations)
@@ -706,6 +724,8 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 			_distributed_services.produce(topic, obj_json.toString());
 		}
 		//(else nothing to do)
+		
+		return Validation.success(obj_json);
 	}
 
 	@Override

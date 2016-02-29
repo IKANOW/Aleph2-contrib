@@ -7,7 +7,7 @@
 	<properties>
 		<aleph2.version>0.0.1-SNAPSHOT</aleph2.version>
 		<aleph2.scope>compile</aleph2.scope>
-		<aleph2.hadoop>2.6.0</aleph2.hadoop>
+		<aleph2.hadoop>2.7.1</aleph2.hadoop>
 	</properties>
 	<build>
 		<plugins>
@@ -129,6 +129,22 @@
 					<artifactId>guava</artifactId>
 					<groupId>com.google.guava</groupId>
 				</exclusion>
+				<exclusion>
+					<artifactId>servlet-api</artifactId>
+					<groupId>javax.servlet</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jasper-runtime</artifactId>
+					<groupId>tomcat</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jasper-compiler</artifactId>
+					<groupId>tomcat</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jetty-util</artifactId>
+					<groupId>org.mortbay.jetty</groupId>
+				</exclusion>
 			</exclusions>
 		</dependency>
 		<dependency>
@@ -151,6 +167,30 @@
 					<artifactId>guava</artifactId>
 					<groupId>com.google.guava</groupId>
 				</exclusion>
+				<exclusion>
+					<artifactId>servlet-api</artifactId>
+					<groupId>javax.servlet</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jasper-runtime</artifactId>
+					<groupId>tomcat</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jasper-compiler</artifactId>
+					<groupId>tomcat</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jetty-util</artifactId>
+					<groupId>org.mortbay.jetty</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jetty</artifactId>
+					<groupId>org.mortbay.jetty</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jsp-api</artifactId>
+					<groupId>javax.servlet.jsp</groupId>
+				</exclusion>
 			</exclusions>
 		</dependency>
 		<dependency>
@@ -161,6 +201,30 @@
 				<exclusion>
 					<artifactId>guava</artifactId>
 					<groupId>com.google.guava</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>servlet-api</artifactId>
+					<groupId>javax.servlet</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jasper-runtime</artifactId>
+					<groupId>tomcat</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jasper-compiler</artifactId>
+					<groupId>tomcat</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jetty-util</artifactId>
+					<groupId>org.mortbay.jetty</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jetty</artifactId>
+					<groupId>org.mortbay.jetty</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jsp-api</artifactId>
+					<groupId>javax.servlet.jsp</groupId>
 				</exclusion>
 			</exclusions>
 		</dependency>
@@ -190,7 +254,41 @@
 					<artifactId>guava</artifactId>
 					<groupId>com.google.guava</groupId>
 				</exclusion>
-			</exclusions>
+				<exclusion>
+					<artifactId>servlet-api</artifactId>
+					<groupId>javax.servlet</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jasper-runtime</artifactId>
+					<groupId>tomcat</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jasper-compiler</artifactId>
+					<groupId>tomcat</groupId>
+				</exclusion>
+				<exclusion>
+					<artifactId>jetty-util</artifactId>
+					<groupId>org.mortbay.jetty</groupId>
+				</exclusion>
+				<exclusion>
+		            <groupId>javax.servlet.jsp</groupId>
+		            <artifactId>jsp-api</artifactId>
+	        	</exclusion>
+	        </exclusions>
+		</dependency>
+		<!--  We do want servlet-api, just the right version compared to the tomcat version -->
+		<dependency>
+	  		<groupId>com.ikanow.aleph2</groupId>
+	  		<artifactId>aleph2_server_only_dependencies</artifactId>
+	  		<version>${aleph2.version}</version>
+			<scope>${aleph2.scope}</scope>  		
+		</dependency>
+		<dependency>
+			<!-- This just ensures that log4j won't be in the shaded jar via some transitive install -->
+			<groupId>log4j</groupId>
+			<artifactId>log4j</artifactId>
+			<version>[0,)</version>
+			<scope>provided</scope>			
 		</dependency>
 				
 	</dependencies>

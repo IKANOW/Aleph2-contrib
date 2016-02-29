@@ -1,18 +1,18 @@
 /*******************************************************************************
-* Copyright 2015, The IKANOW Open Source Project.
-* 
-* This program is free software: you can redistribute it and/or modify
-* it under the terms of the GNU Affero General Public License, version 3,
-* as published by the Free Software Foundation.
-* 
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU Affero General Public License for more details.
-* 
-* You should have received a copy of the GNU Affero General Public License
-* along with this program. If not, see <http://www.gnu.org/licenses/>.
-******************************************************************************/
+ * Copyright 2015, The IKANOW Open Source Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.services;
 
 import static org.junit.Assert.*;
@@ -436,7 +436,7 @@ public class TestBatchEnrichmentContext {
 			fail("Should have errored");
 		}
 		catch (Exception e) {
-			assertEquals(HadoopErrorUtils.SERVICE_RESTRICTIONS, e.getMessage());		
+			assertEquals(com.ikanow.aleph2.analytics.utils.ErrorUtils.SERVICE_RESTRICTIONS, e.getMessage());		
 		}
 		
 		final AnalyticThreadJobBean analytic_job1 = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
@@ -472,8 +472,8 @@ public class TestBatchEnrichmentContext {
 		// Empty service set:
 		test_context.getEnrichmentContextSignature(Optional.of(test_bucket), Optional.empty());		
 		final Collection<Object> res1 = test_context.getUnderlyingArtefacts();
-		final String exp1 = "class com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext:class com.ikanow.aleph2.analytics.services.AnalyticsContext:class com.ikanow.aleph2.data_model.utils.ModuleUtils$ServiceContext:class com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices:class com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService:class com.ikanow.aleph2.shared.crud.mongodb.services.MockMongoDbCrudServiceFactory:class com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService:class com.ikanow.aleph2.shared.crud.elasticsearch.services.MockElasticsearchCrudServiceFactory:class com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService:class com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService:class com.ikanow.aleph2.shared.crud.mongodb.services.MockMongoDbCrudServiceFactory";
-		assertEquals(exp1, res1.stream().map(o -> o.getClass().toString()).collect(Collectors.joining(":")));
+		final String exp1 = "class com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext:class com.ikanow.aleph2.analytics.services.AnalyticsContext:class com.ikanow.aleph2.core.shared.utils.SharedErrorUtils:class com.ikanow.aleph2.data_model.utils.ModuleUtils$ServiceContext:class com.ikanow.aleph2.distributed_services.services.MockCoreDistributedServices:class com.ikanow.aleph2.management_db.mongodb.services.MockMongoDbManagementDbService:class com.ikanow.aleph2.search_service.elasticsearch.services.MockElasticsearchIndexService:class com.ikanow.aleph2.shared.crud.elasticsearch.services.MockElasticsearchCrudServiceFactory:class com.ikanow.aleph2.shared.crud.mongodb.services.MockMongoDbCrudServiceFactory:class com.ikanow.aleph2.storage_service_hdfs.services.MockHdfsStorageService";
+		assertEquals(exp1, res1.stream().map(o -> o.getClass().toString()).sorted().collect(Collectors.joining(":")));
 		
 		// Check can retrieve the analytics context:
 		

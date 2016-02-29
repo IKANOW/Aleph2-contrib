@@ -34,6 +34,7 @@ import org.apache.logging.log4j.Logger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.Inject;
+import com.google.inject.Provider;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
@@ -60,8 +61,8 @@ public class IkanowV1SyncService_PurgeBuckets {
 	
 	protected final MongoDbManagementDbConfigBean _config;
 	protected final IServiceContext _context;
-	protected final IManagementDbService _core_management_db;
-	protected final IManagementDbService _underlying_management_db;
+	protected final Provider<IManagementDbService> _core_management_db;
+	protected final Provider<IManagementDbService> _underlying_management_db;
 	protected final ICoreDistributedServices _core_distributed_services;
 	
 	protected final SetOnce<MutexMonitor> _source_purge_mutex_monitor = new SetOnce<MutexMonitor>();
@@ -82,11 +83,11 @@ public class IkanowV1SyncService_PurgeBuckets {
 	public IkanowV1SyncService_PurgeBuckets(final MongoDbManagementDbConfigBean config, final IServiceContext service_context) {		
 		_config = config;
 		_context = service_context;
-		_core_management_db = _context.getCoreManagementDbService();		
-		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
+		_core_management_db = _context.getServiceProvider(IManagementDbService.class, IManagementDbService.CORE_MANAGEMENT_DB).get();		
+		_underlying_management_db = _context.getServiceProvider(IManagementDbService.class, Optional.empty()).get();
 		_context.getService(ICoreDistributedServices.class, Optional.empty()).get();
 		_core_distributed_services = _context.getService(ICoreDistributedServices.class, Optional.empty()).get();
-		
+				
 		if (Optional.ofNullable(_config.v1_enabled()).orElse(false)) {
 			// Launch the synchronization service
 			
@@ -167,7 +168,7 @@ public class IkanowV1SyncService_PurgeBuckets {
 			}
 			if (!_v1_db.isSet()) {
 				@SuppressWarnings("unchecked")
-				final ICrudService<PurgeQueueBean> v1_config_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.v2_purge_q/" + PurgeQueueBean.class.getName())).get();				
+				final ICrudService<PurgeQueueBean> v1_config_db = _underlying_management_db.get().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.v2_purge_q/" + PurgeQueueBean.class.getName())).get();				
 				_v1_db.set(v1_config_db);
 				
 				_v1_db.get().optimizeQuery(Arrays.asList(BeanTemplateUtils.from(PurgeQueueBean.class).field(PurgeQueueBean::status)));
@@ -176,8 +177,8 @@ public class IkanowV1SyncService_PurgeBuckets {
 			try {
 				// Synchronize
 				synchronizePurgeSources(
-						_core_management_db.getDataBucketStore(), 
-						_underlying_management_db.getDataBucketStatusStore(), 
+						_core_management_db.get().getDataBucketStore(), 
+						_underlying_management_db.get().getDataBucketStatusStore(), 
 						_v1_db.get())
 						.get();
 				//(note this only waits for completions to finish, which should be super fast)
@@ -245,7 +246,7 @@ public class IkanowV1SyncService_PurgeBuckets {
 	private CompletableFuture<Boolean> handlePurgeSource(DataBucketBean to_purge,
 			PurgeQueueBean purge_source) {
 		_logger.info("Purging data bucket: " + to_purge.full_name());
-		return _core_management_db.purgeBucket(to_purge, Optional.empty());
+		return _core_management_db.get().purgeBucket(to_purge, Optional.empty());
 	}	
 	
 	/**

@@ -1,0 +1,27 @@
+{
+	"primitive_field": "BIGINT",
+	"raw_struct": {
+		"raw_field_1": "VARCHAR",
+		"raw_field_2": "DATE"
+	},
+	"raw_map": [ "STRING", "TIMESTAMP" ], 
+	"raw_array": [ "TINYINT" ],
+	"raw_union_1": [ {}, "SMALLINT" ],
+	"raw_union_2": [ {}, "INT", "BOOLEAN" ],
+	"nested_struct": {
+		"raw_field_1": "FLOAT",
+		"nested_field2": {
+			"nested_raw_1": "DOUBLE",
+			"nested_nested_2": [ "BINARY" ]
+		}
+	},
+	"nested_map": [ "STRING", 
+					{
+					 "raw_field_1": "CHAR",
+					 "nested_nested_2": [ {}, "STRING", "STRING", "DATE" ]
+					}
+				], 
+	"nested_array_1": [ [ "STRING" ] ],
+	"nested_array_2": [ { "raw_field_1": "STRING" } ],
+	"nested_union": [ {}, { "raw_field_1": "STRING" } ]	
+}

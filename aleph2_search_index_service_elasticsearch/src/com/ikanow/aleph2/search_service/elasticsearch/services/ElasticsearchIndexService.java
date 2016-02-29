@@ -1,18 +1,18 @@
 /*******************************************************************************
  * Copyright 2015, The IKANOW Open Source Project.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ *******************************************************************************/
 package com.ikanow.aleph2.search_service.elasticsearch.services;
 
 import java.io.IOException;
@@ -29,7 +29,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -38,8 +37,11 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.spark.sql.DataFrame;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
 import org.elasticsearch.action.admin.indices.template.delete.DeleteIndexTemplateResponse;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesRequest;
@@ -60,27 +62,33 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.inject.Inject;
 import com.google.inject.Module;
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IDataWarehouseService;
+import com.ikanow.aleph2.data_model.interfaces.data_services.IDocumentService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.ISubject;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.DataWarehouseSchemaBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.DocumentSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchIndexSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
-import com.ikanow.aleph2.data_model.objects.shared.AuthorizationBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
-import com.ikanow.aleph2.data_model.utils.BucketUtils;
-import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
+import com.ikanow.aleph2.data_model.utils.AnalyticsUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.MultiBucketUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -88,8 +96,11 @@ import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIn
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean.CollidePolicy;
 import com.ikanow.aleph2.search_service.elasticsearch.module.ElasticsearchIndexServiceModule;
+import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchHadoopUtils;
+import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchHiveUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexUtils;
+import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchSparkUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.SearchIndexErrorUtils;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudService.CreationPolicy;
@@ -105,9 +116,14 @@ import fj.data.Validation;
  * @author Alex
  *
  */
-public class ElasticsearchIndexService implements ISearchIndexService, ITemporalService, IColumnarService, IExtraDependencyLoader {
+public class ElasticsearchIndexService implements IDataWarehouseService, ISearchIndexService, ITemporalService, IColumnarService, IDocumentService, IExtraDependencyLoader {
 	final static protected Logger _logger = LogManager.getLogger();
 
+	//TODO (ALEPH-20): IDocumentService things to implement:
+	// - built-in mapping for doc fields
+	// - should always add _id (so it actually goes in _source - which it doesn't if it's auto generated ... arguably should just change that anyway...)
+	// - implement full CRUD
+	
 	protected final IServiceContext _service_context; // (need the security service)
 	protected final IElasticsearchCrudServiceFactory _crud_factory;
 	protected final ElasticsearchIndexServiceConfigBean _config;
@@ -293,12 +309,10 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 				throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "ElasticsearchDataService.getWritableDataService, multi_bucket_children"));
 			}
 			
-			// If single bucket, is the search index service enabled?
-			if (!Optional.ofNullable(bucket.data_schema())
-					.map(ds -> ds.search_index_schema())
-						.map(sis -> Optional.ofNullable(sis.enabled())
-						.orElse(true))
-				.orElse(false))
+			// If single bucket, is a writable service enabled?
+			if (!isServiceFor(bucket, ISearchIndexService.class, Optionals.of(() -> bucket.data_schema().search_index_schema()))
+					&&
+				!isServiceFor(bucket, IDocumentService.class, Optionals.of(() -> bucket.data_schema().document_schema())))
 			{
 				return Optional.empty();
 			}
@@ -404,68 +418,11 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 				Class<O> clazz, Collection<DataBucketBean> buckets,
 				Optional<String> options) {
 
-			// First get any buckets that we need to resolve
-			//final Set<String> wildcard_bucket_list = 
-			final Map<String, List<Tuple2<String, String>>> multi_bucket_list =
-					buckets.stream()
-						.flatMap(b -> Optional.ofNullable(b.multi_bucket_children())
-												.map(s -> s.stream()
-															.<Tuple2<String, String>>
-																map(ss -> Tuples._2T(ss, Optional.ofNullable(b.owner_id()).orElse(""))))
-												.orElse(Stream.empty())
-						)
-						.collect(Collectors.groupingBy((Tuple2<String, String> s_o) -> s_o._2()))
-						;
-			//(due to security architecture if we have any wild
-			
-			// Now get a final list of buckets
-			
 			final Collection<DataBucketBean> final_bucket_list = 
-					multi_bucket_list.isEmpty()
-					? buckets
-					: Stream.concat(buckets.stream(), Lambdas.get(() -> {
-						
-						final List<CompletableFuture<Stream<DataBucketBean>>> res = multi_bucket_list.entrySet().stream().parallel()
-								.<CompletableFuture<Stream<DataBucketBean>>>map(kv -> {
-									
-									final List<String> multi_paths = kv.getValue().stream().map(s_o -> s_o._1()).collect(Collectors.toList());
-									
-									//DEBUG
-									//System.out.println("PATHS = " + wildcard_paths.stream().collect(Collectors.joining(";")));
-									
-									final QueryComponent<DataBucketBean> query = 
-											BucketUtils.getApproxMultiBucketQuery(multi_paths);
-									
-									final Predicate<String> filter = BucketUtils.refineMultiBucketQuery(multi_paths);
-									
-									final ICrudService<DataBucketBean> bucket_store = 
-											Optional.of(_service_context.getCoreManagementDbService().readOnlyVersion().getDataBucketStore())
-													.map(db -> kv.getKey().isEmpty() ? db : db.secured(_service_context, new AuthorizationBean(kv.getKey())))
-													.get()
-													;
-									
-									//DEBUG
-									//System.out.println("OWNER: " + kv.getKey() + " .. " + bucket_store.countObjects().join().intValue() + " query = \n" + query.toString());
-									
-									return bucket_store												
-												.getObjectsBySpec(query)
-												.thenApply(cursor -> {
-													return Optionals.streamOf(cursor.iterator(), false)
-																.filter(b -> filter.test(b.full_name()))
-																;
-												});
-								})
-								.collect(Collectors.toList());
-						
-						// Wait for everything to stop
-						CompletableFuture.allOf(res.stream().toArray(CompletableFuture[]::new)).join();
-						
-						// Create a stream of buckets
-						
-						return res.stream().flatMap(cf -> cf.join());
-						
-					})).collect(Collectors.toSet());
-			
+					MultiBucketUtils
+						.expandMultiBuckets(buckets, _service_context.getCoreManagementDbService().readOnlyVersion().getDataBucketStore(), _service_context)
+						.values()
+						;
 			
 			// Next up, split the (now non-multi) buckets into fixed and timed 
 			
@@ -501,7 +458,11 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 					context,
 					Optional.empty(), 
 					CreationPolicy.OPTIMIZED, 
-					Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()));
+					Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()))
+//TODO: (ALEPH-20): need to be able to specify various transform policies, eg default add + field map					
+//				.map(crud -> CrudServiceUtils.intercept(clazz, crud, Optional.empty(), query_transform, interceptors, default_interceptor))
+					
+					;
 		}
 
 		/* (non-Javadoc)
@@ -816,11 +777,29 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService#getUnderlyingPlatformDriver(java.lang.Class, java.util.Optional)
 	 */
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
 	public <T> Optional<T> getUnderlyingPlatformDriver(final Class<T> driver_class, final Optional<String> driver_options) {
 		if (Client.class.isAssignableFrom(driver_class)) {
 			return (Optional<T>) Optional.of(_crud_factory.getClient());
+		}
+		if (IAnalyticsAccessContext.class.isAssignableFrom(driver_class)) {
+			final String[] owner_bucket_config = driver_options.orElse("unknown:/unknown:{}").split(":", 3);
+			
+			if (InputFormat.class.isAssignableFrom(AnalyticsUtils.getTypeName((Class<? extends IAnalyticsAccessContext>)driver_class))) { // INPUT FORMAT
+				return (Optional<T>) driver_options.filter(__ -> 3 == owner_bucket_config.length)
+						.map(__ -> BeanTemplateUtils.from(owner_bucket_config[2], AnalyticThreadJobBean.AnalyticThreadJobInputBean.class))
+						.map(job_input -> ElasticsearchHadoopUtils.getInputFormat(_crud_factory.getClient(), job_input.get()))
+						.map(access_context -> AnalyticsUtils.injectImplementation((Class<? extends IAnalyticsAccessContext>)driver_class, access_context))
+						;
+			}
+			else if (DataFrame.class.isAssignableFrom(AnalyticsUtils.getTypeName((Class<? extends IAnalyticsAccessContext>)driver_class))) { // SCHEMA RDD
+				return (Optional<T>) driver_options.filter(__ -> 3 == owner_bucket_config.length)
+						.map(__ -> BeanTemplateUtils.from(owner_bucket_config[2], AnalyticThreadJobBean.AnalyticThreadJobInputBean.class))
+						.map(job_input -> ElasticsearchSparkUtils.getDataFrame(_crud_factory.getClient(), job_input.get()))
+						.map(access_context -> AnalyticsUtils.injectImplementation((Class<? extends IAnalyticsAccessContext>)driver_class, access_context))
+						;				
+			}
 		}
 		return Optional.empty();
 	}
@@ -833,11 +812,38 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean)
 	 */
 	@Override
+	public Tuple2<String, List<BasicMessageBean>> validateSchema(final DataWarehouseSchemaBean schema, final DataBucketBean bucket) {
+		
+		List<String> errors = ElasticsearchHiveUtils.validateSchema(schema, bucket, _service_context.getSecurityService());
+		
+		if (errors.isEmpty()) {
+			return Tuples._2T(ElasticsearchHiveUtils.getTableName(bucket, schema), Collections.emptyList());			
+		}
+		else {
+			return Tuples._2T("", errors.stream().map(err -> ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "IDataWarehouseService.validateSchema", err)).collect(Collectors.toList()));
+		}
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IColumnarService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.ColumnarSchemaBean)
+	 */
+	@Override
 	public Tuple2<String, List<BasicMessageBean>> validateSchema(final ColumnarSchemaBean schema, final DataBucketBean bucket) {
 		// (Performed under search index schema)
 		return Tuples._2T("", Collections.emptyList());
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IDocumentService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.DocumentSchemaBean, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
+	 */
+	@Override
+	public Tuple2<String, List<BasicMessageBean>> validateSchema(
+			DocumentSchemaBean schema, DataBucketBean bucket) {
+		// (Currently nothing doc_schema specific)
+		return Tuples._2T("", Collections.emptyList());
+	}
+	
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean)
 	 */
@@ -866,15 +872,8 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 				((String) bucket.data_schema().search_index_schema().technology_override_schema().get(SearchIndexSchemaDefaultBean.index_name_override_)));
 			
 			if (manual_index_name.isPresent()) { // (then must be admin)
-				final ISubject system_user = _service_context.getSecurityService().loginAsSystem();
-				try {
-					_service_context.getSecurityService().runAs(system_user, Arrays.asList(bucket.owner_id())); // (Switch to bucket owner user)
-					if (!_service_context.getSecurityService().hasRole(system_user, "admin")) {
-						errors.add(ErrorUtils.buildErrorMessage(bucket.full_name(), "validateSchema", SearchIndexErrorUtils.NON_ADMIN_BUCKET_NAME_OVERRIDE));
-					}
-				}
-				finally {
-					_service_context.getSecurityService().releaseRunAs(system_user);
+				if (!_service_context.getSecurityService().hasUserRole(Optional.of(bucket.owner_id()), ISecurityService.ROLE_ADMIN)) {
+					errors.add(ErrorUtils.buildErrorMessage(bucket.full_name(), "validateSchema", SearchIndexErrorUtils.NON_ADMIN_BUCKET_NAME_OVERRIDE));
 				}
 			}
 			
@@ -935,6 +934,29 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 				.orElse(false);
 	}
 	
+	/** A slightly generic function that determines what roles this service is playing
+	 * @param bucket
+	 * @param service_clazz
+	 * @param maybe_schema
+	 * @return
+	 */
+	protected <I extends IUnderlyingService, T> boolean isServiceFor(final DataBucketBean bucket, final Class<I> service_clazz, Optional<T> maybe_schema) {
+		return maybe_schema.flatMap(Lambdas.maybeWrap_i(schema -> {
+			final JsonNode schema_map = BeanTemplateUtils.toJson(schema);
+			final JsonNode enabled = schema_map.get("enabled");
+			
+			if ((null != enabled) && enabled.isBoolean() && !enabled.asBoolean()) {
+				return false;
+			}
+			else {
+				final Optional<I> maybe_service = _service_context.getService(service_clazz, 
+						Optional.ofNullable(schema_map.get("service_name")).<String>map(j -> j.asText()));
+				
+				return maybe_service.map(service -> this.getClass().equals(service.getClass())).orElse(false);
+			}
+		})).orElse(false);
+	}
+	
 	////////////////////////////////////////////////////////////////////////////////
 	
 	/** This service needs to load some additional classes via Guice. Here's the module that defines the bindings
@@ -954,6 +976,66 @@ public class ElasticsearchIndexService implements ISearchIndexService, ITemporal
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
 		return Arrays.asList(this, _crud_factory);
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider#onPublishOrUpdate(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Optional, boolean, java.util.Set, java.util.Set)
+	 */
+	@Override
+	public CompletableFuture<Collection<BasicMessageBean>> onPublishOrUpdate(
+			DataBucketBean bucket, Optional<DataBucketBean> old_bucket,
+			boolean suspended, Set<String> data_services,
+			Set<String> previous_data_services)
+	{
+		try {
+		
+			final LinkedList<BasicMessageBean> mutable_errors = new LinkedList<>();
+			
+			// If search_index_service or document_service is enabled then update mapping
+	
+			if ((data_services.contains(DataSchemaBean.SearchIndexSchemaBean.name)) || data_services.contains(DataSchemaBean.DocumentSchemaBean.name)) {
+				
+				final Tuple3<ElasticsearchIndexServiceConfigBean, String, Optional<String>> schema_index_type = getSchemaConfigAndIndexAndType(bucket, _config);
+				
+				handlePotentiallyNewIndex(bucket, Optional.empty(), true, schema_index_type._1(), schema_index_type._2());
+			}		
+			
+			// If data_warehouse_service is enabled then update Hive table (remove and reinsert super quick)
+			// If data_warehouse_service _was_ enabled then remove Hive table
+			
+			final boolean old_data_service_matches_dw = previous_data_services.contains(DataSchemaBean.DataWarehouseSchemaBean.name);
+			if ((data_services.contains(DataSchemaBean.DataWarehouseSchemaBean.name)) || old_data_service_matches_dw)
+			{			
+				final Configuration hive_config = ElasticsearchHiveUtils.getHiveConfiguration(_service_context.getGlobalProperties());
+				
+				final DataBucketBean delete_bucket = old_bucket.filter(__-> old_data_service_matches_dw).orElse(bucket);			
+				final String delete_string = ElasticsearchHiveUtils.deleteHiveSchema(delete_bucket, delete_bucket.data_schema().data_warehouse_schema());
+				
+				final Validation<String, String> maybe_recreate_string = 
+						data_services.contains(DataSchemaBean.DataWarehouseSchemaBean.name)
+						? ElasticsearchHiveUtils.generateFullHiveSchema(bucket, bucket.data_schema().data_warehouse_schema())
+						: Validation.success(null)
+						;
+						
+				final Validation<String, Boolean> ret_val = maybe_recreate_string
+						.bind(recreate_string -> ElasticsearchHiveUtils.registerHiveTable(Optional.empty(), hive_config, Optional.of(delete_string), Optional.ofNullable(recreate_string)));
+				
+				if (ret_val.isFail()) {
+					mutable_errors.add(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "onPublishOrUpdate", ret_val.fail()));
+				}
+				else {
+					_logger.info(ErrorUtils.get("Register/update/delete hive ({2}) table for bucket {0}: {1}", 
+													bucket.full_name(), 
+													delete_string + "/" + maybe_recreate_string.success(),
+													ElasticsearchHiveUtils.getParamsFromHiveConfig(hive_config)))
+													;
+				}
+			}		
+			return CompletableFuture.completedFuture(mutable_errors);
+		}
+		catch (Throwable t) {
+			return CompletableFuture.completedFuture(Arrays.asList(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "onPublishOrUpdate", ErrorUtils.getLongForm("{0}", t))));
+		}
 	}
 
 }

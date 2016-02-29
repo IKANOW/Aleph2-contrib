@@ -1,18 +1,18 @@
 /*******************************************************************************
-* Copyright 2015, The IKANOW Open Source Project.
-* 
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-* 
-*   http://www.apache.org/licenses/LICENSE-2.0
-* 
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-******************************************************************************/
+ * Copyright 2015, The IKANOW Open Source Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package com.ikanow.aleph2.storage_service_hdfs.services;
 
 import static org.junit.Assert.*;
@@ -89,6 +89,7 @@ public class TestMockHdfsStorageSystem {
 		
 		assertFalse("Not found", storageService.getUnderlyingPlatformDriver(null, Optional.empty()).isPresent());
 		assertFalse("Not found", storageService.getUnderlyingPlatformDriver(String.class, Optional.empty()).isPresent());			
+		assertFalse("Not found", storageService.getUnderlyingPlatformDriver(String.class, Optional.of("{}")).isPresent());			
 	}
 
 	@Test
@@ -546,6 +547,49 @@ public class TestMockHdfsStorageSystem {
 		assertTrue("Default returns processing",
 				storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, bucket_full, Optional.empty(), Optional.empty())).isPresent()
 				);
+		
+		// Transient input cases
+		{
+			final DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean test_override = 
+					BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.class)
+						.with(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean::target_write_settings, 
+								BeanTemplateUtils.build(DataSchemaBean.WriteSettings.class)
+									.with(DataSchemaBean.WriteSettings::batch_max_objects, 10)
+									.with(DataSchemaBean.WriteSettings::batch_flush_interval, 100)
+								.done().get()
+								)
+					.done().get();
+			
+			final String test_override_str = BeanTemplateUtils.toJson(test_override).toString();
+			
+			final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::full_name, "/aleph2_testing/test")
+					.done().get();
+			
+			final DataBucketBean non_test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::full_name, "/non_testing")
+					.done().get();
+			
+			{
+				HfdsDataWriteService<JsonNode> test1 = (HfdsDataWriteService<JsonNode>)storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, non_test_bucket, Optional.of("transient_input"), Optional.empty())).get();			
+				assertEquals(null, HfdsDataWriteService.getStorageSubSchema(test1._bucket.data_schema().storage_schema(), test1._stage).target_write_settings());
+			}
+			{
+				HfdsDataWriteService<JsonNode> test1 = (HfdsDataWriteService<JsonNode>)storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, test_bucket, Optional.of("transient_input"), Optional.empty())).get();			
+				assertEquals(10, HfdsDataWriteService.getStorageSubSchema(test1._bucket.data_schema().storage_schema(), test1._stage).target_write_settings().batch_flush_interval().intValue());
+				assertEquals(null, HfdsDataWriteService.getStorageSubSchema(test1._bucket.data_schema().storage_schema(), test1._stage).target_write_settings().batch_max_objects());
+			}
+			{
+				HfdsDataWriteService<JsonNode> test1 = (HfdsDataWriteService<JsonNode>)storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, non_test_bucket, Optional.of("transient_input:" + test_override_str), Optional.empty())).get();			
+				assertEquals(100, HfdsDataWriteService.getStorageSubSchema(test1._bucket.data_schema().storage_schema(), test1._stage).target_write_settings().batch_flush_interval().intValue());
+				assertEquals(10, HfdsDataWriteService.getStorageSubSchema(test1._bucket.data_schema().storage_schema(), test1._stage).target_write_settings().batch_max_objects().intValue());
+			}
+			{
+				HfdsDataWriteService<JsonNode> test1 = (HfdsDataWriteService<JsonNode>)storage_service.getDataService().flatMap(ds -> ds.getWritableDataService(JsonNode.class, test_bucket, Optional.of("transient_input:" + test_override_str), Optional.empty())).get();			
+				assertEquals(100, HfdsDataWriteService.getStorageSubSchema(test1._bucket.data_schema().storage_schema(), test1._stage).target_write_settings().batch_flush_interval().intValue());
+				assertEquals(10, HfdsDataWriteService.getStorageSubSchema(test1._bucket.data_schema().storage_schema(), test1._stage).target_write_settings().batch_max_objects().intValue());
+			}
+		}		
 	}
 	
 	@Test

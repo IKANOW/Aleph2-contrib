@@ -1,18 +1,18 @@
 /*******************************************************************************
  * Copyright 2015, The IKANOW Open Source Project.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ *******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.assets;
 
 import java.io.DataInput;
@@ -20,6 +20,7 @@ import java.io.DataInputStream;
 import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Optional;
 
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
@@ -121,4 +122,8 @@ public class Aleph2MultiInputSplit extends InputSplit implements Configurable, W
 		return _delegate.getLocations();
 	}
 
+	@Override
+	public String toString() {
+		return Aleph2MultiInputSplit.class.getSimpleName() + ":" + Optional.ofNullable(_name).orElse("(no name)") + ":" +  Optional.ofNullable(_delegate).map(d -> d.toString()).orElse("none");
+	}
 }

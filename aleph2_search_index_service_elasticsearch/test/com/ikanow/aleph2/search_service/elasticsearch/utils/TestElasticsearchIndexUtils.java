@@ -1,18 +1,18 @@
 /*******************************************************************************
  * Copyright 2015, The IKANOW Open Source Project.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ *******************************************************************************/
 package com.ikanow.aleph2.search_service.elasticsearch.utils;
 
 import static org.junit.Assert.*;
@@ -489,6 +489,7 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
+					Optional.empty(),
 				_mapper, "_default_");
 	
 			final ObjectNode expected_remove_search_settings = ((ObjectNode) expected_json.get("mappings").get("_default_")).remove(Arrays.asList("_meta", "_all", "_source"));
@@ -555,6 +556,22 @@ public class TestElasticsearchIndexUtils {
 			
 		}
 		
+		// 1d) Check if doc schema are enabled
+		{
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty());
+			
+			final XContentBuilder test_result = ElasticsearchIndexUtils.getColumnarMapping(
+					test_bucket, Optional.empty(), field_lookups, 
+					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class),
+					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
+					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
+					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
+					Optional.of(_mapper.convertValue(_config.document_schema_override(), JsonNode.class)),
+				_mapper, "_default_");
+			
+			assertTrue("Should contain the annotation logic: " + test_result.string(), test_result.string().contains("\"__a\":{\"properties\":{"));
+		}
+		
 		// 2) Types instead of "_defaults_"
 		
 		// 2a) type exists
@@ -572,6 +589,7 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
+					Optional.empty(),
 				_mapper, "_default_");
 	
 			assertEquals(expected_json.get("mappings").get("_default_").toString(), test_result.bytes().toUtf8());
@@ -588,8 +606,9 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
+					Optional.empty(),
 				_mapper, "_default_");
-	
+			
 			assertEquals(expected_json.get("mappings").get("_default_").toString(), test_result.bytes().toUtf8());
 		}
 	}
@@ -810,6 +829,7 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
+					Optional.empty(),
 				_mapper, "misc_test");
 			
 			assertEquals(expected_json.toString(), test_result.bytes().toUtf8());
@@ -824,7 +844,7 @@ public class TestElasticsearchIndexUtils {
 
 	
 	@Test
-	public void test_defaultMappings() {
+	public void test_defaultMappings() throws IOException {
 		
 		final DataBucketBean search_index_test = BeanTemplateUtils.build(DataBucketBean.class)
 				.with(DataBucketBean::full_name, "/test/test")
@@ -853,6 +873,33 @@ public class TestElasticsearchIndexUtils {
 			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(search_index_test, Optional.empty(), true, schema_config, _mapper, index_type);
 	
 			assertEquals("Get expected search_index_test schema", expected, mapping.bytes().toUtf8());
+		}
+		
+		// (Search index schema and doc schema only)
+		{
+			final DataBucketBean doc_test = BeanTemplateUtils.clone(search_index_test)
+					.with(DataBucketBean::data_schema,
+							BeanTemplateUtils.clone(search_index_test.data_schema())
+								.with(DataSchemaBean::document_schema,
+										BeanTemplateUtils.build(DataSchemaBean.DocumentSchemaBean.class)
+										//(empty)
+										.done().get())																
+							.done()
+						)
+					.done();
+							
+			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(doc_test, _config, _mapper);
+			
+			final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
+			final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+					.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
+						? "_default_"
+						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
+			
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(doc_test, Optional.empty(), true, schema_config, _mapper, index_type);
+			
+			assertTrue("Should contain the annotation logic: " + mapping.string(), mapping.string().contains("\"__a\":{\"properties\":{"));
+			
 		}
 		
 		// Temporal + search index schema

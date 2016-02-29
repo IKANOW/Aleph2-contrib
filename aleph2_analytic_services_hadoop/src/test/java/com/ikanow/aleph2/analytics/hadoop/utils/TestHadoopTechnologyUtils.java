@@ -1,18 +1,18 @@
 /*******************************************************************************
  * Copyright 2015, The IKANOW Open Source Project.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ *******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.utils;
 
 import static org.junit.Assert.assertEquals;
@@ -22,6 +22,8 @@ import static org.junit.Assert.assertTrue;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.Test;
 
@@ -114,11 +116,64 @@ public class TestHadoopTechnologyUtils {
 			final BasicMessageBean res1 = HadoopTechnologyUtils.validateJobs(test_bucket1, Collections.emptyList());
 			
 			assertTrue("Validation should pass", res1.success());
-			assertEquals("Correct error message: " + res1.message(), "", res1.message());
-			
+			assertEquals("Correct error message: " + res1.message(), "", res1.message());			
 		}
 	}
 
+	@Test
+	public void test_enrichmentPipelineConversion() {
+		
+		// Standard case
+		{
+			final Map<String, Object> test1 = 
+					new LinkedHashMap<String, Object>(
+							ImmutableMap.<String, Object>builder()
+								.put("enrich_pipeline", Arrays.asList(
+										new LinkedHashMap<String, Object>(
+											ImmutableMap.<String, Object>builder()
+												.put("name", "test_element")
+												.put("config", 
+														new LinkedHashMap<String, Object>(
+																ImmutableMap.<String, Object>builder()
+																	.put("element", "1")
+																.build())
+														)
+											.build()																				
+										)))
+							.build());
+			
+			final List<EnrichmentControlMetadataBean> res = HadoopTechnologyUtils.convertAnalyticJob("test", test1);
+			assertEquals(1, res.size());
+			assertEquals("test_element", res.get(0).name());
+			assertEquals(1, res.get(0).config().size());
+		}
+		// Pipeline is object - falls back
+		{
+			final Map<String, Object> test1 = 
+					new LinkedHashMap<String, Object>(
+							ImmutableMap.<String, Object>builder()
+								.put("enrich_pipeline", 
+										new LinkedHashMap<String, Object>(
+											ImmutableMap.<String, Object>builder()
+												.put("name", "test_element")
+												.put("config", 
+														new LinkedHashMap<String, Object>(
+																ImmutableMap.<String, Object>builder()
+																	.put("element", "1")
+																.build())
+														)
+											.build()																				
+										))
+							.build());
+			
+			final List<EnrichmentControlMetadataBean> res = HadoopTechnologyUtils.convertAnalyticJob("test", test1);
+			assertEquals(1, res.size());
+			assertEquals("enrich_pipeline", res.get(0).name());
+		}
+		
+		// (other cases are tested by test_localValidation)
+	}
+	
 	@Test
 	public void test_localValidation() {
 		
@@ -150,7 +205,7 @@ public class TestHadoopTechnologyUtils {
 		// Test error case 1: inputs
 		
 		final AnalyticThreadJobBean.AnalyticThreadJobInputBean analytic_input1 =  BeanTemplateUtils.build(AnalyticThreadJobBean.AnalyticThreadJobInputBean.class)
-				.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::data_service, "search_index_service")
+				.with(AnalyticThreadJobBean.AnalyticThreadJobInputBean::data_service, "streaming")
 				.done().get();
 
 		final AnalyticThreadJobBean analytic_job1 = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
@@ -164,7 +219,7 @@ public class TestHadoopTechnologyUtils {
 		{
 			final BasicMessageBean res1 = HadoopTechnologyUtils.validateJob(test_bucket1, Collections.emptyList(), analytic_job1);			
 			assertFalse("Validation should fail", res1.success());
-			assertEquals("Correct error message: " + res1.message(), ErrorUtils.get(HadoopErrorUtils.CURR_INPUT_RESTRICTIONS, "search_index_service", "/test", "analytic_job_1", "search_index_service"), res1.message());
+			assertEquals("Correct error message: " + res1.message(), ErrorUtils.get(HadoopErrorUtils.CURR_INPUT_RESTRICTIONS, "streaming", "/test", "analytic_job_1"), res1.message());
 		}
 		
 		// Test error case 2: outputs
@@ -483,7 +538,7 @@ public class TestHadoopTechnologyUtils {
 			assertFalse("Validation should fail", res2.success());
 			final String[] messages = res2.message().split("\n");
 			assertEquals(2, messages.length);
-			assertEquals("Correct error message 1: " + messages[0], ErrorUtils.get(HadoopErrorUtils.CURR_INPUT_RESTRICTIONS, "search_index_service", "/test", "analytic_job_1"), messages[0]);
+			assertEquals("Correct error message 1: " + messages[0], ErrorUtils.get(HadoopErrorUtils.CURR_INPUT_RESTRICTIONS, "streaming", "/test", "analytic_job_1"), messages[0]);
 			assertEquals("Correct error message 2: " + messages[1], ErrorUtils.get(HadoopErrorUtils.TEMP_TRANSIENT_OUTPUTS_MUST_BE_BATCH, "/test", "analytic_job_2", "streaming"), messages[1]);
 		}
 		

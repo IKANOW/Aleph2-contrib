@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2015, The IKANOW Open Source Project.
+ * Copyright 2015, 2016, The IKANOW Open Source Project.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbServic
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 
@@ -92,7 +93,7 @@ public class IkanowV1AdminRoleProvider implements IRoleProvider {
 		}
 		logger.debug("Roles loaded for "+principalName+":");
 		logger.debug(roleNames);
-		return Tuple2.apply(roleNames, permissions);
+		return Tuples._2T(roleNames, permissions);
 	}
 
 	

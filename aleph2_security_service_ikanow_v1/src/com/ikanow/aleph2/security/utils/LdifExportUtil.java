@@ -1,9 +1,22 @@
+/*******************************************************************************
+ * Copyright 2015, 2016, The IKANOW Open Source Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package com.ikanow.aleph2.security.utils;
 
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
-import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -15,17 +28,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
-import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.shiro.authc.AccountException;
-import org.apache.shiro.authc.AuthenticationException;
-import org.apache.shiro.authc.AuthenticationInfo;
-import org.apache.shiro.authc.AuthenticationToken;
-import org.apache.shiro.authc.UsernamePasswordToken;
 import org.bson.types.ObjectId;
 
 import scala.Tuple2;
@@ -35,18 +40,15 @@ import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IManagementCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.Cursor;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
-import com.ikanow.aleph2.data_model.utils.ModuleUtils;
-import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
+import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.security.service.AuthenticationBean;
-import com.ikanow.aleph2.security.service.IkanowV1AuthenticationInfo;
-import com.ikanow.aleph2.security.service.IkanowV1DataGroupRoleProvider;
-import com.mongodb.DBCollection;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
@@ -95,7 +97,7 @@ public class LdifExportUtil {
 			sourceDb = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of(ingestOptions)).get();
 		}
 		if (bucketDb == null) {
-			bucketDb = _core_management_db.getDataBucketStore();
+			bucketDb = _core_management_db.getDataBucketStore().readOnlyVersion();
 		}
 		if (shareDb == null) {
 			String shareOptions = "social.share";
@@ -306,7 +308,7 @@ public class LdifExportUtil {
 			}
 			logger.debug("Roles loaded for "+principalName+":");
 			logger.debug(roleNames);
-			return Tuple2.apply(roleNames, permissions);
+			return Tuples._2T(roleNames, permissions);
 		}
 
 	
@@ -368,7 +370,7 @@ public class LdifExportUtil {
 		}
 		logger.debug("Roles loaded for "+principalName+":");
 		logger.debug(roleNames);
-		return Tuple2.apply(roleNames, permissions);
+		return Tuples._2T(roleNames, permissions);
 	}
 */
 	

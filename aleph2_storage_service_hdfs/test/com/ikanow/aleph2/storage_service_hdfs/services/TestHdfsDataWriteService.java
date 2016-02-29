@@ -1,18 +1,18 @@
 /*******************************************************************************
-* Copyright 2015, The IKANOW Open Source Project.
-* 
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-* 
-*   http://www.apache.org/licenses/LICENSE-2.0
-* 
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-******************************************************************************/
+ * Copyright 2015, The IKANOW Open Source Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package com.ikanow.aleph2.storage_service_hdfs.services;
 
 import static org.junit.Assert.*;
@@ -133,20 +133,36 @@ public class TestHdfsDataWriteService {
 				.with(DataBucketBean::full_name, "/test/static")
 			.done().get();
 
-		assertEquals("/root/test/static/managed_bucket/import/stored/raw/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.raw, Optional.empty(), "current/"));
-		assertEquals("/root/test/static/managed_bucket/import/stored/raw/ping", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.raw, Optional.empty(), "ping"));
-		assertEquals("/root/test/static/managed_bucket/import/stored/json/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.json, Optional.empty(), "current/"));
-		assertEquals("/root/test/static/managed_bucket/import/stored/json/pong", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.json, Optional.empty(), "pong"));
-		assertEquals("/root/test/static/managed_bucket/import/stored/processed/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.processed, Optional.empty(), "current/"));
-		assertEquals("/root/test/static/managed_bucket/import/stored/processed/other", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.processed, Optional.empty(), "other"));
+		assertEquals("/root/test/static/managed_bucket/import/stored/raw/current/.spooldir/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.raw, Optional.empty(), "current/", true));
+		assertEquals("/root/test/static/managed_bucket/import/stored/raw/ping/.spooldir/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.raw, Optional.empty(), "ping", true));
+		assertEquals("/root/test/static/managed_bucket/import/stored/json/current/.spooldir/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.json, Optional.empty(), "current/", true));
+		assertEquals("/root/test/static/managed_bucket/import/stored/json/pong/.spooldir/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.json, Optional.empty(), "pong", true));
+		assertEquals("/root/test/static/managed_bucket/import/stored/processed/current/.spooldir/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.processed, Optional.empty(), "current/", true));
+		assertEquals("/root/test/static/managed_bucket/import/stored/processed/other/.spooldir/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.processed, Optional.empty(), "other", true));
 
+		assertEquals("/root/test/static/managed_bucket/import/stored/raw/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.raw, Optional.empty(), "current/", false));
+		assertEquals("/root/test/static/managed_bucket/import/stored/raw/ping", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.raw, Optional.empty(), "ping", false));
+		assertEquals("/root/test/static/managed_bucket/import/stored/json/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.json, Optional.empty(), "current/", false));
+		assertEquals("/root/test/static/managed_bucket/import/stored/json/pong", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.json, Optional.empty(), "pong", false));
+		assertEquals("/root/test/static/managed_bucket/import/stored/processed/current/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.processed, Optional.empty(), "current/", false));
+		assertEquals("/root/test/static/managed_bucket/import/stored/processed/other", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.processed, Optional.empty(), "other", false));
+		
 		// Transient output:
 		try {
-			HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.transient_output, Optional.empty(), "current/");
+			HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.transient_output, Optional.empty(), "current/", false);
 			fail("Should have thrown");
 		}
 		catch (Exception e) {}
-		assertEquals("/root/test/static/managed_bucket/import/transient/testj-testm/current", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.transient_output, Optional.of("testj-testm"), "current"));
+		
+		assertEquals("/root/test/static/managed_bucket/import/transient/testj-testm/current", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.transient_output, Optional.of("testj-testm"), "current", false));
+		assertEquals("/root/test/static/managed_bucket/import/transient/testj-testm/current/.spooldir/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.transient_output, Optional.of("testj-testm"), "current", true));
+		
+		// Transient input
+		
+		assertEquals("/root/test/static/managed_bucket/import/ready/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.transient_input, Optional.empty(), "current", false));
+		assertEquals("/root/test/static/managed_bucket/import/temp/", HfdsDataWriteService.getBasePath("/root", bucket, IStorageService.StorageStage.transient_input, Optional.empty(), "current", true));
+		
+		assertEquals("", HfdsDataWriteService.getSuffix(new Date(), bucket, IStorageService.StorageStage.transient_input));
 	}
 		
 	/** Get some easy testing out the way
@@ -461,7 +477,10 @@ public class TestHdfsDataWriteService {
 			HfdsDataWriteService<JsonNode> write_service_json = (HfdsDataWriteService<JsonNode> )write_service.getRawService();
 			assertEquals(write_service_json._bucket, write_service._bucket);
 			
+			// Get underlying platform drivers with various options
+			
 			assertEquals(Optional.empty(), write_service.getUnderlyingPlatformDriver(String.class, Optional.empty()));
+			assertEquals(Optional.empty(), write_service.getUnderlyingPlatformDriver(String.class, Optional.of("{}")));
 		}
 
 		// Check the batch service isn't loaded
@@ -493,7 +512,7 @@ public class TestHdfsDataWriteService {
 			assertTrue("File should exist: " + f, f.exists());
 			assertTrue("Expected segment: ", f.toString().endsWith("_1.json"));
 					
-			worker.complete_segment();
+			worker.complete_segment(false);
 			
 			assertTrue("File should not have moved: " + f, f.exists());
 	
@@ -524,7 +543,7 @@ public class TestHdfsDataWriteService {
 			worker.write(t1);
 			worker.write(BeanTemplateUtils.toJson(t2));
 			
-			worker.complete_segment();
+			worker.complete_segment(true);
 			
 			assertTrue("File should have moved: " + f, !f.exists());
 	
@@ -556,7 +575,7 @@ public class TestHdfsDataWriteService {
 			worker.write(Arrays.asList("TEST1b", "TEST2b\n", t1, BeanTemplateUtils.toJson(t2)
 					));
 			
-			worker.complete_segment();
+			worker.complete_segment(true);
 			
 			assertTrue("File should have moved: " + f, !f.exists());
 	
@@ -640,19 +659,19 @@ public class TestHdfsDataWriteService {
 			TestBean emit = new TestBean("id" + i, "val" + i, null);
 			if (0 == (i % 2)) {
 				if (0 == ((i/2) % 2)) {
-					batch.storeObject(emit);
+					batch.storeObject(emit, true); //(use this form to maximize code coverage)
 				}
 				else {
-					CompletableFuture<Supplier<Object>> cf = write_service.storeObject(emit);
+					CompletableFuture<Supplier<Object>> cf = write_service.storeObject(emit, true);
 					assertEquals(null, cf.get().get());
 				}
 			}
 			else {
 				if (0 == ((i/2) % 2)) {
-					batch.storeObjects(Arrays.asList(emit));
+					batch.storeObjects(Arrays.asList(emit), true); //(use this form to maximize code coverage)
 				}
 				else {
-					CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> cf = write_service.storeObjects(Arrays.asList(emit));	
+					CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> cf = write_service.storeObjects(Arrays.asList(emit), true);	
 					assertEquals(Collections.emptyList(), cf.get()._1().get());
 					assertEquals(1L, cf.get()._2().get().longValue());
 				}

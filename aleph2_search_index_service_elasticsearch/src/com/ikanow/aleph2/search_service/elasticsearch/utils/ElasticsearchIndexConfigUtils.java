@@ -1,18 +1,18 @@
 /*******************************************************************************
  * Copyright 2015, The IKANOW Open Source Project.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ *******************************************************************************/
 package com.ikanow.aleph2.search_service.elasticsearch.utils;
 
 import java.util.Collections;
@@ -56,6 +56,8 @@ public class ElasticsearchIndexConfigUtils {
 			final Config default_temporal = ConfigFactory.parseResources(Thread.currentThread().getContextClassLoader(), 
 					"com/ikanow/aleph2/search_service/elasticsearch/data_model/default_temporal_override.conf").atPath("temporal_technology_override");
 			
+			final Config default_docs = ConfigFactory.parseResources(Thread.currentThread().getContextClassLoader(), 
+					"com/ikanow/aleph2/search_service/elasticsearch/data_model/default_document_schema_override.conf").atPath("document_schema_override");
 			
 			final Config user_overrides = PropertiesUtils.getSubConfig(global_config, ElasticsearchIndexServiceConfigBean.PROPERTIES_ROOT)
 											.orElse(ConfigFactory.empty())
@@ -63,7 +65,7 @@ public class ElasticsearchIndexConfigUtils {
 													.orElse(ConfigFactory.empty()).root());
 			
 			return BeanTemplateUtils.from(
-					default_templates.withFallback(default_search).withFallback(default_temporal).entrySet().stream()
+					default_templates.withFallback(default_search).withFallback(default_temporal).withFallback(default_docs).entrySet().stream()
 								.reduce(
 										user_overrides, 
 										(acc, kv) -> (acc.hasPath(kv.getKey())) ? acc : acc.withValue(kv.getKey(), kv.getValue()), 
@@ -140,6 +142,7 @@ public class ElasticsearchIndexConfigUtils {
 				.with(ElasticsearchIndexServiceConfigBean::search_technology_override, search_index_bits)
 				.with(ElasticsearchIndexServiceConfigBean::columnar_technology_override, columnar_bits)
 				.with(ElasticsearchIndexServiceConfigBean::temporal_technology_override, temporal_bits)
+				.with(ElasticsearchIndexServiceConfigBean::document_schema_override, backup.document_schema_override())
 				.done().get();
 	}
 	

@@ -1,18 +1,18 @@
 /*******************************************************************************
  * Copyright 2015, The IKANOW Open Source Project.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ *******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.services;
 
 import java.io.File;
@@ -78,7 +78,9 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 				_config.trySet(HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties()));
 			}
 		}
-		catch (Throwable t) {}
+		catch (Throwable t) {
+			_logger.error(ErrorUtils.getLongForm("Error setting hadoop: {0}", t));
+		}
 	}
 
 	/* (non-Javadoc)
@@ -252,7 +254,10 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 				? analytic_bucket
 				: BeanTemplateUtils.clone(analytic_bucket)
 										.with(DataBucketBean::master_enrichment_type, DataBucketBean.MasterEnrichmentType.batch)
-										.with(DataBucketBean::batch_enrichment_configs, HadoopTechnologyUtils.convertAnalyticJob(job_to_start.name(), job_to_start.config()))
+										.with(DataBucketBean::batch_enrichment_configs, 
+												HadoopTechnologyUtils.convertAnalyticJob(
+														job_to_start.name(), 
+														Optional.ofNullable(job_to_start.config()).orElse(Collections.emptyMap())))
 									.done();
 		
 		wrapped_context.setBucket(converted_bucket);

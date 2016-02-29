@@ -32,7 +32,6 @@ import org.apache.shiro.authz.AuthorizationException;
 import org.apache.shiro.authz.AuthorizationInfo;
 import org.apache.shiro.authz.SimpleAuthorizationInfo;
 import org.apache.shiro.cache.Cache;
-import org.apache.shiro.cache.CacheManager;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
 import org.apache.shiro.subject.SimplePrincipalCollection;
@@ -46,6 +45,7 @@ import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbServic
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.security.interfaces.IClearableRealmCache;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
@@ -69,8 +69,8 @@ public class IkanowV1Realm extends AuthorizingRealm implements IClearableRealmCa
 	private Set<IRoleProvider> roleProviders;
 	
 	@Inject
-	public IkanowV1Realm(final IServiceContext service_context,CacheManager cacheManager, CredentialsMatcher matcher, Set<IRoleProvider> roleProviders) {		
-		super(cacheManager,matcher);
+	public IkanowV1Realm(final IServiceContext service_context, CredentialsMatcher matcher, Set<IRoleProvider> roleProviders) {		
+		super(CoreEhCacheManager.getInstance().getCacheManager(),matcher);
 		_context = service_context;
 		this.roleProviders = roleProviders;
 		logger.debug("IkanowV1Realm name="+getName());
@@ -82,7 +82,7 @@ public class IkanowV1Realm extends AuthorizingRealm implements IClearableRealmCa
 			_core_management_db = _context.getCoreManagementDbService();
 		}
 		if(_underlying_management_db == null) {
-		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
+		_underlying_management_db = _context.getServiceProvider(IManagementDbService.class, Optional.empty()).get().get();
 		}
 		String authDboptions = "security.authentication/"+AuthenticationBean.class.getName();
         authenticationDb = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of(authDboptions)).get();
@@ -168,9 +168,9 @@ public class IkanowV1Realm extends AuthorizingRealm implements IClearableRealmCa
         	logger.debug("Loaded user info from db:"+b);
 			info = new IkanowV1AuthenticationInfo(b);
         }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             final String message = "There was a Connection error while authenticating user [" + username + "]";
-            logger.error(message,e);
+			logger.error(ErrorUtils.getLongForm(message+" {0}", e));
 
             // Rethrow any errors as an authentication exception
             throw new AuthenticationException(message, e);

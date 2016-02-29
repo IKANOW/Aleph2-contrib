@@ -1,18 +1,18 @@
 /*******************************************************************************
  * Copyright 2015, The IKANOW Open Source Project.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ *******************************************************************************/
 package com.ikanow.aleph2.management_db.mongodb.services;
 
 import java.time.Duration;
@@ -229,7 +229,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 			}
 		});
 		
-		final ICrudService<T> intercepted_crud = CrudServiceUtils.intercept(clazz, state_crud, Optional.empty(), interceptors, Optional.empty());				
+		final ICrudService<T> intercepted_crud = CrudServiceUtils.intercept(clazz, state_crud, Optional.empty(), Optional.empty(), interceptors, Optional.empty());				
 		return intercepted_crud.readOnlyVersion(_read_only);
 	}
 	
@@ -490,7 +490,7 @@ public class MongoDbManagementDbService implements IManagementDbService, IExtraD
 
 		return extra_terms
 					.<ICrudService<AssetStateDirectoryBean>>
-						map(et -> CrudServiceUtils.intercept(AssetStateDirectoryBean.class, raw_state_crud, extra_terms, Collections.emptyMap(), Optional.empty()))
+						map(et -> CrudServiceUtils.intercept(AssetStateDirectoryBean.class, raw_state_crud, extra_terms, Optional.empty(), Collections.emptyMap(), Optional.empty()))
 					.orElse(raw_state_crud)
 					.readOnlyVersion(_read_only)
 				;

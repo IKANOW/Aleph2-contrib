@@ -1,18 +1,18 @@
 /*******************************************************************************
  * Copyright 2015, The IKANOW Open Source Project.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ *******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.services;
 
 import static org.junit.Assert.*;
@@ -32,6 +32,7 @@ import java.util.concurrent.ExecutionException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.util.FileUtils;
 import org.elasticsearch.common.collect.ImmutableMap;
 import org.junit.Before;
 import org.junit.Test;
@@ -40,7 +41,9 @@ import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputBean;
@@ -59,8 +62,7 @@ import com.typesafe.config.ConfigValueFactory;
 import fj.data.Either;
 
 public class TestHadoopTechnologyService {
-
-    private static final Logger logger = LogManager.getLogger(TestBeJobService.class);
+    private static final Logger logger = LogManager.getLogger();
 
 	@Inject
 	protected GlobalPropertiesBean _globals = null;
@@ -73,6 +75,8 @@ public class TestHadoopTechnologyService {
 		try{
 			final String temp_dir = System.getProperty("java.io.tmpdir");
 
+			FileUtils.mkdir(new File(temp_dir + "/lib"), true);
+			
 			// OK we're going to use guice, it was too painful doing this by hand...				
 			Config config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/context_local_test.properties")))
 					.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
@@ -119,6 +123,7 @@ public class TestHadoopTechnologyService {
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
 												.with(DataBucketBean::full_name, "/test/simple/analytics")
+												.with(DataBucketBean::owner_id, "misc_user")
 												.with(DataBucketBean::analytic_thread,
 														BeanTemplateUtils.build(AnalyticThreadBean.class)
 															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
@@ -127,9 +132,35 @@ public class TestHadoopTechnologyService {
 												.with(DataBucketBean::batch_enrichment_configs, 
 														Arrays.asList(
 																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
+																	.with(EnrichmentControlMetadataBean::technology_override,
+																			new LinkedHashMap<String, Object>(
+																					ImmutableMap.<String, Object>builder()
+																						.put("config", 
+																								new LinkedHashMap<String, Object>(
+																										ImmutableMap.<String, Object>builder()
+																											.put("mapred:task:timeout", "300")
+																										.build()
+																									)
+																								)
+																					.build()
+																				)
+																			)
 																.done().get()
 																,
 																BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
+																	.with(EnrichmentControlMetadataBean::technology_override, // (same, just to check collisions doesn't break it)
+																			new LinkedHashMap<String, Object>(
+																					ImmutableMap.<String, Object>builder()
+																						.put("config", 
+																								new LinkedHashMap<String, Object>(
+																										ImmutableMap.<String, Object>builder()
+																											.put("mapred:task:timeout", "300")
+																										.build()
+																									)
+																								)
+																					.build()
+																				)
+																			)
 																.done().get()
 																))
 												.with(DataBucketBean::data_schema,
@@ -170,7 +201,12 @@ public class TestHadoopTechnologyService {
 		final InputStream test_file = new ByteArrayInputStream("{\"testField\":\"test1\"}".getBytes(StandardCharsets.UTF_8));
 		test_service.addFileToInputDirectory(test_file, test_bucket);
 		
-		test_service.testAnalyticModule(test_bucket, Optional.empty());
+		// Try this twice, once will fail with a security error, then will update security and check works again
+		final CompletableFuture<BasicMessageBean> ret1 = test_service.testAnalyticModule(test_bucket, Optional.empty());
+		assertFalse("Should have failed with security error: " + ret1.join().message(), ret1.join().success());
+		((MockSecurityService)_service_context.getSecurityService()).setGlobalMockRole(ISecurityService.ROLE_ADMIN, true);
+		final CompletableFuture<BasicMessageBean> ret2 = test_service.testAnalyticModule(test_bucket, Optional.empty());
+		assertTrue("Should have worked this time: " + ret2.join().message(), ret2.join().success());
 
 		// Wait for job to finish
 		for (int ii = 0; ii < 120; ++ii) {
@@ -222,6 +258,7 @@ public class TestHadoopTechnologyService {
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
 												.with(DataBucketBean::full_name, "/test/simple/analytics")
+												.with(DataBucketBean::owner_id, "misc_user")
 												.with(DataBucketBean::analytic_thread,
 														BeanTemplateUtils.build(AnalyticThreadBean.class)
 															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))
@@ -264,8 +301,10 @@ public class TestHadoopTechnologyService {
 		final InputStream test_file = new ByteArrayInputStream("{\"testField\":\"test1\"}".getBytes(StandardCharsets.UTF_8));
 		test_service.addFileToInputDirectory(test_file, test_bucket);
 		
-		test_service.testAnalyticModule(test_bucket, Optional.of(10));
-
+		final CompletableFuture<BasicMessageBean> start_res = test_service.testAnalyticModule(test_bucket, Optional.of(10));
+		
+		assertTrue("Failed to start: " + start_res.join().message(), start_res.join().success());		
+		
 		// Wait for job to finish
 		for (int ii = 0; ii < 120; ++ii) {
 			Thread.sleep(1000L);
@@ -334,6 +373,7 @@ public class TestHadoopTechnologyService {
 		
 		final DataBucketBean test_bucket = BeanTemplateUtils.build(DataBucketBean.class)
 												.with(DataBucketBean::full_name, "/test/simple/analytics/multi")
+												.with(DataBucketBean::owner_id, "misc_user")
 												.with(DataBucketBean::analytic_thread,
 														BeanTemplateUtils.build(AnalyticThreadBean.class)
 															.with(AnalyticThreadBean::jobs, Arrays.asList(test_analytic))

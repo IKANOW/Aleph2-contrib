@@ -35,15 +35,23 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 	# (All files created from the tarball)
 
 %post
+/sbin/chkconfig --add ikanow-aleph2
+/sbin/chkconfig ikanow-aleph2 on
 ###########################################################################
 # INSTALL *AND* UPGRADE
 
 %preun
 
 %postun
-###########################################################################
-# (Nothing to do)
+    # Upgrade
+    if [ $1 -eq 1 ]; then
+        /sbin/service ikanow-aleph2 status && /sbin/service ikanow-aleph2 restart
+    fi
 
+    # Uninstall
+    if [ $1 -eq 0 ]; then
+        /sbin/chkconfig --del ikanow-aleph2
+    fi
 %posttrans
 ###########################################################################
 # FILE LISTS
@@ -51,13 +59,19 @@ cp -rv %{_builddir}/%{name}-%{_VERSION}-%{_RELEASE}/* %{_buildrootdir}/%{name}-%
 %files
 %attr(755,root,root) /etc/init.d/ikanow-aleph2
 %attr(755,root,root) /etc/cron.d/ikanow-aleph2
+%config /etc/sysconfig/ikanow-aleph2
 %defattr(-,tomcat,tomcat)
 /opt/aleph2-home/
 /opt/aleph2-home/lib/
+/opt/aleph2-home/server/
+/opt/aleph2-home/server/lib/
 /opt/aleph2-home/etc/
+/opt/aleph2-home/bin/
 %config /opt/aleph2-home/etc/log4j2.xml
 %config /opt/aleph2-home/etc/v1_sync_service.properties
 %dir /opt/aleph2-home/logs
 %dir /opt/aleph2-home/yarn-config
 %dir /opt/aleph2-home/cached-jars
+%dir /opt/aleph2-home/etc/conf.d
+%dir /opt/aleph2-home/run
 %dir /var/run/ikanow/

@@ -1,25 +1,27 @@
 /*******************************************************************************
-* Copyright 2015, The IKANOW Open Source Project.
-* 
-* This program is free software: you can redistribute it and/or modify
-* it under the terms of the GNU Affero General Public License, version 3,
-* as published by the Free Software Foundation.
-* 
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU Affero General Public License for more details.
-* 
-* You should have received a copy of the GNU Affero General Public License
-* along with this program. If not, see <http://www.gnu.org/licenses/>.
-******************************************************************************/
+ * Copyright 2015, The IKANOW Open Source Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.services;
 
 import java.io.IOException;
 import java.io.File;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -32,6 +34,7 @@ import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.logging.log4j.LogManager;
@@ -47,8 +50,13 @@ import com.ikanow.aleph2.analytics.hadoop.assets.ObjectNodeWritableComparable;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobService;
 import com.ikanow.aleph2.analytics.hadoop.data_model.HadoopTechnologyOverrideBean;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -68,8 +76,6 @@ import fj.data.Validation;
  */
 public class BeJobLauncher implements IBeJobService{
 
-	//TODO (ALEPH-12): sort out test spec
-	
 	private static final Logger logger = LogManager.getLogger(BeJobLauncher.class);
 
 	protected Configuration _configuration;
@@ -79,6 +85,9 @@ public class BeJobLauncher implements IBeJobService{
 
 	protected BatchEnrichmentContext _batchEnrichmentContext;
 
+	@SuppressWarnings("rawtypes")
+	public static interface HadoopAccessContext extends IAnalyticsAccessContext<InputFormat> {}
+	
 	/** User/guice c'tor
 	 * @param globals
 	 * @param beJobLoader
@@ -114,9 +123,6 @@ public class BeJobLauncher implements IBeJobService{
 		
 		final SetOnce<Job> job = new SetOnce<>();
 		try {
-			final String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
-		    config.set(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE, contextSignature);
-			
 		    final Optional<Long> debug_max = 
 		    		testSpec.flatMap(testSpecVals -> 
 		    							Optional.ofNullable(testSpecVals.requested_num_objects()));
@@ -126,47 +132,96 @@ public class BeJobLauncher implements IBeJobService{
 		    
 		    final Aleph2MultiInputFormatBuilder inputBuilder = new Aleph2MultiInputFormatBuilder();
 
+		    // Validation:
+		    
+		    try {
+			    final BatchEnrichmentJob.BatchEnrichmentBaseValidator validator = new BatchEnrichmentJob.BatchEnrichmentBaseValidator();
+			    validator.setDataBucket(bucket);
+			    validator.setEnrichmentContext(_batchEnrichmentContext);
+			    validator.setEcMetadata(Optional.ofNullable(bucket.batch_enrichment_configs()).orElse(Collections.emptyList()));
+			    final List<BasicMessageBean> errs = validator.validate();
+			    if (errs.stream().anyMatch(b -> !b.success())) {
+			    	return Validation.fail(ErrorUtils.get("Validation errors for {0}: {1}", bucket.full_name(),
+			    			errs.stream().map(b -> ErrorUtils.get("{0}: {1}", b.success() ? "INFO" : "ERROR", b.message())).collect(Collectors.joining(";"))
+			    			));
+			    }
+		    }
+		    catch (Throwable t) { // we'll log but carry on in this case...(in case there's some classloading shenanigans which won't affect the operation in hadoop)
+		    	logger.error(ErrorUtils.getLongForm("Failed validation, bucket: {1} error: {0}", t, bucket.full_name()));
+		    }
+		    
 		    // Create a separate InputFormat for every input (makes testing life easier)
+		    
+		    //TODO: detect if there are inputs here
 		    
 			Optional.ofNullable(_batchEnrichmentContext.getJob().inputs())
 						.orElse(Collections.emptyList())
 					.stream()
+					.filter(input -> Optional.ofNullable(input.enabled()).orElse(true))
 					.forEach(Lambdas.wrap_consumer_u(input -> {
-						final List<String> paths = _batchEnrichmentContext.getAnalyticsContext().getInputPaths(Optional.of(bucket), _batchEnrichmentContext.getJob(), input);
+						// In the debug case, transform the input to add the max record limit
+						final AnalyticThreadJobInputBean input_with_test_settings = BeanTemplateUtils.clone(input)
+								.with(AnalyticThreadJobInputBean::config,
+										BeanTemplateUtils.clone(
+												Optional.ofNullable(input.config())
+												.orElseGet(() -> BeanTemplateUtils.build(AnalyticThreadJobInputConfigBean.class)
+																					.done().get()
+														))
+											.with(AnalyticThreadJobInputConfigBean::test_record_limit_request, //(if not test, always null; else "input override" or "output default")
+													debug_max.map(max -> Optionals.of(() -> input.config().test_record_limit_request()).orElse(max))
+													.orElse(null)
+													)
+										.done()
+										)
+								.done();						
 						
-						logger.info(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));
+						final List<String> paths = _batchEnrichmentContext.getAnalyticsContext().getInputPaths(Optional.of(bucket), _batchEnrichmentContext.getJob(), input_with_test_settings);
 						
-					    final Job inputJob = Job.getInstance(config);
-					    inputJob.setInputFormatClass(BeFileInputFormat.class);				
-						paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(path))));
-						inputBuilder.addInput(UuidUtils.get().getRandomUuid(), inputJob);
+						if (!paths.isEmpty()) {
+						
+							logger.info(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));
+							
+						    final Job inputJob = Job.getInstance(config);
+						    inputJob.setInputFormatClass(BeFileInputFormat.class);				
+							paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(path))));
+							// (Add the input config in)
+							inputJob.getConfiguration().set(BatchEnrichmentJob.BE_BUCKET_INPUT_CONFIG, BeanTemplateUtils.toJson(input_with_test_settings).toString());
+							inputBuilder.addInput(UuidUtils.get().getRandomUuid(), inputJob);
+						}
+						else { // not easily available in HDFS directory format, try getting from the context
+							
+							Optional<HadoopAccessContext> input_format_info = _batchEnrichmentContext.getAnalyticsContext().getServiceInput(HadoopAccessContext.class, Optional.of(bucket), _batchEnrichmentContext.getJob(), input_with_test_settings);
+							if (!input_format_info.isPresent()) {
+								logger.warn(ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input_with_test_settings)));
+							}
+							else {
+								logger.info(ErrorUtils.get("Adding data service path for bucket {0}: {1}", bucket.full_name(),
+										input_format_info.get().describe()));
+								
+							    final Job inputJob = Job.getInstance(config);
+							    inputJob.setInputFormatClass(input_format_info.get().getAccessService().either(l -> l.getClass(), r -> r));
+							    input_format_info.get().getAccessConfig().ifPresent(map -> {
+							    	map.entrySet().forEach(kv -> inputJob.getConfiguration().set(kv.getKey(), kv.getValue().toString()));
+							    });							    
+							    inputBuilder.addInput(UuidUtils.get().getRandomUuid(), inputJob);
+							}
+						}
 					}));
-					;
+					;					
 					
-			// (ALEPH-12): other input format types
-			
+			if (!inputBuilder.hasInputs()) {
+				// No way of returning this to the bucket status, could have a Tuple2<Job, String> with the number of inputs broken down maybe)
+				logger.warn(ErrorUtils.get("No data in specified inputs for bucket {0} job {1}", bucket.full_name(), _batchEnrichmentContext.getJob()));
+			}
+					
 		    // Now do everything else
+		    
+			final String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
+		    config.set(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE, contextSignature);
 		    
 			final String jobName = BucketUtils.getUniqueSignature(bucket.full_name(), Optional.ofNullable(_batchEnrichmentContext.getJob().name()));
 			
-			// Try to minimize class conflicts vs Hadoop's ancient libraries:
-			config.set("mapreduce.job.user.classpath.first", "true");
-			
-			// Get max batch size, apply that everywhere:
-			final Optional<Integer> max_requested_batch_size = 
-			    Optional.ofNullable(bucket.batch_enrichment_configs()).orElse(Collections.emptyList())
-					.stream()
-					.filter(cfg -> Optional.ofNullable(cfg.enabled()).orElse(true))
-	    			.<Integer>flatMap(cfg -> {
-	    				final HadoopTechnologyOverrideBean tech_override = 
-	    						BeanTemplateUtils.from(Optional.ofNullable(cfg.technology_override()).orElse(Collections.emptyMap()), 
-	    								HadoopTechnologyOverrideBean.class)
-	    								.get();
-	    				return Optional.ofNullable(tech_override.requested_batch_size()).map(Stream::of).orElseGet(Stream::empty);
-	    			})
-	    			.max(Integer::max)
-	    			;
-			max_requested_batch_size.ifPresent(i -> config.set(BatchEnrichmentJob.BATCH_SIZE_PARAM, Integer.toString(i)));
+			this.handleHadoopConfigOverrides(bucket, config);
 			
 		    // do not set anything into config past this line (can set job.getConfiguration() elements though - that is what the builder does)
 		    job.set(Job.getInstance(config, jobName));
@@ -179,6 +234,8 @@ public class BeJobLauncher implements IBeJobService{
 		    
 		    // (generic mapper - the actual code is run using the classes in the shared libraries)
 		    job.get().setMapperClass(BatchEnrichmentJob.BatchEnrichmentMapper.class);
+		    job.get().setMapOutputKeyClass(ObjectNodeWritableComparable.class);
+		    job.get().setMapOutputValueClass(ObjectNodeWritableComparable.class);
 		    
 		    // (combiner and reducer)
 		    Optional.ofNullable(bucket.batch_enrichment_configs()).orElse(Collections.emptyList())
@@ -239,6 +296,60 @@ public class BeJobLauncher implements IBeJobService{
 			Thread.currentThread().setContextClassLoader(currentClassloader);
 		}
 	     		
+	}
+	
+	/** Handles confi overrides
+	 * @param bucket
+	 * @param config
+	 */
+	protected void handleHadoopConfigOverrides(final DataBucketBean bucket, final Configuration config) {
+		// Try to minimize class conflicts vs Hadoop's ancient libraries:
+		config.set("mapreduce.job.user.classpath.first", "true");		
+		
+		// Get max batch size, apply that everywhere:
+		final Optional<Integer> max_requested_batch_size = 
+		    Optional.ofNullable(bucket.batch_enrichment_configs()).orElse(Collections.emptyList())
+				.stream()
+				.filter(cfg -> Optional.ofNullable(cfg.enabled()).orElse(true))
+    			.<Integer>flatMap(cfg -> {
+    				final HadoopTechnologyOverrideBean tech_override = 
+    						BeanTemplateUtils.from(Optional.ofNullable(cfg.technology_override()).orElse(Collections.emptyMap()), 
+    								HadoopTechnologyOverrideBean.class)
+    								.get();
+    				return Optional.ofNullable(tech_override.requested_batch_size()).map(Stream::of).orElseGet(Stream::empty);
+    			})
+    			.max(Integer::max)
+    			;
+		max_requested_batch_size.ifPresent(i -> config.set(BatchEnrichmentJob.BATCH_SIZE_PARAM, Integer.toString(i)));
+		
+		// Take all the "task:" overrides and apply:
+		final Map<String, String> task_overrides =
+			    Optional.ofNullable(bucket.batch_enrichment_configs()).orElse(Collections.emptyList())
+					.stream()
+					.filter(cfg -> Optional.ofNullable(cfg.enabled()).orElse(true))
+	    			.<Map<String, String>>map(cfg -> {
+	    				final HadoopTechnologyOverrideBean tech_override = 
+	    						BeanTemplateUtils.from(Optional.ofNullable(cfg.technology_override()).orElse(Collections.emptyMap()), 
+	    								HadoopTechnologyOverrideBean.class)
+	    								.get();
+	    				return tech_override.config();
+	    			})
+	    			.collect(HashMap::new, Map::putAll, Map::putAll)
+	    			;
+		
+		if (!task_overrides.isEmpty()) {
+			// Need admin privileges:
+			//TODO (ALEPH-78): once possible, want to use RBAC for this
+			final ISecurityService security_service = _batchEnrichmentContext.getServiceContext().getSecurityService();
+			if (!security_service.hasUserRole(Optional.of(bucket.owner_id()), ISecurityService.ROLE_ADMIN)) {
+				throw new RuntimeException(ErrorUtils.get("Permission error: not admin, can't set hadoop config for {0}", bucket.full_name()));				
+			}
+			logger.info(ErrorUtils.get("Hadoop-level overrides for bucket {0}: {1}", bucket.full_name(),
+					task_overrides.keySet().stream().collect(Collectors.joining(","))
+					));
+			
+			task_overrides.entrySet().forEach(kv -> config.set(kv.getKey().replace(":", "."), kv.getValue()));
+		}		
 	}
 	
 	/** Cache the system and user classpaths

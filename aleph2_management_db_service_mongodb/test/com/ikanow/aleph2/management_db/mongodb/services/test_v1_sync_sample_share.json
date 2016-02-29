@@ -12,6 +12,7 @@
     "description": "<<TEMPLATE>>",
     "mediaType": "archive/jar",
     "tags": [ "test1", "test2" ],
+    "binaryId": "50bcd6fffbf0fd0b27875a7e",
     "communities": [{
     	"_id": "50bcd6fffbf0fd0b27875a7c",
     	"name": "commid1"    	

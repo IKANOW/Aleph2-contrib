@@ -1,18 +1,18 @@
 /*******************************************************************************
  * Copyright 2015, The IKANOW Open Source Project.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ *******************************************************************************/
 package com.ikanow.aleph2.shared.crud.mongodb.services;
 
 import java.net.UnknownHostException;
@@ -54,6 +54,8 @@ import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.mongodb.data_model.MongoDbConfigurationBean;
 import com.ikanow.aleph2.shared.crud.mongodb.services.MongoDbCrudService;
 import com.mongodb.BasicDBObject;
+import com.mongodb.DB;
+import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
 import com.mongodb.MongoException;
 
@@ -96,6 +98,11 @@ public class TestMongoDbCrudService {
 				MongoDbConfigurationBean config_bean = new MongoDbConfigurationBean(_real_mongodb_connection);
 				_factory = new MongoDbCrudServiceFactory(config_bean);
 			}
+			// Couple of quick tests:
+			final DB db1 = _factory.getMongoDb("db_test");
+			assertEquals("db_test", db1.getName());
+			final DBCollection dbc1 = _factory.getMongoDbCollection("db_test.test_collection");
+			assertEquals("db_test.test_collection", dbc1.getFullName());
 		}
 	}
 	
@@ -259,19 +266,16 @@ public class TestMongoDbCrudService {
 		assertEquals(50, service._state.orig_coll.count());
 		assertEquals((Long)(long)50, result_2.get()._2().get());
 		
-		// 3) Check storeObjects(..., true) fails
-		// TODOL (ALEPH-22) This now will return and overwrite so need to fix this test
+		// 3) Check storeObjects(..., true) will succeed
 		
-//		final List<TestBean> l3 = IntStream.rangeClosed(151, 200).boxed()
-//				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done().get())
-//				.collect(Collectors.toList());
-//
-//		try {
-//			service.storeObjects(l3, true);
-//		}
-//		catch (Exception e) {
-//			assertTrue("Should throw runtime exception: " + e.getMessage(), e instanceof RuntimeException);
-//		}
+		final List<TestBean> l3 = IntStream.rangeClosed(41, 110).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done().get())
+				.collect(Collectors.toList());
+
+		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_3 = service.storeObjects(l3, true);
+		
+		assertEquals(70, service._state.orig_coll.count());
+		assertEquals((Long)(long)70, result_3.get()._2().get());
 		
 		// 4) Insertion with dups - fail and continue
 		
@@ -1086,6 +1090,12 @@ public class TestMongoDbCrudService {
 		// Search service - currently not implemented
 		
 		assertEquals(Optional.empty(), service.getSearchService());
+		
+		// Myself
+		
+		final ICrudService<?> myself = service.getUnderlyingPlatformDriver(ICrudService.class, Optional.empty()).get();
+		
+		assertEquals(myself, service);
 		
 		// Mongo DB collection
 		

@@ -1,18 +1,18 @@
 /*******************************************************************************
  * Copyright 2015, The IKANOW Open Source Project.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ *******************************************************************************/
 package com.ikanow.aleph2.analytics.hadoop.assets;
 
 import java.io.IOException;
@@ -36,6 +36,7 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hadoop.util.ReflectionUtils;
 
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 
 /** A more generic multiple input format utility than the one provided by Hadoop
@@ -63,6 +64,13 @@ public class Aleph2MultiInputFormatBuilder {
 		return this;
 	}
 
+	/** Just returns whether this job has any inputs
+	 * @return
+	 */
+	public boolean hasInputs() {
+		return !_inputs.isEmpty();
+	}
+	
 	/** Sets the output configurations in the job 
 	 * @param job
 	 */
@@ -113,8 +121,11 @@ public class Aleph2MultiInputFormatBuilder {
 								return stringifier.fromString(id_cfg._2());
 							}							
 						}));
-						config.addResource(job_context.getConfiguration()); //(ie add everything else)
 						InputFormat format = (InputFormat) ReflectionUtils.newInstance(Class.forName(config.get(ALEPH2_MULTI_INPUT_FORMAT_CLAZZ)), config);
+						config.addResource(new Configuration(job_context.getConfiguration()));
+							//(have seen ConcurrentModificationExceptions in subsequent operations (in 2.7.1 - which fixed some known 2.6.0 exceptions), very unclear why
+							// so try to make more robust by cloning the "global" state)
+							//(ie then add everything else ready for the delegated getSplits call)
 						
 						return ((List<InputSplit>)format.getSplits(createJobContext(job_context, config)))
 								.stream()
@@ -154,7 +165,12 @@ public class Aleph2MultiInputFormatBuilder {
 		
 		@Override
 		public void initialize(InputSplit split, TaskAttemptContext task_context) throws IOException, InterruptedException {
-			//(nothing to do here)
+			//(must be an Aleph2MultiInputSplit by construction, add this bit of code for robustness)
+			final InputSplit delegate = Patterns.match(split).<InputSplit>andReturn()
+											.when(Aleph2MultiInputSplit.class, s -> s.getInputSplit())
+											.otherwise(s -> s);													
+					
+			_delegate.initialize(delegate, task_context);
 		}
 
 		@Override

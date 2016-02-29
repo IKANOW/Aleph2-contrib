@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.security.service;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 import java.io.InputStreamReader;
 import java.util.Arrays;
@@ -26,6 +27,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.shiro.authc.AuthenticationException;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.inject.Inject;
@@ -36,6 +38,8 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISubject;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.security.utils.ProfilingUtility;
+import com.ikanow.aleph2.security.web.CookieBean;
+import com.ikanow.aleph2.security.web.IkanowV1CookieAuthentication;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
@@ -55,6 +59,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	protected String adminId = "4e3706c48d26852237078005";
 	protected String regularUserId = "54f86d8de4b03d27d1ea0d7b";  //cb_user
 	protected String testUserId = "4e3706c48d26852237079004"; 	
+	protected String regularUserCommunityPermission = IkanowV1SecurityService.SECURITY_ASSET_COMMUNITY+":read:55a52aa7e4b056ae0f9bd894";
 
 	
 	@Before
@@ -128,9 +133,8 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	public void testPermission(){
 		ISubject subject = loginAsRegularUser();
 		// test personal community permission
-		String permission = "54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
-		assertEquals(true,securityService.isPermitted(subject,permission));
+		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
 	}
 
 	@Test
@@ -139,7 +143,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		// system community
 		String runAsPrincipal = "54f86d8de4b03d27d1ea0d7b"; // casey
 		String runAsRole = "54f86d8de4b03d27d1ea0d7b";
-		String runAsPersonalPermission = "v1_54fa4ab9e4b0b269e3a0c837";
+		String runAsPersonalPermission = "SharedLibraryBean:read:v1_55a5672ce4b056ae0f9bdb1e";
 		
 		securityService.runAs(subject,Arrays.asList(runAsPrincipal));
 		
@@ -162,11 +166,6 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	public void testSessionTimeout(){
 		((IkanowV1SecurityService)securityService).setSessionTimeout(1000);
 		ISubject subject = loginAsAdmin();
-		// system community
-		@SuppressWarnings("unused")
-		String permission = "4c927585d591d31d7b37097a";
-		@SuppressWarnings("unused")
-		String role = "admin";
 		assertEquals(true,securityService.hasRole(subject,"admin"));
 		try {
 			Thread.sleep(5000);
@@ -184,26 +183,24 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	public void testCaching(){
 		ISubject subject = loginAsRegularUser();
 		// test personal community permission
-		String permission = "54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU-permisssion0");
-		assertEquals(true,securityService.isPermitted(subject,permission));
+		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
 		ProfilingUtility.timeStopAndLog("TU-permisssion0");
 		for (int i = 0; i < 10; i++) {
 			ProfilingUtility.timeStart("TU-permisssion"+(i+1));
-			assertEquals(true,securityService.isPermitted(subject,permission));			
+			assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));			
 			ProfilingUtility.timeStopAndLog("TU-permisssion"+(i+1));
 		}
 		subject = loginAsAdmin();
 		// test personal community permission
-		permission = "54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("AU-permisssion0");
-		assertEquals(true,securityService.isPermitted(subject,permission));
+		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
 		ProfilingUtility.timeStopAndLog("AU-permisssion");
 		for (int i = 0; i < 10; i++) {
 			ProfilingUtility.timeStart("AU-permisssion"+i+1);
-			assertEquals(true,securityService.isPermitted(subject,permission));			
+			assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));			
 			ProfilingUtility.timeStopAndLog("AU-permisssion"+i+1);
 		}
 		
@@ -212,10 +209,9 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		subject = loginAsRegularUser();
 		ProfilingUtility.timeStopAndLog("TU2-permisssion_L"+(i+1));
 		// test personal community permission
-		permission = "54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU2-permisssion"+(i+1));
-		assertEquals(true,securityService.isPermitted(subject,permission));
+		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
 			ProfilingUtility.timeStopAndLog("TU2-permisssion"+(i+1));
 		}
 	}
@@ -226,15 +222,13 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		
 		securityService.runAs(subject,Arrays.asList(regularUserId));
 
-		// test personal community permission
-		String permission = "54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU-permisssion0");
-		assertEquals(true,securityService.isPermitted(subject,permission));
+		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
 		ProfilingUtility.timeStopAndLog("TU-permisssion0");
 		for (int i = 0; i < 10; i++) {
 			ProfilingUtility.timeStart("TU-permisssion"+(i+1));
-			assertEquals(true,securityService.isPermitted(subject,permission));			
+			assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));			
 			ProfilingUtility.timeStopAndLog("TU-permisssion"+(i+1));
 			if(i==5){
 				((IkanowV1SecurityService)securityService).invalidateAuthenticationCache(Arrays.asList(regularUserId));	
@@ -250,14 +244,13 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		securityService.runAs(subject,Arrays.asList(regularUserId));
 
 		// test personal community permission
-		String permission = "54f86d8de4b03d27d1ea0d7b";
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU-permisssion0");
-		assertEquals(true,securityService.isPermitted(subject,permission));
+		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
 		ProfilingUtility.timeStopAndLog("TU-permisssion0");
 		for (int i = 0; i < 10; i++) {
 			ProfilingUtility.timeStart("TU-permisssion"+(i+1));
-			assertEquals(true,securityService.isPermitted(subject,permission));			
+			assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));			
 			ProfilingUtility.timeStopAndLog("TU-permisssion"+(i+1));
 			if(i==5){
 				((IkanowV1SecurityService)securityService).invalidateCache();	
@@ -288,5 +281,35 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		//Thread.sleep(50000);
 	}
 	
+	@Test
+	public void testBucketPermission(){
+		ISubject subject = loginAsRegularUser();
+		// test personal community permission
+		String permission = "DataBucketBean:read:aleph...bucket.Sample_Netflow_Ingestion_.COPY..;";
+        //test a typed permission (not instance-level)
+		assertEquals(true,securityService.isPermitted(subject,permission));
+	}
+
+	@Test
+	public void testCookieAuthentication() throws Exception{
+		
+		   IkanowV1CookieAuthentication cookieAuth = IkanowV1CookieAuthentication.getInstance(ModuleUtils.getAppInjector().get());
+		   CookieBean cb = cookieAuth.createCookie(regularUserId);
+		   assertNotNull(cb);
+		   CookieBean cb2 = cookieAuth.createCookieByEmail("jf_user@ikanow.com");
+		   assertNotNull(cb2);
+		   // this time we are using a WPUserId
+		   CookieBean cb3 = cookieAuth.createCookieByEmail("jf_user_wp@ikanow.com");
+		   assertNotNull(cb3);
+	}
+
+	@Test
+	@Ignore 
+	public void testUserCreation() throws Exception{
+		
+		   IkanowV1CookieAuthentication cookieAuth = IkanowV1CookieAuthentication.getInstance(ModuleUtils.getAppInjector().get());
+		   
+		   cookieAuth.createUser("test_user123","test_user123@ikanow.com", "TFirst", "TLast", "555-555-5555");
+	}
 
 }

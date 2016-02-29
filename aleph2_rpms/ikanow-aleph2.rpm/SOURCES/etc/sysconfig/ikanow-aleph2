@@ -1,0 +1,2 @@
+HDP_VERSION="2.3.0.0-2557"
+JAVA_OPTS="-Dhdp.version=$HDP_VERSION"

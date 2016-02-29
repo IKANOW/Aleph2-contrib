@@ -74,6 +74,8 @@ public class TestBeJobService {
 		try{
 			final String temp_dir = System.getProperty("java.io.tmpdir");
 
+			FileUtils.forceMkdir(new File(temp_dir + "/lib"));
+			
 			// OK we're going to use guice, it was too painful doing this by hand...				
 			Config config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/context_local_test.properties")))
 					.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))

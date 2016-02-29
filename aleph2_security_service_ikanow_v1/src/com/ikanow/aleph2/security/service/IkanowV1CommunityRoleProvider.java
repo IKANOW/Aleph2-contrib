@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2015, The IKANOW Open Source Project.
+ * Copyright 2015, 2016, The IKANOW Open Source Project.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 
 public class IkanowV1CommunityRoleProvider implements IRoleProvider {
@@ -84,14 +86,15 @@ public class IkanowV1CommunityRoleProvider implements IRoleProvider {
 					}
 	        	    for (final JsonNode community : communities) {
 	        	    	String communityId = community.get("_id").asText();
-	        	    	permissions.add(communityId);
+	        	    	String communityPermission = PermissionExtractor.createPermission(IkanowV1SecurityService.SECURITY_ASSET_COMMUNITY, Optional.of(ISecurityService.ACTION_WILDCARD), communityId);
+	        	    	permissions.add(communityPermission);
 	        	    }
 	        	}
 	        }
 		} catch (Exception e) {
 			logger.error("Caught Exception",e);
 		}
-		return Tuple2.apply(roleNames, permissions);
+		return Tuples._2T(roleNames, permissions);
 	}
 
 	

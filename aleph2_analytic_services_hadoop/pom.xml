@@ -6,7 +6,8 @@
   <properties>
 	<aleph2.version>0.0.1-SNAPSHOT</aleph2.version>
 	<aleph2.scope>compile</aleph2.scope>
-	<aleph2.hadoop>2.6.0</aleph2.hadoop>
+	<aleph2.hadoop>2.7.1</aleph2.hadoop>
+	<maven.test.skip>true</maven.test.skip>
   </properties>
   <build>
     <plugins>
@@ -120,7 +121,7 @@
   		<artifactId>aleph2_data_model</artifactId>
   		<version>${aleph2.version}</version>
 		<scope>${aleph2.scope}</scope>
-	</dependency>
+  	</dependency>
 	<dependency>
 		<groupId>com.ikanow.aleph2</groupId>
 		<artifactId>aleph2_core_distributed_services_library</artifactId>
@@ -147,29 +148,79 @@
   	</dependency>
 	<!-- Other external dependencies here -->
 	<dependency>
+		<groupId>com.fasterxml.jackson.dataformat</groupId>
+		<artifactId>jackson-dataformat-xml</artifactId>
+		<version>2.3.1</version>
+		<exclusions>
+			<exclusion>
+				<artifactId>jackson-core</artifactId>
+				<groupId>com.fasterxml.jackson.core</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jackson-annotations</artifactId>
+				<groupId>com.fasterxml.jackson.core</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jackson-databind</artifactId>
+				<groupId>com.fasterxml.jackson.core</groupId>
+			</exclusion>
+		</exclusions>
+	</dependency>
+	<dependency>
 		<groupId>org.apache.hadoop</groupId>
 		<artifactId>hadoop-minicluster</artifactId>
 		<version>${aleph2.hadoop}</version>
 		<scope>test</scope>
+		<exclusions>
+			<exclusion>
+				<artifactId>servlet-api</artifactId>
+				<groupId>javax.servlet</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jetty-util</artifactId>
+				<groupId>org.mortbay.jetty</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jetty</artifactId>
+				<groupId>org.mortbay.jetty</groupId>
+			</exclusion>
+		</exclusions>
 	</dependency>
-	<!-- Test deps -->
-	<dependency>
-		<groupId>com.ikanow.aleph2</groupId>
-		<artifactId>aleph2_storage_service_hdfs</artifactId>
-		<version>${aleph2.version}</version>
-		<scope>test</scope>
-	</dependency>
-	<dependency>
-		<groupId>com.ikanow.aleph2</groupId>
-		<artifactId>aleph2_management_db_service_mongodb</artifactId>
-		<version>${aleph2.version}</version>
-		<scope>test</scope>
-	</dependency>
-	<dependency>
-		<groupId>com.ikanow.aleph2</groupId>
-		<artifactId>aleph2_search_index_service_elasticsearch</artifactId>
-		<version>${aleph2.version}</version>
-		<scope>test</scope>
-	</dependency>
-  </dependencies>
+	</dependencies>
+	
+	<!-- Test dependencies -->
+	<profiles>
+		<profile>
+			<id>test_dependencies</id>
+			<activation>
+				<property>
+					<name>skipTests</name>
+					<value>!true</value>
+				</property>
+			</activation>
+			<properties>
+				<maven.test.skip>false</maven.test.skip>
+			</properties>
+			<dependencies>
+				<dependency>
+					<groupId>com.ikanow.aleph2</groupId>
+					<artifactId>aleph2_storage_service_hdfs</artifactId>
+					<version>${aleph2.version}</version>
+					<scope>test</scope>
+				</dependency>
+				<dependency>
+					<groupId>com.ikanow.aleph2</groupId>
+					<artifactId>aleph2_management_db_service_mongodb</artifactId>
+					<version>${aleph2.version}</version>
+					<scope>test</scope>
+				</dependency>
+				<dependency>
+					<groupId>com.ikanow.aleph2</groupId>
+					<artifactId>aleph2_search_index_service_elasticsearch</artifactId>
+					<version>${aleph2.version}</version>
+					<scope>test</scope>
+				</dependency>
+			</dependencies>
+		</profile>
+	</profiles>	
 </project>

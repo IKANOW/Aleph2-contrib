@@ -42,6 +42,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.google.inject.Inject;
+import com.google.inject.Provider;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider;
@@ -77,8 +78,8 @@ public class IkanowV1SyncService_TestBuckets {
 	
 	protected final MongoDbManagementDbConfigBean _config;
 	protected final IServiceContext _context;
-	protected final IManagementDbService _core_management_db;
-	protected final IManagementDbService _underlying_management_db;
+	protected final Provider<IManagementDbService> _core_management_db;
+	protected final Provider<IManagementDbService> _underlying_management_db;
 	protected final ICoreDistributedServices _core_distributed_services;
 	
 	protected final SetOnce<MutexMonitor> _source_test_mutex_monitor = new SetOnce<MutexMonitor>();
@@ -99,8 +100,8 @@ public class IkanowV1SyncService_TestBuckets {
 	public IkanowV1SyncService_TestBuckets(final MongoDbManagementDbConfigBean config, final IServiceContext service_context) {		
 		_config = config;
 		_context = service_context;
-		_core_management_db = _context.getCoreManagementDbService();		
-		_underlying_management_db = _context.getService(IManagementDbService.class, Optional.empty()).get();
+		_core_management_db = _context.getServiceProvider(IManagementDbService.class, IManagementDbService.CORE_MANAGEMENT_DB).get();		
+		_underlying_management_db = _context.getServiceProvider(IManagementDbService.class, Optional.empty()).get();
 		_context.getService(ICoreDistributedServices.class, Optional.empty()).get();
 		_core_distributed_services = _context.getService(ICoreDistributedServices.class, Optional.empty()).get();
 		
@@ -184,7 +185,7 @@ public class IkanowV1SyncService_TestBuckets {
 			}
 			if (!_v1_db.isSet()) {
 				@SuppressWarnings("unchecked")
-				final ICrudService<TestQueueBean> v1_config_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.v2_test_q/" + TestQueueBean.class.getName())).get();				
+				final ICrudService<TestQueueBean> v1_config_db = _underlying_management_db.get().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest.v2_test_q/" + TestQueueBean.class.getName())).get();				
 				_v1_db.set(v1_config_db);
 				
 				_v1_db.get().optimizeQuery(Arrays.asList(BeanTemplateUtils.from(TestQueueBean.class).field(TestQueueBean::status)));
@@ -193,8 +194,8 @@ public class IkanowV1SyncService_TestBuckets {
 			try {
 				// Synchronize
 				synchronizeTestSources(
-						_core_management_db.getDataBucketStore(), 
-						_underlying_management_db.getDataBucketStatusStore(), 
+						_core_management_db.get().getDataBucketStore(), 
+						_underlying_management_db.get().getDataBucketStatusStore(), 
 						_v1_db.get(),
 						new BucketTestService())
 						.get();
@@ -236,18 +237,25 @@ public class IkanowV1SyncService_TestBuckets {
 			//_logger.debug("Got test sources successfully, looping over any results");
 			test_sources.forEach(Lambdas.wrap_consumer_u(test_source -> {		
 				_logger.debug("Looking at test source: " + test_source._id());
-
-				final DataBucketBean to_test = Lambdas.wrap_u(() -> getBucketFromV1Source(test_source.source())).get();
-				if ( test_source.status() != null &&
-						(test_source.status() == TestStatus.in_progress || test_source.status() == TestStatus.completed || test_source.status() == TestStatus.error ) 
-						//(test_source.status().equals("in_progress") || test_source.status().equals("completed") || test_source.status().equals("error"))
-						)
-				{
-					existing_results.add(handleExistingTestSource(to_test, test_source, source_test_db));
-				} else { // in progress...
-					
-					_logger.debug("Found a new entry, setting up test");
-					new_results.add(handleNewTestSource(to_test, test_source, bucket_test_service, source_test_db));								
+				try {
+					final DataBucketBean to_test = Lambdas.wrap_u(() -> getBucketFromV1Source(test_source.source())).get();
+					if ( test_source.status() != null &&
+							(test_source.status() == TestStatus.in_progress || test_source.status() == TestStatus.completed || test_source.status() == TestStatus.error ) 
+							//(test_source.status().equals("in_progress") || test_source.status().equals("completed") || test_source.status().equals("error"))
+							)
+					{
+						existing_results.add(handleExistingTestSource(to_test, test_source, source_test_db));
+					} else { // in progress...
+						
+						_logger.debug("Found a new entry, setting up test");
+						new_results.add(handleNewTestSource(to_test, test_source, bucket_test_service, source_test_db));								
+					}
+				} catch (Exception ex ) {
+					final String error = ErrorUtils.getLongForm("error: {0}", ex);
+					_logger.error("Error when checking test source: " + error);
+					//turn off this test source
+					updateTestSourceStatus(test_source._id(), TestStatus.error, source_test_db, Optional.empty(), Optional.empty(), Optional.of(error))
+							.join();
 				}
 			}));
 			if (existing_results.isEmpty()) { // Make sure at least that we don't start a new thread until we've got all the tests from the previous sources
@@ -384,7 +392,7 @@ public class IkanowV1SyncService_TestBuckets {
 		return v2_output_db.getObjectsBySpec(CrudUtils.allOf().limit(requested_num_objects)).thenCompose( results -> {
 			_logger.debug("returned: " + results.count() + " items in output collection (with limit, there could be more)");
 			_logger.debug("moving data to mongo collection: ingest." + data_bucket._id());
-			final ICrudService<JsonNode> v1_output_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + data_bucket._id())).get();		
+			final ICrudService<JsonNode> v1_output_db = _underlying_management_db.get().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + data_bucket._id())).get();		
 			List<JsonNode> objects_to_store = new ArrayList<JsonNode>();
 			results.forEach(objects_to_store::add);
 			return objects_to_store.isEmpty()
@@ -429,9 +437,9 @@ public class IkanowV1SyncService_TestBuckets {
 		//try to test the bucket
 		_logger.debug("Running bucket test");
 		@SuppressWarnings("unchecked")
-		final ICrudService<JsonNode> v1_output_db = _underlying_management_db.getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + data_bucket._id())).get();
+		final ICrudService<JsonNode> v1_output_db = _underlying_management_db.get().getUnderlyingPlatformDriver(ICrudService.class, Optional.of("ingest." + data_bucket._id())).get();
 		final CompletableFuture<Boolean> delete_datastore = v1_output_db.deleteDatastore(); //(this is done in a few other places, so just to be on the safe side here)
-		final ManagementFuture<Boolean> test_res_future = bucket_test_service.test_bucket(_core_management_db, data_bucket, test_spec);
+		final ManagementFuture<Boolean> test_res_future = bucket_test_service.test_bucket(_core_management_db.get(), data_bucket, test_spec);
 		
 		return delete_datastore.exceptionally(ex->{
 			_logger.error("Error trying to clear v1 output db before test run: ingest." + data_bucket._id(),ex);

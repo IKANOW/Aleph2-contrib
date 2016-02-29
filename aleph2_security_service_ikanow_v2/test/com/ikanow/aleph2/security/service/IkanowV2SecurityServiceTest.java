@@ -19,7 +19,6 @@ import static org.junit.Assert.assertEquals;
 
 import java.io.InputStreamReader;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Optional;
 
 import org.apache.logging.log4j.LogManager;
@@ -35,7 +34,6 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISubject;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
-import com.ikanow.aleph2.security.utils.ProfilingUtility;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;

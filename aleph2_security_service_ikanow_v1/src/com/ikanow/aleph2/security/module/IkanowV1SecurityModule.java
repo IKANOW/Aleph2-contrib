@@ -15,6 +15,8 @@
  *******************************************************************************/
 package com.ikanow.aleph2.security.module;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.shiro.authc.credential.CredentialsMatcher;
 
 import com.google.inject.multibindings.Multibinder;
@@ -29,8 +31,10 @@ import com.ikanow.aleph2.security.service.IkanowV1UserGroupRoleProvider;
 
 public class IkanowV1SecurityModule extends CoreSecurityModule{
 	
-	
+	private static final Logger logger = LogManager.getLogger(IkanowV1SecurityModule.class);
+
 	public IkanowV1SecurityModule(){
+		logger.debug("IkanowV1SecurityModule created");
 	}
 	
 	@Override

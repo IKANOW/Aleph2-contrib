@@ -1,18 +1,18 @@
 /*******************************************************************************
-* Copyright 2015, The IKANOW Open Source Project.
-* 
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-* 
-*   http://www.apache.org/licenses/LICENSE-2.0
-* 
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-******************************************************************************/
+ * Copyright 2015, The IKANOW Open Source Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package com.ikanow.aleph2.storage_service_hdfs.services;
 
 import java.io.File;
@@ -42,12 +42,15 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvi
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.storage_service_hdfs.utils.HdfsErrorUtils;
@@ -127,23 +130,28 @@ public class HdfsStorageService implements IStorageService {
 		T driver = null;
 		try {
 			if(driver_class!=null){
-				final Configuration config = getConfiguration();
-				URI uri = driver_options.isPresent() ? new URI(driver_options.get()) : getUri(config);
-				
-				if (driver_class.isAssignableFrom(AbstractFileSystem.class)) {
-	
-					AbstractFileSystem fs = AbstractFileSystem.createFileSystem(uri, config);
+				if (driver_class.isAssignableFrom(AbstractFileSystem.class) ||
+						driver_class.isAssignableFrom(FileContext.class)
+						)
+				{
+					final Configuration config = getConfiguration();
+					URI uri = driver_options.isPresent() ? new URI(driver_options.get()) : getUri(config);
 					
-					return (Optional<T>) Optional.of(fs);
-				}			
-				else if(driver_class.isAssignableFrom(FileContext.class)){					
-					if (driver_options.equals(IStorageService.LOCAL_FS)) {
-						FileContext fs = FileContext.getLocalFSFileContext(config);
+					if (driver_class.isAssignableFrom(AbstractFileSystem.class)) {
+		
+						AbstractFileSystem fs = AbstractFileSystem.createFileSystem(uri, config);
+						
 						return (Optional<T>) Optional.of(fs);
-					}
-					else {
-						FileContext fs = FileContext.getFileContext(AbstractFileSystem.createFileSystem(uri, config), config);
-						return (Optional<T>) Optional.of(fs);
+					}			
+					else if(driver_class.isAssignableFrom(FileContext.class)){					
+						if (driver_options.equals(IStorageService.LOCAL_FS)) {
+							FileContext fs = FileContext.getLocalFSFileContext(config);
+							return (Optional<T>) Optional.of(fs);
+						}
+						else {
+							FileContext fs = FileContext.getFileContext(AbstractFileSystem.createFileSystem(uri, config), config);
+							return (Optional<T>) Optional.of(fs);
+						}
 					}
 				}
 			} // !=null
@@ -157,6 +165,7 @@ public class HdfsStorageService implements IStorageService {
 	/** 
 	 * Retrieves the system configuration
 	 *  (with code to handle possible internal concurrency bug in Configuration)
+	 *  (tried putting a static synchronization around Configuration as an alternative)
 	 * @return
 	 */
 	protected Configuration getConfiguration(){		
@@ -165,7 +174,15 @@ public class HdfsStorageService implements IStorageService {
 				return getConfiguration(i);
 			}
 			catch (java.util.ConcurrentModificationException e) {
-				try { Thread.sleep(100L); } catch (Exception ee) {}
+				final long to_sleep = Patterns.match(i).<Long>andReturn()
+						.when(ii -> ii < 15, __ -> 100L)
+						.when(ii -> ii < 30, __ -> 250L)
+						.when(ii -> ii < 45, __ -> 500L)
+						.otherwise(__ -> 1000L)
+						+ (new Date().getTime() % 100L) // (add random component)
+						;
+				
+				try { Thread.sleep(to_sleep); } catch (Exception ee) {}
 				if (59 == i) throw e;
 			}
 		}
@@ -175,35 +192,41 @@ public class HdfsStorageService implements IStorageService {
 	 * @param try_number
 	 * @return
 	 */
-	protected Configuration getConfiguration(int try_number){
-		Configuration config = new Configuration(false);
-		
-		if (new File(_globals.local_yarn_config_dir()).exists()) {
-			config.addResource(new Path(_globals.local_yarn_config_dir() +"/yarn-site.xml"));
-			config.addResource(new Path(_globals.local_yarn_config_dir() +"/core-site.xml"));
-			config.addResource(new Path(_globals.local_yarn_config_dir() +"/hdfs-site.xml"));
-		}
-		else {
-			final String alternative = System.getenv("HADOOP_CONF_DIR");
-
-			_logger.warn("Aleph2 yarn-config dir not found, try alternative: " + alternative);
-			// (another alternative would be HADOOP_HOME + "/conf")
+	protected Configuration getConfiguration(int attempt){
+		synchronized (Configuration.class) {
+			Configuration config = new Configuration(false);
 			
-			if ((null != alternative) && new File(alternative).exists()) {
-				config.addResource(new Path(alternative +"/yarn-site.xml"));
-				config.addResource(new Path(alternative +"/core-site.xml"));
-				config.addResource(new Path(alternative +"/hdfs-site.xml"));				
+			if (new File(_globals.local_yarn_config_dir()).exists()) {
+				config.addResource(new Path(_globals.local_yarn_config_dir() +"/yarn-site.xml"));
+				config.addResource(new Path(_globals.local_yarn_config_dir() +"/core-site.xml"));
+				config.addResource(new Path(_globals.local_yarn_config_dir() +"/hdfs-site.xml"));
 			}
-			else  // last ditch - will work for local testing but never from anything remote
-				config.addResource("default_fs.xml");						
-		}
-		// These are not added by Hortonworks, so add them manually
-		config.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");									
-		config.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");									
-		config.set("fs.AbstractFileSystem.hdfs.impl", "org.apache.hadoop.fs.Hdfs");
-		config.set("fs.AbstractFileSystem.file.impl", "org.apache.hadoop.fs.local.LocalFs");
-		return config;
-		
+			else {
+				final String alternative = System.getenv("HADOOP_CONF_DIR");
+	
+				_logger.warn("Aleph2 yarn-config dir not found, try alternative: " + alternative);
+				// (another alternative would be HADOOP_HOME + "/conf")
+				
+				if ((null != alternative) && new File(alternative).exists()) {
+					config.addResource(new Path(alternative +"/yarn-site.xml"));
+					config.addResource(new Path(alternative +"/core-site.xml"));
+					config.addResource(new Path(alternative +"/hdfs-site.xml"));				
+				}
+				else  // last ditch - will work for local testing but never from anything remote
+					config.addResource("default_fs.xml");						
+			}
+			if (attempt > 10) { // (try sleeping here)
+				final long to_sleep = 500L + (new Date().getTime() % 100L); // (add random component)
+				try { Thread.sleep(to_sleep); } catch (Exception e) {}
+			}
+			
+			// These are not added by Hortonworks, so add them manually
+			config.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");									
+			config.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");									
+			config.set("fs.AbstractFileSystem.hdfs.impl", "org.apache.hadoop.fs.Hdfs");
+			config.set("fs.AbstractFileSystem.file.impl", "org.apache.hadoop.fs.local.LocalFs");
+			return config;
+		}		
 	}
 
 	protected URI getUri(Configuration configuration){
@@ -316,6 +339,11 @@ public class HdfsStorageService implements IStorageService {
 									
 									return Tuples._2T(IStorageService.StorageStage.transient_output, Optional.of(job));
 								}
+								else if (stage.startsWith(StorageStage.transient_input.toString())) { // the second part can be the subsystem settings
+									final String[] transient_job = stage.split(":", 2);
+									return Tuples._2T(IStorageService.StorageStage.transient_input, 
+											Optional.of(transient_job).filter(tj -> tj.length > 1).<String>map(tj -> tj[1]));									
+								}
 								else {
 									return Tuples._2T(IStorageService.StorageStage.valueOf(stage), Optional.<String>empty());
 								}
@@ -327,22 +355,37 @@ public class HdfsStorageService implements IStorageService {
 						}
 					});
 			
+			// For transient input, can override the storage sub schema from the options, otherwise use sensible defaults (check for test mode)
+			
+			final DataBucketBean transient_input_bucket = Lambdas.get(() -> {
+				if (StorageStage.transient_input == stage_job._1()) {
+					return buildInputBatchSchema(bucket, stage_job._2());
+				}
+				else return bucket; // (default return normal bucket)			
+			});
+			
 			// Check if the stage is enabled:
 			
-			return (StorageStage.transient_output == stage_job._1())
-					? 
-					Optional.of(new HfdsDataWriteService<O>(bucket, this, stage_job._1(), stage_job._2(), HdfsStorageService.this, secondary_buffer))
-					:
-					Optionals.of(() -> bucket.data_schema().storage_schema())
+			return Patterns.match(stage_job._1()).<Optional<IDataWriteService<O>>>andReturn()
+					.when(stage -> StorageStage.transient_output == stage, __ ->
+							Optional.of(new HfdsDataWriteService<O>(bucket, this, stage_job._1(), stage_job._2(), HdfsStorageService.this, secondary_buffer))
+					)
+					.when(stage -> StorageStage.transient_input == stage, __ ->
+							Optional.of(new HfdsDataWriteService<O>(transient_input_bucket, this, stage_job._1(), Optional.empty(), HdfsStorageService.this, secondary_buffer))
+					)
+					.otherwise(stage -> {
+						return 	Optionals.of(() -> bucket.data_schema().storage_schema())
 								.filter(storage -> 
 											Optional.ofNullable(storage.enabled()).orElse(true))
 								.map(storage -> 
 											HfdsDataWriteService.getStorageSubSchema(storage, stage_job._1()))
 								.filter(substore -> 
-												Optional.ofNullable(substore.enabled()).orElse(true))
+											Optional.ofNullable(substore.enabled()).orElse(true))
 								.map(__ -> 
-										new HfdsDataWriteService<O>(bucket, this, stage_job._1(), Optional.empty(), HdfsStorageService.this, secondary_buffer))
+									new HfdsDataWriteService<O>(bucket, this, stage_job._1(), Optional.empty(), HdfsStorageService.this, secondary_buffer))
 								;
+
+					});
 		}
 
 		/* (non-Javadoc)
@@ -432,8 +475,12 @@ public class HdfsStorageService implements IStorageService {
 				return Optional.of(new_name_for_ex_primary.orElse(IStorageService.EX_PRIMARY_BUFFER_SUFFIX))
 						.filter(name -> !name.isEmpty())
 						.map(Lambdas.wrap_e((name -> {
+							// force delete destination, otherwise can run into problems
+							final Path dst_path = Path.mergePaths(path, new Path(name.startsWith("/") ? name : "/" + name));
+							try { fc.delete(dst_path, true); } catch (Exception e) {} // (happy if dir doesn't exist)
+							
 							//(NOTE ABOUT MERGE PATHS - IF STARTS WITH // THEN ASSUMES IS FS PROTOCOL AND IGNORES) 
-							fc.rename(path_to_move, Path.mergePaths(path, new Path(name.startsWith("/") ? name : "/" + name)), Rename.OVERWRITE);					
+							fc.rename(path_to_move, dst_path, Rename.OVERWRITE);					
 							return path;
 						})))
 						.orElseGet(Lambdas.wrap_e(() -> { // just delete it
@@ -478,8 +525,10 @@ public class HdfsStorageService implements IStorageService {
 				
 				final Validation<Throwable, Path> err1a = moveOrDeleteDir.apply(raw_top_level);
 				final Validation<Throwable, Path> err1b = moveToPrimary.apply(raw_top_level);
+				
 				final Validation<Throwable, Path> err2a = moveOrDeleteDir.apply(json_top_level);
 				final Validation<Throwable, Path> err2b = moveToPrimary.apply(json_top_level);
+				
 				final Validation<Throwable, Path> err3a = moveOrDeleteDir.apply(px_top_level);
 				final Validation<Throwable, Path> err3b = moveToPrimary.apply(px_top_level);
 				
@@ -724,4 +773,44 @@ public class HdfsStorageService implements IStorageService {
 		} 		
 	}	
 		
+	/** Create an identical bucket except with the batch input storage settings inserted into the data_schema.storage_schema.json
+	 *  (or apply the user override)
+	 * @param bucket
+	 * @param options
+	 * @return
+	 */
+	protected static DataBucketBean buildInputBatchSchema(final DataBucketBean bucket, final Optional<String> options) {
+		final Optional<DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean> 
+				sub_schema_override =
+					options.flatMap(Lambdas.maybeWrap_i(s -> BeanTemplateUtils.from(s, DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.class).get()))
+					;
+		return BeanTemplateUtils.clone(bucket) // 
+				.with(DataBucketBean::data_schema,
+						BeanTemplateUtils.clone(Optional.ofNullable(bucket.data_schema()).orElse(BeanTemplateUtils.build(DataSchemaBean.class).done().get()))
+							.with(DataSchemaBean::storage_schema,
+									BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.class)
+										.with(DataSchemaBean.StorageSchemaBean::json,
+												sub_schema_override.orElseGet(() -> {
+													if (BucketUtils.isTestBucket(bucket)) {
+														return BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.class)
+																	.with(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean::target_write_settings,
+																			BeanTemplateUtils.build(DataSchemaBean.WriteSettings.class)
+																				.with(DataSchemaBean.WriteSettings::batch_flush_interval, 10)
+																			.done().get()
+																			)
+																.done().get();																	
+													}
+													else { // (will just use the underlying defaults)
+														return BeanTemplateUtils.build(DataSchemaBean.StorageSchemaBean.StorageSubSchemaBean.class)
+																.done().get();
+													}
+												})
+										)
+									.done().get()
+									)
+						.done()
+						)
+				.done();
+	}
+
 }

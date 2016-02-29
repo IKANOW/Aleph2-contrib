@@ -1,18 +1,18 @@
 /*******************************************************************************
  * Copyright 2015, The IKANOW Open Source Project.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
+ *******************************************************************************/
 package com.ikanow.aleph2.shared.crud.elasticsearch.services;
 
 import java.time.Duration;
@@ -55,6 +55,7 @@ import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.index.IndexRequest.OpType;
 import org.elasticsearch.action.index.IndexResponse;
+import org.elasticsearch.action.search.SearchPhaseExecutionException;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.Client;
@@ -540,7 +541,9 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				}
 			},
 			(err, future) -> {
-				if (err instanceof IndexMissingException) { // just treat this like an "object not found"
+				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				{ 
+					// just treat this like an "object not found"
 					future.complete(Optional.empty());
 				}
 				else {
@@ -601,7 +604,9 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 					}
 				},
 				(err, future) -> {
-					if (err instanceof IndexMissingException) { // just treat this like an "object not found"
+					if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+					{ 
+						// just treat this like an "object not found"
 						future.complete(Optional.empty());
 					}
 					else {
@@ -632,8 +637,10 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		try {
 			//TODO (ALEPH-14): Handle case where no source is present but fields are
 			
-			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(spec, _state.id_ranges_ok);
+			//TODO (ALEPH-14): if there's an obvious timestamp range then apply to getReadableIndexArray
 			
+			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(spec, _state.id_ranges_ok);
+
 			final SearchRequestBuilder srb = Optional
 						.of(
 							_state.client.prepareSearch()
@@ -662,7 +669,9 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				return new ElasticsearchCursor(sr);
 			},
 			(err, future) -> {
-				if (err instanceof IndexMissingException) { // just treat this like an "object not found"
+				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				{ 	
+					// just treat this like an "object not found"
 					future.complete(new ElasticsearchCursor(null));
 				}
 				else {
@@ -694,7 +703,8 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				return cr.getCount();
 			},
 			(err, future) -> {
-				if (err instanceof IndexMissingException) {
+				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				{
 					future.complete(0L);
 				}
 				else {
@@ -723,7 +733,8 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				return cr.getCount();
 			},
 			(err, future) -> {
-				if (err instanceof IndexMissingException) {
+				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				{
 					future.complete(0L);
 				}
 				else {
@@ -849,7 +860,8 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 						return true;
 					},
 					(err, future) -> {
-						if (err instanceof IndexMissingException) {
+						if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+						{
 							future.complete(false);
 						}
 						else {
@@ -901,14 +913,15 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 * @param <O> - the object type
 	 */
 	public class ElasticsearchBatchSubsystem implements IBatchSubservice<O> {
-
+		final protected Object sync_lock = new Object(); 
+		
 		protected ElasticsearchBatchSubsystem() {
 			// Kick off thread that handles higher speed flushing
 			final ExecutorService executor = Executors.newSingleThreadExecutor();
 			executor.submit(() -> {
 				for (;;) {
 					if (_flush_now) {
-						synchronized (this) {
+						synchronized (sync_lock) {
 							_current.flush(); // (must always be non-null because _flush_now can only be set if _current exists)
 							_flush_now = false;
 						}
@@ -922,7 +935,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		public void setBatchProperties(final Optional<Integer> max_objects, final Optional<Long> size_kb, final Optional<Duration> flush_interval, final Optional<Integer> write_threads)
 		{
 			BulkProcessor old = null;
-			synchronized (this) {
+			synchronized (sync_lock) {
 				old = _current;
 				_current = buildBulkProcessor(max_objects, size_kb, flush_interval, write_threads);
 			}
@@ -938,22 +951,26 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		}
 		
 		@Override
-		public synchronized void storeObjects(final List<O> new_objects, final boolean replace_if_present) {
-			if (null == _current) {
-				_current = buildBulkProcessor();
+		public void storeObjects(final List<O> new_objects, final boolean replace_if_present) {
+			synchronized (sync_lock) {
+				if (null == _current) {
+					_current = buildBulkProcessor();
+				}
+				new_objects.stream().forEach(new_object -> 			
+					_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
+						Either.left(new_object), replace_if_present, true).request()));
 			}
-			new_objects.stream().forEach(new_object -> 			
-				_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
-					Either.left(new_object), replace_if_present, true).request()));
 		}
 
 		@Override
-		public synchronized void storeObject(final O new_object, final boolean replace_if_present) {
-			if (null == _current) {
-				_current = buildBulkProcessor();
-			}			
-			_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
-							Either.left(new_object), replace_if_present, true).request());
+		public void storeObject(final O new_object, final boolean replace_if_present) {
+			synchronized (sync_lock) {
+				if (null == _current) {
+					_current = buildBulkProcessor();
+				}			
+				_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
+								Either.left(new_object), replace_if_present, true).request());
+			}
 		}
 		
 		private boolean _flush_now = false; // (_very_ simple inter-thread comms via this mutable var, NOTE: don't let it get more complex than this without refactoring)
@@ -979,44 +996,56 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 								{
 									final ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext auto_context = (ElasticsearchContext.TypeContext.ReadWriteTypeContext.AutoRwTypeContext) _state.es_context.typeContext();
 									final Iterator<BulkItemResponse> it = out.iterator();
-									synchronized (this) {
-										while (it.hasNext()) {										
-											final BulkItemResponse bir = it.next();
-											if (bir.isFailed()) {								
-												final String error_message = bir.getFailure().getMessage();
+									final LinkedList<Tuple2<BulkItemResponse, String>> mutable_errs = new LinkedList<>(); 
+									while (it.hasNext()) {										
+										final BulkItemResponse bir = it.next();
+										if (bir.isFailed()) {								
+											final String error_message = bir.getFailure().getMessage();
+											
+											if (error_message.startsWith("MapperParsingException")
+													||
+												error_message.startsWith("WriteFailureException; nested: MapperParsingException"))
+											{
+												final Set<String> fixed_type_fields = auto_context.fixed_type_fields();
+												if (!fixed_type_fields.isEmpty()) {
+													// Obtain the field name from the exception (if we fail then drop the record) 
+													final String field = getFieldFromParsingException(error_message);
+													if ((null == field) || fixed_type_fields.contains(field)) {
+														continue;
+													}
+												}//(else roll on to...)																												
 												
-												if (error_message.startsWith("MapperParsingException")
-														||
-													error_message.startsWith("WriteFailureException; nested: MapperParsingException"))
-												{
-													final Set<String> fixed_type_fields = auto_context.fixed_type_fields();
-													if (!fixed_type_fields.isEmpty()) {
-														// Obtain the field name from the exception (if we fail then drop the record) 
-														final String field = getFieldFromParsingException(error_message);
-														if ((null == field) || fixed_type_fields.contains(field)) {
-															continue;
-														}
-													}//(else roll on to...)																												
-													
-													String failed_json = null;
+												final String failed_json = Lambdas.get(() -> {
 													final ActionRequest<?> ar = in.requests().get(bir.getItemId());
 													if (ar instanceof IndexRequest) {											
 														IndexRequest ir = (IndexRequest) ar;
-														failed_json = ir.source().toUtf8();
+														return ir.source().toUtf8();
 													}
-													if (null != failed_json) {
-														_flush_now = true;
-														_current.add(singleObjectIndexRequest(
-																	Either.right(Tuples._2T(bir.getIndex(), 
-																			ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), bir.getType()))), 
-																	Either.right(Tuples._2T(bir.getId(), failed_json)), 
-																	false, true).request());
-													}//(End got the source, so re-insert this into the stream)
-												}//(was a mapping error)
-											}//(item failed)
-										}//(loop over iterms)
+													else return null;
+												});
+												if (null != failed_json) {
+													mutable_errs.add(Tuples._2T(bir, failed_json));
+												}
+												
+											}//(was a mapping error)
+										}//(item failed)
+									}//(loop over iterms)
 										
-									}//(synchronized)									
+									if (!mutable_errs.isEmpty()) { // Reinsert into the steam
+										CompletableFuture.runAsync(() -> {
+											synchronized (sync_lock) {
+												_flush_now = true;
+												mutable_errs.forEach(bir_json -> 
+													_current.add(singleObjectIndexRequest(
+																Either.right(Tuples._2T(bir_json._1().getIndex(), 
+																		ElasticsearchContextUtils.getNextAutoType(auto_context.getPrefix(), bir_json._1().getType()))), 
+																Either.right(Tuples._2T(bir_json._1().getId(), bir_json._2())), 
+																false, true).request())
+												);
+											}														
+										});
+									}
+										
 								}//(has failures AND is an auto type)
 								
 							}//(end afterBulk)
@@ -1052,7 +1081,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		 */
 		@Override
 		public CompletableFuture<?> flushOutput() {
-			synchronized (this) {
+			synchronized (sync_lock) {
 				if (null != _current) _current.flush(); 
 			}
 			// Just sleep for 1.25s
