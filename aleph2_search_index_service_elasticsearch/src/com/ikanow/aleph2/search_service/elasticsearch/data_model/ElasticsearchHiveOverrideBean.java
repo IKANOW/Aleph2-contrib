@@ -52,7 +52,7 @@ public class ElasticsearchHiveOverrideBean {
 		 */
 		public Map<String, Object> json_query() { return json_query; }
 
-		/** Allows to map between ES field names and hive compatible ones (eg date:@timestamp)
+		/** Allows to map between ES field names and hive compatible ones (eg date:@timestamp, ie from the new fieldname to the ES fieldname)
 		 * @return
 		 */
 		public Map<String, String> name_mappings() { return name_mappings; }
