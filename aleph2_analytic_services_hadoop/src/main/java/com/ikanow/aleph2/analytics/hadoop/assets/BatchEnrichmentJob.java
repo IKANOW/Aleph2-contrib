@@ -74,6 +74,7 @@ import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
+import com.ikanow.aleph2.analytics.services.PassthroughService;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.Arrays;
@@ -303,7 +304,7 @@ public class BatchEnrichmentJob{
 										_v1_logger.ifPresent(logger -> logger.info("Trying to launch stage " + Optional.ofNullable(ecm.name()).orElse("(no name)") + " with entry point = " + entryPoint));
 										logger.info("Trying to launch stage " + Optional.ofNullable(ecm.name()).orElse("(no name)") + " with entry point = " + entryPoint);
 										
-										return entryPoint.map(Stream::of).orElseGet(() -> Stream.of(BePassthroughModule.class.getName()))
+										return entryPoint.map(Stream::of).orElseGet(() -> Stream.of(PassthroughService.class.getName()))
 												.flatMap(Lambdas.flatWrap_i(ep -> {
 													try {
 														return (IEnrichmentBatchModule)Class.forName(ep).newInstance();
