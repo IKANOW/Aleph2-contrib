@@ -21,6 +21,8 @@ import java.util.Optional;
 import org.apache.logging.log4j.Level;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
@@ -33,7 +35,9 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.LoggingSc
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchIndexSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.StorageSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.TemporalSchemaBean;
+import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 
 /**
  * @author Burch
@@ -73,6 +77,26 @@ public class LoggingUtils {
 					.orElse(bucket.management_schema().logging_schema().log_level());
 		}
 		return default_log_level; //default to off if logging service isn't configured		
+	}
+	
+	/**
+	 * Builds a jsonnode log message object, contains fields for date, message, generated_by, bucket, subsystem, and severity
+	 * 
+	 * @param level
+	 * @param bucket
+	 * @param message
+	 * @param isSystemMessage
+	 * @return
+	 */
+	public static JsonNode createLogObject(final Level level, final DataBucketBean bucket, final BasicMessageBean message, final boolean isSystemMessage, final String date_field) {
+		final ObjectMapper _mapper = new ObjectMapper();
+		return Optional.ofNullable(message.details()).map(d -> _mapper.convertValue(d, ObjectNode.class)).orElseGet(() -> _mapper.createObjectNode())
+				.put(date_field, message.date().getTime()) //TODO can I actually pass in a date object/need to?
+				.put("message", ErrorUtils.show(message))
+				.put("generated_by", isSystemMessage ? "system" : "user")
+				.put("bucket", bucket.full_name())
+				.put("subsystem", message.source())
+				.put("severity", level.toString());			
 	}
 	
 	/**

@@ -22,6 +22,7 @@ import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
@@ -97,11 +98,14 @@ public class TestLoggingService {
 		final String subsystem_name = "logging_test1";
 		final long num_messages_to_log = 50;
 		final DataBucketBean test_bucket = getTestBucket("test1", Level.ALL); 
+		final IBucketLogger user_logger = logging_service.getLogger(test_bucket);
+		final IBucketLogger system_logger = logging_service.getSystemLogger(test_bucket);
+		final IBucketLogger external_logger = logging_service.getExternalLogger(subsystem_name);
 		//log a few messages
 		for ( int i = 0; i < num_messages_to_log; i++ ) {
-			logging_service.log(Level.ERROR, test_bucket,ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
-			logging_service.systemLog(Level.ERROR, Optional.of(test_bucket), ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
-			logging_service.systemLog(Level.ERROR, Optional.empty(), ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
+			user_logger.log(Level.ERROR, ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
+			system_logger.log(Level.ERROR, ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
+			external_logger.log(Level.ERROR, ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
 		}
 		
 		//check its in ES, wait 10s max for the index to refresh
@@ -125,12 +129,15 @@ public class TestLoggingService {
 		final long num_messages_to_log_each_type = 5;
 		final List<Level> levels = Arrays.asList(Level.DEBUG, Level.INFO, Level.ERROR);
 		final DataBucketBean test_bucket = getTestBucket("test2", Level.ERROR); 
+		final IBucketLogger user_logger = logging_service.getLogger(test_bucket);
+		final IBucketLogger system_logger = logging_service.getSystemLogger(test_bucket);
+		final IBucketLogger external_logger = logging_service.getExternalLogger(subsystem_name);
 		//log a few messages
 		for ( int i = 0; i < num_messages_to_log_each_type; i++ ) {
 			for ( Level level : levels) {
-				logging_service.log(level, test_bucket,ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
-				logging_service.systemLog(level, Optional.of(test_bucket),ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
-				logging_service.systemLog(level, Optional.empty(), ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
+				user_logger.log(level, ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
+				system_logger.log(level, ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
+				external_logger.log(level, ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
 			}
 		}
 		
