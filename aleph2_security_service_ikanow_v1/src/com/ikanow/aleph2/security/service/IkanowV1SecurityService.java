@@ -99,14 +99,6 @@ public class IkanowV1SecurityService extends SecurityService implements ISecurit
 	}
 
 
-
-
-
-	@Override
-	public ISubject loginAsSystem() {
-		return super.loginAsSystem();
-	}
-
 	@Override
 	protected String getRealmName(){
 		return IkanowV1Realm.class.getName();

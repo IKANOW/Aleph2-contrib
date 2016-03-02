@@ -94,15 +94,6 @@ public class IkanowV2SecurityService extends SecurityService implements ISecurit
 		
 	}
 
-
-
-
-
-	@Override
-	public ISubject loginAsSystem() {
-		return super.loginAsSystem();
-	}
-
 	@Override
 	protected String getRealmName(){
 		return IkanowV2Realm.class.getName();
