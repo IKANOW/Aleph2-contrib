@@ -21,6 +21,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import com.ikanow.aleph2.analytics.spark.services.SparkPyWrapperService;
 
 /** This class acts as a wrapper for Spark/Python related functionality
+ *  Note these aren't static methods to make the python libraries life easy
  * @author Alex
  *
  */
@@ -32,7 +33,7 @@ public class SparkPyTechnologyUtils {
 	 * @param test_signature
 	 * @return
 	 */
-	public static SparkPyWrapperService getAleph2(JavaSparkContext spark_context, String signature, String test_signature) {
+	public SparkPyWrapperService getAleph2(JavaSparkContext spark_context, String signature, String test_signature) {
 		return new SparkPyWrapperService(spark_context, signature, test_signature);
 	}
 	
@@ -41,7 +42,7 @@ public class SparkPyTechnologyUtils {
 	 * @param signature
 	 * @return
 	 */
-	public static SparkPyWrapperService getAleph2(JavaSparkContext spark_context, String signature) {
+	public SparkPyWrapperService getAleph2(JavaSparkContext spark_context, String signature) {
 		return new SparkPyWrapperService(spark_context, signature);
 	}
 	

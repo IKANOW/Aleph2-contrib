@@ -16,6 +16,7 @@
 
 package com.ikanow.aleph2.analytics.spark.services;
 
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
@@ -44,14 +45,17 @@ import fj.data.Either;
  * @author Alex
  *
  */
-public class SparkPyWrapperService {
+public class SparkPyWrapperService implements Serializable {
+	private static final long serialVersionUID = 6174776554864774616L;
+
 	protected final static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 	
-	final JavaSparkContext _spark_context;
 	final IAnalyticsContext _aleph2_context;
-	final Optional<ProcessingTestSpecBean> _test_spec_bean;
 	
-	final SetOnce<Multimap<String, JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>>> _rdd_set = new SetOnce<>();
+	// Transients
+	final transient JavaSparkContext _spark_context;
+	final transient Optional<ProcessingTestSpecBean> _test_spec_bean;	
+	final transient SetOnce<Multimap<String, JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>>> _rdd_set = new SetOnce<>();
 	
 	/** Creates a spark wrapper object (with test spec)
 	 * @param spark_context
@@ -102,8 +106,11 @@ public class SparkPyWrapperService {
 	public JavaRDD<Map<String, Object>> getRddInput(final String input_name) {
 		initializeRdd(Collections.emptySet());
 		
-		return _rdd_set.get().get(input_name).stream().reduce((acc1, acc2) -> acc1.union(acc2))
-						.map(rdd -> rdd.<Map<String, Object>>map(t2 -> _mapper.convertValue(t2._2()._2().getJson(), Map.class))).orElse(null);
+		// (not sure why the cast is needed, eclipse happy but maven fails)
+		return (JavaRDD<Map<String, Object>>)_rdd_set.get().get(input_name).stream()
+						.reduce((acc1, acc2) -> acc1.union(acc2))
+						.<JavaRDD<Map<String, Object>>>map(rdd -> rdd.<Map<String, Object>>map(t2 -> _mapper.convertValue(t2._2()._2().getJson(), Map.class)))
+						.orElse(null);
 	}
 	
 	/** Returns a union of all the types (for convenience)
@@ -113,21 +120,24 @@ public class SparkPyWrapperService {
 	public JavaRDD<Map<String, Object>> getAllRddInputs() {
 		initializeRdd(Collections.emptySet());
 		
-		return _rdd_set.get().values().stream().reduce((acc1, acc2) -> acc1.union(acc2))
-				.map(rdd -> rdd.<Map<String, Object>>map(t2 -> _mapper.convertValue(t2._2()._2().getJson(), Map.class))).orElse(null);
+		// (not sure why the cast is needed, eclipse happy but maven fails)
+		return (JavaRDD<Map<String, Object>>)_rdd_set.get().values().stream()
+				.reduce((acc1, acc2) -> acc1.union(acc2))
+				.<JavaRDD<Map<String, Object>>>map(rdd -> rdd.<Map<String, Object>>map(t2 -> _mapper.convertValue(t2._2()._2().getJson(), Map.class)))
+				.orElse(null);
 	}
 
 	///////////////////////////////////////////////////////
 	
 	// INPUTS - SPARK-SQL
 	
-	//TODO
+	//TODO (ALEPH-63)
 	
 	///////////////////////////////////////////////////////
 	
 	// OUTPUTS
 	
-	//TODO: need an emitRdd that works on a pair and thus lets me emit vs external emit as i please...
+	//TODO (ALEPH-63): need an emitRdd that works on a pair and thus lets me emit vs external emit as i please...
 	
 	public long emitRdd(final JavaRDD<Map<String, Object>> output) {
 		return output.map(map -> _aleph2_context.emitObject(Optional.empty(), _aleph2_context.getJob().get(), Either.right(map), Optional.empty())).count();
@@ -161,7 +171,7 @@ public class SparkPyWrapperService {
 	 * @param exclude
 	 */
 	private void initializeRdd(final Set<String> exclude) {
-		if (_rdd_set.isSet()) {
+		if (!_rdd_set.isSet()) {
 			_rdd_set.set(SparkTechnologyUtils.buildBatchSparkInputs(_aleph2_context, _test_spec_bean, _spark_context, exclude));			
 		}
 	}

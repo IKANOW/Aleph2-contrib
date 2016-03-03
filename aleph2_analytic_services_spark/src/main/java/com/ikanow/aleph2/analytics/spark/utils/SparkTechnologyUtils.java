@@ -129,7 +129,7 @@ public class SparkTechnologyUtils {
 	{
 		//https://spark.apache.org/docs/1.2.0/submitting-applications.html
 		
-		//TODO: python options (--pyfiles) + normal files (--files)
+		//TODO: python options (--pyfiles) + normal files (--files) .. integrated with the library path (ie don't put them in classpath, add them as file/pyfiles instead, possibly with rename...)
 		
 		final List<String> command_line =
 			ImmutableList.<String>builder()
