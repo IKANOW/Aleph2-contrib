@@ -16,8 +16,16 @@
 
 package com.ikanow.aleph2.analytics.spark.utils;
 
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.net.URL;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
+import org.apache.commons.io.Charsets;
 import org.apache.spark.api.java.JavaSparkContext;
 
+import com.google.common.io.Resources;
 import com.ikanow.aleph2.analytics.spark.services.SparkPyWrapperService;
 
 /** This class acts as a wrapper for Spark/Python related functionality
@@ -26,6 +34,42 @@ import com.ikanow.aleph2.analytics.spark.services.SparkPyWrapperService;
  *
  */
 public class SparkPyTechnologyUtils {
+	
+	/** Create a zip containing the Aleph2 driver
+	 * @param bucket
+	 * @param job
+	 * @throws IOException
+	 */
+	public static String writeAleph2DriverZip(final String signature) throws IOException {
+		final String tmp_dir = System.getProperty("java.io.tmpdir");
+		final String filename = tmp_dir + "/aleph2_driver_py_" + signature + ".zip";
+		
+		final URL url = Resources.getResource("aleph2_driver.py");
+		final String text = Resources.toString(url, Charsets.UTF_8);		
+		final FileOutputStream fout = new FileOutputStream(filename);
+		final ZipOutputStream zout = new ZipOutputStream(fout);
+		final ZipEntry ze= new ZipEntry("aleph2_driver.py");
+		zout.putNextEntry(ze);
+		zout.write(text.getBytes());
+		zout.closeEntry();
+		zout.close();
+		
+		return filename;
+	}
+	
+	/** Write the script to a temp file
+	 * @param bucket
+	 * @param job
+	 * @param script
+	 */
+	public static String writeUserPythonScriptTmpFile(final String signature, final String script) {
+		final String tmp_dir = System.getProperty("java.io.tmpdir");
+		final String filename = tmp_dir + "/user_py_script" + signature + ".zip";
+		
+		//TODO (ALEPH-63)
+		
+		return filename;		
+	}
 	
 	/** Returns a spark wrapper for use by python
 	 * @param spark_context

@@ -142,7 +142,8 @@ public class SparkTechnologyUtils {
 				.add("--jars")
 				.add(Stream.concat(other_jars.stream(), external_jars.stream()).collect(Collectors.joining(",")))
 				.addAll(external_files.isEmpty() ? Collections.emptyList() : Arrays.asList("--files", external_files.stream().collect(Collectors.joining(","))))				
-				.addAll(external_lang_files.isEmpty() ? Collections.emptyList() : Arrays.asList("--pyfiles", external_lang_files.stream().collect(Collectors.joining(","))))				
+				.addAll(external_lang_files.isEmpty() ? Collections.emptyList() : Arrays.asList("--py-files", external_lang_files.stream().collect(Collectors.joining(","))))				
+					//TODO create the aleph2 driver				
 					//^^^ TODO need to handle the other cases (R?)
 				.addAll(Optional.ofNullable(System.getProperty("hdp.version")).map(hdp_version -> { // Set HDP version from whatever I'm set to
 					return (List<String>)ImmutableList.<String>of(

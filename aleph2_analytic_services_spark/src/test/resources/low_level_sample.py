@@ -1,6 +1,5 @@
 from pyspark import SparkContext
 from pyspark import SparkConf
-from py4j.java_gateway import JavaGateway
 import sys
 from pyspark.rdd import RDD
 

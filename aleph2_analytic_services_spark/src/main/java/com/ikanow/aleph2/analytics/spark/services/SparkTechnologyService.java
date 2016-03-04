@@ -306,6 +306,8 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 			
 			final String bucket_signature = BucketUtils.getUniqueSignature(analytic_bucket.full_name(), Optional.of(job_to_start.name()));
 			
+			//TODO create the zip file and pass that in if specified
+			
 			final ProcessBuilder pb =
 					SparkTechnologyUtils.createSparkJob(
 							bucket_signature,
@@ -313,7 +315,7 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 							globals.local_yarn_config_dir(), 
 							spark_job_config.cluster_mode(),
 							Optional.ofNullable(spark_job_config.entry_point()).filter(__ -> SparkType.jvm == spark_job_config.language()), 
-								//^^^ TODO: all support built in?  TODO also this can be the python job instead
+								//^^^ TODO: all support built in?  
 							new String(Base64.getEncoder().encode(context.getAnalyticsContextSignature(Optional.of(analytic_bucket), Optional.empty()).getBytes())),
 							test_spec.map(ts -> new String(Base64.getEncoder().encode(BeanTemplateUtils.toJson(ts).toString().getBytes()))),
 							main_jar_or_script,  
