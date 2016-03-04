@@ -100,7 +100,7 @@ public class SparkTopologyConfigBean implements Serializable {
 	/** Allows the specification of files from the shared library 
 	 * @return
 	 */
-	public List<String> uploaded_files() { return Optional.ofNullable(uploaded_lang_files).orElse(Collections.emptyList()); }
+	public List<String> uploaded_files() { return Optional.ofNullable(uploaded_files).orElse(Collections.emptyList()); }
 	
 	/** Allows the specification of language specific libraries from the shared library
 	 * @return

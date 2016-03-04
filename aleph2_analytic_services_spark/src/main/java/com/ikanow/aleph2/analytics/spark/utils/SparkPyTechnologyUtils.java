@@ -16,6 +16,7 @@
 
 package com.ikanow.aleph2.analytics.spark.utils;
 
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URL;
@@ -23,10 +24,14 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import org.apache.commons.io.Charsets;
+import org.apache.commons.io.FileUtils;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import com.google.common.io.Resources;
 import com.ikanow.aleph2.analytics.spark.services.SparkPyWrapperService;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
+
+import fj.data.Either;
 
 /** This class acts as a wrapper for Spark/Python related functionality
  *  Note these aren't static methods to make the python libraries life easy
@@ -61,12 +66,15 @@ public class SparkPyTechnologyUtils {
 	 * @param bucket
 	 * @param job
 	 * @param script
+	 * @throws IOException 
 	 */
-	public static String writeUserPythonScriptTmpFile(final String signature, final String script) {
+	public static String writeUserPythonScriptTmpFile(final String signature, final Either<String, String> script_or_resource) throws IOException {
 		final String tmp_dir = System.getProperty("java.io.tmpdir");
-		final String filename = tmp_dir + "/user_py_script" + signature + ".zip";
+		final String filename = tmp_dir + "/user_py_script" + signature + ".py";
 		
-		//TODO (ALEPH-63)
+		final String script = script_or_resource.<String>either(l -> l, fj.data.Java8.Function_F(Lambdas.wrap_u(r -> Resources.toString(Resources.getResource(r), Charsets.UTF_8))));
+		
+		FileUtils.writeStringToFile(new File(filename), script);
 		
 		return filename;		
 	}
