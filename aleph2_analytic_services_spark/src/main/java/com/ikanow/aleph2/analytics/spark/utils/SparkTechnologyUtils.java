@@ -140,7 +140,7 @@ public class SparkTechnologyUtils {
 				.add("--master")
 				.add(spark_master)
 				.add("--jars")
-				.add(Stream.concat(other_jars.stream(), external_jars.stream()).collect(Collectors.joining(",")))
+				.add(Stream.concat(other_jars.stream(), external_jars.stream()).filter(j -> j.endsWith(".jar")).collect(Collectors.joining(",")))
 				.addAll(external_files.isEmpty() ? Collections.emptyList() : Arrays.asList("--files", external_files.stream().collect(Collectors.joining(","))))				
 				.addAll(external_lang_files.isEmpty() ? Collections.emptyList() : Arrays.asList("--py-files", external_lang_files.stream().collect(Collectors.joining(","))))				
 					//TODO create the aleph2 driver				

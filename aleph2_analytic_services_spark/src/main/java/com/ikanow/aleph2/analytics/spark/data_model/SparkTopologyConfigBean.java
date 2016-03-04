@@ -97,6 +97,16 @@ public class SparkTopologyConfigBean implements Serializable {
 	 */
 	public List<String> external_lang_files() { return Optional.ofNullable(external_lang_files).orElse(Collections.emptyList()); }	
 	
+	/** Allows the specification of files from the shared library 
+	 * @return
+	 */
+	public List<String> uploaded_files() { return Optional.ofNullable(uploaded_lang_files).orElse(Collections.emptyList()); }
+	
+	/** Allows the specification of language specific libraries from the shared library
+	 * @return
+	 */
+	public List<String> uploaded_lang_files() { return Optional.ofNullable(uploaded_lang_files).orElse(Collections.emptyList()); }	
+	
 	private String cluster_mode;
 	
 	private SparkType language;
@@ -107,6 +117,9 @@ public class SparkTopologyConfigBean implements Serializable {
 	private Map<String, String> system_config;
 	private Map<String, Object> job_config;
 	private Boolean include_job_config_in_spark_config;
+
+	private List<String> uploaded_files;
+	private List<String> uploaded_lang_files;	
 	
 	private List<String> external_jars;
 	private List<String> external_files;
