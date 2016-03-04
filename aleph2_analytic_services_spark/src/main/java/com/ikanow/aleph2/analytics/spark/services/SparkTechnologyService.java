@@ -385,7 +385,7 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 				: Stream.empty()
 				;
 		final Set<String> requested_files = spark_job_config.uploaded_files().stream().map(s -> SparkTechnologyUtils.transformFromPath(s)).collect(Collectors.toSet());
-		final Set<String> requested_lang_files = spark_job_config.uploaded_files().stream().map(s -> SparkTechnologyUtils.transformFromPath(s)).collect(Collectors.toSet());
+		final Set<String> requested_lang_files = spark_job_config.uploaded_lang_files().stream().map(s -> SparkTechnologyUtils.transformFromPath(s)).collect(Collectors.toSet());
 		
 		final ProcessBuilder pb =
 				SparkTechnologyUtils.createSparkJob(

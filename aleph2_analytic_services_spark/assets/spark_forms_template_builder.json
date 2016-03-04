@@ -273,7 +273,7 @@
             "configurable": true,
             "deletable": true,
             "form_model": {
-              "json": "{\n    \"analytic_type\": \"BATCH\",\n    \"lock_to_nodes\": true,\n    \"analytic_technology_name_or_id\": \"/app/aleph2/library/spark_technology.jar\",\n    \"job_config\": \"{\\n}\",\n    \"language\": \"python\",\n    \"cluster_mode\": \"yarn-cluster\",\n    \"include_job_config_in_spark_config\": true,\n\t\"script\": \"import sys\\nfrom pyspark import SparkContext\\nfrom pyspark import SparkConf\\nfrom aleph2_driver import Aleph2Driver\\n\\nif __name__ == \\\"__main__\\\":\\n  sc = SparkContext(appName=\\\"JOB_NAME\\\")\\n  aleph2 = Aleph2Driver(sc, sys.argv[1])\\n  #EXAMPLES:\\n  #names = aleph2.getRddInputNames()\\n  #rdd1 = aleph2.getAllRddInputs(sc)\\n  #rdd2 = aleph2.getRddInput(sc, \\\"NAME\\\")\\n  #count = aleph2.emitRdd(rdd1)\\n  #count = aleph2.externalEmitRdd(rdd1)\\n  \"\n}"
+              "json": "{\n    \"analytic_type\": \"batch\",\n    \"lock_to_nodes\": true,\n    \"analytic_technology_name_or_id\": \"/app/aleph2/library/spark_technology.jar\",\n    \"job_config\": \"{\\n}\",\n    \"language\": \"python\",\n    \"cluster_mode\": \"yarn-cluster\",\n    \"include_job_config_in_spark_config\": true,\n\t\"script\": \"import sys\\nfrom pyspark import SparkContext\\nfrom pyspark import SparkConf\\nfrom aleph2_driver import Aleph2Driver\\n\\nif __name__ == \\\"__main__\\\":\\n  sc = SparkContext(appName=\\\"JOB_NAME\\\")\\n  aleph2 = Aleph2Driver(sc, sys.argv[1])\\n  #EXAMPLES:\\n  #names = aleph2.getRddInputNames()\\n  #rdd1 = aleph2.getAllRddInputs(sc)\\n  #rdd2 = aleph2.getRddInput(sc, \\\"NAME\\\")\\n  #count = aleph2.emitRdd(rdd1)\\n  #count = aleph2.externalEmitRdd(rdd1)\\n  \"\n}"
             },
             "template": {
               "display_name": "Raw Default Values",
@@ -612,7 +612,7 @@
           "label": "Show/Hide Section",
           "element": {
             "enabled": true,
-            "short_name": "Show/Hide Section",
+            "short_name": "Advanced show/hide",
             "summary": "Advanced options",
             "row": 2,
             "col": 2,
@@ -1039,6 +1039,824 @@
                 }
               },
               "children": []
+            },
+            {
+              "root": false,
+              "label": "Repeating Section",
+              "element": {
+                "enabled": true,
+                "short_name": "Spark Parameters",
+                "summary": "",
+                "row": 1,
+                "col": 2,
+                "sizeX": 1,
+                "sizeY": 1,
+                "expandable": true,
+                "configurable": true,
+                "deletable": true,
+                "form_model": {
+                  "key": "spark_config",
+                  "type": "repeatSection",
+                  "btnText": "Add"
+                },
+                "template": {
+                  "display_name": "Repeating Section",
+                  "form_info": "Create a sub-form under here",
+                  "filters": [
+                    "Template/template_builder",
+                    "Template/template_builder/**"
+                  ],
+                  "expandable": true,
+                  "key": "template_builder",
+                  "categories": [
+                    "Layout"
+                  ],
+                  "schema": [
+                    {
+                      "key": "key",
+                      "type": "horizontalInput",
+                      "templateOptions": {
+                        "label": "Key",
+                        "placeholder": "Enter a key for this repeater",
+                        "required": true
+                      }
+                    },
+                    {
+                      "key": "btnText",
+                      "type": "horizontalInput",
+                      "defaultValue": "Add",
+                      "templateOptions": {
+                        "label": "Add Button Name",
+                        "placeholder": "Enter the name for this button",
+                        "required": true
+                      }
+                    }
+                  ],
+                  "default_model": {
+                    "key": "ADD_KEY_HERE",
+                    "type": "repeatSection",
+                    "btnText": "Add"
+                  },
+                  "building_function": {
+                    "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n  var m = template.element.form_model;\n  var obj = { templateOptions: { schema: [] } }; \n  curr_obj.schema.push(obj); \n  obj.type = m.type; \n  obj.key = m.key; \n  obj.templateOptions.btnText = m.btnText;\n  return obj.templateOptions;   \n}"
+                  },
+                  "post_building_function": {
+                    "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n\tvar me = curr_obj.schema[curr_obj.schema.length-1]; \n  me.templateOptions.fields = me.templateOptions.schema;\n  me.templateOptions.schema = undefined;  \n}"
+                  }
+                }
+              },
+              "children": [
+                {
+                  "root": false,
+                  "label": "Row/Column Layout",
+                  "element": {
+                    "enabled": true,
+                    "short_name": "Row/Column Layout",
+                    "summary": "",
+                    "row": 0,
+                    "col": 0,
+                    "sizeX": 1,
+                    "sizeY": 1,
+                    "expandable": true,
+                    "configurable": true,
+                    "deletable": true,
+                    "form_model": {
+                      "class": "row",
+                      "columns": [
+                        "6",
+                        "6"
+                      ]
+                    },
+                    "template": {
+                      "display_name": "Row/Column Layout",
+                      "form_info": "Add a row and define the layout of columns",
+                      "filters": [
+                        "Template/template_builder",
+                        "Template/template_builder/**"
+                      ],
+                      "expandable": true,
+                      "key": "template_builder",
+                      "categories": [
+                        "Layout"
+                      ],
+                      "schema": [
+                        {
+                          "type": "multiInput",
+                          "templateOptions": {
+                            "inputOptions": {
+                              "type": "select",
+                              "templateOptions": {
+                                "options": [
+                                  {
+                                    "name": "0",
+                                    "value": "0"
+                                  },
+                                  {
+                                    "name": "1",
+                                    "value": "1"
+                                  },
+                                  {
+                                    "name": "2",
+                                    "value": "2"
+                                  },
+                                  {
+                                    "name": "3",
+                                    "value": "3"
+                                  },
+                                  {
+                                    "name": "4",
+                                    "value": "4"
+                                  },
+                                  {
+                                    "name": "5",
+                                    "value": "5"
+                                  },
+                                  {
+                                    "name": "6",
+                                    "value": "6"
+                                  },
+                                  {
+                                    "name": "7",
+                                    "value": "7"
+                                  },
+                                  {
+                                    "name": "8",
+                                    "value": "8"
+                                  },
+                                  {
+                                    "name": "9",
+                                    "value": "9"
+                                  },
+                                  {
+                                    "name": "10",
+                                    "value": "10"
+                                  },
+                                  {
+                                    "name": "11",
+                                    "value": "11"
+                                  }
+                                ]
+                              }
+                            },
+                            "label": "Column widths (must add up to <= 12)"
+                          },
+                          "key": "columns"
+                        }
+                      ],
+                      "default_model": {
+                        "class": "row"
+                      },
+                      "building_function": {
+                        "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n var m = template.element.form_model;\n var obj = { schema: [] }; \n curr_obj.schema.push(obj); \n obj.className = m.class; \n return obj; \n}"
+                      },
+                      "post_building_function": {
+                        "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  var me = curr_obj.schema[curr_obj.schema.length-1]; \n  me.fieldGroup = me.schema;\n  me.schema = undefined;\n  if (template.element.form_model.columns) {\n    for (i in template.element.form_model.columns) {\n      var col = template.element.form_model.columns[i];\n      me.fieldGroup[i].className = 'col-xs-' + col;\n    }\n  }\n}"
+                      }
+                    }
+                  },
+                  "children": [
+                    {
+                      "root": false,
+                      "label": "2-Line Input",
+                      "element": {
+                        "enabled": true,
+                        "short_name": "Parameter Key",
+                        "summary": "Must start with \"spark.\" eg \"spark.config.param\"",
+                        "row": 0,
+                        "col": 0,
+                        "sizeX": 1,
+                        "sizeY": 1,
+                        "expandable": false,
+                        "configurable": true,
+                        "deletable": true,
+                        "form_model": {
+                          "type": "input",
+                          "key": "key",
+                          "required": true
+                        },
+                        "template": {
+                          "display_name": "2-Line Input",
+                          "form_info": "Text input element with label on the line above",
+                          "filters": [
+                            "Template/template_builder",
+                            "Template/template_builder/**"
+                          ],
+                          "expandable": false,
+                          "key": "simple_input",
+                          "categories": [
+                            "Text"
+                          ],
+                          "schema": [
+                            {
+                              "key": "_short_name",
+                              "type": "horizontalInput",
+                              "templateOptions": {
+                                "label": "Label",
+                                "placeholder": "The label displayed next to the input",
+                                "required": true
+                              }
+                            },
+                            {
+                              "key": "_summary",
+                              "type": "horizontalTextArea",
+                              "templateOptions": {
+                                "label": "Placeholder",
+                                "placeholder": "The placeholder text displayed when the input is empty",
+                                "required": true
+                              }
+                            },
+                            {
+                              "key": "key",
+                              "type": "horizontalInput",
+                              "templateOptions": {
+                                "label": "Key",
+                                "pattern": "[a-zA-Z0-9_]+",
+                                "placeholder": "The key for this input",
+                                "required": true
+                              }
+                            },
+                            {
+                              "key": "required",
+                              "type": "horizontalCheckbox",
+                              "templateOptions": {
+                                "label": "Is this element required?"
+                              }
+                            },
+                            {
+                              "key": "pattern",
+                              "type": "horizontalInput",
+                              "templateOptions": {
+                                "label": "Pattern",
+                                "placeholder": "Optional validation regular expression",
+                                "required": false
+                              }
+                            }
+                          ],
+                          "default_model": {
+                            "type": "input",
+                            "key": "TODO_KEY"
+                          },
+                          "building_function": {
+                            "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  var obj = { templateOptions: {} };\n  obj.key = template.element.form_model.key;\n  obj.type = template.element.form_model.type;   \n  obj.templateOptions.required = (true === template.element.form_model.required);\n  if ((template.element.form_model.pattern || '').length > 0) {\n    obj.templateOptions.pattern = template.element.form_model.pattern;\n  }\n  obj.templateOptions.label = template.element.short_name;\n  obj.templateOptions.placeholder = template.element.summary;\n  curr_obj.schema.push(obj)\n}"
+                          },
+                          "post_building_function": {
+                            "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+                          }
+                        }
+                      },
+                      "children": []
+                    },
+                    {
+                      "root": false,
+                      "label": "2-Line Input",
+                      "element": {
+                        "enabled": true,
+                        "short_name": "Parameter Value",
+                        "summary": "The value",
+                        "row": 0,
+                        "col": 1,
+                        "sizeX": 1,
+                        "sizeY": 1,
+                        "expandable": false,
+                        "configurable": true,
+                        "deletable": true,
+                        "form_model": {
+                          "type": "input",
+                          "key": "value",
+                          "required": true
+                        },
+                        "template": {
+                          "display_name": "2-Line Input",
+                          "form_info": "Text input element with label on the line above",
+                          "filters": [
+                            "Template/template_builder",
+                            "Template/template_builder/**"
+                          ],
+                          "expandable": false,
+                          "key": "simple_input",
+                          "categories": [
+                            "Text"
+                          ],
+                          "schema": [
+                            {
+                              "key": "_short_name",
+                              "type": "horizontalInput",
+                              "templateOptions": {
+                                "label": "Label",
+                                "placeholder": "The label displayed next to the input",
+                                "required": true
+                              }
+                            },
+                            {
+                              "key": "_summary",
+                              "type": "horizontalTextArea",
+                              "templateOptions": {
+                                "label": "Placeholder",
+                                "placeholder": "The placeholder text displayed when the input is empty",
+                                "required": true
+                              }
+                            },
+                            {
+                              "key": "key",
+                              "type": "horizontalInput",
+                              "templateOptions": {
+                                "label": "Key",
+                                "pattern": "[a-zA-Z0-9_]+",
+                                "placeholder": "The key for this input",
+                                "required": true
+                              }
+                            },
+                            {
+                              "key": "required",
+                              "type": "horizontalCheckbox",
+                              "templateOptions": {
+                                "label": "Is this element required?"
+                              }
+                            },
+                            {
+                              "key": "pattern",
+                              "type": "horizontalInput",
+                              "templateOptions": {
+                                "label": "Pattern",
+                                "placeholder": "Optional validation regular expression",
+                                "required": false
+                              }
+                            }
+                          ],
+                          "default_model": {
+                            "type": "input",
+                            "key": "TODO_KEY"
+                          },
+                          "building_function": {
+                            "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  var obj = { templateOptions: {} };\n  obj.key = template.element.form_model.key;\n  obj.type = template.element.form_model.type;   \n  obj.templateOptions.required = (true === template.element.form_model.required);\n  if ((template.element.form_model.pattern || '').length > 0) {\n    obj.templateOptions.pattern = template.element.form_model.pattern;\n  }\n  obj.templateOptions.label = template.element.short_name;\n  obj.templateOptions.placeholder = template.element.summary;\n  curr_obj.schema.push(obj)\n}"
+                          },
+                          "post_building_function": {
+                            "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+                          }
+                        }
+                      },
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "root": false,
+              "label": "Section header",
+              "element": {
+                "enabled": true,
+                "short_name": "Spark Parameters",
+                "summary": "",
+                "row": 1,
+                "col": 1,
+                "sizeX": 1,
+                "sizeY": 1,
+                "expandable": false,
+                "configurable": true,
+                "deletable": true,
+                "form_model": {},
+                "template": {
+                  "display_name": "Section header",
+                  "form_info": "Provides a section header",
+                  "filters": [
+                    "Template/template_builder",
+                    "Template/template_builder/**"
+                  ],
+                  "expandable": false,
+                  "key": "template_element",
+                  "categories": [
+                    "Layout"
+                  ],
+                  "schema": [
+                    {
+                      "templateOptions": {
+                        "required": true,
+                        "label": "Horizontal Input",
+                        "placeholder": "The section header title (in HTML)"
+                      },
+                      "key": "_short_name",
+                      "type": "horizontalInput"
+                    }
+                  ],
+                  "building_function": {
+                    "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  obj = { \n    \"className\": \"section-label\",\n    \"template\": \"<hr /><div><strong>\" + template.element.short_name + \"</strong></div>\"    \n        };\n  curr_obj.schema.push(obj);\n  \n}"
+                  },
+                  "post_building_function": {
+                    "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+                  }
+                }
+              },
+              "children": []
+            },
+            {
+              "root": false,
+              "label": "Section header",
+              "element": {
+                "enabled": true,
+                "short_name": "Spark Executor Command Line Options",
+                "summary": "",
+                "row": 2,
+                "col": 1,
+                "sizeX": 1,
+                "sizeY": 1,
+                "expandable": false,
+                "configurable": true,
+                "deletable": true,
+                "form_model": {},
+                "template": {
+                  "display_name": "Section header",
+                  "form_info": "Provides a section header",
+                  "filters": [
+                    "Template/template_builder",
+                    "Template/template_builder/**"
+                  ],
+                  "expandable": false,
+                  "key": "template_element",
+                  "categories": [
+                    "Layout"
+                  ],
+                  "schema": [
+                    {
+                      "templateOptions": {
+                        "required": true,
+                        "label": "Horizontal Input",
+                        "placeholder": "The section header title (in HTML)"
+                      },
+                      "key": "_short_name",
+                      "type": "horizontalInput"
+                    }
+                  ],
+                  "building_function": {
+                    "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  obj = { \n    \"className\": \"section-label\",\n    \"template\": \"<hr /><div><strong>\" + template.element.short_name + \"</strong></div>\"    \n        };\n  curr_obj.schema.push(obj);\n  \n}"
+                  },
+                  "post_building_function": {
+                    "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+                  }
+                }
+              },
+              "children": []
+            },
+            {
+              "root": false,
+              "label": "Repeating Section",
+              "element": {
+                "enabled": true,
+                "short_name": "System Parameters",
+                "summary": "",
+                "row": 2,
+                "col": 2,
+                "sizeX": 1,
+                "sizeY": 1,
+                "expandable": true,
+                "configurable": true,
+                "deletable": true,
+                "form_model": {
+                  "key": "system_config",
+                  "type": "repeatSection",
+                  "btnText": "Add"
+                },
+                "template": {
+                  "display_name": "Repeating Section",
+                  "form_info": "Create a sub-form under here",
+                  "filters": [
+                    "Template/template_builder",
+                    "Template/template_builder/**"
+                  ],
+                  "expandable": true,
+                  "key": "template_builder",
+                  "categories": [
+                    "Layout"
+                  ],
+                  "schema": [
+                    {
+                      "key": "key",
+                      "type": "horizontalInput",
+                      "templateOptions": {
+                        "label": "Key",
+                        "placeholder": "Enter a key for this repeater",
+                        "required": true
+                      }
+                    },
+                    {
+                      "key": "btnText",
+                      "type": "horizontalInput",
+                      "defaultValue": "Add",
+                      "templateOptions": {
+                        "label": "Add Button Name",
+                        "placeholder": "Enter the name for this button",
+                        "required": true
+                      }
+                    }
+                  ],
+                  "default_model": {
+                    "key": "ADD_KEY_HERE",
+                    "type": "repeatSection",
+                    "btnText": "Add"
+                  },
+                  "building_function": {
+                    "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n  var m = template.element.form_model;\n  var obj = { templateOptions: { schema: [] } }; \n  curr_obj.schema.push(obj); \n  obj.type = m.type; \n  obj.key = m.key; \n  obj.templateOptions.btnText = m.btnText;\n  return obj.templateOptions;   \n}"
+                  },
+                  "post_building_function": {
+                    "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n\tvar me = curr_obj.schema[curr_obj.schema.length-1]; \n  me.templateOptions.fields = me.templateOptions.schema;\n  me.templateOptions.schema = undefined;  \n}"
+                  }
+                }
+              },
+              "children": [
+                {
+                  "root": false,
+                  "label": "Row/Column Layout",
+                  "element": {
+                    "enabled": true,
+                    "short_name": "Row/Column Layout",
+                    "summary": "",
+                    "row": 0,
+                    "col": 0,
+                    "sizeX": 1,
+                    "sizeY": 1,
+                    "expandable": true,
+                    "configurable": true,
+                    "deletable": true,
+                    "form_model": {
+                      "class": "row",
+                      "columns": [
+                        "6",
+                        "6"
+                      ]
+                    },
+                    "template": {
+                      "display_name": "Row/Column Layout",
+                      "form_info": "Add a row and define the layout of columns",
+                      "filters": [
+                        "Template/template_builder",
+                        "Template/template_builder/**"
+                      ],
+                      "expandable": true,
+                      "key": "template_builder",
+                      "categories": [
+                        "Layout"
+                      ],
+                      "schema": [
+                        {
+                          "type": "multiInput",
+                          "templateOptions": {
+                            "inputOptions": {
+                              "type": "select",
+                              "templateOptions": {
+                                "options": [
+                                  {
+                                    "name": "0",
+                                    "value": "0"
+                                  },
+                                  {
+                                    "name": "1",
+                                    "value": "1"
+                                  },
+                                  {
+                                    "name": "2",
+                                    "value": "2"
+                                  },
+                                  {
+                                    "name": "3",
+                                    "value": "3"
+                                  },
+                                  {
+                                    "name": "4",
+                                    "value": "4"
+                                  },
+                                  {
+                                    "name": "5",
+                                    "value": "5"
+                                  },
+                                  {
+                                    "name": "6",
+                                    "value": "6"
+                                  },
+                                  {
+                                    "name": "7",
+                                    "value": "7"
+                                  },
+                                  {
+                                    "name": "8",
+                                    "value": "8"
+                                  },
+                                  {
+                                    "name": "9",
+                                    "value": "9"
+                                  },
+                                  {
+                                    "name": "10",
+                                    "value": "10"
+                                  },
+                                  {
+                                    "name": "11",
+                                    "value": "11"
+                                  }
+                                ]
+                              }
+                            },
+                            "label": "Column widths (must add up to <= 12)"
+                          },
+                          "key": "columns"
+                        }
+                      ],
+                      "default_model": {
+                        "class": "row"
+                      },
+                      "building_function": {
+                        "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n var m = template.element.form_model;\n var obj = { schema: [] }; \n curr_obj.schema.push(obj); \n obj.className = m.class; \n return obj; \n}"
+                      },
+                      "post_building_function": {
+                        "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  var me = curr_obj.schema[curr_obj.schema.length-1]; \n  me.fieldGroup = me.schema;\n  me.schema = undefined;\n  if (template.element.form_model.columns) {\n    for (i in template.element.form_model.columns) {\n      var col = template.element.form_model.columns[i];\n      me.fieldGroup[i].className = 'col-xs-' + col;\n    }\n  }\n}"
+                      }
+                    }
+                  },
+                  "children": [
+                    {
+                      "root": false,
+                      "label": "2-Line Input",
+                      "element": {
+                        "enabled": true,
+                        "short_name": "Command line switch",
+                        "summary": "eg --conf",
+                        "row": 0,
+                        "col": 0,
+                        "sizeX": 1,
+                        "sizeY": 1,
+                        "expandable": false,
+                        "configurable": true,
+                        "deletable": true,
+                        "form_model": {
+                          "type": "input",
+                          "key": "key",
+                          "required": true
+                        },
+                        "template": {
+                          "display_name": "2-Line Input",
+                          "form_info": "Text input element with label on the line above",
+                          "filters": [
+                            "Template/template_builder",
+                            "Template/template_builder/**"
+                          ],
+                          "expandable": false,
+                          "key": "simple_input",
+                          "categories": [
+                            "Text"
+                          ],
+                          "schema": [
+                            {
+                              "key": "_short_name",
+                              "type": "horizontalInput",
+                              "templateOptions": {
+                                "label": "Label",
+                                "placeholder": "The label displayed next to the input",
+                                "required": true
+                              }
+                            },
+                            {
+                              "key": "_summary",
+                              "type": "horizontalTextArea",
+                              "templateOptions": {
+                                "label": "Placeholder",
+                                "placeholder": "The placeholder text displayed when the input is empty",
+                                "required": true
+                              }
+                            },
+                            {
+                              "key": "key",
+                              "type": "horizontalInput",
+                              "templateOptions": {
+                                "label": "Key",
+                                "pattern": "[a-zA-Z0-9_]+",
+                                "placeholder": "The key for this input",
+                                "required": true
+                              }
+                            },
+                            {
+                              "key": "required",
+                              "type": "horizontalCheckbox",
+                              "templateOptions": {
+                                "label": "Is this element required?"
+                              }
+                            },
+                            {
+                              "key": "pattern",
+                              "type": "horizontalInput",
+                              "templateOptions": {
+                                "label": "Pattern",
+                                "placeholder": "Optional validation regular expression",
+                                "required": false
+                              }
+                            }
+                          ],
+                          "default_model": {
+                            "type": "input",
+                            "key": "TODO_KEY"
+                          },
+                          "building_function": {
+                            "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  var obj = { templateOptions: {} };\n  obj.key = template.element.form_model.key;\n  obj.type = template.element.form_model.type;   \n  obj.templateOptions.required = (true === template.element.form_model.required);\n  if ((template.element.form_model.pattern || '').length > 0) {\n    obj.templateOptions.pattern = template.element.form_model.pattern;\n  }\n  obj.templateOptions.label = template.element.short_name;\n  obj.templateOptions.placeholder = template.element.summary;\n  curr_obj.schema.push(obj)\n}"
+                          },
+                          "post_building_function": {
+                            "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+                          }
+                        }
+                      },
+                      "children": []
+                    },
+                    {
+                      "root": false,
+                      "label": "2-Line Input",
+                      "element": {
+                        "enabled": true,
+                        "short_name": "Command line value",
+                        "summary": "The value associated with the switch",
+                        "row": 0,
+                        "col": 1,
+                        "sizeX": 1,
+                        "sizeY": 1,
+                        "expandable": false,
+                        "configurable": true,
+                        "deletable": true,
+                        "form_model": {
+                          "type": "input",
+                          "key": "value",
+                          "required": true
+                        },
+                        "template": {
+                          "display_name": "2-Line Input",
+                          "form_info": "Text input element with label on the line above",
+                          "filters": [
+                            "Template/template_builder",
+                            "Template/template_builder/**"
+                          ],
+                          "expandable": false,
+                          "key": "simple_input",
+                          "categories": [
+                            "Text"
+                          ],
+                          "schema": [
+                            {
+                              "key": "_short_name",
+                              "type": "horizontalInput",
+                              "templateOptions": {
+                                "label": "Label",
+                                "placeholder": "The label displayed next to the input",
+                                "required": true
+                              }
+                            },
+                            {
+                              "key": "_summary",
+                              "type": "horizontalTextArea",
+                              "templateOptions": {
+                                "label": "Placeholder",
+                                "placeholder": "The placeholder text displayed when the input is empty",
+                                "required": true
+                              }
+                            },
+                            {
+                              "key": "key",
+                              "type": "horizontalInput",
+                              "templateOptions": {
+                                "label": "Key",
+                                "pattern": "[a-zA-Z0-9_]+",
+                                "placeholder": "The key for this input",
+                                "required": true
+                              }
+                            },
+                            {
+                              "key": "required",
+                              "type": "horizontalCheckbox",
+                              "templateOptions": {
+                                "label": "Is this element required?"
+                              }
+                            },
+                            {
+                              "key": "pattern",
+                              "type": "horizontalInput",
+                              "templateOptions": {
+                                "label": "Pattern",
+                                "placeholder": "Optional validation regular expression",
+                                "required": false
+                              }
+                            }
+                          ],
+                          "default_model": {
+                            "type": "input",
+                            "key": "TODO_KEY"
+                          },
+                          "building_function": {
+                            "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  var obj = { templateOptions: {} };\n  obj.key = template.element.form_model.key;\n  obj.type = template.element.form_model.type;   \n  obj.templateOptions.required = (true === template.element.form_model.required);\n  if ((template.element.form_model.pattern || '').length > 0) {\n    obj.templateOptions.pattern = template.element.form_model.pattern;\n  }\n  obj.templateOptions.label = template.element.short_name;\n  obj.templateOptions.placeholder = template.element.summary;\n  curr_obj.schema.push(obj)\n}"
+                          },
+                          "post_building_function": {
+                            "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+                          }
+                        }
+                      },
+                      "children": []
+                    }
+                  ]
+                }
+              ]
             }
           ]
         },
@@ -1047,7 +1865,7 @@
           "label": "Show/Hide Section",
           "element": {
             "enabled": true,
-            "short_name": "Show/Hide Section",
+            "short_name": "Library show/hide",
             "summary": "Additional library options",
             "row": 3,
             "col": 2,
@@ -1101,7 +1919,7 @@
                 "enabled": true,
                 "short_name": "External JAR libraries",
                 "summary": "Add other JARs from the local file system",
-                "row": 0,
+                "row": 1,
                 "col": 0,
                 "sizeX": 1,
                 "sizeY": 1,
@@ -1179,86 +1997,8 @@
                 "enabled": true,
                 "short_name": "External Python libraries",
                 "summary": "Add zip or egg files to the python path from the local file system",
-                "row": 0,
+                "row": 1,
                 "col": 1,
-                "sizeX": 1,
-                "sizeY": 1,
-                "expandable": false,
-                "configurable": true,
-                "deletable": true,
-                "form_model": {
-                  "key": "external_lang_files"
-                },
-                "template": {
-                  "display_name": "Multi Text Input",
-                  "form_info": "A variable list of text fields",
-                  "filters": [
-                    "Template/template_builder",
-                    "Template/template_builder/**"
-                  ],
-                  "expandable": false,
-                  "key": "template_element",
-                  "categories": [
-                    "Text"
-                  ],
-                  "schema": [
-                    {
-                      "key": "_short_name",
-                      "type": "horizontalInput",
-                      "templateOptions": {
-                        "label": "Label",
-                        "placeholder": "The label displayed next to the input",
-                        "required": true
-                      }
-                    },
-                    {
-                      "key": "_summary",
-                      "type": "horizontalTextArea",
-                      "templateOptions": {
-                        "label": "Placeholder",
-                        "placeholder": "The placeholder text displayed when the input is empty",
-                        "required": true
-                      }
-                    },
-                    {
-                      "key": "key",
-                      "type": "horizontalInput",
-                      "templateOptions": {
-                        "label": "Key",
-                        "pattern": "[a-zA-Z0-9_]+",
-                        "placeholder": "The key for this input",
-                        "required": true
-                      }
-                    },
-                    {
-                      "key": "pattern",
-                      "type": "horizontalInput",
-                      "templateOptions": {
-                        "label": "Pattern",
-                        "placeholder": "Optional validation regular expression",
-                        "required": false
-                      }
-                    }
-                  ],
-                  "building_function": {
-                    "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  var obj = { type: 'multiInput', templateOptions: { inputOptions: { type: 'input', templateOptions: {} } } };\n  obj.key = template.element.form_model.key;\n  obj.templateOptions.label = template.element.short_name; \n  if ((template.element.form_model.pattern || '').length > 0) {\n    obj.templateOptions.inputOptions.templateOptions.pattern = template.element.form_model.pattern;\n  }\n  obj.templateOptions.inputOptions.templateOptions.placeholder = template.element.summary;\n  curr_obj.schema.push(obj)\n}"
-                  },
-                  "post_building_function": {
-                    "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
-                  }
-                }
-              },
-              "children": []
-            },
-            {
-              "root": false,
-              "label": "Multi Text Input",
-              "element": {
-                "enabled": true,
-                "short_name": "External Python libraries",
-                "summary": "Add zip or egg files to the python path from the local file system",
-                "row": 0,
-                "col": 2,
                 "sizeX": 1,
                 "sizeY": 1,
                 "expandable": false,
@@ -1335,8 +2075,8 @@
                 "enabled": true,
                 "short_name": "External misc files",
                 "summary": "Provide the python script with miscellaneous files from the local file system",
-                "row": 0,
-                "col": 3,
+                "row": 1,
+                "col": 2,
                 "sizeX": 1,
                 "sizeY": 1,
                 "expandable": false,
@@ -1405,6 +2145,96 @@
                 }
               },
               "children": []
+            },
+            {
+              "root": false,
+              "label": "Horizontal Input",
+              "element": {
+                "enabled": true,
+                "short_name": "External python executor",
+                "summary": "If the job that runs main lives on a local file accessible from all data import manager nodes, specify that here",
+                "row": 0,
+                "col": 0,
+                "sizeX": 1,
+                "sizeY": 1,
+                "expandable": false,
+                "configurable": true,
+                "deletable": true,
+                "form_model": {
+                  "type": "horizontalInput",
+                  "key": "entry_point"
+                },
+                "template": {
+                  "display_name": "Horizontal Input",
+                  "form_info": "Compact text input element",
+                  "filters": [
+                    "Template/template_builder",
+                    "Template/template_builder/**"
+                  ],
+                  "expandable": false,
+                  "key": "simple_input",
+                  "categories": [
+                    "Text"
+                  ],
+                  "schema": [
+                    {
+                      "key": "_short_name",
+                      "type": "horizontalInput",
+                      "templateOptions": {
+                        "label": "Label",
+                        "placeholder": "The label displayed next to the input",
+                        "required": true
+                      }
+                    },
+                    {
+                      "key": "_summary",
+                      "type": "horizontalTextArea",
+                      "templateOptions": {
+                        "label": "Placeholder",
+                        "placeholder": "The placeholder text displayed when the input is empty",
+                        "required": true
+                      }
+                    },
+                    {
+                      "key": "key",
+                      "type": "horizontalInput",
+                      "templateOptions": {
+                        "label": "Key",
+                        "pattern": "[a-zA-Z0-9_]+",
+                        "placeholder": "The key for this input",
+                        "required": true
+                      }
+                    },
+                    {
+                      "key": "required",
+                      "type": "horizontalCheckbox",
+                      "templateOptions": {
+                        "label": "Is this element required?"
+                      }
+                    },
+                    {
+                      "key": "pattern",
+                      "type": "horizontalInput",
+                      "templateOptions": {
+                        "label": "Pattern",
+                        "placeholder": "Optional validation regular expression",
+                        "required": false
+                      }
+                    }
+                  ],
+                  "default_model": {
+                    "type": "horizontalInput",
+                    "key": "TODO_KEY"
+                  },
+                  "building_function": {
+                    "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  var obj = { templateOptions: {} };\n  obj.key = template.element.form_model.key;\n  obj.type = template.element.form_model.type;   \n  obj.templateOptions.required = (true === template.element.form_model.required);\n  if ((template.element.form_model.pattern || '').length > 0) {\n    obj.templateOptions.pattern = template.element.form_model.pattern;\n  }\n  obj.templateOptions.label = template.element.short_name;\n  obj.templateOptions.placeholder = template.element.summary;\n  curr_obj.schema.push(obj)\n}"
+                  },
+                  "post_building_function": {
+                    "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+                  }
+                }
+              },
+              "children": []
             }
           ]
         },
@@ -1414,7 +2244,7 @@
           "element": {
             "enabled": true,
             "short_name": "Builder Functions",
-            "summary": "TODO missing spark and system configs in advanced options",
+            "summary": "(complicated!)",
             "row": 0,
             "col": 1,
             "sizeX": 1,
@@ -1423,7 +2253,7 @@
             "configurable": true,
             "deletable": true,
             "form_model": {
-              "pre_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  var new_obj = { inputs: [] };\n  new_obj.name = template.element.short_name;\n  new_obj.lock_to_nodes = template.element.form_model.lock_to_nodes;\n  new_obj.analytic_type = template.element.form_model.analytic_type;\n  new_obj.dependencies = a2_optional_array_from_csv(template.element.form_model.dependencies);\n  new_obj.analytic_technology_name_or_id = template.element.form_model.analytic_technology_name_or_id;\n  new_obj.library_names_or_ids = template.element.form_model.library_names_or_ids;\n  new_obj.node_list_rules = a2_optional_array_from_csv(template.element.form_model.node_list_rules);\n  new_obj.config = {};\n  //TODO spark/python config\n  curr_obj.jobs.push(new_obj);\n  eturn new_obj;\n}",
+              "pre_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  var new_obj = { inputs: [] };\n  new_obj.name = template.element.short_name;\n  new_obj.lock_to_nodes = template.element.form_model.lock_to_nodes;\n  new_obj.analytic_type = template.element.form_model.analytic_type;\n  new_obj.dependencies = a2_optional_array_from_csv(template.element.form_model.dependencies);\n  new_obj.analytic_technology_name_or_id = template.element.form_model.analytic_technology_name_or_id;\n  new_obj.library_names_or_ids = template.element.form_model.library_names_or_ids;\n  new_obj.node_list_rules = a2_optional_array_from_csv(template.element.form_model.node_list_rules);\n  new_obj.config = {};\n  \n  var config = new_obj.config;\n    \n  config.cluster_mode = template.element.form_model.cluster_mode;\n  \n  config.language = template.element.form_model.language;\n  config.entry_point = template.element.form_model.entry_point;\n  config.script = template.element.form_model.script;\n\n  var spark_config = template.element.form_model.spark_config;\n  if (null != spark_config) {\n    config.spark_config = {};\n    for (var kv in spark_config) {\n      var el = spark_config[kv];\n      config.spark_config[el.key] = el.value;\n    }\n  }\n  var system_config = template.element.form_model.system_config;\n  if (null != system_config) {\n    config.system_config = {};\n    for (var kv in system_config) {\n      var el = system_config[kv];\n      config.system_config[el.key] = el.value;\n    }\n  }\n  if (template.element.form_model.job_config) config.job_config = JSON.parse(template.element.form_model.job_config);\n  config.include_job_config_in_spark_config = template.element.form_model.include_job_config_in_spark_config;\n  \n  config.uploaded_files = template.element.form_model.uploaded_files;\n  config.uploaded_lang_files = template.element.form_model.uploaded_lang_files;\n  config.external_jars = template.element.form_model.external_jars;\n  config.external_files = template.element.form_model.external_files;\n  config.external_lang_files = template.element.form_model.external_lang_files;\n\n  curr_obj.jobs.push(new_obj);\n  return new_obj;\n}",
               "post_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
             },
             "template": {

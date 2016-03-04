@@ -19,15 +19,15 @@ package com.ikanow.aleph2.analytics.spark.utils;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.URL;
+import java.io.InputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import org.apache.commons.io.Charsets;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.spark.api.java.JavaSparkContext;
 
-import com.google.common.io.Resources;
 import com.ikanow.aleph2.analytics.spark.services.SparkPyWrapperService;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 
@@ -49,13 +49,12 @@ public class SparkPyTechnologyUtils {
 		final String tmp_dir = System.getProperty("java.io.tmpdir");
 		final String filename = tmp_dir + "/aleph2_driver_py_" + signature + ".zip";
 		
-		final URL url = Resources.getResource("aleph2_driver.py");
-		final String text = Resources.toString(url, Charsets.UTF_8);		
+		final InputStream io_stream = Thread.currentThread().getContextClassLoader().getResourceAsStream("aleph2_driver.py");
 		final FileOutputStream fout = new FileOutputStream(filename);
 		final ZipOutputStream zout = new ZipOutputStream(fout);
 		final ZipEntry ze= new ZipEntry("aleph2_driver.py");
 		zout.putNextEntry(ze);
-		zout.write(text.getBytes());
+		zout.write(IOUtils.toString(io_stream).getBytes());
 		zout.closeEntry();
 		zout.close();
 		
@@ -72,7 +71,8 @@ public class SparkPyTechnologyUtils {
 		final String tmp_dir = System.getProperty("java.io.tmpdir");
 		final String filename = tmp_dir + "/user_py_script" + signature + ".py";
 		
-		final String script = script_or_resource.<String>either(l -> l, fj.data.Java8.Function_F(Lambdas.wrap_u(r -> Resources.toString(Resources.getResource(r), Charsets.UTF_8))));
+		final String script = script_or_resource.<String>either(l -> l, 
+				fj.data.Java8.Function_F(Lambdas.wrap_u(r -> IOUtils.toString( Thread.currentThread().getContextClassLoader().getResourceAsStream(r), Charsets.UTF_8))));
 		
 		FileUtils.writeStringToFile(new File(filename), script);
 		
