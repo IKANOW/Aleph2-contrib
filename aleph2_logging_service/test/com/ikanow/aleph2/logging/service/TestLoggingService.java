@@ -33,10 +33,10 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchInd
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.LoggingUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.logging.data_model.LoggingServiceConfigBean;
 import com.ikanow.aleph2.logging.module.LoggingServiceModule;
-import com.ikanow.aleph2.logging.utils.LoggingUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
@@ -98,9 +98,9 @@ public class TestLoggingService {
 		final String subsystem_name = "logging_test1";
 		final long num_messages_to_log = 50;
 		final DataBucketBean test_bucket = getTestBucket("test1", Level.ALL); 
-		final IBucketLogger user_logger = logging_service.getLogger(test_bucket);
-		final IBucketLogger system_logger = logging_service.getSystemLogger(test_bucket);
-		final IBucketLogger external_logger = logging_service.getExternalLogger(subsystem_name);
+		final IBucketLogger user_logger = logging_service.getLogger(test_bucket).get();
+		final IBucketLogger system_logger = logging_service.getSystemLogger(test_bucket).get();
+		final IBucketLogger external_logger = logging_service.getExternalLogger(subsystem_name).get();
 		//log a few messages
 		for ( int i = 0; i < num_messages_to_log; i++ ) {
 			user_logger.log(Level.ERROR, ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
@@ -129,9 +129,9 @@ public class TestLoggingService {
 		final long num_messages_to_log_each_type = 5;
 		final List<Level> levels = Arrays.asList(Level.DEBUG, Level.INFO, Level.ERROR);
 		final DataBucketBean test_bucket = getTestBucket("test2", Level.ERROR); 
-		final IBucketLogger user_logger = logging_service.getLogger(test_bucket);
-		final IBucketLogger system_logger = logging_service.getSystemLogger(test_bucket);
-		final IBucketLogger external_logger = logging_service.getExternalLogger(subsystem_name);
+		final IBucketLogger user_logger = logging_service.getLogger(test_bucket).get();
+		final IBucketLogger system_logger = logging_service.getSystemLogger(test_bucket).get();
+		final IBucketLogger external_logger = logging_service.getExternalLogger(subsystem_name).get();
 		//log a few messages
 		for ( int i = 0; i < num_messages_to_log_each_type; i++ ) {
 			for ( Level level : levels) {
@@ -156,44 +156,48 @@ public class TestLoggingService {
 		logging_crud.deleteDatastore().get();
 	}
 	
-//	@Test
-//	public void testLogExternal() throws InterruptedException, ExecutionException {
-//		final String external_service_name = "external_1";
-//		final long num_messages_to_log = 50;
-//		final DataBucketBean test_bucket = getExternalBucket(external_service_name); 
-//		//log a few messages
-//		for ( int i = 0; i < num_messages_to_log; i++ ) {
-//			logging_service.log(external_service_name, "test_message " + i).get();
-//		}
-//		
-//		//check its in ES, wait 10s max for the index to refresh
-//		final DataBucketBean logging_test_bucket = LoggingService.convertBucketToLoggingBucket(test_bucket);
-//		final IDataWriteService<BasicMessageBean> logging_crud = search_index_service.getDataService().get().getWritableDataService(BasicMessageBean.class, logging_test_bucket, Optional.empty(), Optional.empty()).get();
-//		waitForResults(logging_crud, 10);
-//		assertEquals(num_messages_to_log, logging_crud.countObjects().get().longValue());
-//
-//		//cleanup
-//		logging_crud.deleteDatastore().get();
-//	}
-//	
-//	@Test
-//	public void testLogSystem() throws InterruptedException, ExecutionException {
-//		final long num_messages_to_log = 50;
-//		final DataBucketBean test_bucket = getSystemBucket("TODO"); 
-//		//log a few messages
-//		for ( int i = 0; i < num_messages_to_log; i++ ) {
-//			logging_service.log("test_message " + i).get();
-//		}
-//		
-//		//check its in ES, wait 10s max for the index to refresh
-//		final DataBucketBean logging_test_bucket = LoggingService.convertBucketToLoggingBucket(test_bucket);
-//		final IDataWriteService<BasicMessageBean> logging_crud = search_index_service.getDataService().get().getWritableDataService(BasicMessageBean.class, logging_test_bucket, Optional.empty(), Optional.empty()).get();
-//		waitForResults(logging_crud, 10);
-//		assertEquals(num_messages_to_log, logging_crud.countObjects().get().longValue());
-//
-//		//cleanup
-//		logging_crud.deleteDatastore().get();
-//	}
+	@Test
+	public void testLogEmptyManagement() throws InterruptedException, ExecutionException {
+		//if no logging schema is supplied, falls back to defaults in config file (if any)
+		//config file is set to:
+		//SYSTEM: DEBUG
+		//USER: ERROR
+		//therefore we should see 
+		//5 messages of each type to make it through via the system calls (15)
+		//5 messages of DEBUG making it through via user calls (5)
+		//5 messages of each type to make it through via the external calls (15)
+		final String subsystem_name = "logging_test3";
+		final long num_messages_to_log_each_type = 5;
+		final List<Level> levels = Arrays.asList(Level.DEBUG, Level.INFO, Level.ERROR);
+		final DataBucketBean test_bucket = getEmptyTestBucket("test3"); 
+		final IBucketLogger user_logger = logging_service.getLogger(test_bucket).get();
+		final IBucketLogger system_logger = logging_service.getSystemLogger(test_bucket).get();
+		final IBucketLogger external_logger = logging_service.getExternalLogger(subsystem_name).get();
+		//log a few messages
+		for ( int i = 0; i < num_messages_to_log_each_type; i++ ) {
+			for ( Level level : levels) {
+				user_logger.log(level, ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
+				system_logger.log(level, ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
+				external_logger.log(level, ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
+			}
+		}
+		
+		//check its in ES, wait 10s max for the index to refresh
+		//USER + SYSTEM
+		final DataBucketBean logging_test_bucket = LoggingUtils.convertBucketToLoggingBucket(test_bucket);
+		final IDataWriteService<BasicMessageBean> logging_crud = search_index_service.getDataService().get().getWritableDataService(BasicMessageBean.class, logging_test_bucket, Optional.empty(), Optional.empty()).get();
+		waitForResults(logging_crud, 10);
+		assertEquals(20, logging_crud.countObjects().get().longValue()); //should only have logged ERROR messages
+
+		//EXTERNAL
+		final DataBucketBean logging_external_test_bucket = LoggingUtils.convertBucketToLoggingBucket(BeanTemplateUtils.clone(test_bucket).with(DataBucketBean::full_name, "/external/"+ subsystem_name+"/").done());
+		final IDataWriteService<BasicMessageBean> logging_crud_external = search_index_service.getDataService().get().getWritableDataService(BasicMessageBean.class, logging_external_test_bucket, Optional.empty(), Optional.empty()).get();
+		waitForResults(logging_crud_external, 10);
+		assertEquals(15, logging_crud_external.countObjects().get().longValue());
+		
+		//cleanup
+		logging_crud.deleteDatastore().get();
+	}
 	
 	/**
 	 * Waits for the crud service count objects to return some amount of objects w/in the given
@@ -232,26 +236,14 @@ public class TestLoggingService {
 				.done().get();
 	}
 	
-//	private DataBucketBean getSystemBucket(final String technology_name) {
-//		return BeanTemplateUtils.build(DataBucketBean.class)
-//				.with(DataBucketBean::full_name, "/system/" + technology_name + "/")
-//				.with(DataBucketBean::data_schema, BeanTemplateUtils.build(DataSchemaBean.class)
-//						.with(DataSchemaBean::search_index_schema, BeanTemplateUtils.build(SearchIndexSchemaBean.class)
-//								.with(SearchIndexSchemaBean::enabled, true)
-//								.done().get())
-//						.done().get())
-//				.done().get();
-//	}
-//	
-//	private DataBucketBean getExternalBucket(final String technology_name) {
-//		return BeanTemplateUtils.build(DataBucketBean.class)
-//				.with(DataBucketBean::full_name, "/external/" + technology_name + "/")
-//				.with(DataBucketBean::data_schema, BeanTemplateUtils.build(DataSchemaBean.class)
-//						.with(DataSchemaBean::search_index_schema, BeanTemplateUtils.build(SearchIndexSchemaBean.class)
-//								.with(SearchIndexSchemaBean::enabled, true)
-//								.done().get())
-//						.done().get())
-//				.done().get();
-//	}
-
+	private DataBucketBean getEmptyTestBucket(final String name) {
+		return BeanTemplateUtils.build(DataBucketBean.class)
+				.with(DataBucketBean::full_name, "/test/logtest/" + name + "/")
+				.with(DataBucketBean::data_schema, BeanTemplateUtils.build(DataSchemaBean.class)
+						.with(DataSchemaBean::search_index_schema, BeanTemplateUtils.build(SearchIndexSchemaBean.class)
+								.with(SearchIndexSchemaBean::enabled, true)
+								.done().get())
+						.done().get())					
+				.done().get();
+	}
 }

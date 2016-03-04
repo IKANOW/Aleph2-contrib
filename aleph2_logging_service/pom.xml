@@ -1,8 +1,8 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <groupId>aleph2_logging_service</groupId>
+  <groupId>com.ikanow.aleph2</groupId>
+  <version>${aleph2.version}</version>
   <artifactId>aleph2_logging_service</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
   <properties>
 	<aleph2.version>0.0.1-SNAPSHOT</aleph2.version>
 	<aleph2.scope>compile</aleph2.scope>
@@ -36,6 +36,12 @@
   	<dependency>
   		<groupId>com.ikanow.aleph2</groupId>
   		<artifactId>aleph2_storage_service_hdfs</artifactId>
+  		<version>${aleph2.version}</version>
+		<scope>${aleph2.scope}</scope>  		  		
+  	</dependency>
+  	<dependency>
+  		<groupId>com.ikanow.aleph2</groupId>
+  		<artifactId>aleph2_management_db_service</artifactId>
   		<version>${aleph2.version}</version>
 		<scope>${aleph2.scope}</scope>  		  		
   	</dependency>
