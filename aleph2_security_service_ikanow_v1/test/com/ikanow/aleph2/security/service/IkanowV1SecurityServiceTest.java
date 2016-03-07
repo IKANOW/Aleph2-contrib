@@ -209,7 +209,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		ProfilingUtility.timeStopAndLog("TU-permisssion0");
 		for (int i = 0; i < 10; i++) {
 			ProfilingUtility.timeStart("TU-permisssion"+(i+1));
-			assertEquals(true,securityService.isUserPermitted(testUserId,regularUserCommunityPermission));			
+			assertEquals(true,securityService.isUserPermitted(regularUserId,regularUserCommunityPermission));			
 			ProfilingUtility.timeStopAndLog("TU-permisssion"+(i+1));
 			if(i==5){
 				((IkanowV1SecurityService)securityService).invalidateAuthenticationCache(Arrays.asList(regularUserId));	
