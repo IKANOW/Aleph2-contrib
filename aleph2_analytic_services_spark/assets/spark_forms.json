@@ -1,0 +1,304 @@
+[
+  {
+    "display_name": "Spark Python Job",
+    "form_info": "Runs a python job under the pyspark framework",
+    "expandable": true,
+    "child_filters": [
+      "analytic_input",
+      "analytic_output"
+    ],
+    "key": "analytic_job",
+    "categories": [
+      "Spark Processing"
+    ],
+    "filters": [
+      "Bucket/**"
+    ],
+    "schema": [
+      {
+        "templateOptions": {
+          "required": true,
+          "pattern": "[a-zA-Z0-9_]+",
+          "label": "Unique Job Name",
+          "placeholder": "A Short Name For This Job (Alphanumeric/_ only, no spaces - used for dependencies etc)"
+        },
+        "key": "_short_name",
+        "type": "horizontalInput"
+      },
+      {
+        "templateOptions": {
+          "required": false,
+          "label": "Dependencies",
+          "placeholder": "A comma-separated list of dependencies (other job names) for this job"
+        },
+        "key": "dependencies",
+        "type": "horizontalInput"
+      },
+      {
+        "template": "<hr/>"
+      },
+      {
+        "key": "script",
+        "type": "code_input",
+        "templateOptions": {
+          "codemirror": {
+            "lineNumbers": true,
+            "smartIndent": true,
+            "mode": "python"
+          },
+          "label": "Code Editor",
+          "required": false
+        }
+      },
+      {
+        "type": "multiInput",
+        "templateOptions": {
+          "inputOptions": {
+            "type": "input",
+            "templateOptions": {
+              "placeholder": "Add zip or egg files to the python path from the shared library"
+            }
+          },
+          "label": "Python libraries"
+        },
+        "key": "uploaded_lang_files"
+      },
+      {
+        "type": "multiInput",
+        "templateOptions": {
+          "inputOptions": {
+            "type": "input",
+            "templateOptions": {
+              "placeholder": "Add jar files to the python path from the shared library"
+            }
+          },
+          "label": "JAR libraries"
+        },
+        "key": "library_names_or_ids"
+      },
+      {
+        "type": "multiInput",
+        "templateOptions": {
+          "inputOptions": {
+            "type": "input",
+            "templateOptions": {
+              "placeholder": "Provide the python script with miscellaneous files from the shared library"
+            }
+          },
+          "label": "Misc files"
+        },
+        "key": "uploaded_files"
+      },
+      {
+        "template": "<hr/>"
+      },
+      {
+        "templateOptions": {
+          "label": "Show advanced options",
+          "placeholder": ""
+        },
+        "type": "checkbox",
+        "key": "advanced_options"
+      },
+      {
+        "hideExpression": "!model.advanced_options",
+        "fieldGroup": [
+          {
+            "key": "job_config",
+            "type": "code_input",
+            "templateOptions": {
+              "codemirror": {
+                "lineNumbers": true,
+                "smartIndent": true,
+                "mode": "javascript"
+              },
+              "label": "Misc Json Config"
+            }
+          },
+          {
+            "templateOptions": {
+              "label": "Insert Job Config into the Spark Config options",
+              "placeholder": "If true then can access this JSON as a string in the pure Spark Conf object"
+            },
+            "type": "checkbox",
+            "key": "include_job_config_in_spark_config"
+          },
+          {
+            "templateOptions": {
+              "required": false,
+              "label": "Analytic Technology Override",
+              "placeholder": "To use a non-standard JAR for this job (eg for testing)"
+            },
+            "key": "analytic_technology_name_or_id",
+            "type": "horizontalInput"
+          },
+          {
+            "templateOptions": {
+              "required": false,
+              "label": "Node List Rules",
+              "placeholder": "A list of (short) hostnames on which this job can run"
+            },
+            "key": "node_list_rules",
+            "type": "horizontalInput"
+          },
+          {
+            "className": "section-label",
+            "template": "<hr /><div><strong>Spark Parameters</strong></div>"
+          },
+          {
+            "templateOptions": {
+              "btnText": "Add",
+              "fields": [
+                {
+                  "className": "row",
+                  "fieldGroup": [
+                    {
+                      "templateOptions": {
+                        "required": true,
+                        "label": "Parameter Key",
+                        "placeholder": "Must start with \"spark.\" eg \"spark.config.param\""
+                      },
+                      "key": "key",
+                      "type": "input",
+                      "className": "col-xs-6"
+                    },
+                    {
+                      "templateOptions": {
+                        "required": true,
+                        "label": "Parameter Value",
+                        "placeholder": "The value"
+                      },
+                      "key": "value",
+                      "type": "input",
+                      "className": "col-xs-6"
+                    }
+                  ]
+                }
+              ]
+            },
+            "type": "repeatSection",
+            "key": "spark_config"
+          },
+          {
+            "className": "section-label",
+            "template": "<hr /><div><strong>Spark Executor Command Line Options</strong></div>"
+          },
+          {
+            "templateOptions": {
+              "btnText": "Add",
+              "fields": [
+                {
+                  "className": "row",
+                  "fieldGroup": [
+                    {
+                      "templateOptions": {
+                        "required": true,
+                        "label": "Command line switch",
+                        "placeholder": "eg --conf"
+                      },
+                      "key": "key",
+                      "type": "input",
+                      "className": "col-xs-6"
+                    },
+                    {
+                      "templateOptions": {
+                        "required": true,
+                        "label": "Command line value",
+                        "placeholder": "The value associated with the switch"
+                      },
+                      "key": "value",
+                      "type": "input",
+                      "className": "col-xs-6"
+                    }
+                  ]
+                }
+              ]
+            },
+            "type": "repeatSection",
+            "key": "system_config"
+          }
+        ]
+      },
+      {
+        "template": "<hr/>"
+      },
+      {
+        "templateOptions": {
+          "label": "Additional library options",
+          "placeholder": "Show more file/lib related options"
+        },
+        "type": "checkbox",
+        "key": "more_files"
+      },
+      {
+        "hideExpression": "!model.more_files",
+        "fieldGroup": [
+          {
+            "templateOptions": {
+              "required": false,
+              "label": "External python executor",
+              "placeholder": "If the job that runs main lives on a local file accessible from all data import manager nodes, specify that here"
+            },
+            "key": "entry_point",
+            "type": "horizontalInput"
+          },
+          {
+            "type": "multiInput",
+            "templateOptions": {
+              "inputOptions": {
+                "type": "input",
+                "templateOptions": {
+                  "placeholder": "Add other JARs from the local file system"
+                }
+              },
+              "label": "External JAR libraries"
+            },
+            "key": "external_jars"
+          },
+          {
+            "type": "multiInput",
+            "templateOptions": {
+              "inputOptions": {
+                "type": "input",
+                "templateOptions": {
+                  "placeholder": "Add zip or egg files to the python path from the local file system"
+                }
+              },
+              "label": "External Python libraries"
+            },
+            "key": "external_lang_files"
+          },
+          {
+            "type": "multiInput",
+            "templateOptions": {
+              "inputOptions": {
+                "type": "input",
+                "templateOptions": {
+                  "placeholder": "Provide the python script with miscellaneous files from the local file system"
+                }
+              },
+              "label": "External misc files"
+            },
+            "key": "external_files"
+          }
+        ]
+      }
+    ],
+    "default_model": {
+      "analytic_type": "batch",
+      "lock_to_nodes": true,
+      "analytic_technology_name_or_id": "/app/aleph2/library/spark_technology.jar",
+      "job_config": "{\n}",
+      "language": "python",
+      "cluster_mode": "yarn-cluster",
+      "include_job_config_in_spark_config": true,
+      "script": "import sys\nfrom pyspark import SparkContext\nfrom pyspark import SparkConf\nfrom aleph2_driver import Aleph2Driver\n\nif __name__ == \"__main__\":\n  sc = SparkContext(appName=\"JOB_NAME\")\n  aleph2 = Aleph2Driver(sc, sys.argv[1])\n  #EXAMPLES:\n  #names = aleph2.getRddInputNames()\n  #rdd1 = aleph2.getAllRddInputs(sc)\n  #rdd2 = aleph2.getRddInput(sc, \"NAME\")\n  #count = aleph2.emitRdd(rdd1)\n  #count = aleph2.externalEmitRdd(rdd1)\n  "
+    },
+    "building_function": {
+      "$fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  var new_obj = { inputs: [] };\n  new_obj.name = template.element.short_name;\n  new_obj.lock_to_nodes = template.element.form_model.lock_to_nodes;\n  new_obj.analytic_type = template.element.form_model.analytic_type;\n  new_obj.dependencies = a2_optional_array_from_csv(template.element.form_model.dependencies);\n  new_obj.analytic_technology_name_or_id = template.element.form_model.analytic_technology_name_or_id;\n  new_obj.library_names_or_ids = [];\n  if (null != template.element.form_model.library_names_or_ids) {\n    for (var i in template.element.form_model.library_names_or_ids) \n      new_obj.library_names_or_ids.push(template.element.form_model.library_names_or_ids[i]);\n  }\n  new_obj.node_list_rules = a2_optional_array_from_csv(template.element.form_model.node_list_rules);\n  new_obj.config = {};\n  \n  var config = new_obj.config;\n    \n  config.cluster_mode = template.element.form_model.cluster_mode;\n  \n  config.language = template.element.form_model.language;\n  config.entry_point = template.element.form_model.entry_point;\n  config.script = template.element.form_model.script;\n\n  var spark_config = template.element.form_model.spark_config;\n  if (null != spark_config) {\n    config.spark_config = {};\n    for (var kv in spark_config) {\n      var el = spark_config[kv];\n      config.spark_config[el.key] = el.value;\n    }\n  }\n  var system_config = template.element.form_model.system_config;\n  if (null != system_config) {\n    config.system_config = {};\n    for (var kv in system_config) {\n      var el = system_config[kv];\n      config.system_config[el.key] = el.value;\n    }\n  }\n  if (template.element.form_model.job_config) config.job_config = JSON.parse(template.element.form_model.job_config);\n  config.include_job_config_in_spark_config = template.element.form_model.include_job_config_in_spark_config;\n  \n  config.uploaded_files = template.element.form_model.uploaded_files;\n  if (null != config.uploaded_files) {\n    if (null == new_obj.library_names_or_ids) new_obj.library_names_or_ids = [];\n    for (var x in config.uploaded_files) new_obj.library_names_or_ids.push(config.uploaded_files[x]);\n  }\n  config.uploaded_lang_files = template.element.form_model.uploaded_lang_files;\n  if (null != config.uploaded_lang_files) {\n    if (null == new_obj.library_names_or_ids) new_obj.library_names_or_ids = [];\n    for (var x in config.uploaded_lang_files) new_obj.library_names_or_ids.push(config.uploaded_lang_files[x]);\n  }\n  config.external_jars = template.element.form_model.external_jars;\n  config.external_files = template.element.form_model.external_files;\n  config.external_lang_files = template.element.form_model.external_lang_files;\n\n  curr_obj.jobs.push(new_obj);\n  return new_obj;\n}"
+    },
+    "post_building_function": {
+      "$fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+    }
+  }
+]

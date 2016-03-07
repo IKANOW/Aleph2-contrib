@@ -54,6 +54,7 @@ import org.apache.spark.sql.SQLContext;
 import scala.Tuple2;
 import scala.Tuple3;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -104,21 +105,28 @@ public class SparkTechnologyUtils {
 	 * @param context_signature
 	 * @param main_jar
 	 * @param other_jars
-	 * @param job_options
-	 * @param spark_options
+	 * @param spark_job_options
+	 * @param spark_system_options
 	 */
 	public static ProcessBuilder createSparkJob(
 			final String job_name,
 			final String spark_home,
 			final String yarn_home,
 			final String spark_master,
-			final String main_clazz,
+			final Optional<String> maybe_main_clazz,
 			final String context_signature,
 			final Optional<String> test_signature,
-			final String main_jar,
+			final String main_jar_or_py,
 			final Collection<String> other_jars,
-			final Map<String, String> job_options,
-			final Map<String, String> spark_options
+			final Collection<String> other_files,
+			final Collection<String> other_lang_files,
+			final List<String> external_jars,
+			final List<String> external_files,
+			final List<String> external_lang_files,
+			final Optional<Map<String, Object>> spark_generic_options,
+			final Map<String, String> spark_job_options,
+			final Map<String, String> spark_system_options
+			
 			)
 	{
 		//https://spark.apache.org/docs/1.2.0/submitting-applications.html
@@ -128,12 +136,18 @@ public class SparkTechnologyUtils {
 				.add(SBT_SUBMIT_BINARY)
 				.add("--name")
 				.add(job_name)
-				.add("--class")
-				.add(main_clazz)
+				.addAll(maybe_main_clazz.map(main_clazz -> Arrays.asList("--class", main_clazz)).orElse(Collections.emptyList()))
 				.add("--master")
 				.add(spark_master)
 				.add("--jars")
-				.add(other_jars.stream().collect(Collectors.joining(",")))
+				.add(Stream.concat(other_jars.stream(), external_jars.stream()).collect(Collectors.joining(",")))
+				.addAll( Optional.of(Stream.concat( other_files.stream(), external_files.stream())
+											.collect(Collectors.joining(","))).filter(s -> !s.isEmpty()).map(s -> Arrays.asList("--files", s))
+								.orElse(Collections.emptyList()))									
+				//TODO (ALEPH-63): handle R in the example below
+				.addAll( Optional.of(Stream.concat( other_lang_files.stream(), external_lang_files.stream())
+											.collect(Collectors.joining(","))).filter(s -> !s.isEmpty()).map(s -> Arrays.asList("--py-files", s))
+								.orElse(Collections.emptyList()))									
 				.addAll(Optional.ofNullable(System.getProperty("hdp.version")).map(hdp_version -> { // Set HDP version from whatever I'm set to
 					return (List<String>)ImmutableList.<String>of(
 							"--conf", "spark.executor.extraJavaOptions=-Dhdp.version=" + hdp_version,
@@ -143,14 +157,20 @@ public class SparkTechnologyUtils {
 					})
 					.orElse(Collections.emptyList())
 				)
-				.add("--conf").add("spark.executor.extraJavaOptions=-Dhdp.version=" + System.getProperty("hdp.version"))
-				.addAll(job_options.isEmpty()
+				.addAll(spark_job_options.isEmpty()
 						? Collections.emptyList()
 						: 							
-						job_options.entrySet().stream().flatMap(kv -> Stream.of("--conf", kv.getKey() + "=" + kv.getValue())).collect(Collectors.toList())
+						spark_job_options.entrySet().stream().flatMap(kv -> Stream.of("--conf", kv.getKey() + "=" + kv.getValue())).collect(Collectors.toList())
 					)
-				.addAll(spark_options.entrySet().stream().flatMap(kv -> Stream.of(kv.getKey(), kv.getValue())).collect(Collectors.toList()))
-				.add(main_jar)				
+				.addAll(spark_system_options.entrySet().stream().flatMap(kv -> Stream.of(kv.getKey(), kv.getValue())).collect(Collectors.toList()))
+				.addAll(
+					spark_generic_options.map(opts -> 
+							Arrays.asList("--conf", 
+									SparkTopologyConfigBean.JOB_CONFIG_KEY + "=" + BeanTemplateUtils.configureMapper(Optional.empty()).convertValue(opts, JsonNode.class))
+						)
+						.orElse(Collections.emptyList())
+					)
+				.add(main_jar_or_py)				
 				.add(context_signature)
 				.addAll(test_signature.map(ts -> Arrays.asList(ts)).orElse(Collections.emptyList()))
 				.build()
@@ -209,7 +229,7 @@ public class SparkTechnologyUtils {
 	    		
 	    		return f_p_fs._2();
 	    	}))
-	    	.map(p -> "hdfs://" + p.toString())
+	    	.map(p -> transformFromPath(p.toString()))
 	    	;
 	    
 	    // User libraries: this is slightly easier since one of the 2 keys
@@ -222,10 +242,18 @@ public class SparkTechnologyUtils {
 			.map(kv -> kv.getKey())
 	    	.filter(jar -> !jar.equals(main_jar_path)) // (this is the uploaded case, eg "/app/aleph2/library/blah.jar")
 			.filter(path -> path.startsWith(root_path))
-			.map(s -> "hdfs://" + s)
+			.map(s -> transformFromPath(s))
 			;	    
 			
 		return Stream.concat(context_stream, lib_stream).collect(Collectors.toList());
+	}
+	
+	/** Just provides a single mechanism for transforming from a key to an HDFS path, so it can be used centrally 
+	 * @param path
+	 * @return
+	 */
+	public static String transformFromPath(final String path) {
+		return "hdfs://" + path;
 	}
 	
 	/** Takes the command line args and builds the Aleph2 objects required to set up Spark within Aleph2 
@@ -314,8 +342,6 @@ public class SparkTechnologyUtils {
 		else return Tuples._3T(f_p._1(), f_p._2(), fs);
 	}
 	
-	//TODO: get processing test spec from args
-	
 	/** Util function to tidy up input bean
 	 * @param in
 	 * @param maybe_test_spec
@@ -383,8 +409,7 @@ public class SparkTechnologyUtils {
 					_logger.info(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));
 	
 					//DEBUG
-					//System.out.println(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));
-	
+					//System.out.println(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));	
 					
 				    final Job input_job = Job.getInstance(config);
 				    input_job.setInputFormatClass(BeFileInputFormat_Pure.class);				
@@ -452,8 +477,6 @@ public class SparkTechnologyUtils {
 
 		return mutable_builder;
 	}
-	
-	//TODO: have a convert to SQL
 	
 	/** Builds a multimap of named inputs
 	 * @param context the analytic context retrieved from the 

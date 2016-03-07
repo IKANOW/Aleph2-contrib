@@ -7,7 +7,7 @@
         <aleph2.version>0.0.1-SNAPSHOT</aleph2.version>
         <aleph2.scope>provided</aleph2.scope>
         <aleph2.hadoop>2.7.1</aleph2.hadoop>
-        <aleph2.spark>1.3.1</aleph2.spark>
+        <aleph2.spark>1.5.2</aleph2.spark>
     </properties>
 
     <build>
@@ -138,7 +138,7 @@
             		<artifactId>scala-library</artifactId>
             		<groupId>org.scala-lang</groupId>
             	</exclusion>
-            </exclusions>
+            </exclusions>        
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
@@ -185,6 +185,13 @@
             		<groupId>org.scala-lang</groupId>
             	</exclusion>
             </exclusions>
+        </dependency>
+        <!-- Don't want to include this since can either run in 2.10 or 2.11 depending on context: -->
+        <dependency>
+       		<artifactId>scala-library</artifactId>
+       		<groupId>org.scala-lang</groupId>
+			<version>2.11.7</version>
+       		<scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>com.ikanow.aleph2</groupId>
