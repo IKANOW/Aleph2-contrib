@@ -21,6 +21,7 @@
         <module>aleph2_storm_dependencies</module>
         <module>aleph2_analytic_services_storm</module>
         <module>aleph2_analytic_services_hadoop</module>
+        <module>aleph2_analytic_services_spark</module>
         <module>aleph2_document_service_v1</module>
     </modules>
 
