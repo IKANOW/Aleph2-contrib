@@ -140,6 +140,12 @@
   		<version>${aleph2.version}</version>
 		<scope>${aleph2.scope}</scope>  		
 	</dependency>  	
+	<dependency>
+		<groupId>com.ikanow.aleph2</groupId>
+		<artifactId>aleph2_server_only_dependencies</artifactId>
+		<version>${aleph2.version}</version>
+		<scope>${aleph2.scope}</scope>  		
+	</dependency>
   	<dependency>
   		<groupId>com.ikanow.aleph2</groupId>
   		<artifactId>aleph2_analytics_context_library</artifactId>
