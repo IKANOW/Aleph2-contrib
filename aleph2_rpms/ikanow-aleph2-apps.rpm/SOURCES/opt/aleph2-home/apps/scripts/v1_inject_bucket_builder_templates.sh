@@ -28,6 +28,7 @@ mongo <<EOF
 //
 // Batch analytics templates
 
+//(CHANGE ID FOR EACH NEW ENGINE)
 var json = cat('/opt/aleph2-home/apps/templates/aleph2_bucket_builder/batch_analytics_templates.json');
 var id = ObjectId("52f43a111111111000000020");
 
@@ -58,8 +59,9 @@ if (!curr) db.share.save(share);
 //
 // Spark analytics templates
 
+//(CHANGE ID FOR EACH NEW ENGINE)
 var json = cat('/opt/aleph2-home/apps/templates/aleph2_bucket_builder/spark_forms.json');
-var id = ObjectId("52f43a111111111000000020");
+var id = ObjectId("52f43a111111111000000030");
 
 use social;
 var share={ 

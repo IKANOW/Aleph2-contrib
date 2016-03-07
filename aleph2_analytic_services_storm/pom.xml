@@ -160,13 +160,37 @@
 		</dependency>
 		<dependency>
 			<groupId>com.ikanow.aleph2</groupId>
+			<artifactId>aleph2_hadoop_dependencies</artifactId>
+			<version>${aleph2.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.ikanow.aleph2</groupId>
+			<artifactId>aleph2_server_only_dependencies</artifactId>
+			<version>${aleph2.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.ikanow.aleph2</groupId>
 			<artifactId>aleph2_management_db_service_mongodb</artifactId>
 			<version>${aleph2.version}</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>com.ikanow.aleph2</groupId>
+			<artifactId>aleph2_crud_service_mongodb</artifactId>
+			<version>${aleph2.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.ikanow.aleph2</groupId>
 			<artifactId>aleph2_search_index_service_elasticsearch</artifactId>
+			<version>${aleph2.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.ikanow.aleph2</groupId>
+			<artifactId>aleph2_crud_service_elasticsearch</artifactId>
 			<version>${aleph2.version}</version>
 			<scope>test</scope>
 		</dependency>
