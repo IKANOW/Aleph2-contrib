@@ -42,6 +42,9 @@ cp $HOME_DIR/Aleph2-examples/aleph2_script_harvester/target/*-shaded.jar $PLUGIN
 
 cp $HOME_DIR/Aleph2-examples/aleph2_storm_script_topo/target/*-shaded.jar $PLUGINS_DIR
 
+cp $HOME_DIR/Aleph2-contrib/aleph2_analytic_services_spark/target/*-shaded.jar $PLUGINS_DIR/spark_technology.jar
+cp $HOME_DIR/Aleph2-contrib/aleph2_analytic_services_spark/assets/spark_forms.json $A2BB_TEMPLATES/
+
 ###############################################
 #
 # Build the RPM
