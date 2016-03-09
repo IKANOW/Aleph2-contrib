@@ -82,6 +82,7 @@ import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher.HadoopAccessCon
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.spark.assets.BeFileInputFormat_Pure;
 import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
+import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean.SparkType;
 
 /** Utilities for building spark jobs
  * @author Alex
@@ -533,11 +534,17 @@ public class SparkTechnologyUtils {
 			}
 			else {
 				final SparkTopologyConfigBean config = BeanTemplateUtils.from(job.config(), SparkTopologyConfigBean.class).get();
-				if (null == config.entry_point())
-					mutable_errs.push(ErrorUtils.get(SparkErrorUtils.MISSING_PARAM, new_analytic_bucket.full_name(), job.name(), "config.entry_point"));
+				if (SparkType.jvm == Optional.ofNullable(config.language()).orElse(SparkType.jvm)) { // JVM validation
+					if (null == config.entry_point()) {
+						mutable_errs.push(ErrorUtils.get(SparkErrorUtils.MISSING_PARAM, new_analytic_bucket.full_name(), job.name(), "config.entry_point"));
+					}
+				}
+				else if (SparkType.python == Optional.ofNullable(config.language()).orElse(SparkType.jvm)) { // JVM validation
+					if ((null == config.entry_point()) && (null == config.script())) {
+						mutable_errs.push(ErrorUtils.get(SparkErrorUtils.MISSING_PARAM, new_analytic_bucket.full_name(), job.name(), "config.entry_point|config.script"));
+					}
+				}
 			}			
-			if (MasterEnrichmentType.batch != job.analytic_type())
-				mutable_errs.push(ErrorUtils.get(SparkErrorUtils.CURRENTLY_BATCH_ONLY, new_analytic_bucket.full_name(), job.name()));
 		});
 		
 		return ErrorUtils.buildMessage(mutable_errs.isEmpty(), SparkTechnologyUtils.class, "validateJobs", mutable_errs.stream().collect(Collectors.joining(";")));
