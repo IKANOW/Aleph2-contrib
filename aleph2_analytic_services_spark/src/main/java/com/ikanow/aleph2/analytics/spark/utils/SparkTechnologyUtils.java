@@ -68,7 +68,6 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
-import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean.MasterEnrichmentType;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -82,6 +81,7 @@ import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher.HadoopAccessCon
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.spark.assets.BeFileInputFormat_Pure;
 import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
+import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean.SparkType;
 
 /** Utilities for building spark jobs
  * @author Alex
@@ -118,6 +118,8 @@ public class SparkTechnologyUtils {
 			final Optional<String> test_signature,
 			final String main_jar_or_py,
 			final Collection<String> other_jars,
+			final Collection<String> other_files,
+			final Collection<String> other_lang_files,
 			final List<String> external_jars,
 			final List<String> external_files,
 			final List<String> external_lang_files,
@@ -129,8 +131,6 @@ public class SparkTechnologyUtils {
 	{
 		//https://spark.apache.org/docs/1.2.0/submitting-applications.html
 		
-		//TODO: python options (--pyfiles) + normal files (--files) .. integrated with the library path (ie don't put them in classpath, add them as file/pyfiles instead, possibly with rename...)
-		
 		final List<String> command_line =
 			ImmutableList.<String>builder()
 				.add(SBT_SUBMIT_BINARY)
@@ -140,11 +140,14 @@ public class SparkTechnologyUtils {
 				.add("--master")
 				.add(spark_master)
 				.add("--jars")
-				.add(Stream.concat(other_jars.stream(), external_jars.stream()).filter(j -> j.endsWith(".jar")).collect(Collectors.joining(",")))
-				.addAll(external_files.isEmpty() ? Collections.emptyList() : Arrays.asList("--files", external_files.stream().collect(Collectors.joining(","))))				
-				.addAll(external_lang_files.isEmpty() ? Collections.emptyList() : Arrays.asList("--py-files", external_lang_files.stream().collect(Collectors.joining(","))))				
-					//TODO create the aleph2 driver				
-					//^^^ TODO need to handle the other cases (R?)
+				.add(Stream.concat(other_jars.stream(), external_jars.stream()).collect(Collectors.joining(",")))
+				.addAll( Optional.of(Stream.concat( other_files.stream(), external_files.stream())
+											.collect(Collectors.joining(","))).filter(s -> !s.isEmpty()).map(s -> Arrays.asList("--files", s))
+								.orElse(Collections.emptyList()))									
+				//TODO (ALEPH-63): handle R in the example below
+				.addAll( Optional.of(Stream.concat( other_lang_files.stream(), external_lang_files.stream())
+											.collect(Collectors.joining(","))).filter(s -> !s.isEmpty()).map(s -> Arrays.asList("--py-files", s))
+								.orElse(Collections.emptyList()))									
 				.addAll(Optional.ofNullable(System.getProperty("hdp.version")).map(hdp_version -> { // Set HDP version from whatever I'm set to
 					return (List<String>)ImmutableList.<String>of(
 							"--conf", "spark.executor.extraJavaOptions=-Dhdp.version=" + hdp_version,
@@ -154,7 +157,6 @@ public class SparkTechnologyUtils {
 					})
 					.orElse(Collections.emptyList())
 				)
-				.add("--conf").add("spark.executor.extraJavaOptions=-Dhdp.version=" + System.getProperty("hdp.version"))
 				.addAll(spark_job_options.isEmpty()
 						? Collections.emptyList()
 						: 							
@@ -227,7 +229,7 @@ public class SparkTechnologyUtils {
 	    		
 	    		return f_p_fs._2();
 	    	}))
-	    	.map(p -> "hdfs://" + p.toString())
+	    	.map(p -> transformFromPath(p.toString()))
 	    	;
 	    
 	    // User libraries: this is slightly easier since one of the 2 keys
@@ -240,10 +242,18 @@ public class SparkTechnologyUtils {
 			.map(kv -> kv.getKey())
 	    	.filter(jar -> !jar.equals(main_jar_path)) // (this is the uploaded case, eg "/app/aleph2/library/blah.jar")
 			.filter(path -> path.startsWith(root_path))
-			.map(s -> "hdfs://" + s)
+			.map(s -> transformFromPath(s))
 			;	    
 			
 		return Stream.concat(context_stream, lib_stream).collect(Collectors.toList());
+	}
+	
+	/** Just provides a single mechanism for transforming from a key to an HDFS path, so it can be used centrally 
+	 * @param path
+	 * @return
+	 */
+	public static String transformFromPath(final String path) {
+		return "hdfs://" + path;
 	}
 	
 	/** Takes the command line args and builds the Aleph2 objects required to set up Spark within Aleph2 
@@ -523,11 +533,17 @@ public class SparkTechnologyUtils {
 			}
 			else {
 				final SparkTopologyConfigBean config = BeanTemplateUtils.from(job.config(), SparkTopologyConfigBean.class).get();
-				if (null == config.entry_point())
-					mutable_errs.push(ErrorUtils.get(SparkErrorUtils.MISSING_PARAM, new_analytic_bucket.full_name(), job.name(), "config.entry_point"));
+				if (SparkType.jvm == Optional.ofNullable(config.language()).orElse(SparkType.jvm)) { // JVM validation
+					if (null == config.entry_point()) {
+						mutable_errs.push(ErrorUtils.get(SparkErrorUtils.MISSING_PARAM, new_analytic_bucket.full_name(), job.name(), "config.entry_point"));
+					}
+				}
+				else if (SparkType.python == Optional.ofNullable(config.language()).orElse(SparkType.jvm)) { // JVM validation
+					if ((null == config.entry_point()) && (null == config.script())) {
+						mutable_errs.push(ErrorUtils.get(SparkErrorUtils.MISSING_PARAM, new_analytic_bucket.full_name(), job.name(), "config.entry_point|config.script"));
+					}
+				}
 			}			
-			if (MasterEnrichmentType.batch != job.analytic_type())
-				mutable_errs.push(ErrorUtils.get(SparkErrorUtils.CURRENTLY_BATCH_ONLY, new_analytic_bucket.full_name(), job.name()));
 		});
 		
 		return ErrorUtils.buildMessage(mutable_errs.isEmpty(), SparkTechnologyUtils.class, "validateJobs", mutable_errs.stream().collect(Collectors.joining(";")));

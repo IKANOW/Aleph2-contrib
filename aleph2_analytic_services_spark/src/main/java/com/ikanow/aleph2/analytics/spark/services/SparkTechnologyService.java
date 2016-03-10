@@ -17,14 +17,18 @@
 package com.ikanow.aleph2.analytics.spark.services;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.logging.log4j.Level;
@@ -38,6 +42,7 @@ import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.spark.data_model.GlobalSparkConfigBean;
 import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
 import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean.SparkType;
+import com.ikanow.aleph2.analytics.spark.utils.SparkPyTechnologyUtils;
 import com.ikanow.aleph2.analytics.spark.utils.SparkTechnologyUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyService;
@@ -61,6 +66,7 @@ import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 
+import fj.data.Either;
 import fj.data.Validation;
 
 /** Hadoop analytic technology module - provides the interface between Hadoop and Aleph2
@@ -96,7 +102,7 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 	 * @return
 	 */
 	public static List<Module> getExtraDependencyModules() {
-		//TODO: need to build global spark config from the config if in guice mode
+		//TODO (ALEPH-63): need to build global spark config from the config if in guice mode
 		return Collections.emptyList();
 		
 	}
@@ -269,65 +275,12 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 			)
 	{
 		try {
-			// Firstly, precalculate the inputs to ensure the right classes are copied across
-			final Configuration hadoop_config = HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties());			
-			SparkTechnologyUtils.buildAleph2Inputs(context, analytic_bucket, job_to_start, test_spec, hadoop_config, Collections.emptySet(), (input, input_job) -> {}); //(mutate the context)
-			
-			// Now do the spark stuff:
-			
 			final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
-			
-			_logger.log(DEBUG_LEVEL, "spark_home = " + _global_spark_config.get().spark_home());			
-			
-			final SparkTopologyConfigBean spark_job_config = BeanTemplateUtils.from(job_to_start.config(), SparkTopologyConfigBean.class).get();
-
-			_logger.log(DEBUG_LEVEL, "entry_point = " + spark_job_config.entry_point());			
-			
-			final String main_jar_or_script = Patterns.match(spark_job_config.language()).<String>andReturn()
-					.when(l -> l == SparkType.python, __ ->	spark_job_config.entry_point()) //TODO: handle script if populated, else allow external file
-					.when(l -> l == SparkType.r, __ ->	spark_job_config.entry_point())
-					.otherwise(__ ->					
-						Lambdas.get(() -> {
-							try {
-								return "hdfs:///" + context.getTechnologyConfig().path_name();
-							}
-							catch (Exception e) { // (service mode)
-								//TODO derive this from "this" using the core shared lib util
-								return "/opt/aleph2-home/lib/aleph2_spark_analytics_services.jar";						
-							}
-						}))
-						;
-
-			_logger.log(DEBUG_LEVEL, "main_jars = " + main_jar_or_script);
-			
-			final List<String> other_jars = SparkTechnologyUtils.getCachedJarList(analytic_bucket, main_jar_or_script, context);
-			
-			_logger.log(DEBUG_LEVEL, "other_jars = " + other_jars.stream().collect(Collectors.joining(";")));
-			
 			final String bucket_signature = BucketUtils.getUniqueSignature(analytic_bucket.full_name(), Optional.of(job_to_start.name()));
 			
-			//TODO create the zip file and pass that in if specified
-			
-			final ProcessBuilder pb =
-					SparkTechnologyUtils.createSparkJob(
-							bucket_signature,
-							_global_spark_config.get().spark_home(),
-							globals.local_yarn_config_dir(), 
-							spark_job_config.cluster_mode(),
-							Optional.ofNullable(spark_job_config.entry_point()).filter(__ -> SparkType.jvm == spark_job_config.language()), 
-								//^^^ TODO: all support built in?  
-							new String(Base64.getEncoder().encode(context.getAnalyticsContextSignature(Optional.of(analytic_bucket), Optional.empty()).getBytes())),
-							test_spec.map(ts -> new String(Base64.getEncoder().encode(BeanTemplateUtils.toJson(ts).toString().getBytes()))),
-							main_jar_or_script,  
-							other_jars, 
-							spark_job_config.external_jars(),
-							spark_job_config.external_files(),
-							spark_job_config.external_lang_files(),
-							Optional.ofNullable(spark_job_config.job_config()).filter(__ -> spark_job_config.include_job_config_in_spark_config()),
-							spark_job_config.spark_config().entrySet().stream().map(kv -> Tuples._2T(kv.getKey().replace(":", "."), kv.getValue())).collect(Collectors.toMap(t2 -> t2._1(), t2 -> t2._2())), 
-							spark_job_config.system_config()
-							);
 
+			final ProcessBuilder pb = serviceLevelProcessBuild(analytic_bucket, jobs, job_to_start, context, test_spec, globals, bucket_signature);
+			
 			DEBUG_LOG_FILE.map(x -> x + "/" + bucket_signature).ifPresent(name -> {
 				pb.inheritIO().redirectErrorStream(true).redirectOutput(new File(name));				
 			});
@@ -359,6 +312,106 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 		}
 	}
 
+	/** Separation of logic from startAnalyticJobOrTest to simplify testing
+	 * @param analytic_bucket
+	 * @param jobs
+	 * @param job_to_start
+	 * @param context
+	 * @param test_spec
+	 * @return
+	 * @throws IOException 
+	 * @throws ExecutionException 
+	 * @throws InterruptedException 
+	 * @throws IllegalArgumentException 
+	 */
+	public ProcessBuilder serviceLevelProcessBuild(
+			final DataBucketBean analytic_bucket,
+			final Collection<AnalyticThreadJobBean> jobs,
+			final AnalyticThreadJobBean job_to_start, IAnalyticsContext context,
+			final Optional<ProcessingTestSpecBean> test_spec,
+			final GlobalPropertiesBean globals,
+			final String bucket_signature
+			) throws IllegalArgumentException, InterruptedException, ExecutionException, IOException
+	{
+		// Firstly, precalculate the inputs to ensure the right classes are copied across
+		final Configuration hadoop_config = HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties());			
+		SparkTechnologyUtils.buildAleph2Inputs(context, analytic_bucket, job_to_start, test_spec, hadoop_config, Collections.emptySet(), (input, input_job) -> {}); //(mutate the context)
+		
+		// Now do the spark stuff:
+				
+		_logger.log(DEBUG_LEVEL, "spark_home = " + _global_spark_config.get().spark_home());			
+		
+		final SparkTopologyConfigBean spark_job_config = BeanTemplateUtils.from(job_to_start.config(), SparkTopologyConfigBean.class).get();
+
+		_logger.log(DEBUG_LEVEL, "entry_point = " + spark_job_config.entry_point());			
+		
+		final String main_jar_or_script = Patterns.match(spark_job_config.language()).<String>andReturn()
+				.when(l -> l == SparkType.python, Lambdas.wrap_u(__ ->	{
+					// 3 cases:
+					if (Optional.ofNullable(spark_job_config.entry_point()).filter(s -> !s.isEmpty()).isPresent()) { // 1) external override set 
+						return spark_job_config.entry_point();
+					}
+					else { // 2+3 internal
+						// 2) the internal method points to a python file on the classpath
+						if (spark_job_config.script().endsWith(".py")) {
+							return SparkPyTechnologyUtils.writeUserPythonScriptTmpFile(bucket_signature, Either.right(spark_job_config.script()));
+						}
+						else { // 3) script
+							return SparkPyTechnologyUtils.writeUserPythonScriptTmpFile(bucket_signature, Either.left(spark_job_config.script()));
+						}
+					}
+				}))
+				.when(l -> l == SparkType.r, __ ->	spark_job_config.entry_point())
+				.otherwise(__ ->					
+					Lambdas.get(() -> {
+						try {
+							return "hdfs:///" + context.getTechnologyConfig().path_name();
+						}
+						catch (Exception e) { // (service mode)
+							//TODO (ALEPH-63): derive this from "this" using the core shared lib util
+							return "/opt/aleph2-home/lib/aleph2_spark_analytics_services.jar";						
+						}
+					}))
+					;
+
+		_logger.log(DEBUG_LEVEL, "main_jars = " + main_jar_or_script);
+		
+		final List<String> other_resources = SparkTechnologyUtils.getCachedJarList(analytic_bucket, main_jar_or_script, context);
+		
+		_logger.log(DEBUG_LEVEL, "other_jars = " + other_resources.stream().collect(Collectors.joining(";")));
+		
+		final Stream<String> aleph2_py_driver = (SparkType.python == spark_job_config.language())
+				? Stream.of(SparkPyTechnologyUtils.writeAleph2DriverZip(bucket_signature))
+				: Stream.empty()
+				;
+		final Set<String> requested_files = spark_job_config.uploaded_files().stream().map(s -> SparkTechnologyUtils.transformFromPath(s)).collect(Collectors.toSet());
+		final Set<String> requested_lang_files = spark_job_config.uploaded_lang_files().stream().map(s -> SparkTechnologyUtils.transformFromPath(s)).collect(Collectors.toSet());
+		
+		final ProcessBuilder pb =
+				SparkTechnologyUtils.createSparkJob(
+						bucket_signature,
+						_global_spark_config.get().spark_home(),
+						globals.local_yarn_config_dir(), 
+						spark_job_config.cluster_mode(),
+						Optional.ofNullable(spark_job_config.entry_point()).filter(__ -> SparkType.jvm == spark_job_config.language()), 
+						new String(Base64.getEncoder().encode(context.getAnalyticsContextSignature(Optional.of(analytic_bucket), Optional.empty()).getBytes())),
+						test_spec.map(ts -> new String(Base64.getEncoder().encode(BeanTemplateUtils.toJson(ts).toString().getBytes()))),
+						main_jar_or_script,  
+						other_resources.stream().filter(j -> j.endsWith(".jar")).collect(Collectors.toList()), 
+						other_resources.stream().filter(f -> requested_files.contains(f)).collect(Collectors.toList()),
+						Stream.concat(aleph2_py_driver, other_resources.stream().filter(f -> requested_lang_files.contains(f))).collect(Collectors.toList()),
+						spark_job_config.external_jars(),
+						spark_job_config.external_files(),
+						spark_job_config.external_lang_files(),
+						Optional.ofNullable(spark_job_config.job_config()).filter(__ -> spark_job_config.include_job_config_in_spark_config()),
+						spark_job_config.spark_config().entrySet().stream().map(kv -> Tuples._2T(kv.getKey().replace(":", "."), kv.getValue())).collect(Collectors.toMap(t2 -> t2._1(), t2 -> t2._2())), 
+						spark_job_config.system_config()
+						);
+
+
+		return pb;
+	}
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyModule#stopAnalyticJob(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, java.util.Collection, com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean, com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext)
 	 */
