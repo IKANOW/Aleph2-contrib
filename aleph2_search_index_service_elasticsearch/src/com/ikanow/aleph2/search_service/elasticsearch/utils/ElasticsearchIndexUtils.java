@@ -16,6 +16,7 @@
 package com.ikanow.aleph2.search_service.elasticsearch.utils;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -28,6 +29,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import org.elasticsearch.client.Client;
+import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
 
@@ -140,6 +143,25 @@ public class ElasticsearchIndexUtils {
 							}
 						})
 						;
+	}
+	
+	/** Utility that returns a set of types for the specified (comma separated indexes)
+	 * @param client
+	 * @param index_list
+	 * @return
+	 */
+	public static Set<String> getTypesForIndex(final Client client, final String index_list) {
+		return Arrays.<Object>stream( 						
+		client.admin().cluster().prepareState()
+				.setIndices(index_list)
+				.setRoutingTable(false).setNodes(false).setListenerThreaded(false).get().getState()
+				.getMetaData().getIndices().values().toArray()
+			)
+			.map(obj -> (IndexMetaData)obj)
+			.flatMap(index_meta -> Optionals.streamOf(index_meta.getMappings().keysIt(), false))
+			.filter(type -> !type.equals("_default_"))
+			.collect(Collectors.<String>toSet());
+		
 	}
 	
 	/////////////////////////////////////////////////////////////////////

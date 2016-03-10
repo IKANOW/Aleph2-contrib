@@ -50,6 +50,7 @@ import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.count.CountRequestBuilder;
+import org.elasticsearch.action.delete.DeleteRequestBuilder;
 import org.elasticsearch.action.get.GetRequestBuilder;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexRequestBuilder;
@@ -73,6 +74,7 @@ import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IBasicSearchService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
@@ -216,6 +218,39 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				//DEBUG
 				//.map(irb -> { System.out.println("REQUEST INDICES = " + Arrays.toString(irb.request().indices())); return irb; })
 				.get();		
+	}
+	
+	/** Utility function for deleting an object
+	 * @param rw_context
+	 * @param id
+	 * @param obj_to_delete
+	 * @param bulk
+	 * @return
+	 */
+	private DeleteRequestBuilder singleObjectDeleteRequest(
+			final Either<ReadWriteContext, Tuple2<String, String>> rw_context,
+			final String id, final Either<O, Tuple2<String, String>> obj_to_delete, final boolean bulk)
+	{
+		final Either<JsonNode, Tuple2<String, String>> json_object =
+				obj_to_delete.left().map(left-> {
+					return ((JsonNode.class.isAssignableFrom(_state.clazz))
+							? (JsonNode) left
+							: BeanTemplateUtils.toJson(left));
+				});
+		
+		return Optional
+				.of(rw_context.<DeleteRequestBuilder>either(
+									left -> _state.client.prepareDelete()
+										.setIndex(left.indexContext().getWritableIndex(Optional.of(json_object.left().value())))
+										.setType(left.typeContext().getWriteType())
+									, 
+									right ->_state.client.prepareDelete().setIndex(right._1()).setType(right._2())
+									)
+							.setConsistencyLevel(WriteConsistencyLevel.ONE)
+							.setRefresh(!bulk && CreationPolicy.OPTIMIZED != _state.creation_policy)
+							.setId(id)
+					)
+					.get();
 	}
 	
 	private static final String PARSE_ERROR_FRAGMENT = "failed to parse [";
@@ -950,15 +985,41 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 					);
 		}
 		
+		/** Determines if this is actually a deletion request and what the _id is if so
+		 * @param object
+		 * @param is_replace_mode
+		 * @return
+		 */
+		private String getPossibleDeletionRequest(final O object, final boolean is_replace_mode) {
+			if (is_replace_mode && ObjectNode.class.isAssignableFrom(object.getClass())) {
+				final ObjectNode j = (ObjectNode) object;
+				if (1 == j.size()) { // ie empty... apart from...
+					final JsonNode _id = j.get("_id");
+					if ((null != _id) && _id.isTextual()) {  // ... an _id
+						return _id.asText();
+					}
+				}
+			}
+			return null;
+		}
+		
 		@Override
 		public void storeObjects(final List<O> new_objects, final boolean replace_if_present) {
 			synchronized (sync_lock) {
 				if (null == _current) {
 					_current = buildBulkProcessor();
 				}
-				new_objects.stream().forEach(new_object -> 			
-					_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
-						Either.left(new_object), replace_if_present, true).request()));
+				new_objects.stream().forEach(new_object -> {
+					final String deletion_request_id = getPossibleDeletionRequest(new_object, replace_if_present);
+					if (null != deletion_request_id) { // overwrite with empty object => delete
+						_current.add(singleObjectDeleteRequest(Either.left((ReadWriteContext) _state.es_context), deletion_request_id,
+							Either.left(new_object), true).request());
+					}
+					else {
+						_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
+							Either.left(new_object), replace_if_present, true).request());
+					}
+				});
 			}
 		}
 
@@ -968,8 +1029,15 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				if (null == _current) {
 					_current = buildBulkProcessor();
 				}			
-				_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
-								Either.left(new_object), replace_if_present, true).request());
+				final String deletion_request_id = getPossibleDeletionRequest(new_object, replace_if_present);
+				if (null != deletion_request_id) { // overwrite with empty object => delete
+					_current.add(singleObjectDeleteRequest(Either.left((ReadWriteContext) _state.es_context), deletion_request_id,
+						Either.left(new_object), true).request());
+				}
+				else {
+					_current.add(singleObjectIndexRequest(Either.left((ReadWriteContext) _state.es_context), 
+									Either.left(new_object), replace_if_present, true).request());
+				}
 			}
 		}
 		

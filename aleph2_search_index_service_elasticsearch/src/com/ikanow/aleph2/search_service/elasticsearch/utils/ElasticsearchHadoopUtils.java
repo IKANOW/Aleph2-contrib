@@ -15,7 +15,6 @@
  *******************************************************************************/
 package com.ikanow.aleph2.search_service.elasticsearch.utils;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -24,7 +23,6 @@ import java.util.stream.Collectors;
 
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,7 +31,6 @@ import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
-import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.search_service.elasticsearch.hadoop.assets.Aleph2EsInputFormat;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 
@@ -103,17 +100,9 @@ public class ElasticsearchHadoopUtils {
 				// (needs MDB to pull out - because need to get the full bucket ugh)
 				
 				// Currently need to add types: 
-				//TODO (ALEPH-72): from elasticsearch-hadoop 2.2.0.m2 this will no longer be necessary (currently at 2.2.0.m1)
-				final String type_resource = Arrays.<Object>stream( 						
-						client.admin().cluster().prepareState()
-								.setIndices(index_resource)
-								.setRoutingTable(false).setNodes(false).setListenerThreaded(false).get().getState()
-								.getMetaData().getIndices().values().toArray()
-							)
-							.map(obj -> (IndexMetaData)obj)
-							.flatMap(index_meta -> Optionals.streamOf(index_meta.getMappings().keysIt(), false))
-							.filter(type -> !type.equals("_default_"))
-							.collect(Collectors.toSet())
+				//TODO (ALEPH-72): 2.2.0 you _can_ just put "indexes/" to get all types - that doesn't work for all es-hadoop code though
+				final String type_resource = 
+						ElasticsearchIndexUtils.getTypesForIndex(client, index_resource)						
 							.stream()
 							.collect(Collectors.joining(","))
 							;						

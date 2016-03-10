@@ -37,6 +37,7 @@ import com.google.inject.Module;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.spark.data_model.GlobalSparkConfigBean;
 import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
+import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean.SparkType;
 import com.ikanow.aleph2.analytics.spark.utils.SparkTechnologyUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyService;
@@ -54,6 +55,7 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
+import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.ProcessUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
@@ -281,38 +283,48 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 
 			_logger.log(DEBUG_LEVEL, "entry_point = " + spark_job_config.entry_point());			
 			
-			final String main_jar = 
-					Lambdas.get(() -> {
-						try {
-							return "hdfs:///" + context.getTechnologyConfig().path_name();
-						}
-						catch (Exception e) { // (service mode)
-							//TODO derive this from "this" using the core shared lib util
-							return "/opt/aleph2-home/lib/aleph2_spark_analytics_services.jar";						
-						}
-					});
+			final String main_jar_or_script = Patterns.match(spark_job_config.language()).<String>andReturn()
+					.when(l -> l == SparkType.python, __ ->	spark_job_config.entry_point()) //TODO: handle script if populated, else allow external file
+					.when(l -> l == SparkType.r, __ ->	spark_job_config.entry_point())
+					.otherwise(__ ->					
+						Lambdas.get(() -> {
+							try {
+								return "hdfs:///" + context.getTechnologyConfig().path_name();
+							}
+							catch (Exception e) { // (service mode)
+								//TODO derive this from "this" using the core shared lib util
+								return "/opt/aleph2-home/lib/aleph2_spark_analytics_services.jar";						
+							}
+						}))
+						;
 
-			_logger.log(DEBUG_LEVEL, "main_jars = " + main_jar);
+			_logger.log(DEBUG_LEVEL, "main_jars = " + main_jar_or_script);
 			
-			final List<String> other_jars = SparkTechnologyUtils.getCachedJarList(analytic_bucket, main_jar, context);
+			final List<String> other_jars = SparkTechnologyUtils.getCachedJarList(analytic_bucket, main_jar_or_script, context);
 			
 			_logger.log(DEBUG_LEVEL, "other_jars = " + other_jars.stream().collect(Collectors.joining(";")));
 			
 			final String bucket_signature = BucketUtils.getUniqueSignature(analytic_bucket.full_name(), Optional.of(job_to_start.name()));
+			
+			//TODO create the zip file and pass that in if specified
 			
 			final ProcessBuilder pb =
 					SparkTechnologyUtils.createSparkJob(
 							bucket_signature,
 							_global_spark_config.get().spark_home(),
 							globals.local_yarn_config_dir(), 
-							"yarn-cluster", //TODO: make this configurable 
-							spark_job_config.entry_point(), //TODO: all support built in? 
+							spark_job_config.cluster_mode(),
+							Optional.ofNullable(spark_job_config.entry_point()).filter(__ -> SparkType.jvm == spark_job_config.language()), 
+								//^^^ TODO: all support built in?  
 							new String(Base64.getEncoder().encode(context.getAnalyticsContextSignature(Optional.of(analytic_bucket), Optional.empty()).getBytes())),
 							test_spec.map(ts -> new String(Base64.getEncoder().encode(BeanTemplateUtils.toJson(ts).toString().getBytes()))),
-							main_jar, 
+							main_jar_or_script,  
 							other_jars, 
-							//TODO: combine globals and per-job options
-							spark_job_config.config().entrySet().stream().map(kv -> Tuples._2T(kv.getKey().replace(":", "."), kv.getValue())).collect(Collectors.toMap(t2 -> t2._1(), t2 -> t2._2())), 
+							spark_job_config.external_jars(),
+							spark_job_config.external_files(),
+							spark_job_config.external_lang_files(),
+							Optional.ofNullable(spark_job_config.job_config()).filter(__ -> spark_job_config.include_job_config_in_spark_config()),
+							spark_job_config.spark_config().entrySet().stream().map(kv -> Tuples._2T(kv.getKey().replace(":", "."), kv.getValue())).collect(Collectors.toMap(t2 -> t2._1(), t2 -> t2._2())), 
 							spark_job_config.system_config()
 							);
 
