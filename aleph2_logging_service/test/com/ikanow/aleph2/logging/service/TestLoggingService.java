@@ -1,3 +1,18 @@
+/*******************************************************************************
+ * Copyright 2015, The IKANOW Open Source Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package com.ikanow.aleph2.logging.service;
 
 import static org.junit.Assert.*;
@@ -32,8 +47,8 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.LoggingSc
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.SearchIndexSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
-import com.ikanow.aleph2.data_model.utils.LoggingUtils;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.logging.data_model.LoggingServiceConfigBean;
 import com.ikanow.aleph2.logging.module.LoggingServiceModule;
@@ -93,6 +108,12 @@ public class TestLoggingService {
 	public void tearDown() throws Exception {
 	}
 
+	/**
+	 * Tests writing messages as user, system, external and checks all the messages were stored.
+	 * 
+	 * @throws InterruptedException
+	 * @throws ExecutionException
+	 */
 	@Test
 	public void testLogBucket() throws InterruptedException, ExecutionException {
 		final String subsystem_name = "logging_test1";
@@ -109,12 +130,12 @@ public class TestLoggingService {
 		}
 		
 		//check its in ES, wait 10s max for the index to refresh
-		final DataBucketBean logging_test_bucket = LoggingUtils.convertBucketToLoggingBucket(test_bucket);
+		final DataBucketBean logging_test_bucket = BucketUtils.convertDataBucketBeanToLogging(test_bucket);
 		final IDataWriteService<BasicMessageBean> logging_crud = search_index_service.getDataService().get().getWritableDataService(BasicMessageBean.class, logging_test_bucket, Optional.empty(), Optional.empty()).get();
 		waitForResults(logging_crud, 10);
 		assertEquals(num_messages_to_log*2, logging_crud.countObjects().get().longValue());
 		
-		final DataBucketBean logging_external_test_bucket = LoggingUtils.convertBucketToLoggingBucket(BeanTemplateUtils.clone(test_bucket).with(DataBucketBean::full_name, "/external/"+ subsystem_name+"/").done());
+		final DataBucketBean logging_external_test_bucket = BucketUtils.convertDataBucketBeanToLogging(BeanTemplateUtils.clone(test_bucket).with(DataBucketBean::full_name, "/external/"+ subsystem_name+"/").done());
 		final IDataWriteService<BasicMessageBean> logging_crud_external = search_index_service.getDataService().get().getWritableDataService(BasicMessageBean.class, logging_external_test_bucket, Optional.empty(), Optional.empty()).get();
 		waitForResults(logging_crud_external, 10);
 		assertEquals(num_messages_to_log, logging_crud_external.countObjects().get().longValue());
@@ -123,6 +144,13 @@ public class TestLoggingService {
 		logging_crud.deleteDatastore().get();
 	}
 	
+	/**
+	 * Tests writing messages as user, system, external at 3 different log levels and verifies
+	 * the too low of level messages were filtered out (not written to storage).
+	 * 
+	 * @throws InterruptedException
+	 * @throws ExecutionException
+	 */
 	@Test
 	public void testLogFilter() throws InterruptedException, ExecutionException {
 		final String subsystem_name = "logging_test2";
@@ -142,12 +170,12 @@ public class TestLoggingService {
 		}
 		
 		//check its in ES, wait 10s max for the index to refresh
-		final DataBucketBean logging_test_bucket = LoggingUtils.convertBucketToLoggingBucket(test_bucket);
+		final DataBucketBean logging_test_bucket = BucketUtils.convertDataBucketBeanToLogging(test_bucket);
 		final IDataWriteService<BasicMessageBean> logging_crud = search_index_service.getDataService().get().getWritableDataService(BasicMessageBean.class, logging_test_bucket, Optional.empty(), Optional.empty()).get();
 		waitForResults(logging_crud, 10);
 		assertEquals(10, logging_crud.countObjects().get().longValue()); //should only have logged ERROR messages
 
-		final DataBucketBean logging_external_test_bucket = LoggingUtils.convertBucketToLoggingBucket(BeanTemplateUtils.clone(test_bucket).with(DataBucketBean::full_name, "/external/"+ subsystem_name+"/").done());
+		final DataBucketBean logging_external_test_bucket = BucketUtils.convertDataBucketBeanToLogging(BeanTemplateUtils.clone(test_bucket).with(DataBucketBean::full_name, "/external/"+ subsystem_name+"/").done());
 		final IDataWriteService<BasicMessageBean> logging_crud_external = search_index_service.getDataService().get().getWritableDataService(BasicMessageBean.class, logging_external_test_bucket, Optional.empty(), Optional.empty()).get();
 		waitForResults(logging_crud_external, 10);
 		assertEquals(15, logging_crud_external.countObjects().get().longValue());
@@ -156,6 +184,12 @@ public class TestLoggingService {
 		logging_crud.deleteDatastore().get();
 	}
 	
+	/**
+	 * Tests and empty management schema falls back to defaults and filters items by the
+	 * defaults used in the config file.
+	 * @throws InterruptedException
+	 * @throws ExecutionException
+	 */
 	@Test
 	public void testLogEmptyManagement() throws InterruptedException, ExecutionException {
 		//if no logging schema is supplied, falls back to defaults in config file (if any)
@@ -184,13 +218,13 @@ public class TestLoggingService {
 		
 		//check its in ES, wait 10s max for the index to refresh
 		//USER + SYSTEM
-		final DataBucketBean logging_test_bucket = LoggingUtils.convertBucketToLoggingBucket(test_bucket);
+		final DataBucketBean logging_test_bucket = BucketUtils.convertDataBucketBeanToLogging(test_bucket);
 		final IDataWriteService<BasicMessageBean> logging_crud = search_index_service.getDataService().get().getWritableDataService(BasicMessageBean.class, logging_test_bucket, Optional.empty(), Optional.empty()).get();
 		waitForResults(logging_crud, 10);
 		assertEquals(20, logging_crud.countObjects().get().longValue()); //should only have logged ERROR messages
 
 		//EXTERNAL
-		final DataBucketBean logging_external_test_bucket = LoggingUtils.convertBucketToLoggingBucket(BeanTemplateUtils.clone(test_bucket).with(DataBucketBean::full_name, "/external/"+ subsystem_name+"/").done());
+		final DataBucketBean logging_external_test_bucket = BucketUtils.convertDataBucketBeanToLogging(BeanTemplateUtils.clone(test_bucket).with(DataBucketBean::full_name, "/external/"+ subsystem_name+"/").done());
 		final IDataWriteService<BasicMessageBean> logging_crud_external = search_index_service.getDataService().get().getWritableDataService(BasicMessageBean.class, logging_external_test_bucket, Optional.empty(), Optional.empty()).get();
 		waitForResults(logging_crud_external, 10);
 		assertEquals(15, logging_crud_external.countObjects().get().longValue());
@@ -236,6 +270,12 @@ public class TestLoggingService {
 				.done().get();
 	}
 	
+	/**
+	 * Creates a sample bucket without a mangement schema.
+	 * 
+	 * @param name
+	 * @return
+	 */
 	private DataBucketBean getEmptyTestBucket(final String name) {
 		return BeanTemplateUtils.build(DataBucketBean.class)
 				.with(DataBucketBean::full_name, "/test/logtest/" + name + "/")

@@ -1,7 +1,23 @@
+/*******************************************************************************
+ * Copyright 2015, The IKANOW Open Source Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package com.ikanow.aleph2.logging.service;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.Level;
@@ -21,10 +37,16 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ILoggingService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
-import com.ikanow.aleph2.data_model.utils.LoggingUtils;
 import com.ikanow.aleph2.logging.data_model.LoggingServiceConfigBean;
+import com.ikanow.aleph2.logging.utils.LoggingUtils;
 import com.ikanow.aleph2.management_db.services.DataBucketCrudService;
 
+/**
+ * Implementation of ILoggingService that reads the management schema of a data bucket and writes out
+ * to those locations.
+ * @author Burch
+ *
+ */
 public class LoggingService implements ILoggingService {
 	
 	private final static Logger _logger = LogManager.getLogger();
@@ -74,15 +96,17 @@ public class LoggingService implements ILoggingService {
 	 * 
 	 * @param log_bucket
 	 * @return
+	 * @throws ExecutionException 
 	 */
 	private IDataWriteService<JsonNode> getWritable(final DataBucketBean log_bucket) {
-		//TODO do I need to put a lock around checking/updating the cache?
-		return Optional.ofNullable(bucket_writable_cache.getIfPresent(getWritableCacheKey(log_bucket))).orElseGet(() -> {	
-			_logger.debug("cache miss, adding writable to cache for bucket: " + log_bucket.full_name());
-			final IDataWriteService<JsonNode> logging_service = LoggingUtils.getLoggingServiceForBucket(search_index_service, storage_service, log_bucket); //TODO will I need temporal/columnar services also
-			bucket_writable_cache.put(getWritableCacheKey(log_bucket), logging_service);
-			return logging_service;
-		});
+		try {
+			return bucket_writable_cache.get(getWritableCacheKey(log_bucket), () -> {
+				return LoggingUtils.getLoggingServiceForBucket(search_index_service, storage_service, log_bucket); //TODO will I need temporal/columnar services also
+			});
+		} catch (ExecutionException e) {
+			_logger.error("Error getting writable for bucket: " + log_bucket.full_name() + " return an empty logger instead that ignores requests", e);
+			return new LoggingUtils.EmptyWritable<JsonNode>();
+		}
 	}	
 
 	/**
@@ -118,6 +142,12 @@ public class LoggingService implements ILoggingService {
 		return bucket.full_name() + ":" + Optional.ofNullable(bucket.modified()).map(d->d.toString());
 	}
 	
+	/**
+	 * Implementation of the IBucketLogger that just filters log messages based on the ManagementSchema in
+	 * the DatabucketBean and pushes objects into a writable created from the same schema at initialization of this object.
+	 * @author Burch
+	 *
+	 */
 	private class BucketLogger implements IBucketLogger {
 		final IDataWriteService<JsonNode> logging_writable;
 		final boolean isSystem;
@@ -131,7 +161,6 @@ public class LoggingService implements ILoggingService {
 			this.logging_writable = logging_writable;
 			this.isSystem = isSystem;
 			this.bucket_logging_thresholds = LoggingUtils.getBucketLoggingThresholds(bucket);
-			//TODO should I be reaching out of this object to grab the properties like this :/ or just pass them in
 			this.date_field = Optional.ofNullable(properties.default_time_field()).orElse("date");
 			this.default_log_level = isSystem ? Optional.ofNullable(properties.default_system_log_level()).orElse(Level.OFF) : Optional.ofNullable(properties.default_user_log_level()).orElse(Level.OFF);			
 		}

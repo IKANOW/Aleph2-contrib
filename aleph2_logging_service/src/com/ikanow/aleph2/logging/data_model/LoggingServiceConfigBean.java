@@ -18,6 +18,7 @@ package com.ikanow.aleph2.logging.data_model;
 import org.apache.logging.log4j.Level;
 
 /**
+ * Config options for the Logging Service.
  * @author Burch
  *
  */
@@ -35,8 +36,20 @@ public class LoggingServiceConfigBean {
 		this.default_system_log_level = default_system_log_level;
 		this.default_user_log_level = default_user_log_level;
 	}
-
+	
+	/**
+	 * Default field to output logigng timestamp as (defaults to 'date')
+	 * @return
+	 */
 	public String default_time_field() { return this.default_time_field; }
+	/**
+	 * Default Level to log system level messages as (defaults to 'OFF')
+	 * @return
+	 */
 	public Level default_system_log_level() { return this.default_system_log_level; }
+	/**
+	 * Default Level to log user level messages as (defaults to 'OFF')
+	 * @return
+	 */
 	public Level default_user_log_level() { return this.default_user_log_level; }
 }

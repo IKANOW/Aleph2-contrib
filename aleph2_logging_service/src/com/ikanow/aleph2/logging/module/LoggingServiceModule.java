@@ -24,6 +24,7 @@ import com.ikanow.aleph2.logging.data_model.LoggingServiceConfigBean;
 import com.typesafe.config.Config;
 
 /**
+ * Just pulls in the config properties.
  * @author Burch
  *
  */
