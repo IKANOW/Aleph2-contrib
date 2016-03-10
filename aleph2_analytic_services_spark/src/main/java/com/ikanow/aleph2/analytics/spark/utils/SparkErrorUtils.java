@@ -21,5 +21,4 @@ package com.ikanow.aleph2.analytics.spark.utils;
 public class SparkErrorUtils {
 
 	public static String MISSING_PARAM = "Bucket {0} job {1}: config missing parameter {2}"; 
-	public static String CURRENTLY_BATCH_ONLY = "Bucket {0} job {1}: currently only batch analytic jobs are supported";
 }
