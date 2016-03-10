@@ -16,18 +16,23 @@
 package com.ikanow.aleph2.search_service.elasticsearch.utils;
 
 import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.elasticsearch.client.Client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.Multimap;
+import com.ikanow.aleph2.core.shared.utils.TimeSliceDirUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
@@ -85,8 +90,6 @@ public class ElasticsearchHadoopUtils {
 				Optional.ofNullable(job_input.config()).map(cfg -> cfg.test_record_limit_request())
 						.ifPresent(max -> _mutable_output.put(Aleph2EsInputFormat.BE_DEBUG_MAX_SIZE, Long.toString(max)));				
 				
-				//TODO (XXX): going to start off with a simple version of this:
-
 				final String index_resource = 
 						ElasticsearchContext.READ_PREFIX + ElasticsearchIndexUtils.getBaseIndexName(
 							BeanTemplateUtils.build(DataBucketBean.class)
@@ -101,13 +104,11 @@ public class ElasticsearchHadoopUtils {
 				
 				// Currently need to add types: 
 				//TODO (ALEPH-72): 2.2.0 you _can_ just put "indexes/" to get all types - that doesn't work for all es-hadoop code though
-				final String type_resource = 
-						ElasticsearchIndexUtils.getTypesForIndex(client, index_resource)						
-							.stream()
-							.collect(Collectors.joining(","))
-							;						
+				final Multimap<String, String> index_type_mapping = ElasticsearchIndexUtils.getTypesForIndex(client, index_resource);				
+				final String type_resource = index_type_mapping.values().stream().collect(Collectors.joining(","));
+				final String final_index = getTimedIndexes(job_input, index_type_mapping, new Date()).map(s -> s.collect(Collectors.joining(","))).orElse(index_resource);						
 				
-				_mutable_output.put("es.resource", index_resource + "/" + type_resource);  
+				_mutable_output.put("es.resource", final_index + "/" + type_resource);  
 								
 				_mutable_output.put("es.index.read.missing.as.empty", "yes");
 				
@@ -121,7 +122,7 @@ public class ElasticsearchHadoopUtils {
 											;
 									})
 									.orElse("?q=*"));
-				// (incorporate tmin/tmax and also add a JSON mapping for the Aleph2 crud utils)
+				//TODO (ALEPH-72) (incorporate tmin/tmax and also add a JSON mapping for the Aleph2 crud utils)
 				
 				// Here are the parameters that can be set:
 				// es.query ... can be stringified JSON or a q=string .... eg conf.set("es.query", "?q=me*");  
@@ -139,4 +140,20 @@ public class ElasticsearchHadoopUtils {
 			}			
 		};
 	}
+	
+	/** Utility to time slice elasticsearch indexes
+	 * @param job_input
+	 * @param index_type_mappings
+	 * @return
+	 */
+	public static Optional<Stream<String>> getTimedIndexes(final AnalyticThreadJobInputBean job_input, final Multimap<String, String> index_type_mappings, final Date now) {
+		return Optional.ofNullable(job_input.config())
+		.filter(cfg -> (null != cfg.time_min()) || (null != cfg.time_max()))
+		.map(cfg -> {
+			return TimeSliceDirUtils.filterTimedDirectories(
+						TimeSliceDirUtils.annotateTimedDirectories(index_type_mappings.keySet().stream()), 
+						TimeSliceDirUtils.getQueryTimeRange(cfg, now));
+		});		
+	}
+	
 }

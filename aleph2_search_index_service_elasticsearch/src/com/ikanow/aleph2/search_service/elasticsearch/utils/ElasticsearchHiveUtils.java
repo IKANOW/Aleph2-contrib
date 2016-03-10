@@ -192,7 +192,7 @@ public class ElasticsearchHiveUtils {
 		final Set<String> mutable_type_set = 
 				user_type_overrides
 					.orElseGet(() -> { 
-						return new TreeSet<String>(maybe_client.map(client -> ElasticsearchIndexUtils.getTypesForIndex(client, index)).orElse(Collections.emptySet())); 
+						return new TreeSet<String>(maybe_client.map(client -> ElasticsearchIndexUtils.getTypesForIndex(client, index).values()).orElse(Collections.emptySet())); 
 					})
 					;
 		
