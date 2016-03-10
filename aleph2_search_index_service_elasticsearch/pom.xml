@@ -115,6 +115,14 @@
          		<artifactId>scala-library</artifactId>
          		<groupId>org.scala-lang</groupId>
          	</exclusion>
+         	<exclusion>
+         		<artifactId>curator-framework</artifactId>
+         		<groupId>org.apache.curator</groupId>
+         	</exclusion>
+         	<exclusion>
+         		<artifactId>curator-recipes</artifactId>
+         		<groupId>org.apache.curator</groupId>
+         	</exclusion>
          </exclusions>
      </dependency>
 	<dependency>
@@ -167,6 +175,14 @@
 				</artifactId>
 				<groupId>org.apache.hadoop</groupId>
 			</exclusion>
+			<exclusion>
+				<artifactId>curator-framework</artifactId>
+				<groupId>org.apache.curator</groupId>
+			</exclusion>
+         	<exclusion>
+         		<artifactId>curator-recipes</artifactId>
+         		<groupId>org.apache.curator</groupId>
+         	</exclusion>
 		</exclusions>
 	</dependency>
   	<dependency>
@@ -204,6 +220,10 @@
 					aleph2_server_only_dependencies
 				</artifactId>
 				<groupId>com.ikanow.aleph2</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>curator-framework</artifactId>
+				<groupId>org.apache.curator</groupId>
 			</exclusion>
 		</exclusions>
   	</dependency>
