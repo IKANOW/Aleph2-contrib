@@ -37,6 +37,7 @@ cp $HOME_DIR/Aleph2-examples/aleph2_enrichment_utils/assets/batch_analytics_temp
 cp $HOME_DIR/Aleph2-examples/aleph2_flume_harvester/target/*-shaded.jar $PLUGINS_DIR
 
 cp $HOME_DIR/Aleph2-examples/aleph2_logstash_harvester/target/*-shaded.jar $PLUGINS_DIR
+cp $HOME_DIR/Aleph2-examples/aleph2_logstash_harvester/assets/logstash_forms.json $A2BB_TEMPLATES/
 
 cp $HOME_DIR/Aleph2-examples/aleph2_script_harvester/target/*-shaded.jar $PLUGINS_DIR
 

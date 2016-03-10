@@ -86,4 +86,35 @@ var curr = db.share.findOne( { "_id" : id } , { _id : 1 } );
 if (curr) db.share.update( { "_id" : id } , { \$set: { share: json } }, false, false );
 if (!curr) db.share.save(share);
 
+/////////////////////////////////////////////////////////////
+//
+// Spark analytics templates
+
+//(CHANGE ID FOR EACH NEW ENGINE)
+var json = cat('/opt/aleph2-home/apps/templates/aleph2_bucket_builder/logstash_forms.json');
+var id = ObjectId("52f43a111111111000000040");
+
+use social;
+var share={ 
+"_id" : id, 
+"created" : ISODate("$cur_date"), 
+"modified" : ISODate("$cur_date"), 
+"owner" : { "_id" : ObjectId("4e3706c48d26852237078005"), 
+"email" : "$ADMIN_EMAIL", "displayName" : "Admin Infinite" }, 
+"endorsed" : [  ObjectId("4c927585d591d31d7b37097a") ], 
+"type" : "aleph2-bucket-template",
+"share": json, 
+"title" : "Logstash harvester Aleph2 bucket builder templates", 
+"description" : "Contains forms for building harvesters using Logstash", 
+"communities" : [ { 
+		"_id" : ObjectId("4c927585d591d31d7b37097a"), 
+		"name" : "Infinit.e System Community", 	
+		"comment" : "Added by addWidgetsToMongo.sh" 
+	} ] 
+}
+
+var curr = db.share.findOne( { "_id" : id } , { _id : 1 } );
+if (curr) db.share.update( { "_id" : id } , { \$set: { share: json } }, false, false );
+if (!curr) db.share.save(share);
+
 EOF
