@@ -8,7 +8,7 @@ echo "Inject or update Aleph2 app templates"
 
 PROPERTY_CONFIG_FILE='/opt/infinite-install/config/infinite.configuration.properties'
 
-cur_date=$(date +%Y-%m-%dT%TZ)
+cur_date=$(TZ=UTC date +%Y-%m-%dT%TZ)
 
 ADMIN_EMAIL=`grep "^admin.email=" $PROPERTY_CONFIG_FILE | sed s/'admin.email='// | sed s/' '//g`
 if [ "$ADMIN_EMAIL" == "" ]; then
