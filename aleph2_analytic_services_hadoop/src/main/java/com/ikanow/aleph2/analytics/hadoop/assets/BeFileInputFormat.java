@@ -41,7 +41,7 @@ import java.util.Arrays;
 /** The file input format specific to batch enrichment modules
  * @author jfreydank
  */
-public class BeFileInputFormat extends CombineFileInputFormat<String, Tuple2<Long, IBatchRecord>> {
+public class BeFileInputFormat extends UpdatedCombineFileInputFormat<String, Tuple2<Long, IBatchRecord>> {
 	private static final Logger logger = LogManager.getLogger(BeFileInputFormat.class);
 
 	/** User c'tor
