@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.SQLContext;
@@ -29,6 +30,7 @@ import org.elasticsearch.common.collect.ImmutableMap;
 import org.elasticsearch.spark.sql.api.java.JavaEsSparkSQL;
 
 import com.google.common.collect.Multimap;
+import com.ikanow.aleph2.core.shared.utils.TimeSliceDirUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
@@ -98,7 +100,10 @@ public class ElasticsearchSparkUtils {
 				//TODO (ALEPH-72): from elasticsearch-hadoop 2.2.0.m2 this will no longer be necessary (currently at 2.2.0.m1)
 				final Multimap<String, String> index_type_mapping = ElasticsearchIndexUtils.getTypesForIndex(client, index_resource);				
 				final String type_resource = index_type_mapping.values().stream().collect(Collectors.toSet()).stream().collect(Collectors.joining(","));
-				final String final_index = ElasticsearchHadoopUtils.getTimedIndexes(job_input, index_type_mapping, new Date()).map(s -> s.collect(Collectors.joining(","))).orElse(index_resource);						
+				final String final_index = ElasticsearchHadoopUtils.getTimedIndexes(job_input, index_type_mapping, new Date())
+						.map(s -> Stream.concat(s, TimeSliceDirUtils.getUntimedDirectories(index_type_mapping.keySet().stream()))
+									.collect(Collectors.joining(",")))
+					.orElse(index_resource);						
 				
 				//TODO (ALEPH-72): handle single/multiple types
 				

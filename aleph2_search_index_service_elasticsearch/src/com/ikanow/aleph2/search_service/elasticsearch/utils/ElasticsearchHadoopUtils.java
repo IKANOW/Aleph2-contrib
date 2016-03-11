@@ -106,7 +106,10 @@ public class ElasticsearchHadoopUtils {
 				//TODO (ALEPH-72): 2.2.0 you _can_ just put "indexes/" to get all types - that doesn't work for all es-hadoop code though
 				final Multimap<String, String> index_type_mapping = ElasticsearchIndexUtils.getTypesForIndex(client, index_resource);
 				final String type_resource = index_type_mapping.values().stream().collect(Collectors.toSet()).stream().collect(Collectors.joining(","));
-				final String final_index = getTimedIndexes(job_input, index_type_mapping, new Date()).map(s -> s.collect(Collectors.joining(","))).orElse(index_resource);						
+				final String final_index = getTimedIndexes(job_input, index_type_mapping, new Date())
+												.map(s -> Stream.concat(s, TimeSliceDirUtils.getUntimedDirectories(index_type_mapping.keySet().stream()))
+															.collect(Collectors.joining(",")))
+											.orElse(index_resource);						
 				
 				_mutable_output.put("es.resource", final_index + "/" + type_resource);  
 								
