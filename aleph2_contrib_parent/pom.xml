@@ -6,7 +6,7 @@
     <name>Aleph2 contrib parent project</name>
     <version>${aleph2.version}</version>
 	<properties>
-        <aleph2.version>2.6.0-SNAPSHOT</aleph2.version>
+        <aleph2.version>2.7.0-SNAPSHOT</aleph2.version>
     </properties>
     <modules>
         <module>../aleph2_access_library_es_proxy</module>

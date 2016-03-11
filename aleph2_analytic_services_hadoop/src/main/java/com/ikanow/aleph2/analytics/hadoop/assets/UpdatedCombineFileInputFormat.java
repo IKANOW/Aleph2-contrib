@@ -56,6 +56,8 @@ import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
 
 /**
+ * NOTE: no longer used because we're at 2.7 now
+ * 
  * NOTE: this is the vanilla 2.6 CombineFileInputFormat but supporting Guava 18.0
  * It has no test coverage therefore should be hand tested whenever modified
  * In practice should never be modified and can be removed at 2.7

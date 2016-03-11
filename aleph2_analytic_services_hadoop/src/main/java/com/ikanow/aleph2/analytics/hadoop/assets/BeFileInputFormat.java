@@ -25,6 +25,7 @@ import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
+import org.apache.hadoop.mapreduce.lib.input.CombineFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.CombineFileSplit;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -40,7 +41,7 @@ import java.util.Arrays;
 /** The file input format specific to batch enrichment modules
  * @author jfreydank
  */
-public class BeFileInputFormat extends UpdatedCombineFileInputFormat<String, Tuple2<Long, IBatchRecord>> {
+public class BeFileInputFormat extends CombineFileInputFormat<String, Tuple2<Long, IBatchRecord>> {
 	private static final Logger logger = LogManager.getLogger(BeFileInputFormat.class);
 
 	/** User c'tor

@@ -97,7 +97,7 @@ public class ElasticsearchSparkUtils {
 				// Currently need to add types: 
 				//TODO (ALEPH-72): from elasticsearch-hadoop 2.2.0.m2 this will no longer be necessary (currently at 2.2.0.m1)
 				final Multimap<String, String> index_type_mapping = ElasticsearchIndexUtils.getTypesForIndex(client, index_resource);				
-				final String type_resource = index_type_mapping.values().stream().collect(Collectors.joining(","));
+				final String type_resource = index_type_mapping.values().stream().collect(Collectors.toSet()).stream().collect(Collectors.joining(","));
 				final String final_index = ElasticsearchHadoopUtils.getTimedIndexes(job_input, index_type_mapping, new Date()).map(s -> s.collect(Collectors.joining(","))).orElse(index_resource);						
 				
 				//TODO (ALEPH-72): handle single/multiple types
