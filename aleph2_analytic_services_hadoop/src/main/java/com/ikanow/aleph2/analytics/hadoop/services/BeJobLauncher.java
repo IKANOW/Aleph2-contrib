@@ -341,7 +341,7 @@ public class BeJobLauncher implements IBeJobService{
 			// Need admin privileges:
 			//TODO (ALEPH-78): once possible, want to use RBAC for this
 			final ISecurityService security_service = _batchEnrichmentContext.getServiceContext().getSecurityService();
-			if (!security_service.hasUserRole(Optional.of(bucket.owner_id()), ISecurityService.ROLE_ADMIN)) {
+			if (!security_service.hasUserRole(bucket.owner_id(), ISecurityService.ROLE_ADMIN)) {
 				throw new RuntimeException(ErrorUtils.get("Permission error: not admin, can't set hadoop config for {0}", bucket.full_name()));				
 			}
 			logger.info(ErrorUtils.get("Hadoop-level overrides for bucket {0}: {1}", bucket.full_name(),

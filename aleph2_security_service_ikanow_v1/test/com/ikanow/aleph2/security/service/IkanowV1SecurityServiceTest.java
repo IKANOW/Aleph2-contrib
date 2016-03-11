@@ -20,7 +20,6 @@ import static org.junit.Assert.assertNotNull;
 
 import java.io.InputStreamReader;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Optional;
 
 import org.apache.logging.log4j.LogManager;
@@ -124,17 +123,15 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 
 	@Test
 	public void testRole(){
-		ISubject subject = loginAsAdmin();
         //test a typed permission (not instance-level)
-		assertEquals(true,securityService.hasRole(subject,"admin"));
+		assertEquals(true,securityService.hasUserRole(adminId,"admin"));
 	}
 
 	@Test
 	public void testPermission(){
-		ISubject subject = loginAsRegularUser();
 		// test personal community permission
         //test a typed permission (not instance-level)
-		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
+		assertEquals(true,securityService.isUserPermitted(regularUserId,regularUserCommunityPermission));
 	}
 
 	@Test
@@ -145,73 +142,59 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		String runAsRole = "54f86d8de4b03d27d1ea0d7b";
 		String runAsPersonalPermission = "SharedLibraryBean:read:v1_55a5672ce4b056ae0f9bdb1e";
 		
-		securityService.runAs(subject,Arrays.asList(runAsPrincipal));
-		
-		assertEquals(true,securityService.hasRole(subject,runAsRole));
+		assertEquals(true,securityService.hasUserRole(runAsPrincipal,runAsRole));
         //test a typed permission (not instance-level)
-		assertEquals(true,securityService.isPermitted(subject,runAsPersonalPermission));
-		Collection<String> p = securityService.releaseRunAs(subject);
-		logger.debug("Released Principals:"+p);
-		securityService.runAs(subject,Arrays.asList(runAsPrincipal));
+		assertEquals(true,securityService.isUserPermitted(runAsPrincipal,runAsPersonalPermission));
 		
-		assertEquals(true,securityService.hasRole(subject,runAsRole));
+		assertEquals(true,securityService.hasUserRole(runAsPrincipal,runAsRole));
         //test a typed permission (not instance-level)
-		assertEquals(true,securityService.isPermitted(subject,runAsPersonalPermission));
-		p = securityService.releaseRunAs(subject);
-		logger.debug("Released Principals:"+p);
+		assertEquals(true,securityService.isUserPermitted(runAsPrincipal,runAsPersonalPermission));
 	}
 
 	
 	@Test
 	public void testSessionTimeout(){
 		((IkanowV1SecurityService)securityService).setSessionTimeout(1000);
-		ISubject subject = loginAsAdmin();
-		assertEquals(true,securityService.hasRole(subject,"admin"));
+		assertEquals(true,securityService.hasUserRole(adminId,"admin"));
 		try {
 			Thread.sleep(5000);
 		} catch (InterruptedException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		subject = loginAsAdmin();
-		//assertEquals(true,subject.isAuthenticated());
-		
-		assertEquals(true,securityService.hasRole(subject,"admin"));
+		assertEquals(true,securityService.hasUserRole(adminId,"admin"));
 	}
 
 	@Test
 	public void testCaching(){
-		ISubject subject = loginAsRegularUser();
 		// test personal community permission
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU-permisssion0");
-		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
+		assertEquals(true,securityService.isUserPermitted(regularUserId,regularUserCommunityPermission));
 		ProfilingUtility.timeStopAndLog("TU-permisssion0");
 		for (int i = 0; i < 10; i++) {
 			ProfilingUtility.timeStart("TU-permisssion"+(i+1));
-			assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));			
+			assertEquals(true,securityService.isUserPermitted(regularUserId,regularUserCommunityPermission));			
 			ProfilingUtility.timeStopAndLog("TU-permisssion"+(i+1));
 		}
-		subject = loginAsAdmin();
 		// test personal community permission
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("AU-permisssion0");
-		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
+		assertEquals(true,securityService.isUserPermitted(adminId,regularUserCommunityPermission));
 		ProfilingUtility.timeStopAndLog("AU-permisssion");
 		for (int i = 0; i < 10; i++) {
 			ProfilingUtility.timeStart("AU-permisssion"+i+1);
-			assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));			
+			assertEquals(true,securityService.isUserPermitted(adminId,regularUserCommunityPermission));			
 			ProfilingUtility.timeStopAndLog("AU-permisssion"+i+1);
 		}
 		
 		for (int i = 0; i < 10; i++) {
 			ProfilingUtility.timeStart("TU2-permisssion_L"+(i+1));
-		subject = loginAsRegularUser();
 		ProfilingUtility.timeStopAndLog("TU2-permisssion_L"+(i+1));
 		// test personal community permission
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU2-permisssion"+(i+1));
-		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
+		assertEquals(true,securityService.isUserPermitted(regularUserId,regularUserCommunityPermission));
 			ProfilingUtility.timeStopAndLog("TU2-permisssion"+(i+1));
 		}
 	}
@@ -220,15 +203,13 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	public void testInvalidateAuthenticationCache(){
 		ISubject subject = loginAsTestUser();
 		
-		securityService.runAs(subject,Arrays.asList(regularUserId));
-
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU-permisssion0");
-		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
+		assertEquals(true,securityService.isUserPermitted(regularUserId,regularUserCommunityPermission));
 		ProfilingUtility.timeStopAndLog("TU-permisssion0");
 		for (int i = 0; i < 10; i++) {
 			ProfilingUtility.timeStart("TU-permisssion"+(i+1));
-			assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));			
+			assertEquals(true,securityService.isUserPermitted(regularUserId,regularUserCommunityPermission));			
 			ProfilingUtility.timeStopAndLog("TU-permisssion"+(i+1));
 			if(i==5){
 				((IkanowV1SecurityService)securityService).invalidateAuthenticationCache(Arrays.asList(regularUserId));	
@@ -239,18 +220,14 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 
 	@Test
 	public void testInvalidateCache(){
-		ISubject subject = loginAsTestUser();
-		
-		securityService.runAs(subject,Arrays.asList(regularUserId));
-
 		// test personal community permission
         //test a typed permission (not instance-level)
 		ProfilingUtility.timeStart("TU-permisssion0");
-		assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));
+		assertEquals(true,securityService.isUserPermitted(regularUserId,regularUserCommunityPermission));
 		ProfilingUtility.timeStopAndLog("TU-permisssion0");
 		for (int i = 0; i < 10; i++) {
 			ProfilingUtility.timeStart("TU-permisssion"+(i+1));
-			assertEquals(true,securityService.isPermitted(subject,regularUserCommunityPermission));			
+			assertEquals(true,securityService.isUserPermitted(regularUserId,regularUserCommunityPermission));			
 			ProfilingUtility.timeStopAndLog("TU-permisssion"+(i+1));
 			if(i==5){
 				((IkanowV1SecurityService)securityService).invalidateCache();	
@@ -265,14 +242,10 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 		// system community
 		String runAsPrincipal = regularUserId; 
 		
-		assertEquals(true,securityService.hasRole(subject,"admin"));
+		assertEquals(true,securityService.hasUserRole(adminId,"admin"));
+		assertEquals(false,securityService.hasUserRole(runAsPrincipal,"admin"));
 
-		securityService.runAs(subject,Arrays.asList(runAsPrincipal));
-		
-		assertEquals(false,securityService.hasRole(subject,"admin"));
-		Collection<String> p = securityService.releaseRunAs(subject);
-		assertEquals(true,securityService.hasRole(subject,"admin"));
-		logger.debug("Released Principals:"+p);
+		assertEquals(true,securityService.hasUserRole(adminId,"admin"));
 	}
 	
 	@Test
@@ -283,11 +256,10 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 	
 	@Test
 	public void testBucketPermission(){
-		ISubject subject = loginAsRegularUser();
 		// test personal community permission
 		String permission = "DataBucketBean:read:aleph...bucket.Sample_Netflow_Ingestion_.COPY..;";
         //test a typed permission (not instance-level)
-		assertEquals(true,securityService.isPermitted(subject,permission));
+		assertEquals(true,securityService.isUserPermitted(regularUserId,permission));
 	}
 
 	@Test

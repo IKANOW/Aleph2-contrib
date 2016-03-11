@@ -22,10 +22,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.apache.shiro.mgt.SecurityManager;
-import org.apache.shiro.subject.Subject;
 
 import com.google.inject.Inject;
 import com.google.inject.Module;
@@ -41,7 +38,7 @@ public class IkanowV1SecurityService extends SecurityService implements ISecurit
 	public static String SECURITY_ASSET_SOURCE="source";
 
 	protected ISubject currentSubject = null;
-	private static final Logger logger = LogManager.getLogger(IkanowV1SecurityService.class);
+
 	@Inject
 	protected IServiceContext serviceContext;
 
@@ -53,23 +50,6 @@ public class IkanowV1SecurityService extends SecurityService implements ISecurit
 		super(serviceContext,securityManager);
 
 	}
-
-
-	protected void initUnauthorized(){
-		try {
-			logger.debug("Init was called, it should not be called except in rare cases, use login instead.");
-
-	        // get the currently executing user:
-	        Subject currentUser = getShiroSubject();
-	        this.currentSubject = new SubjectWrapper(currentUser);
-	        // Do some stuff with a Session (no need for a web or EJB container!!!)
-	        
-		} catch (Throwable e) {
-			logger.error("initUnauthorized Caught exception",e);
-		}
-
-	}
-	
 
 	@Override
 	public <T> Optional<T> getUnderlyingPlatformDriver(Class<T> driver_class, Optional<String> driver_options) {
@@ -98,14 +78,6 @@ public class IkanowV1SecurityService extends SecurityService implements ISecurit
 		
 	}
 
-
-
-
-
-	@Override
-	public ISubject loginAsSystem() {
-		return super.loginAsSystem();
-	}
 
 	@Override
 	protected String getRealmName(){

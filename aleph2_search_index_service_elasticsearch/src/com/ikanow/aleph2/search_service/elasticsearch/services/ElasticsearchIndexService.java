@@ -877,7 +877,7 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 				((String) bucket.data_schema().search_index_schema().technology_override_schema().get(SearchIndexSchemaDefaultBean.index_name_override_)));
 			
 			if (manual_index_name.isPresent()) { // (then must be admin)
-				if (!_service_context.getSecurityService().hasUserRole(Optional.of(bucket.owner_id()), ISecurityService.ROLE_ADMIN)) {
+				if (!_service_context.getSecurityService().hasUserRole(bucket.owner_id(), ISecurityService.ROLE_ADMIN)) {
 					errors.add(ErrorUtils.buildErrorMessage(bucket.full_name(), "validateSchema", SearchIndexErrorUtils.NON_ADMIN_BUCKET_NAME_OVERRIDE));
 				}
 			}
