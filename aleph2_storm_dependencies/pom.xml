@@ -170,8 +170,8 @@
 		<dependency>
 			<groupId>org.apache.storm</groupId>
 			<artifactId>storm-core</artifactId>
-			<!-- This is selected to match HDP 2.3 -->
-			<version>0.10.0.2.3.0.0-2557</version>
+			<!-- This is selected to match HDP 2.3.4 -->
+			<version>0.10.0.2.3.4.0-3485</version>
  			<exclusions> 
  				<exclusion> 
  					<artifactId>log4j-over-slf4j</artifactId> 
