@@ -12,6 +12,7 @@
         </RollingFile>
         </Appenders>
         <Loggers>
+                <logger name="com.joestelmach.natty.Parser" level="WARN"/>        
                 <Root level="info">
                         <AppenderRef ref="fileWriter" />
                 </Root>
