@@ -17,11 +17,15 @@ package com.ikanow.aleph2.search_service.elasticsearch.utils;
 
 import static org.junit.Assert.*;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.junit.Before;
@@ -29,9 +33,12 @@ import org.junit.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.LinkedHashMultimap;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputBean;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.search_service.elasticsearch.hadoop.assets.Aleph2EsInputFormat;
@@ -198,6 +205,59 @@ public class TestElasticsearchHadoopUtils {
 			assertEquals("r__" + BucketUtils.getUniqueSignature("/test3", Optional.empty()) + "*/", res.get("es.resource"));
 			assertEquals("{\"test\":\"test2\"}", res.get("es.query"));
 			assertEquals("yes", res.get("es.index.read.missing.as.empty"));						
+		}
+		
+	}
+	
+	@Test
+	public void test_getTimedIndexes() {
+		final LinkedHashMultimap<String, String> test_in = LinkedHashMultimap.create();
+		test_in.put("test_time_sliced_index__4633d78cd58b_2015.04.01", "test");
+		test_in.put("test_time_sliced_index__4633d78cd58b_2015.06.01", "test");
+		test_in.put("r__test_time_sliced_index__4633d78cd58b_2015.06.03", "test");
+		test_in.put("r__test_time_sliced_index__4633d78cd58b", "test");
+		
+		// min + max
+		{
+			final Date now = Date.from(LocalDateTime.of(2015, 6, 12, 2, 0).atZone(ZoneOffset.systemDefault()).toInstant());
+			
+			AnalyticThreadJobInputConfigBean test =
+					BeanTemplateUtils.build(AnalyticThreadJobInputConfigBean.class)
+						.with(AnalyticThreadJobInputConfigBean::time_min, "12 days")
+						.with(AnalyticThreadJobInputConfigBean::time_max, "8 days")
+					.done().get();
+			
+			AnalyticThreadJobInputBean input =
+					BeanTemplateUtils.build(AnalyticThreadJobInputBean.class)
+					.with(AnalyticThreadJobInputBean::config, test)
+					.done().get();
+			
+			final Optional<Stream<String>> res = 
+					ElasticsearchHadoopUtils.getTimedIndexes(input, test_in, now);
+			
+			assertEquals(
+					Arrays.asList(
+							"test_time_sliced_index__4633d78cd58b_2015.06.01",
+							"r__test_time_sliced_index__4633d78cd58b_2015.06.03"
+							)
+					, 
+					res.map(s -> s.collect(Collectors.toList())).get());
+		}
+		// neither
+		{
+			AnalyticThreadJobInputConfigBean test =
+					BeanTemplateUtils.build(AnalyticThreadJobInputConfigBean.class)
+					.done().get();
+			
+			AnalyticThreadJobInputBean input =
+					BeanTemplateUtils.build(AnalyticThreadJobInputBean.class)
+					.with(AnalyticThreadJobInputBean::config, test)
+					.done().get();
+			
+			final Optional<Stream<String>> res = 
+					ElasticsearchHadoopUtils.getTimedIndexes(input, test_in, new Date());
+			
+			assertEquals(Optional.empty(), res);
 		}
 		
 	}

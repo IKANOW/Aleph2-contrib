@@ -25,6 +25,7 @@ import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.function.Function;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -41,6 +42,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.LinkedHashMultimap;
+import com.google.common.collect.Multimap;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -150,7 +153,7 @@ public class ElasticsearchIndexUtils {
 	 * @param index_list
 	 * @return
 	 */
-	public static Set<String> getTypesForIndex(final Client client, final String index_list) {
+	public static Multimap<String, String> getTypesForIndex(final Client client, final String index_list) {
 		return Arrays.<Object>stream( 						
 		client.admin().cluster().prepareState()
 				.setIndices(index_list)
@@ -158,10 +161,9 @@ public class ElasticsearchIndexUtils {
 				.getMetaData().getIndices().values().toArray()
 			)
 			.map(obj -> (IndexMetaData)obj)
-			.flatMap(index_meta -> Optionals.streamOf(index_meta.getMappings().keysIt(), false))
-			.filter(type -> !type.equals("_default_"))
-			.collect(Collectors.<String>toSet());
-		
+			.collect(Collector.of(LinkedHashMultimap::create, 
+					(acc, v) -> Optionals.streamOf(v.getMappings().keysIt(), false).filter(t -> !t.equals("_default_")).forEach(t -> acc.put(v.index(), t)),
+					(acc1, acc2) -> { acc1.putAll(acc2); return acc1; }));
 	}
 	
 	/////////////////////////////////////////////////////////////////////

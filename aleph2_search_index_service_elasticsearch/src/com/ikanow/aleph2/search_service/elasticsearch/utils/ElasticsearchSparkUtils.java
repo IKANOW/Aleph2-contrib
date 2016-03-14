@@ -16,26 +16,27 @@
 
 package com.ikanow.aleph2.search_service.elasticsearch.utils;
 
-import java.util.Arrays;
+import java.util.Date;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.SQLContext;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.common.collect.ImmutableMap;
 import org.elasticsearch.spark.sql.api.java.JavaEsSparkSQL;
 
+import com.google.common.collect.Multimap;
+import com.ikanow.aleph2.core.shared.utils.TimeSliceDirUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
-import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 
@@ -97,19 +98,12 @@ public class ElasticsearchSparkUtils {
 				
 				// Currently need to add types: 
 				//TODO (ALEPH-72): from elasticsearch-hadoop 2.2.0.m2 this will no longer be necessary (currently at 2.2.0.m1)
-				final String type_resource = Arrays.<Object>stream( 						
-						client.admin().cluster().prepareState()
-								.setIndices(index_resource)
-								.setRoutingTable(false).setNodes(false).setListenerThreaded(false).get().getState()
-								.getMetaData().getIndices().values().toArray()
-							)
-							.map(obj -> (IndexMetaData)obj)
-							.flatMap(index_meta -> Optionals.streamOf(index_meta.getMappings().keysIt(), false))
-							.filter(type -> !type.equals("_default_"))
-							.collect(Collectors.toSet())
-							.stream()
-							.collect(Collectors.joining(","))
-							;						
+				final Multimap<String, String> index_type_mapping = ElasticsearchIndexUtils.getTypesForIndex(client, index_resource);				
+				final String type_resource = index_type_mapping.values().stream().collect(Collectors.toSet()).stream().collect(Collectors.joining(","));
+				final String final_index = ElasticsearchHadoopUtils.getTimedIndexes(job_input, index_type_mapping, new Date())
+						.map(s -> Stream.concat(s, TimeSliceDirUtils.getUntimedDirectories(index_type_mapping.keySet().stream()))
+									.collect(Collectors.joining(",")))
+					.orElse(index_resource);						
 				
 				//TODO (ALEPH-72): handle single/multiple types
 				
@@ -117,14 +111,14 @@ public class ElasticsearchSparkUtils {
 						ImmutableMap.<String, String>of(
 								"es.index.read.missing.as.empty", "yes"
 								,
-								"es.resource", index_resource + "/" + type_resource								
+								"es.resource", final_index + "/" + type_resource								
 								);
 				
 				_es_options.set(es_options);
 				final String table_name = Optional.ofNullable(job_input.name()).orElse(BucketUtils.getUniqueSignature(job_input.resource_name_or_id(), Optional.empty()));
 
 				Function<SQLContext, DataFrame> f = sql_context -> {					
-					DataFrame df = JavaEsSparkSQL.esDF(sql_context, es_options);
+					final DataFrame df = JavaEsSparkSQL.esDF(sql_context, es_options);
 					df.registerTempTable(table_name);
 					return df;
 				}

@@ -109,7 +109,7 @@ public class V1DocumentDbHadoopUtils {
 				// Validate communities:
 				maybe_security.ifPresent(sec -> {
 					communities.stream()
-						.filter(cid -> !sec.isUserPermitted(Optional.of(user_id), Tuples._2T("community", cid), Optional.of(ISecurityService.ACTION_READ)))
+						.filter(cid -> !sec.isUserPermitted(user_id, Tuples._2T("community", cid), Optional.of(ISecurityService.ACTION_READ)))
 						.findAny()
 						.ifPresent(cid -> {
 							throw new RuntimeException(ErrorUtils.get(V1DocumentDbErrorUtils.V1_DOCUMENT_USER_PERMISSIONS, user_id, cid));
