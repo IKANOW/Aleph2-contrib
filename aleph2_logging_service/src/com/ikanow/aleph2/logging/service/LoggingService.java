@@ -51,6 +51,7 @@ public class LoggingService implements ILoggingService {
 	
 	private final static Logger _logger = LogManager.getLogger();
 	protected final static Cache<String, MultiDataService> bucket_writable_cache = CacheBuilder.newBuilder().expireAfterAccess(30, TimeUnit.MINUTES).build();
+	private static final BasicMessageBean LOG_MESSAGE_BELOW_THRESHOLD = ErrorUtils.buildSuccessMessage(BucketLogger.class.getName(), "Log message dropped, below threshold", "n/a");
 	
 	protected final LoggingServiceConfigBean properties;
 	protected final IServiceContext service_context;
@@ -144,7 +145,7 @@ public class LoggingService implements ILoggingService {
 	 * @author Burch
 	 *
 	 */
-	private class BucketLogger implements IBucketLogger {
+	private class BucketLogger implements IBucketLogger {		
 		final MultiDataService logging_writable;
 		final boolean isSystem;
 		final DataBucketBean bucket;
@@ -174,7 +175,7 @@ public class LoggingService implements ILoggingService {
 				_logger.debug("LOGGING MSG: " + logObject.toString());		
 				return CompletableFuture.completedFuture(logging_writable.batchWrite(logObject));
 			} else {
-				return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this.getClass().getName(), "Log message dropped, below threshold", "n/a"));
+				return CompletableFuture.completedFuture(LOG_MESSAGE_BELOW_THRESHOLD);
 			}			
 		}
 
