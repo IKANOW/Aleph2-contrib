@@ -69,7 +69,7 @@ public class LoggingService implements ILoggingService {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ILoggingService#getLogger(com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 	 */
 	@Override
-	public CompletableFuture<IBucketLogger> getLogger(DataBucketBean bucket) {
+	public IBucketLogger getLogger(DataBucketBean bucket) {
 		return getBucketLogger(bucket, getWritable(bucket), false);		
 	}
 
@@ -77,7 +77,7 @@ public class LoggingService implements ILoggingService {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ILoggingService#getSystemLogger(java.util.Optional)
 	 */
 	@Override
-	public CompletableFuture<IBucketLogger> getSystemLogger(DataBucketBean bucket) {
+	public IBucketLogger getSystemLogger(DataBucketBean bucket) {
 		return getBucketLogger(bucket, getWritable(bucket), true);
 	}
 	
@@ -85,7 +85,7 @@ public class LoggingService implements ILoggingService {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ILoggingService#getExternalLogger(java.lang.String)
 	 */
 	@Override
-	public CompletableFuture<IBucketLogger> getExternalLogger(final String subsystem) {
+	public IBucketLogger getExternalLogger(final String subsystem) {
 		final DataBucketBean bucket = LoggingUtils.getExternalBucket(subsystem, Optional.ofNullable(properties.default_system_log_level()).orElse(Level.OFF));		
 		return getBucketLogger(bucket, getWritable(bucket), true);
 	}
@@ -117,18 +117,16 @@ public class LoggingService implements ILoggingService {
 	 * @param writable
 	 * @param b
 	 */
-	private CompletableFuture<IBucketLogger> getBucketLogger(DataBucketBean bucket,
+	private IBucketLogger getBucketLogger(DataBucketBean bucket,
 			MultiDataService writable, boolean isSystem) {
 		//initial the logging bucket path in case it hasn't been created yet
 		try {
 			DataBucketCrudService.createFilePaths(bucket, storage_service);
 		} catch (Exception e) {
-			_logger.error("Error creating logging bucket file path: " + bucket.full_name(), e);
-			CompletableFuture<IBucketLogger> future_error = new CompletableFuture<IBucketLogger>();
-			future_error.completeExceptionally(e);
-			return future_error;
+			_logger.error("Error creating logging bucket file path: " + bucket.full_name(), e);			
+			return new BucketLogger(LoggingUtils.getEmptyBucket(), getWritable(bucket), isSystem);
 		}
-		return CompletableFuture.completedFuture(new BucketLogger(bucket, getWritable(bucket), isSystem));
+		return new BucketLogger(bucket, getWritable(bucket), isSystem);
 	}
 	
 	/**

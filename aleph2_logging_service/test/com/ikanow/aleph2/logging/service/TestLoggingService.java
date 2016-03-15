@@ -116,9 +116,9 @@ public class TestLoggingService {
 		final String subsystem_name = "logging_test1";
 		final long num_messages_to_log = 50;
 		final DataBucketBean test_bucket = getTestBucket("test1", Level.ALL); 
-		final IBucketLogger user_logger = logging_service.getLogger(test_bucket).get();
-		final IBucketLogger system_logger = logging_service.getSystemLogger(test_bucket).get();
-		final IBucketLogger external_logger = logging_service.getExternalLogger(subsystem_name).get();
+		final IBucketLogger user_logger = logging_service.getLogger(test_bucket);
+		final IBucketLogger system_logger = logging_service.getSystemLogger(test_bucket);
+		final IBucketLogger external_logger = logging_service.getExternalLogger(subsystem_name);
 		//log a few messages
 		for ( int i = 0; i < num_messages_to_log; i++ ) {
 			user_logger.log(Level.ERROR, ErrorUtils.buildMessage(true, subsystem_name, "test_message " + i, "no error")).get();
@@ -154,9 +154,9 @@ public class TestLoggingService {
 		final long num_messages_to_log_each_type = 5;
 		final List<Level> levels = Arrays.asList(Level.DEBUG, Level.INFO, Level.ERROR);
 		final DataBucketBean test_bucket = getTestBucket("test2", Level.ERROR); 
-		final IBucketLogger user_logger = logging_service.getLogger(test_bucket).get();
-		final IBucketLogger system_logger = logging_service.getSystemLogger(test_bucket).get();
-		final IBucketLogger external_logger = logging_service.getExternalLogger(subsystem_name).get();
+		final IBucketLogger user_logger = logging_service.getLogger(test_bucket);
+		final IBucketLogger system_logger = logging_service.getSystemLogger(test_bucket);
+		final IBucketLogger external_logger = logging_service.getExternalLogger(subsystem_name);
 		//log a few messages
 		for ( int i = 0; i < num_messages_to_log_each_type; i++ ) {
 			for ( Level level : levels) {
@@ -201,9 +201,9 @@ public class TestLoggingService {
 		final long num_messages_to_log_each_type = 5;
 		final List<Level> levels = Arrays.asList(Level.DEBUG, Level.INFO, Level.ERROR);
 		final DataBucketBean test_bucket = getEmptyTestBucket("test3"); 
-		final IBucketLogger user_logger = logging_service.getLogger(test_bucket).get();
-		final IBucketLogger system_logger = logging_service.getSystemLogger(test_bucket).get();
-		final IBucketLogger external_logger = logging_service.getExternalLogger(subsystem_name).get();
+		final IBucketLogger user_logger = logging_service.getLogger(test_bucket);
+		final IBucketLogger system_logger = logging_service.getSystemLogger(test_bucket);
+		final IBucketLogger external_logger = logging_service.getExternalLogger(subsystem_name);
 		//log a few messages
 		for ( int i = 0; i < num_messages_to_log_each_type; i++ ) {
 			for ( Level level : levels) {
