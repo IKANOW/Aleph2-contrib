@@ -17,6 +17,7 @@ package com.ikanow.aleph2.logging.utils;
 
 import java.util.HashMap;
 import java.util.Optional;
+
 import org.apache.logging.log4j.Level;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -27,7 +28,7 @@ import com.ikanow.aleph2.core.shared.services.MultiDataService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.ManagementSchemaBean;
-import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.LoggingSchemaBean;
+import com.ikanow.aleph2.data_model.objects.data_import.ManagementSchemaBean.LoggingSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
