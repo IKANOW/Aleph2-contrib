@@ -15,25 +15,16 @@
  *******************************************************************************/
 package com.ikanow.aleph2.logging.utils;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Supplier;
-
 import org.apache.logging.log4j.Level;
-
-import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
-import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
-import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
+import com.ikanow.aleph2.core.shared.services.MultiDataService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.ManagementSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.LoggingSchemaBean;
@@ -94,13 +85,11 @@ public class LoggingUtils {
 	 * @param bucket
 	 * @return
 	 */
-	public static IDataWriteService<JsonNode> getLoggingServiceForBucket(final ISearchIndexService search_index_service, final IStorageService storage_service, final DataBucketBean bucket) {
+	public static MultiDataService getLoggingServiceForBucket(final IServiceContext service_context, final DataBucketBean bucket) {
 		//change the bucket.full_name to point to a logging location
 		final DataBucketBean bucket_logging = BucketUtils.convertDataBucketBeanToLogging(bucket);
-		
 		//return crudservice pointing to this path
-		//TODO in the future need to switch to wrapper that gets the actual services we need (currently everything is ES so this if fine)
-		return search_index_service.getDataService().get().getWritableDataService(JsonNode.class, bucket_logging, Optional.empty(), Optional.empty()).get();
+		return MultiDataService.getMultiWriter(bucket_logging, service_context); 
 	}
 
 	/**
@@ -147,83 +136,12 @@ public class LoggingUtils {
 		return curr_min_level.isLessSpecificThan(level);
 	}
 	
-	public static class EmptyWritable<T> implements IDataWriteService<T> {
-
-		/* (non-Javadoc)
-		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#storeObject(java.lang.Object)
-		 */
-		@Override
-		public CompletableFuture<Supplier<Object>> storeObject(T new_object) {
-			return CompletableFuture.completedFuture(() -> true);
-		}
-
-		/* (non-Javadoc)
-		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#storeObject(java.lang.Object, boolean)
-		 */
-		@Override
-		public CompletableFuture<Supplier<Object>> storeObject(T new_object,
-				boolean replace_if_present) {
-			return CompletableFuture.completedFuture(() -> true);
-		}
-
-		/* (non-Javadoc)
-		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#storeObjects(java.util.List)
-		 */
-		@Override
-		public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(
-				List<T> new_objects) {
-			return CompletableFuture.completedFuture(new Tuple2<Supplier<List<Object>>, Supplier<Long>>(() -> new ArrayList<Object>(), () -> 0L));
-		}
-
-		/* (non-Javadoc)
-		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#storeObjects(java.util.List, boolean)
-		 */
-		@Override
-		public CompletableFuture<Tuple2<Supplier<List<Object>>, Supplier<Long>>> storeObjects(
-				List<T> new_objects, boolean replace_if_present) {
-			return CompletableFuture.completedFuture(new Tuple2<Supplier<List<Object>>, Supplier<Long>>(() -> new ArrayList<Object>(), () -> 0L));
-		}
-
-		/* (non-Javadoc)
-		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#countObjects()
-		 */
-		@Override
-		public CompletableFuture<Long> countObjects() {
-			return CompletableFuture.completedFuture(0L);
-		}
-
-		/* (non-Javadoc)
-		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#deleteDatastore()
-		 */
-		@Override
-		public CompletableFuture<Boolean> deleteDatastore() {
-			return CompletableFuture.completedFuture(true);
-		}
-
-		/* (non-Javadoc)
-		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#getCrudService()
-		 */
-		@Override
-		public Optional<ICrudService<T>> getCrudService() {
-			return Optional.empty();
-		}
-
-		/* (non-Javadoc)
-		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#getRawService()
-		 */
-		@Override
-		public IDataWriteService<JsonNode> getRawService() {
-			return null;
-		}
-
-		/* (non-Javadoc)
-		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService#getUnderlyingPlatformDriver(java.lang.Class, java.util.Optional)
-		 */
-		@SuppressWarnings("hiding")
-		@Override
-		public <T> Optional<T> getUnderlyingPlatformDriver(
-				Class<T> driver_class, Optional<String> driver_options) {
-			return Optional.empty();
-		}
+	/**
+	 * Creates an empty DataBucketBean to use during creation of a MultiWriter
+	 * as a way to create a safe empty writer that will do nothing when invoked.
+	 * @return
+	 */
+	public static DataBucketBean getEmptyBucket() {
+		return BeanTemplateUtils.build(DataBucketBean.class).done().get();
 	}
 }

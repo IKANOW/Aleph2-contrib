@@ -29,11 +29,11 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
-import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
+import com.ikanow.aleph2.core.shared.services.MultiDataService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ILoggingService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
@@ -50,20 +50,19 @@ import com.ikanow.aleph2.management_db.services.DataBucketCrudService;
 public class LoggingService implements ILoggingService {
 	
 	private final static Logger _logger = LogManager.getLogger();
-	protected final static Cache<String, IDataWriteService<JsonNode>> bucket_writable_cache = CacheBuilder.newBuilder().expireAfterAccess(30, TimeUnit.MINUTES).build();
+	protected final static Cache<String, MultiDataService> bucket_writable_cache = CacheBuilder.newBuilder().expireAfterAccess(30, TimeUnit.MINUTES).build();
 	
 	protected final LoggingServiceConfigBean properties;
-	protected final ISearchIndexService search_index_service;
+	protected final IServiceContext service_context;
 	protected final IStorageService storage_service;
 	
 	@Inject
 	public LoggingService(
 			final LoggingServiceConfigBean properties, 
-			final ISearchIndexService search_index_service,
-			final IStorageService storage_service) {
+			final IServiceContext service_context) {
 		this.properties = properties;
-		this.search_index_service = search_index_service;
-		this.storage_service = storage_service;
+		this.service_context = service_context;
+		this.storage_service = service_context.getStorageService();		
 	}	
 
 	/* (non-Javadoc)
@@ -71,7 +70,7 @@ public class LoggingService implements ILoggingService {
 	 */
 	@Override
 	public CompletableFuture<IBucketLogger> getLogger(DataBucketBean bucket) {
-		return getBucketLogger(bucket, getWritable(bucket), false, storage_service);		
+		return getBucketLogger(bucket, getWritable(bucket), false);		
 	}
 
 	/* (non-Javadoc)
@@ -79,7 +78,7 @@ public class LoggingService implements ILoggingService {
 	 */
 	@Override
 	public CompletableFuture<IBucketLogger> getSystemLogger(DataBucketBean bucket) {
-		return getBucketLogger(bucket, getWritable(bucket), true, storage_service);
+		return getBucketLogger(bucket, getWritable(bucket), true);
 	}
 	
 	/* (non-Javadoc)
@@ -88,7 +87,7 @@ public class LoggingService implements ILoggingService {
 	@Override
 	public CompletableFuture<IBucketLogger> getExternalLogger(final String subsystem) {
 		final DataBucketBean bucket = LoggingUtils.getExternalBucket(subsystem, Optional.ofNullable(properties.default_system_log_level()).orElse(Level.OFF));		
-		return getBucketLogger(bucket, getWritable(bucket), true, storage_service);
+		return getBucketLogger(bucket, getWritable(bucket), true);
 	}
 	
 	/**
@@ -98,14 +97,15 @@ public class LoggingService implements ILoggingService {
 	 * @return
 	 * @throws ExecutionException 
 	 */
-	private IDataWriteService<JsonNode> getWritable(final DataBucketBean log_bucket) {
+	private MultiDataService getWritable(final DataBucketBean log_bucket) {
 		try {
 			return bucket_writable_cache.get(getWritableCacheKey(log_bucket), () -> {
-				return LoggingUtils.getLoggingServiceForBucket(search_index_service, storage_service, log_bucket); //TODO will I need temporal/columnar services also
+				return LoggingUtils.getLoggingServiceForBucket(service_context, log_bucket);
 			});
 		} catch (ExecutionException e) {
+			//return an empty multiwriter when we've had a failure (this shouldn't occur, but justu to be safe)
 			_logger.error("Error getting writable for bucket: " + log_bucket.full_name() + " return an empty logger instead that ignores requests", e);
-			return new LoggingUtils.EmptyWritable<JsonNode>();
+			return LoggingUtils.getLoggingServiceForBucket(service_context, LoggingUtils.getEmptyBucket());
 		}
 	}	
 
@@ -116,11 +116,9 @@ public class LoggingService implements ILoggingService {
 	 * @param bucket
 	 * @param writable
 	 * @param b
-	 * @param storage_service2
 	 */
 	private CompletableFuture<IBucketLogger> getBucketLogger(DataBucketBean bucket,
-			IDataWriteService<JsonNode> writable, boolean isSystem,
-			IStorageService storage_service2) {
+			MultiDataService writable, boolean isSystem) {
 		//initial the logging bucket path in case it hasn't been created yet
 		try {
 			DataBucketCrudService.createFilePaths(bucket, storage_service);
@@ -149,14 +147,14 @@ public class LoggingService implements ILoggingService {
 	 *
 	 */
 	private class BucketLogger implements IBucketLogger {
-		final IDataWriteService<JsonNode> logging_writable;
+		final MultiDataService logging_writable;
 		final boolean isSystem;
 		final DataBucketBean bucket;
 		final String date_field;
 		final Level default_log_level;  //holds the default log level for quick matching
 		final ImmutableMap<String, Level> bucket_logging_thresholds; //holds bucket logging overrides for quick matching
 		
-		public BucketLogger(final DataBucketBean bucket, final IDataWriteService<JsonNode> logging_writable, final boolean isSystem) {
+		public BucketLogger(final DataBucketBean bucket, final MultiDataService logging_writable, final boolean isSystem) {
 			this.bucket = bucket;
 			this.logging_writable = logging_writable;
 			this.isSystem = isSystem;
@@ -176,10 +174,18 @@ public class LoggingService implements ILoggingService {
 				
 				//send message to output log file
 				_logger.debug("LOGGING MSG: " + logObject.toString());		
-				return logging_writable.storeObject(logObject);
+				return CompletableFuture.completedFuture(logging_writable.batchWrite(logObject));
 			} else {
 				return CompletableFuture.completedFuture(ErrorUtils.buildSuccessMessage(this.getClass().getName(), "Log message dropped, below threshold", "n/a"));
 			}			
+		}
+
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger#flush()
+		 */
+		@Override
+		public CompletableFuture<?> flush() {
+			return logging_writable.flushBatchOutput();
 		}		
 	}
 }

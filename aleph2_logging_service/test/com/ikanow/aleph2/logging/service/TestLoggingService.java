@@ -36,7 +36,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
-import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
@@ -58,7 +57,6 @@ import com.typesafe.config.ConfigFactory;
 public class TestLoggingService {
 	private static final Logger _logger = LogManager.getLogger();
 	private static ISearchIndexService search_index_service;
-	private static IStorageService storage_service;
 	private static LoggingService logging_service;
 	protected ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 	protected Injector _app_injector;
@@ -91,7 +89,6 @@ public class TestLoggingService {
 		
 		_app_injector.injectMembers(this);
 		search_index_service = _service_context.getSearchIndexService().get();
-		storage_service = _service_context.getStorageService();
 	}
 
 	@AfterClass
@@ -101,7 +98,7 @@ public class TestLoggingService {
 	@Before
 	public void setUp() throws Exception {
 		getServices();		
-		logging_service = new LoggingService(_config, search_index_service, storage_service);
+		logging_service = new LoggingService(_config, _service_context);
 	}
 
 	@After
