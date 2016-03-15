@@ -131,8 +131,8 @@ public class LoggingUtils {
 	public static boolean meetsLogLevelThreshold(final Level level, final ImmutableMap<String, Level> logging_overrides, final String subsystem, final Level default_log_level) {
 		final Level curr_min_level = 
 				Optional.ofNullable(logging_overrides.get(subsystem))
-				.orElse(Optional.ofNullable(logging_overrides.get(DEFAULT_LEVEL_KEY))
-				.orElse(default_log_level));	
+				.orElseGet(() -> (Optional.ofNullable(logging_overrides.get(DEFAULT_LEVEL_KEY))
+						.orElse(default_log_level)));	
 		return curr_min_level.isLessSpecificThan(level);
 	}
 	
