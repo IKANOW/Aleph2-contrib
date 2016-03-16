@@ -151,6 +151,12 @@
 			<artifactId>storm-kafka</artifactId>
 			<version>0.10.0</version>
 		</dependency>
+		<dependency>
+			<groupId>com.ikanow.aleph2</groupId>
+			<artifactId>aleph2_logging_service</artifactId>
+			<version>${aleph2.version}</version>
+			<scope>${aleph2.scope}</scope>
+		</dependency>
 		<!-- Test deps -->
 		<dependency>
 			<groupId>com.ikanow.aleph2</groupId>
