@@ -23,7 +23,7 @@ class Aleph2Driver:
 		return self.aleph2.emitRdd(rdd._to_java_object_rdd())
 		
 	def externalEmitRdd(self, path, rdd):
-		return self.aleph2.externalEmitRdd(path, to_output._to_java_object_rdd())
+		return self.aleph2.externalEmitRdd(path, rdd._to_java_object_rdd())
 
 	def emitObject(self, obj):
 		return self.aleph2.emitObject(obj)
