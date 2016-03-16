@@ -44,8 +44,10 @@ import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ILoggingService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService;
@@ -112,6 +114,7 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	protected ICoreDistributedServices _distributed_services; 	
 	protected ISearchIndexService _index_service;
 	protected IStorageService _storage_service;
+	protected ILoggingService _logging_service;
 	protected GlobalPropertiesBean _globals;
 
 	protected final ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());	
@@ -135,6 +138,7 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 		_distributed_services = service_context.getService(ICoreDistributedServices.class, Optional.empty()).get();		
 		_index_service = service_context.getService(ISearchIndexService.class, Optional.empty()).get();
 		_storage_service = _service_context.getStorageService();
+		_logging_service = _service_context.getService(ILoggingService.class, Optional.empty()).get();
 		_globals = service_context.getGlobalProperties();
 	}
 
@@ -596,24 +600,6 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	}
 
 	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#logStatusForThreadOwner(java.util.Optional, com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean, boolean)
-	 */
-	@Override
-	public void logStatusForThreadOwner(final Optional<DataBucketBean> bucket,
-			final BasicMessageBean message, final boolean roll_up_duplicates) {
-		throw new RuntimeException(ErrorUtils.NOT_YET_IMPLEMENTED);
-	}
-
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#logStatusForThreadOwner(java.util.Optional, com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean)
-	 */
-	@Override
-	public void logStatusForThreadOwner(final Optional<DataBucketBean> bucket,
-			final BasicMessageBean message) {
-		throw new RuntimeException(ErrorUtils.NOT_YET_IMPLEMENTED);
-	}
-
-	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#emergencyDisableBucket(java.util.Optional)
 	 */
 	@Override
@@ -732,5 +718,13 @@ public class MockAnalyticsContext implements IAnalyticsContext {
 	public CompletableFuture<?> flushBatchOutput(
 			Optional<DataBucketBean> bucket, AnalyticThreadJobBean job) {
 		return CompletableFuture.completedFuture(Unit.unit());
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext#getLogger(java.util.Optional)
+	 */
+	@Override
+	public IBucketLogger getLogger(Optional<DataBucketBean> bucket) {
+		return _logging_service.getLogger(bucket.orElseGet(() -> _mutable_state.bucket.get()));
 	}
 }
