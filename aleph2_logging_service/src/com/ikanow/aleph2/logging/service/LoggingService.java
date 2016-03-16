@@ -15,6 +15,8 @@
  *******************************************************************************/
 package com.ikanow.aleph2.logging.service;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -186,5 +188,22 @@ public class LoggingService implements ILoggingService {
 		public CompletableFuture<?> flush() {
 			return logging_writable.flushBatchOutput();
 		}		
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingArtefacts()
+	 */
+	@Override
+	public Collection<Object> getUnderlyingArtefacts() {
+		return Collections.emptyList();
+	}
+
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingPlatformDriver(java.lang.Class, java.util.Optional)
+	 */
+	@Override
+	public <T> Optional<T> getUnderlyingPlatformDriver(Class<T> driver_class,
+			Optional<String> driver_options) {
+		return Optional.empty();
 	}
 }
