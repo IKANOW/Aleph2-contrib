@@ -151,12 +151,6 @@
 			<artifactId>storm-kafka</artifactId>
 			<version>0.10.0</version>
 		</dependency>
-		<dependency>
-			<groupId>com.ikanow.aleph2</groupId>
-			<artifactId>aleph2_logging_service</artifactId>
-			<version>${aleph2.version}</version>
-			<scope>${aleph2.scope}</scope>
-		</dependency>
 		<!-- Test deps -->
 		<dependency>
 			<groupId>com.ikanow.aleph2</groupId>
@@ -197,6 +191,12 @@
 		<dependency>
 			<groupId>com.ikanow.aleph2</groupId>
 			<artifactId>aleph2_crud_service_elasticsearch</artifactId>
+			<version>${aleph2.version}</version>
+			<scope>test</scope>
+		</dependency>		
+		<dependency>
+			<groupId>com.ikanow.aleph2</groupId>
+			<artifactId>aleph2_logging_service</artifactId>
 			<version>${aleph2.version}</version>
 			<scope>test</scope>
 		</dependency>
