@@ -74,7 +74,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	protected CombineFileSplit _fileSplit;
 	protected InputStream _inStream = null;
 	protected FileSystem _fs;
-	protected Configuration _config;
+	protected Configuration _config = null;
 	protected int _currFile = 0;
 	protected int _numFiles = 1;
 	protected int _numRecords = 0;
@@ -92,6 +92,14 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	
 	/** User c'tor
 	 */
+	public BeFileInputReader(Configuration config_override){
+		super();
+		logger.debug("BeFileInputReader.constructor");
+		_config = config_override;
+	}
+	
+	/** User c'tor
+	 */
 	public BeFileInputReader(){
 		super();
 		logger.debug("BeFileInputReader.constructor");
@@ -103,7 +111,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	@SuppressWarnings("unchecked")
 	@Override
 	public void initialize(InputSplit inputSplit, TaskAttemptContext context) throws IOException, InterruptedException{				
-		_config = context.getConfiguration();
+		if (null == _config) _config = context.getConfiguration();
 		_fileSplit = (CombineFileSplit) inputSplit;
 		_numFiles = _fileSplit.getNumPaths();
 		
@@ -111,7 +119,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		_maxRecords = _config.getInt(BatchEnrichmentJob.BE_DEBUG_MAX_SIZE, Integer.MAX_VALUE);
 		
 		// Get input configuration...
-		final AnalyticThreadJobInputBean input_settings = BeanTemplateUtils.from(context.getConfiguration().get(BatchEnrichmentJob.BE_BUCKET_INPUT_CONFIG, "{}"), AnalyticThreadJobInputBean.class).get();		
+		final AnalyticThreadJobInputBean input_settings = BeanTemplateUtils.from(_config.get(BatchEnrichmentJob.BE_BUCKET_INPUT_CONFIG, "{}"), AnalyticThreadJobInputBean.class).get();
 		// ... Convert to parsers		
 		_parsers = Stream.concat(
 				Optionals.of(() -> input_settings.filter().get("technology_override"))
