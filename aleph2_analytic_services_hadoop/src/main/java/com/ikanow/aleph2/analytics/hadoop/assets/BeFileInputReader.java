@@ -163,6 +163,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	public boolean nextKeyValue() throws IOException, InterruptedException {
 		_numRecords++;
 		if (_numRecords > _maxRecords) {
+			archiveOrDeleteFile();
 			if (null != _inStream) {
 				_inStream.close();
 			}
