@@ -47,7 +47,7 @@ public class BeFileInputConfigBean {
 	 */
 	public static class XML {
 
-		public String file_pattern() { return Optional.of(file_pattern).orElse("^.*[.]xml"); }
+		public String file_pattern() { return Optional.ofNullable(file_pattern).orElse("^.*[.]xml"); }
 		
 		public List<String> root_fields() { return Optional.ofNullable(root_fields).orElse(Collections.emptyList()); }
 		public List<String> ignore_fields() { return Optional.ofNullable(ignore_fields).orElse(Collections.emptyList()); }
