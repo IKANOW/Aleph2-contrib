@@ -221,8 +221,8 @@ public class BatchEnrichmentJob{
 		 */
 		protected void checkBatch(boolean flush, final TaskInputOutputContext<?,?,ObjectNodeWritableComparable,ObjectNodeWritableComparable> hadoop_context){
 			if (flush) {
-				_v1_logger.ifPresent(logger -> logger.info("Completing job"));
-				logger.info("Completing job");
+				_v1_logger.ifPresent(logger -> logger.info("Completing job."));
+				logger.info("Completing job.");
 			}
 			
 			if((_batch.size() >= _batch_size) || (!_batch.isEmpty() && flush)) {

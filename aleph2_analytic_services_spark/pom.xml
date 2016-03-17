@@ -61,6 +61,19 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                        	<filters>
+                        		<filter>
+                        			<!-- Need to remove some unwanted classes pulled in from Hadoop ...
+                        			     ... particularly important is BatchEnrichmentJob, which needs to be in the hadoop services JAR
+                        			         because it's referenced in setJarByClass() in the Hadoop job launcher
+                        			 -->
+                        			<artifact>com.ikanow.aleph2:aleph2_analytic_services_hadoop</artifact>
+                        			<excludes>
+                        				<exclude>**/hadoop/services/**</exclude>
+                        				<exclude>**/hadoop/assets/BatchEnrichmentJob*</exclude>
+                        			</excludes>
+                        		</filter>
+                        	</filters>
                             <shadedArtifactAttached>true</shadedArtifactAttached>
                         </configuration>
                     </execution>

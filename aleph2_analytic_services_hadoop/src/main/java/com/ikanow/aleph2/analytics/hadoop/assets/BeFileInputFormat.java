@@ -25,7 +25,6 @@ import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
-import org.apache.hadoop.mapreduce.lib.input.CombineFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.CombineFileSplit;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -66,7 +65,8 @@ public class BeFileInputFormat extends UpdatedCombineFileInputFormat<String, Tup
 	@Override
 	public RecordReader<String, Tuple2<Long, IBatchRecord>> createRecordReader(InputSplit inputSplit, TaskAttemptContext context) throws IOException {
 		logger.debug("BeFileInputFormat.createRecordReader");
-		BeFileInputReader reader = new BeFileInputReader();
+		
+		BeFileInputReader reader = new BeFileInputReader(context.getConfiguration());
 		// (don't initialize - that gets called seperately by the interface)
 		return reader;
 	} // createRecordReader
