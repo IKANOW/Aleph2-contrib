@@ -55,6 +55,8 @@ import fj.data.Either;
 
 public class TestElasticsearchIndexUtils {
 
+	//TODO (ALEPH-20): test coverage for the tokenization/dual tokenization overrides
+	
 	static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 	
 	ElasticsearchIndexServiceConfigBean _config ;
@@ -270,11 +272,11 @@ public class TestElasticsearchIndexUtils {
 		
 		// Templates, empty + non-empty
 
-		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> templates_test1 = ElasticsearchIndexUtils.getTemplates(properties_json);
+		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> templates_test1 = ElasticsearchIndexUtils.getTemplates(properties_json, _mapper.readTree("{}"));
 		assertTrue("Empty map if not present", templates_test1.isEmpty());
 		
-		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> templates_test2 = ElasticsearchIndexUtils.getTemplates(templates_json);
-		assertEquals(2, templates_test2.size());
+		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> templates_test2 = ElasticsearchIndexUtils.getTemplates(templates_json, _mapper.readTree("{}"));
+		assertEquals("getTemplates: " + templates_test2, 2, templates_test2.size());
 		assertEquals(Arrays.asList(
 					Tuples._2T("*", "string"),
 					Tuples._2T("*", "number")
@@ -292,14 +294,14 @@ public class TestElasticsearchIndexUtils {
 		// Putting it all together...
 		
 		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> 
-			total_result1 = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.of("type_test"));
+			total_result1 = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.of("type_test"), Optional.empty(), _config.search_technology_override(), _mapper);
 		
 		assertEquals(4, total_result1.size());
-		assertEquals("{\"match\":\"test*\",\"match_mapping_type\":\"number\",\"mapping\":{\"type\":\"number\",\"index\":\"analyzed\"}}", total_result1.get(Either.right(Tuples._2T("test*", "number"))).toString());
+		assertEquals("{\"mapping\":{\"type\":\"number\",\"index\":\"analyzed\"},\"path_match\":\"test*\",\"match_mapping_type\":\"number\"}", total_result1.get(Either.right(Tuples._2T("test*", "number"))).toString());
 		assertEquals("{\"type\":\"date\"}", total_result1.get(Either.left("@timestamp1")).toString());
 		
 		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> 
-		total_result2 = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty());
+		total_result2 = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
 	
 		assertEquals(7, total_result2.size());
 		assertEquals(true, total_result2.get(Either.right(Tuples._2T("*", "string"))).get("mapping").get("omit_norms").asBoolean());
@@ -317,7 +319,7 @@ public class TestElasticsearchIndexUtils {
 		final String both = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/full_mapping_test.json"), Charsets.UTF_8);
 		final JsonNode both_json = _mapper.readTree(both);		
 		
-		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty());
+		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
 
 		//DEBUG
 //		System.out.println("(Field lookups = " + field_lookups + ")");
@@ -340,7 +342,7 @@ public class TestElasticsearchIndexUtils {
 												t2 -> t2._1(),
 												t2 -> t2._2()
 												));
-			final String test_map_expected_1 = "{Left(@timestamp)={'type':'date','fielddata':{}}, Right((field_not_present,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'doc_values'}},'path_match':'field_not_present','match_mapping_type':'*'}, Left(@version)={'type':'string','index':'analyzed','fielddata':{'format':'fst'}}}";
+			final String test_map_expected_1 = "{Left(@timestamp)={'type':'date','fielddata':{}}, Right((field_not_present,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'doc_values'}},'path_match':'field_not_present','match_mapping_type':'*'}, Left(@version)={'type':'string','index':'analyzed','fielddata':{'format':'paged_bytes'}}}";
 			assertEquals(test_map_expected_1, strip(test_map_result_1.toString()));
 			
 			//DEBUG
@@ -366,7 +368,7 @@ public class TestElasticsearchIndexUtils {
 												t2 -> t2._2()
 												));
 			
-			final String test_map_expected_1 = "{Right((test*,*))={'match':'test*','match_mapping_type':'*','mapping':{'type':'string','index':'analyzed','omit_norms':true,'fields':{'raw':{'type':'string','index':'not_analyzed','ignore_above':256,'fielddata':{'format':'doc_values'}}},'fielddata':{'format':'fst'}}}, Right((*,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'doc_values'}},'path_match':'*','match_mapping_type':'*'}}";
+			final String test_map_expected_1 = "{Right((test*,*))={'mapping':{'type':'string','index':'analyzed','omit_norms':true,'fields':{'raw':{'type':'string','index':'not_analyzed','ignore_above':256,'fielddata':{'format':'doc_values'}}},'fielddata':{'format':'paged_bytes'}},'path_match':'test*','match_mapping_type':'*'}, Right((*,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'doc_values'}},'path_match':'*','match_mapping_type':'*'}}";
 			assertEquals(test_map_expected_1, strip(test_map_result_1.toString()));
 			
 			//DEBUG
@@ -410,7 +412,7 @@ public class TestElasticsearchIndexUtils {
 												t2 -> t2._2()
 												));
 			
-			final String test_map_expected_1 = "{Right((test*,*))={'match':'test*','match_mapping_type':'*','mapping':{'type':'string','index':'analyzed','omit_norms':true,'fields':{'raw':{'type':'string','index':'not_analyzed','ignore_above':256,'fielddata':{'format':'disabled'}}},'fielddata':{'format':'disabled'}}}, Right((*,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'disabled'}},'path_match':'*','match_mapping_type':'*'}}";
+			final String test_map_expected_1 = "{Right((test*,*))={'mapping':{'type':'string','index':'analyzed','omit_norms':true,'fields':{'raw':{'type':'string','index':'not_analyzed','ignore_above':256,'fielddata':{'format':'disabled'}}},'fielddata':{'format':'disabled'}},'path_match':'test*','match_mapping_type':'*'}, Right((*,*))={'mapping':{'index':'not_analyzed','type':'{dynamic_type}','fielddata':{'format':'disabled'}},'path_match':'*','match_mapping_type':'*'}}";
 			assertEquals(test_map_expected_1, strip(test_map_result_1.toString()));
 
 			//DEBUG
@@ -476,8 +478,8 @@ public class TestElasticsearchIndexUtils {
 		
 		// 1) Default
 		{
-			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty());
-			
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
+		
 			//DEBUG
 //			System.out.println("(Field lookups = " + field_lookups + ")");
 //			System.out.println("(Analyzed default = " + _config.columnar_technology_override().default_field_data_analyzed() + ")");
@@ -558,7 +560,7 @@ public class TestElasticsearchIndexUtils {
 		
 		// 1d) Check if doc schema are enabled
 		{
-			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty());
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
 			
 			final XContentBuilder test_result = ElasticsearchIndexUtils.getColumnarMapping(
 					test_bucket, Optional.empty(), field_lookups, 
@@ -581,7 +583,7 @@ public class TestElasticsearchIndexUtils {
 			final JsonNode test_type_json = _mapper.readTree(test_type);		
 			
 			
-			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(test_type_json, Optional.of("type_test"));			
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(test_type_json, Optional.of("type_test"), Optional.empty(), _config.search_technology_override(), _mapper);			
 			
 			final XContentBuilder test_result = ElasticsearchIndexUtils.getColumnarMapping(
 					test_bucket, Optional.of(XContentFactory.jsonBuilder().startObject()), field_lookups, 
@@ -598,7 +600,7 @@ public class TestElasticsearchIndexUtils {
 		// 2b) type doesn't exist, should fall back to _default_
 
 		{
-			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.of("no_such_type"));			
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.of("no_such_type"), Optional.empty(), _config.search_technology_override(), _mapper);			
 			
 			final XContentBuilder test_result = ElasticsearchIndexUtils.getColumnarMapping(
 					test_bucket, Optional.of(XContentFactory.jsonBuilder().startObject()), field_lookups, 
@@ -821,7 +823,7 @@ public class TestElasticsearchIndexUtils {
 		
 		// 1) Sub method
 		{
-			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty());
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
 			
 			final XContentBuilder test_result = ElasticsearchIndexUtils.getFullMapping(
 					test_bucket, Optional.empty(), true, schema_config, field_lookups, 
@@ -858,7 +860,7 @@ public class TestElasticsearchIndexUtils {
 						)
 			.done().get();
 		
-		final String expected = "{\"template\":\"test_test__f19167d49eac*\",\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"aliases\":{\"r__test_test__f19167d49eac\":{}},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":\"/test/test\",\"is_primary\":\"true\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true},\"properties\":{\"@timestamp\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"}},\"dynamic_templates\":[{\"STAR_string\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"fields\":{\"raw\":{\"fielddata\":{\"format\":\"disabled\"},\"ignore_above\":256,\"index\":\"not_analyzed\",\"type\":\"string\"}},\"index\":\"analyzed\",\"omit_norms\":true,\"type\":\"string\"},\"match\":\"*\",\"match_mapping_type\":\"string\"}},{\"STAR_STAR\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"index\":\"not_analyzed\",\"type\":\"{dynamic_type}\"},\"match\":\"*\",\"match_mapping_type\":\"*\"}}]}}}";
+		final String expected = "{\"template\":\"test_test__f19167d49eac*\",\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"aliases\":{\"r__test_test__f19167d49eac\":{}},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":\"/test/test\",\"is_primary\":\"true\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true},\"properties\":{\"@timestamp\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"}},\"dynamic_templates\":[{\"STAR_string\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"fields\":{\"raw\":{\"fielddata\":{\"format\":\"disabled\"},\"ignore_above\":256,\"index\":\"not_analyzed\",\"type\":\"string\"}},\"index\":\"analyzed\",\"omit_norms\":true,\"type\":\"string\"},\"match_mapping_type\":\"string\",\"path_match\":\"*\"}},{\"STAR_STAR\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"index\":\"not_analyzed\",\"type\":\"{dynamic_type}\"},\"match_mapping_type\":\"*\",\"path_match\":\"*\"}}]}}}";
 		
 		// Search index schema only
 		{			
@@ -944,7 +946,7 @@ public class TestElasticsearchIndexUtils {
 			//
 
 			//(has testtime inserted)
-			final String expected2 = "{\"template\":\"test_test__f19167d49eac*\",\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":\"/test/test\",\"is_primary\":\"false\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true},\"properties\":{\"@timestamp\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"},\"testtime\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"}},\"dynamic_templates\":[{\"STAR_string\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"fields\":{\"raw\":{\"fielddata\":{\"format\":\"disabled\"},\"ignore_above\":256,\"index\":\"not_analyzed\",\"type\":\"string\"}},\"index\":\"analyzed\",\"omit_norms\":true,\"type\":\"string\"},\"match\":\"*\",\"match_mapping_type\":\"string\"}},{\"STAR_STAR\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"index\":\"not_analyzed\",\"type\":\"{dynamic_type}\"},\"match\":\"*\",\"match_mapping_type\":\"*\"}}]}}}";
+			final String expected2 = "{\"template\":\"test_test__f19167d49eac*\",\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":\"/test/test\",\"is_primary\":\"false\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true},\"properties\":{\"@timestamp\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"},\"testtime\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"}},\"dynamic_templates\":[{\"STAR_string\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"fields\":{\"raw\":{\"fielddata\":{\"format\":\"disabled\"},\"ignore_above\":256,\"index\":\"not_analyzed\",\"type\":\"string\"}},\"index\":\"analyzed\",\"omit_norms\":true,\"type\":\"string\"},\"match_mapping_type\":\"string\",\"path_match\":\"*\"}},{\"STAR_STAR\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"index\":\"not_analyzed\",\"type\":\"{dynamic_type}\"},\"match_mapping_type\":\"*\",\"path_match\":\"*\"}}]}}}";
 
 			final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
 			final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
@@ -957,8 +959,12 @@ public class TestElasticsearchIndexUtils {
 			assertEquals("Get expected search_index_test schema", expected2, mapping.bytes().toUtf8());
 		}
 		
-		// Columnar + search index schema
+		// Columnar + search index schema (note default columnar schema => revert to defaults)
 		{
+			final String expected_with_columnar_defaults =
+				"{\"template\":\"test_test__f19167d49eac*\",\"settings\":{\"index.indices.fielddata.cache.size\":\"10%\",\"index.refresh_interval\":\"5s\"},\"aliases\":{\"r__test_test__f19167d49eac\":{}},\"mappings\":{\"_default_\":{\"_meta\":{\"bucket_path\":\"/test/test\",\"is_primary\":\"true\",\"secondary_buffer\":\"\"},\"_all\":{\"enabled\":false},\"_source\":{\"enabled\":true},\"properties\":{\"@timestamp\":{\"fielddata\":{\"format\":\"doc_values\"},\"index\":\"not_analyzed\",\"type\":\"date\"}},\"dynamic_templates\":[{\"STAR_string\":{\"mapping\":{\"fielddata\":{\"format\":\"paged_bytes\"},\"fields\":{\"raw\":{\"fielddata\":{\"format\":\"doc_values\"},\"ignore_above\":256,\"index\":\"not_analyzed\",\"type\":\"string\"}},\"index\":\"analyzed\",\"omit_norms\":true,\"type\":\"string\"},\"match_mapping_type\":\"string\",\"path_match\":\"*\"}},{\"STAR_number\":{\"mapping\":{\"index\":\"not_analyzed\",\"type\":\"number\",\"fielddata\":{\"format\":\"doc_values\"}},\"path_match\":\"*\",\"match_mapping_type\":\"number\"}},{\"STAR_date\":{\"mapping\":{\"index\":\"not_analyzed\",\"type\":\"date\",\"fielddata\":{\"format\":\"doc_values\"}},\"path_match\":\"*\",\"match_mapping_type\":\"date\"}},{\"STAR_STAR\":{\"mapping\":{\"fielddata\":{\"format\":\"disabled\"},\"index\":\"not_analyzed\",\"type\":\"{dynamic_type}\"},\"match_mapping_type\":\"*\",\"path_match\":\"*\"}}]}}}"
+					;
+			
 			final DataBucketBean columnar_test = BeanTemplateUtils.clone(search_index_test)
 													.with(DataBucketBean::data_schema, 
 															BeanTemplateUtils.clone(search_index_test.data_schema())
@@ -978,10 +984,10 @@ public class TestElasticsearchIndexUtils {
 			
 			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(columnar_test, Optional.empty(), true, schema_config, _mapper, index_type);
 	
-			assertEquals("Get expected search_index_test schema", expected, mapping.bytes().toUtf8());
+			assertEquals("Get expected search_index_test schema", expected_with_columnar_defaults, mapping.bytes().toUtf8());
 		}
 		
-		// Columnar + temporlal search index schema
+		// Columnar + temporal search index schema (add one field to columnar schema to ensure that the defaults aren't applied)
 		{
 			final DataBucketBean temporal_columnar_test = BeanTemplateUtils.clone(search_index_test)
 													.with(DataBucketBean::data_schema, 
@@ -990,7 +996,9 @@ public class TestElasticsearchIndexUtils {
 																		BeanTemplateUtils.build(DataSchemaBean.TemporalSchemaBean.class).done().get()
 																		)
 																.with(DataSchemaBean::columnar_schema, 
-																		BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class).done().get()
+																		BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class)
+																			.with(DataSchemaBean.ColumnarSchemaBean::field_type_include_list, Arrays.asList())
+																		.done().get()
 																		)
 																.done()
 															).done();

@@ -55,6 +55,14 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		public Map<String, Map<String, Object>> mapping_overrides() { return mapping_overrides; }
 		public String index_name_override() { return index_name_override; }
 		public Long target_index_size_mb() { return target_index_size_mb; }
+
+		public Map<String, Object> tokenized_string_field() { return tokenized_string_field; }
+		public Map<String, Object> untokenized_string_field() { return untokenized_string_field; }
+		public Map<String, Object> dual_tokenized_string_field() { return dual_tokenized_string_field; }
+		public Map<String, Object> dual_untokenized_string_field() { return dual_untokenized_string_field; }
+		public DataSchemaBean.ColumnarSchemaBean dual_tokenization_override() { return dual_tokenization_override; }
+
+		//////////////////////
 		
 		public enum CollidePolicy { error, new_type };
 		private CollidePolicy collide_policy;
@@ -66,6 +74,14 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		private Map<String, Map<String, Object>> mapping_overrides;
 		private String index_name_override;
 		private Long target_index_size_mb;
+		
+		// String fields are more complex so we'll allow a bunch of different ways of specifying them...
+		private Map<String, Object> tokenized_string_field;
+		private Map<String, Object> untokenized_string_field;
+		private Map<String, Object> dual_tokenized_string_field;
+		private Map<String, Object> dual_untokenized_string_field;
+		// ...And an override
+		private DataSchemaBean.ColumnarSchemaBean dual_tokenization_override;		
 	}
 	public static class ColumnarSchemaDefaultBean {
 		// the contents of the "fielddata" sub-object of a property for which an include has been specifed, takes from "_default", or field_type if the field_type can be inferred
@@ -73,7 +89,9 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		public Map<String, Map<String, Object>> enabled_field_data_notanalyzed() { return enabled_field_data_notanalyzed; }		
 		private Map<String, Map<String, Object>> enabled_field_data_analyzed;
 		private Map<String, Map<String, Object>> enabled_field_data_notanalyzed;
-
+		
+		///////////////////////
+		
 		// the contents of the "fielddata" sub-object of a property for which no include/exclude has been specifed, takes from "_default", or field_type if the field_type can be inferred
 		public Map<String, Map<String, Object>> default_field_data_analyzed() { return default_field_data_analyzed; }		
 		public Map<String, Map<String, Object>> default_field_data_notanalyzed() { return default_field_data_notanalyzed; }		

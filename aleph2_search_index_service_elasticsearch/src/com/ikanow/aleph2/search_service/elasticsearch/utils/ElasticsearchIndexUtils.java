@@ -43,6 +43,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.LinkedHashMultimap;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
@@ -68,6 +69,18 @@ public class ElasticsearchIndexUtils {
 	public static final String CUSTOM_META_SECONDARY = "secondary_buffer";
 	public static final String CUSTOM_META_BUCKET = "bucket_path";
 	public static final String CUSTOM_META_IS_PRIMARY = "is_primary"; //"true" or "false" 
+
+	public final static String DEFAULT_TOKENIZATION_TYPE = "_default_";
+	public final static String NO_TOKENIZATION_TYPE = "_none_";
+	protected final static String STRING_OVERRIDE_NAME = "__OVERRIDE_STRING_FIELDS__";
+	
+	//TODO (ALEPH-20): i think there's one final wrinkle here ... with columnar not overriding default things ... eg if
+	// user sets { search_index: { tokenize: true, tech: { dual: /*default==false*/ } }, columnar: { } }
+	// then no string fields will be columnar, which seems counter intuitive. Instead it should switch the string field to
+	// non-tokenized ... maybe could do a check for == tokenized_notdual and switch over in that case?
+	
+	//TODO (ALEPH-20): need to decide between dual tokenization == true (ie "LS defaults") or false (case that default should be:
+	//                 true if default_tokenization:true, false if default_tokenization:false)
 	
 	/////////////////////////////////////////////////////////////////////
 	
@@ -175,7 +188,25 @@ public class ElasticsearchIndexUtils {
 	 * @param type - if the index has a specific type, lookup that and _default_ ; otherwise just _default
 	 * @return
 	 */
-	public static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> parseDefaultMapping(final JsonNode mapping, final Optional<String> type) {
+	public static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> parseDefaultMapping(
+			final JsonNode mapping, final Optional<String> type,
+			final Optional<DataSchemaBean.SearchIndexSchemaBean> maybe_search_index_schema,
+			final SearchIndexSchemaDefaultBean search_index_schema_overrides,
+			final ObjectMapper mapper
+			)
+	{
+		
+		final boolean tokenize_by_default = maybe_search_index_schema.map(schema -> schema.tokenize_by_default()).orElse(true);
+		//TODO (ALEPH-20): set this as an override field with this as default:
+		final boolean dual_tokenize_by_default = tokenize_by_default; // (ie dual by default if fields are untokenized, not-dual if they're tokenized)		
+		final JsonNode default_string_mapping = 
+				((ObjectNode)(mapper.createObjectNode()
+					.set("mapping", 
+							ElasticsearchIndexUtils.getMapping(Tuples._2T(tokenize_by_default, dual_tokenize_by_default), search_index_schema_overrides, mapper))))
+					.put(TYPE_MATCH_NAME, "string")
+					.put(PATH_MATCH_NAME, "*")							
+					;
+		
 		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> ret = 
 				Optional.ofNullable(mapping.get("mappings"))
 					.map(m -> {
@@ -191,8 +222,17 @@ public class ElasticsearchIndexUtils {
 						return i;
 					})
 					.map(i -> {
-						final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> props = getProperties(i);						
-						props.putAll(getTemplates(i));
+						final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> props = new LinkedHashMap<>();						
+						props.putAll(getProperties(i));
+						props.putAll(getTemplates(i, default_string_mapping));
+						
+						//TODO: add 1) tokenization overrides, if string_override_name is present then override that using the settings
+						
+						// TODO: OK so I have a list of dynamic_templates, and a list of properties
+						// 1) want to leave the properties alone
+						// 2) then the tokenization overrides
+						// 3) then the other default templates ... handle __OVERRIDE_STRING_FIELDS__
+						
 						return props;
 					})
 					.orElse(new LinkedHashMap<>());
@@ -273,7 +313,7 @@ public class ElasticsearchIndexUtils {
 	 * @param index
 	 * @return
 	 */
-	protected static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> getTemplates(final JsonNode index) {
+	protected static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> getTemplates(final JsonNode index, final JsonNode default_string_mapping) {
 		return Optional.ofNullable(index.get("dynamic_templates"))
 					.filter(p -> !p.isNull())					
 					.map(p -> {
@@ -287,6 +327,7 @@ public class ElasticsearchIndexUtils {
 								return pf;
 							})
 							.flatMap(pp -> StreamSupport.stream(Spliterators.spliteratorUnknownSize(pp.fields(), Spliterator.ORDERED), false))
+							.map(kv -> !kv.getKey().equals(STRING_OVERRIDE_NAME) ? kv : Maps.immutableEntry(kv.getKey(), default_string_mapping)) //(special case - overwrite with system default)
 							.collect(Collectors.
 								<Map.Entry<String, JsonNode>, Either<String, Tuple2<String, String>>, JsonNode, LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>>
 								toMap(
@@ -299,7 +340,7 @@ public class ElasticsearchIndexUtils {
 					.orElse(new LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>());
 	}
 	
-	private static final String RAW_MATCH_NAME = "match";	
+	private static final String RAW_MATCH_NAME = "match"; //(only use this to read, never set)
 	private static final String PATH_MATCH_NAME = "path_match";	
 	private static final String TYPE_MATCH_NAME = "match_mapping_type";
 	
@@ -392,7 +433,108 @@ public class ElasticsearchIndexUtils {
 	protected final static String BACKUP_FIELD_MAPPING_TEMPLATES = "{\"mapping\":" + BACKUP_FIELD_MAPPING_PROPERTIES + "}";
 	protected final static String DEFAULT_FIELDDATA_NAME = "_default_";
 	protected final static String DISABLED_FIELDDATA = "{\"format\":\"disabled\"}";
+
+	/** Utility to build a lookup map based on a columnar schema
+	 * @param columnar_schema
+	 * @return
+	 */
+	protected static Map<Either<String, Tuple2<String, String>>, Boolean> createComplexStringLookups_partial(final DataSchemaBean.ColumnarSchemaBean columnar_schema) {
+		
+		return Stream.<Stream<Tuple2<Either<String, Tuple2<String, String>>, Boolean>>>of(
+				Optionals.ofNullable(columnar_schema.field_include_list()).stream()
+							.map(s -> Tuples._2T(Either.<String, Tuple2<String, String>>left(s), true)),
+				Optionals.ofNullable(columnar_schema.field_exclude_list()).stream()
+							.map(s -> Tuples._2T(Either.<String, Tuple2<String, String>>left(s), false)),
+				Optionals.ofNullable(columnar_schema.field_include_pattern_list()).stream()
+							.map(s -> Tuples._2T(Either.<String, Tuple2<String, String>>right(Tuples._2T(s, "*")), true)),
+				Optionals.ofNullable(columnar_schema.field_exclude_pattern_list()).stream()
+							.map(s -> Tuples._2T(Either.<String, Tuple2<String, String>>right(Tuples._2T(s, "*")), false)),
+				Optionals.ofNullable(columnar_schema.field_type_include_list()).stream()
+							.map(s -> Tuples._2T(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", s)), true)),
+							(Stream<Tuple2<Either<String, Tuple2<String, String>>, Boolean>>)Optionals.ofNullable(columnar_schema.field_type_exclude_list()).stream()
+							.map(s -> Tuples._2T(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", s)), true)))
+				.flatMap(__->__)
+				.collect(Collectors.toMap(t2-> t2._1(), t2 -> t2._2()))
+				;
+	}
+
+	/** Returns a JsonNode with the field's mapping
+	 * @param tokenize_dual
+	 * @param defaults
+	 * @return
+	 */
+	protected static JsonNode getMapping(final Tuple2<Boolean, Boolean> tokenize_dual, final SearchIndexSchemaDefaultBean defaults, final ObjectMapper mapper) {
+		return Patterns.match(tokenize_dual).<JsonNode>andReturn()
+				.when(td -> td.equals(Tuples._2T(true, true)), __ -> mapper.convertValue(defaults.dual_tokenized_string_field(), JsonNode.class))
+				.when(td -> td.equals(Tuples._2T(true, false)), __ -> mapper.convertValue(defaults.tokenized_string_field(), JsonNode.class))
+				.when(td -> td.equals(Tuples._2T(false, true)), __ -> mapper.convertValue(defaults.dual_untokenized_string_field(), JsonNode.class))
+				.when(td -> td.equals(Tuples._2T(false, false)), __ -> mapper.convertValue(defaults.untokenized_string_field(), JsonNode.class))
+				.otherwiseAssert();
+	}
+
 	
+	/** Utility to build a lookup map based on a columnar schema
+	 * @param columnar_schema
+	 * @return
+	 */
+	protected static Map<Either<String, Tuple2<String, String>>, JsonNode> createComplexStringLookups(
+			final DataSchemaBean.SearchIndexSchemaBean search_index_schema, 
+			final SearchIndexSchemaDefaultBean search_index_schema_override, 
+			final ObjectMapper mapper)
+	{
+		final boolean tokenize_by_default = Optional.ofNullable(search_index_schema.tokenize_by_default()).orElse(true);
+		//TODO (ALEPH-20): set this as an override field with this as default:
+		final boolean dual_tokenize_by_default = tokenize_by_default; // (ie dual by default if fields are untokenized, not-dual if they're tokenized)		
+		
+		// Start with streams of tokenized, non-tokenized, and dual fields
+		return Stream.of(
+			Optional.ofNullable(search_index_schema.tokenization_override())
+						.map(m -> m.get(DEFAULT_TOKENIZATION_TYPE))	
+						.map(columnar_schema -> createComplexStringLookups_partial(columnar_schema))
+						.orElse(Collections.emptyMap())
+						.entrySet()
+						.stream()
+						.<Tuple3<Either<String, Tuple2<String, String>>, Boolean, Boolean>>map(kv -> Tuples._3T(kv.getKey(), kv.getValue(), null))
+			,
+			Optional.ofNullable(search_index_schema.tokenization_override())
+						.map(m -> m.get(NO_TOKENIZATION_TYPE))	
+						.map(columnar_schema -> createComplexStringLookups_partial(columnar_schema))
+						.orElse(Collections.emptyMap())
+						.entrySet()
+						.stream()
+						.<Tuple3<Either<String, Tuple2<String, String>>, Boolean, Boolean>>map(kv -> Tuples._3T(kv.getKey(), !kv.getValue(), null))
+			,
+			Optional.ofNullable(search_index_schema_override.dual_tokenization_override())
+						.map(columnar_schema -> createComplexStringLookups_partial(columnar_schema))
+						.orElse(Collections.emptyMap())
+						.entrySet()
+						.stream()
+						.<Tuple3<Either<String, Tuple2<String, String>>, Boolean, Boolean>>map(kv -> Tuples._3T(kv.getKey(), null, kv.getValue()))
+			)
+			.flatMap(__->__)
+			// Merge the map
+			.collect(Collectors.toMap(
+					t3 -> t3._1(), 
+					t3 -> Tuples._2T(t3._2(), t3._3()), 
+					// use the existing value, unless it's null in which case overwrite it
+					(t2_1, t2_2) -> Tuples._2T(
+										Optional.ofNullable(t2_1._1()).orElse(t2_2._1()),
+										Optional.ofNullable(t2_2._1()).orElse(t2_2._2()))
+					))
+			.entrySet() 
+			// Now convert to the JSON mapping
+			.stream()
+			.map(kv -> Tuples._2T(
+							kv.getKey(), 
+							getMapping(
+									Tuples._2T(
+											Optional.ofNullable(kv.getValue()._1()).orElse(tokenize_by_default),
+											Optional.ofNullable(kv.getValue()._2()).orElse(dual_tokenize_by_default)
+									), 
+									search_index_schema_override, mapper)))
+			.collect(Collectors.toMap(t2 -> t2._1(), t2 -> t2._2()))
+			;
+	}
 	
 	/** Creates a mapping for the bucket - columnar elements
 	 *  ALSO INCLUDES THE PER-FIELD CONFIGURATION FROM THE SEARCH_INDEX_SCHEMA AND TEMPORAL_SCHMEA
@@ -415,44 +557,63 @@ public class ElasticsearchIndexUtils {
 						.filter(s -> Optional.ofNullable(s.enabled()).orElse(true))
 						.isPresent(); 
 			
+			// If no columnar settings are specified then go with a sensible default
+			final Optional<DataSchemaBean.ColumnarSchemaBean> maybe_user_columnar_schema = Optionals.of(() -> bucket.data_schema().columnar_schema());
+			final DataSchemaBean.ColumnarSchemaBean columnar_schema =
+					maybe_user_columnar_schema
+						.filter(__ -> columnar_enabled)
+						.filter(schema -> (null == schema.field_include_list()) && // ie the entire thing is empty
+											(null == schema.field_exclude_list()) &&
+											(null == schema.field_include_pattern_list()) &&
+											(null == schema.field_type_include_list()) &&
+											(null == schema.field_exclude_pattern_list()) &&
+											(null == schema.field_type_exclude_list())
+								)
+						.map(schema -> BeanTemplateUtils.clone(schema)
+										.with(DataSchemaBean.ColumnarSchemaBean::field_type_include_list, Arrays.asList("string", "number", "date"))
+										.done()
+								)
+						.orElseGet(() -> maybe_user_columnar_schema.orElse(null)) // (NOTE: can only be null if columnar_enabled is false)
+						;
+			
 			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> column_lookups = Stream.of(			
 					columnar_enabled ?
-						createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_include_list()).stream(),
+						createFieldIncludeLookups(Optionals.ofNullable(columnar_schema.field_include_list()).stream(),
 								fn -> Either.left(fn), 
 								field_lookups, enabled_not_analyzed, enabled_analyzed, true, mapper, index_type
 								)
 						: Stream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>empty()
 					,
 					columnar_enabled ?
-						createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_exclude_list()).stream(),
+						createFieldExcludeLookups(Optionals.ofNullable(columnar_schema.field_exclude_list()).stream(),
 								fn -> Either.left(fn), 
 								field_lookups, mapper, index_type
 								)
 						: Stream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>empty()
 					,
 					columnar_enabled ?
-						createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_include_pattern_list()).stream(),
+						createFieldIncludeLookups(Optionals.ofNullable(columnar_schema.field_include_pattern_list()).stream(),
 								fn -> Either.right(Tuples._2T(fn, "*")), 
 								field_lookups, enabled_not_analyzed, enabled_analyzed, true, mapper, index_type
 								)
 						: Stream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>empty()
 					,	
 					columnar_enabled ?
-						createFieldIncludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_type_include_list()).stream(),
+						createFieldIncludeLookups(Optionals.ofNullable(columnar_schema.field_type_include_list()).stream(),
 								fn -> Either.right(Tuples._2T("*", fn)), 
 								field_lookups, enabled_not_analyzed, enabled_analyzed, true, mapper, index_type
 								)
 						: Stream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>empty()
 					,			
 					columnar_enabled ?
-						createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_exclude_pattern_list()).stream(),
+						createFieldExcludeLookups(Optionals.ofNullable(columnar_schema.field_exclude_pattern_list()).stream(),
 								fn -> Either.right(Tuples._2T(fn, "*")), 
 								field_lookups, mapper, index_type
 								)
 						: Stream.<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>>empty()
 					,
 					columnar_enabled ?
-						createFieldExcludeLookups(Optionals.ofNullable(bucket.data_schema().columnar_schema().field_type_exclude_list()).stream(),
+						createFieldExcludeLookups(Optionals.ofNullable(columnar_schema.field_type_exclude_list()).stream(),
 								fn -> Either.right(Tuples._2T("*", fn)), 
 								field_lookups, mapper, index_type
 								)
@@ -474,8 +635,6 @@ public class ElasticsearchIndexUtils {
 					() -> new LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>()
 					));
 			;			
-			
-			// Build the mapping in 2 stages - left (properties) then right (dynamic_templates)
 			
 			final XContentBuilder properties = column_lookups.entrySet().stream()
 							// properties not dynamic_templates
@@ -579,6 +738,7 @@ public class ElasticsearchIndexUtils {
 															Lambdas.wrap_fj_u(__ -> mapper.readTree(BACKUP_FIELD_MAPPING_PROPERTIES)),
 															Lambdas.wrap_fj_u(__ -> mapper.readTree(BACKUP_FIELD_MAPPING_TEMPLATES))
 															));
+			//(note that these 2 mappings don't have "type"s - therefore they will result in default_templates not properties - you need the type to generate a property)
 
 			final ObjectNode mutable_field_mapping_tmp = either.isLeft()
 								? mutable_field_metadata
@@ -591,7 +751,7 @@ public class ElasticsearchIndexUtils {
 					final ObjectNode top_level = (ObjectNode) mapper.createObjectNode().set("mapping", mutable_field_metadata);
 					return Tuples._2T(top_level, Either.<String, Tuple2<String, String>>right(Tuples._2T(fn, "*")));
 				}
-				else {
+				else { // right[dynamic] *OR* (left[properties] and has-type)
 					return Tuples._2T(mutable_field_metadata, either);
 				}
 			});
@@ -888,8 +1048,11 @@ public class ElasticsearchIndexUtils {
 			field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(default_mapping, 
 					(CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override().collide_policy()).orElse(CollidePolicy.new_type))
 							? Optional.empty()
-							: Optional.ofNullable(schema_config.search_technology_override().type_name_or_prefix())
-						);		
+							: Optional.ofNullable(schema_config.search_technology_override().type_name_or_prefix()),
+					Optionals.of(() -> bucket.data_schema().search_index_schema()),
+					schema_config.search_technology_override(),
+					mapper
+					);		
 		
 		// If a time field is present then adding the default mapping for it (overwrite @timestamp if that's the specified field):
 		

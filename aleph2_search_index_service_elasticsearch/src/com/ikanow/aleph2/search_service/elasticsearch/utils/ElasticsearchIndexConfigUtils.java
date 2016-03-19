@@ -107,6 +107,11 @@ public class ElasticsearchIndexConfigUtils {
 					.with(SearchIndexSchemaDefaultBean::aliases, Optional.ofNullable(search_index_bits_tmp.aliases()).orElse(backup.search_technology_override().aliases()))
 					.with(SearchIndexSchemaDefaultBean::mappings, Optional.ofNullable(search_index_bits_tmp.mappings()).orElse(backup.search_technology_override().mappings()))
 					.with(SearchIndexSchemaDefaultBean::mapping_overrides, Optional.ofNullable(search_index_bits_tmp.mapping_overrides()).orElse(backup.search_technology_override().mapping_overrides()))
+					.with(SearchIndexSchemaDefaultBean::tokenized_string_field, Optional.ofNullable(search_index_bits_tmp.tokenized_string_field()).orElse(backup.search_technology_override().tokenized_string_field()))
+					.with(SearchIndexSchemaDefaultBean::untokenized_string_field, Optional.ofNullable(search_index_bits_tmp.untokenized_string_field()).orElse(backup.search_technology_override().untokenized_string_field()))
+					.with(SearchIndexSchemaDefaultBean::dual_tokenized_string_field, Optional.ofNullable(search_index_bits_tmp.dual_tokenized_string_field()).orElse(backup.search_technology_override().dual_tokenized_string_field()))
+					.with(SearchIndexSchemaDefaultBean::dual_untokenized_string_field, Optional.ofNullable(search_index_bits_tmp.dual_untokenized_string_field()).orElse(backup.search_technology_override().dual_untokenized_string_field()))
+					.with(SearchIndexSchemaDefaultBean::dual_tokenization_override, Optional.ofNullable(search_index_bits_tmp.dual_tokenization_override()).orElse(backup.search_technology_override().dual_tokenization_override()))
 				.done();
 		
 		final ColumnarSchemaDefaultBean columnar_bits_tmp =

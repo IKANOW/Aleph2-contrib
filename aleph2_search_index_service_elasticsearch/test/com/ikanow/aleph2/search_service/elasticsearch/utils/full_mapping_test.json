@@ -7,35 +7,35 @@
        "_all" : {"enabled" : true},
        "dynamic_templates" : [ {
          "string_fields" : {
-           "match" : "*",
-           "match_mapping_type" : "string",
            "mapping" : {
              "type" : "string", "index" : "analyzed", "omit_norms" : true,
                "fields" : {
                  "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256}
                }
-           }
+           },
+           "path_match" : "*",
+           "match_mapping_type" : "string"
          }
        }, 
        {
          "named_fields1" : {
-           "match" : "test*",
-           "match_mapping_type" : "*",
            "mapping" : {
              "type" : "string", "index" : "analyzed", "omit_norms" : true,
                "fields" : {
                  "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256}
                }
-           }
+           },
+           "path_match" : "test*",
+           "match_mapping_type" : "*"
          }
        },
        {
          "named_fields2" : {
-           "match" : "*noindex",
-           "match_mapping_type" : "*",
            "mapping" : {
              "type" : "string", "index" : "not_analyzed"
-           }
+           },
+           "path_match" : "*noindex",
+           "match_mapping_type" : "*"
          }
        }
        ],
@@ -57,11 +57,11 @@
        "_all" : {"enabled" : true},
        "dynamic_templates" : [ {
          "number_fields" : {
-           "match" : "test*",
-           "match_mapping_type" : "number",
            "mapping" : {
              "type" : "number", "index" : "analyzed"
-           }
+           },
+           "path_match" : "test*",
+           "match_mapping_type" : "number"
          }
        } ],
        "properties" : {

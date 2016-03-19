@@ -14,8 +14,8 @@
 	   "_all":{"enabled":false},
 	   "_source":{"enabled":true},
        "properties" : {
-         "@timestamp": { "type": "date", "fielddata": { "format": "fst" } },
-         "@version": { "type": "string", "index": "analyzed", "fielddata": {"format":"fst"} },       
+         "@timestamp": { "type": "date", "fielddata": { "format": "paged_bytes" } },
+         "@version": { "type": "string", "index": "analyzed", "fielddata": {"format":"paged_bytes"} },       
          "sourceKey": { "type": "string", "index": "not_analyzed", "fielddata": { "format": "disabled" } },
          "geoip"  : {
            "type" : "object",
@@ -48,14 +48,14 @@
        },       
        {
          "testSTAR_STAR" : {
-           "match" : "test*",
-           "match_mapping_type" : "*",
            "mapping" : {
              "type" : "string", "index" : "analyzed", "omit_norms" : true, 
                "fields" : {
                  "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256,"fielddata":{"format":"doc_values"}}
-               }, "fielddata": {"format":"fst"}
-           }
+               }, "fielddata": {"format":"paged_bytes"}
+           },
+           "path_match" : "test*",
+           "match_mapping_type" : "*"
          }
        },
        {
@@ -69,23 +69,23 @@
        },
        {
          "STAR_string" : {
-           "match" : "*",
-           "match_mapping_type" : "string",
            "mapping" : {
              "type" : "string", "index" : "analyzed", "omit_norms" : true,
                "fields" : {
                  "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256, "fielddata":{"format":"doc_values"}}
-               }, "fielddata": {"format":"fst"}
-           }
+               }, "fielddata": {"format":"paged_bytes"}
+           },
+           "path_match" : "*",
+           "match_mapping_type" : "string"
          }
        }, 
        {
          "STARnoindex_STAR" : {
-           "match" : "*noindex",
-           "match_mapping_type" : "*",
            "mapping" : {
              "type" : "string", "index" : "not_analyzed", "fielddata": {"format":"disabled"}
-           }
+           },
+           "path_match" : "*noindex",
+           "match_mapping_type" : "*"
          }
        },
        {

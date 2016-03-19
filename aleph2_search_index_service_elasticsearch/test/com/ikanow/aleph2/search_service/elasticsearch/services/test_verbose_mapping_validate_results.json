@@ -54,8 +54,8 @@
                             "omit_norms": true,
                             "type": "string"
                         },
-                        "match": "*",
-                        "match_mapping_type": "string"
+                        "match_mapping_type": "string",
+                        "path_match": "*"
                     }
                 },
                 {
@@ -67,8 +67,8 @@
                             "index": "not_analyzed",
                             "type": "{dynamic_type}"
                         },
-                        "match": "*",
-                        "match_mapping_type": "*"
+                        "match_mapping_type": "*",
+                        "path_match": "*"
                     }
                 }
             ]

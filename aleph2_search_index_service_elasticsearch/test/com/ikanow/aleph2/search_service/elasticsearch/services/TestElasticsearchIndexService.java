@@ -400,7 +400,7 @@ public class TestElasticsearchIndexService {
 					)
 					.done();
 			final Collection<BasicMessageBean> res_search = _index_service.validateSchema(bucket.data_schema().search_index_schema(), bucket_too_small)._2();
-			assertEquals(1, res_search.size());
+			assertEquals("Validation: " + res_search.stream().map(b -> b.message()).collect(Collectors.joining(";")), 1, res_search.size());
 			assertEquals(false, res_search.stream().allMatch(BasicMessageBean::success));
 			BasicMessageBean res_search_message = res_search.iterator().next();
 			assertTrue("Right message: " + res_search_message.message(), res_search_message.message().contains("10 MB"));			

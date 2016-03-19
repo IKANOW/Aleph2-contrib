@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -123,6 +124,16 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 	// - built-in mapping for doc fields
 	// - should always add _id (so it actually goes in _source - which it doesn't if it's auto generated ... arguably should just change that anyway...)
 	// - implement full CRUD
+
+	//TODO (ALEPH-20): if columnar then disable tokenization
+	
+	//TODO (ALEPH-20): handle turning tokenization off
+	
+	//TODO (ALEPH-20): handle not duplicating fields
+	
+	//TODO (ALEPH-20): handle tokenization overrides
+	
+	//TODO (ALEPH-20): handle columnar-izing the document dedup fields (check doc schema set, search index not set)
 	
 	protected final IServiceContext _service_context; // (need the security service)
 	protected final IElasticsearchCrudServiceFactory _crud_factory;
@@ -872,6 +883,14 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 	public Tuple2<String, List<BasicMessageBean>> validateSchema(final SearchIndexSchemaBean schema, final DataBucketBean bucket) {
 		final LinkedList<BasicMessageBean> errors = new LinkedList<BasicMessageBean>(); // (Warning mutable code)
 		try {
+			Map<String, DataSchemaBean.ColumnarSchemaBean> tokenization_overrides = Optionals.of(() -> schema.tokenization_override()).orElse(Collections.emptyMap());
+			final HashSet<String> unsupported_tokenization_overrides = new HashSet<String>(tokenization_overrides.keySet());
+			unsupported_tokenization_overrides.removeAll(Arrays.asList(ElasticsearchIndexUtils.DEFAULT_TOKENIZATION_TYPE, ElasticsearchIndexUtils.NO_TOKENIZATION_TYPE));
+			if (!unsupported_tokenization_overrides.isEmpty()) {
+				errors.add(ErrorUtils.buildErrorMessage(bucket.full_name(), "validateSchema", SearchIndexErrorUtils.NOT_YET_SUPPORTED, 
+						"tokenization_overrides: " +  unsupported_tokenization_overrides.toString()));
+			}
+			
 			// If the user is trying to override the index name then they have to be admin:
 			final Optional<String> manual_index_name = Optionals.<String>of(() -> 
 				((String) bucket.data_schema().search_index_schema().technology_override_schema().get(SearchIndexSchemaDefaultBean.index_name_override_)));
