@@ -125,16 +125,16 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 	// - should always add _id (so it actually goes in _source - which it doesn't if it's auto generated ... arguably should just change that anyway...)
 	// - implement full CRUD
 
-	//TODO (ALEPH-20): if columnar then disable tokenization
+	//TODO (ALEPH-20): if columnar then disable tokenization (test)
 	
-	//TODO (ALEPH-20): handle turning tokenization off
+	//TODO (ALEPH-20): handle turning tokenization off (test)
 	
-	//TODO (ALEPH-20): handle not duplicating fields
+	//TODO (ALEPH-20): handle not duplicating fields (test)
 	
-	//TODO (ALEPH-20): handle tokenization overrides
+	//TODO (ALEPH-20): handle tokenization overrides (test)
 	
-	//TODO (ALEPH-20): handle columnar-izing the document dedup fields (check doc schema set, search index not set)
-	
+	//TODO (ALEPH-20): handle columnar-izing the document dedup fields (check scenario with doc schema set, search index not set)
+
 	protected final IServiceContext _service_context; // (need the security service)
 	protected final IElasticsearchCrudServiceFactory _crud_factory;
 	protected final ElasticsearchIndexServiceConfigBean _config;

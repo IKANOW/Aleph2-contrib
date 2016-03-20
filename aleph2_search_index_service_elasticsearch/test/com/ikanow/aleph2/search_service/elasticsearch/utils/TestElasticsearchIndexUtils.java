@@ -64,7 +64,14 @@ public class TestElasticsearchIndexUtils {
 	@Before
 	public void getConfig() throws JsonProcessingException, IOException {
 		
-		_config = ElasticsearchIndexConfigUtils.buildConfigBean(ConfigFactory.empty());
+		final ElasticsearchIndexServiceConfigBean tmp_config = ElasticsearchIndexConfigUtils.buildConfigBean(ConfigFactory.empty());
+		_config = BeanTemplateUtils.clone(tmp_config)
+					.with(ElasticsearchIndexServiceConfigBean::search_technology_override, 
+							BeanTemplateUtils.clone(tmp_config.search_technology_override())
+								.with(ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean::dual_tokenize_by_default, true)
+							.done()		
+					)
+					.done();
 		
 		_config.columnar_technology_override().enabled_field_data_analyzed().put("test_type_123", ImmutableMap.<String, Object>builder().put("format", "test1").build());
 		_config.columnar_technology_override().enabled_field_data_notanalyzed().put("test_type_123", ImmutableMap.<String, Object>builder().put("format", "test2").build());
@@ -334,7 +341,7 @@ public class TestElasticsearchIndexUtils {
 					ElasticsearchIndexUtils.createFieldIncludeLookups(test_stream1, fn -> Either.left(fn), field_lookups, 
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class),
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class),
-								false,
+								false, _config.search_technology_override(),
 							_mapper, "_default_");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
@@ -359,7 +366,7 @@ public class TestElasticsearchIndexUtils {
 							field_lookups, 
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class),
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
-								true,
+								true, _config.search_technology_override(),
 							_mapper, "_default_");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
@@ -380,7 +387,7 @@ public class TestElasticsearchIndexUtils {
 			final Stream<String> test_stream1 = Stream.of("@version", "field_not_present", "@timestamp");
 			
 			final Stream<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>> test_stream_result_1 =
-					ElasticsearchIndexUtils.createFieldExcludeLookups(test_stream1, fn -> Either.left(fn), field_lookups, 
+					ElasticsearchIndexUtils.createFieldExcludeLookups(test_stream1, fn -> Either.left(fn), field_lookups, _config.search_technology_override(),
 							_mapper, "_default_");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
@@ -403,7 +410,7 @@ public class TestElasticsearchIndexUtils {
 			final Stream<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>> test_stream_result_1 =
 					ElasticsearchIndexUtils.createFieldExcludeLookups(test_stream1, 
 							fn -> Either.right(Tuples._2T(fn, "*")), 
-							field_lookups, 
+							field_lookups, _config.search_technology_override(), 
 							_mapper, "_default_");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
@@ -435,7 +442,7 @@ public class TestElasticsearchIndexUtils {
 							field_lookups, 
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class),
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
-								false,
+								false, _config.search_technology_override(),
 							_mapper, "test_type_123");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
@@ -491,7 +498,7 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
-					Optional.empty(),
+					Optional.empty(), _config.search_technology_override(),
 				_mapper, "_default_");
 	
 			final ObjectNode expected_remove_search_settings = ((ObjectNode) expected_json.get("mappings").get("_default_")).remove(Arrays.asList("_meta", "_all", "_source"));
@@ -568,7 +575,7 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
-					Optional.of(_mapper.convertValue(_config.document_schema_override(), JsonNode.class)),
+					Optional.of(_mapper.convertValue(_config.document_schema_override(), JsonNode.class)), _config.search_technology_override(),
 				_mapper, "_default_");
 			
 			assertTrue("Should contain the annotation logic: " + test_result.string(), test_result.string().contains("\"__a\":{\"properties\":{"));
@@ -591,7 +598,7 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
-					Optional.empty(),
+					Optional.empty(), _config.search_technology_override(),
 				_mapper, "_default_");
 	
 			assertEquals(expected_json.get("mappings").get("_default_").toString(), test_result.bytes().toUtf8());
@@ -608,7 +615,7 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
-					Optional.empty(),
+					Optional.empty(), _config.search_technology_override(),
 				_mapper, "_default_");
 			
 			assertEquals(expected_json.get("mappings").get("_default_").toString(), test_result.bytes().toUtf8());
@@ -831,7 +838,7 @@ public class TestElasticsearchIndexUtils {
 					_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_notanalyzed(), JsonNode.class),
 					_mapper.convertValue(_config.columnar_technology_override().default_field_data_analyzed(), JsonNode.class), 
-					Optional.empty(),
+					Optional.empty(), _config.search_technology_override(),
 				_mapper, "misc_test");
 			
 			assertEquals(expected_json.toString(), test_result.bytes().toUtf8());

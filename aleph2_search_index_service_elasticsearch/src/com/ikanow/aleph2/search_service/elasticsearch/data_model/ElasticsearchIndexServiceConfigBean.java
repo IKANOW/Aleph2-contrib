@@ -60,6 +60,7 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		public Map<String, Object> untokenized_string_field() { return untokenized_string_field; }
 		public Map<String, Object> dual_tokenized_string_field() { return dual_tokenized_string_field; }
 		public Map<String, Object> dual_untokenized_string_field() { return dual_untokenized_string_field; }
+		public Boolean dual_tokenize_by_default() { return dual_tokenize_by_default; }
 		public DataSchemaBean.ColumnarSchemaBean dual_tokenization_override() { return dual_tokenization_override; }
 
 		//////////////////////
@@ -76,11 +77,14 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		private Long target_index_size_mb;
 		
 		// String fields are more complex so we'll allow a bunch of different ways of specifying them...
+		// (these aren't normally overridden)
 		private Map<String, Object> tokenized_string_field;
 		private Map<String, Object> untokenized_string_field;
 		private Map<String, Object> dual_tokenized_string_field;
 		private Map<String, Object> dual_untokenized_string_field;
 		// ...And an override
+		//.. (these are)
+		private Boolean dual_tokenize_by_default;
 		private DataSchemaBean.ColumnarSchemaBean dual_tokenization_override;		
 	}
 	public static class ColumnarSchemaDefaultBean {

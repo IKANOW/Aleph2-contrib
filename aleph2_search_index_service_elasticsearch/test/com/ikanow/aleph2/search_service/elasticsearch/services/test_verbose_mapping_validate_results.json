@@ -40,16 +40,6 @@
                             "fielddata": {
                                 "format": "disabled"
                             },
-                            "fields": {
-                                "raw": {
-                                    "fielddata": {
-                                        "format": "disabled"
-                                    },
-                                    "ignore_above": 256,
-                                    "index": "not_analyzed",
-                                    "type": "string"
-                                }
-                            },
                             "index": "analyzed",
                             "omit_norms": true,
                             "type": "string"

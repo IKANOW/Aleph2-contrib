@@ -111,6 +111,7 @@ public class ElasticsearchIndexConfigUtils {
 					.with(SearchIndexSchemaDefaultBean::untokenized_string_field, Optional.ofNullable(search_index_bits_tmp.untokenized_string_field()).orElse(backup.search_technology_override().untokenized_string_field()))
 					.with(SearchIndexSchemaDefaultBean::dual_tokenized_string_field, Optional.ofNullable(search_index_bits_tmp.dual_tokenized_string_field()).orElse(backup.search_technology_override().dual_tokenized_string_field()))
 					.with(SearchIndexSchemaDefaultBean::dual_untokenized_string_field, Optional.ofNullable(search_index_bits_tmp.dual_untokenized_string_field()).orElse(backup.search_technology_override().dual_untokenized_string_field()))
+					.with(SearchIndexSchemaDefaultBean::dual_tokenize_by_default, Optional.ofNullable(search_index_bits_tmp.dual_tokenize_by_default()).orElse(backup.search_technology_override().dual_tokenize_by_default()))
 					.with(SearchIndexSchemaDefaultBean::dual_tokenization_override, Optional.ofNullable(search_index_bits_tmp.dual_tokenization_override()).orElse(backup.search_technology_override().dual_tokenization_override()))
 				.done();
 		
