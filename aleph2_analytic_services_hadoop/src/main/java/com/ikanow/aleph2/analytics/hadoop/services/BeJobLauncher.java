@@ -34,7 +34,6 @@ import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileContext;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.logging.log4j.LogManager;
@@ -51,7 +50,6 @@ import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobService;
 import com.ikanow.aleph2.analytics.hadoop.data_model.HadoopTechnologyOverrideBean;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopBatchEnrichmentUtils;
-import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean;
@@ -86,9 +84,6 @@ public class BeJobLauncher implements IBeJobService{
 
 	protected BatchEnrichmentContext _batchEnrichmentContext;
 
-	@SuppressWarnings("rawtypes")
-	public static interface HadoopAccessContext extends IAnalyticsAccessContext<InputFormat> {}
-	
 	/** User/guice c'tor
 	 * @param globals
 	 * @param beJobLoader
@@ -191,7 +186,7 @@ public class BeJobLauncher implements IBeJobService{
 						}
 						else { // not easily available in HDFS directory format, try getting from the context
 							
-							Optional<HadoopAccessContext> input_format_info = _batchEnrichmentContext.getAnalyticsContext().getServiceInput(HadoopAccessContext.class, Optional.of(bucket), _batchEnrichmentContext.getJob(), input_with_test_settings);
+							Optional<HadoopBatchEnrichmentUtils.HadoopAccessContext> input_format_info = _batchEnrichmentContext.getAnalyticsContext().getServiceInput(HadoopBatchEnrichmentUtils.HadoopAccessContext.class, Optional.of(bucket), _batchEnrichmentContext.getJob(), input_with_test_settings);
 							if (!input_format_info.isPresent()) {
 								logger.warn(ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input_with_test_settings)));
 							}

@@ -76,7 +76,6 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
-import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher.HadoopAccessContext;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopBatchEnrichmentUtils;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.spark.assets.BeFileInputFormat_Pure;
@@ -420,7 +419,7 @@ public class SparkTechnologyUtils {
 				}
 				else { // not easily available in HDFS directory format, try getting from the context
 					
-					Optional<HadoopAccessContext> input_format_info = context.getServiceInput(HadoopAccessContext.class, Optional.empty(), job, input_with_test_settings);
+					Optional<HadoopBatchEnrichmentUtils.HadoopAccessContext> input_format_info = context.getServiceInput(HadoopBatchEnrichmentUtils.HadoopAccessContext.class, Optional.empty(), job, input_with_test_settings);
 					if (!input_format_info.isPresent()) {
 						_logger.warn(ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input_with_test_settings)));
 	

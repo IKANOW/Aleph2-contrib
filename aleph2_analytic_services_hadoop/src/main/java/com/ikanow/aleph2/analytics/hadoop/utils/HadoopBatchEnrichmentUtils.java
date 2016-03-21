@@ -16,12 +16,19 @@
 
 package com.ikanow.aleph2.analytics.hadoop.utils;
 
+import org.apache.hadoop.mapreduce.InputFormat;
+
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
+
 /** Collection of constants used in various Hadoop batch enrichment related places
  * @author Alex
  *
  */
 public class HadoopBatchEnrichmentUtils {
 
+	@SuppressWarnings("rawtypes")
+	public static interface HadoopAccessContext extends IAnalyticsAccessContext<InputFormat> {}
+	
 	// Batch enrichment constants
 	
 	public static final String BATCH_SIZE_PARAM = "aleph2.batch.batchSize";
