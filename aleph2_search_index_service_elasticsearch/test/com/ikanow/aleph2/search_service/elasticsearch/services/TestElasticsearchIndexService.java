@@ -89,6 +89,8 @@ import fj.data.Either;
 
 public class TestElasticsearchIndexService {
 
+	//TODO: test schema validation, one "test putting it all together" type test involving overrides
+	
 	public static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());	
 	
 	protected MockServiceContext _service_context;

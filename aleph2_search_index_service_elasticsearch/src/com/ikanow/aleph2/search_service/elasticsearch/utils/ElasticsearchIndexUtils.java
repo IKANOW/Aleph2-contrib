@@ -441,8 +441,8 @@ public class ElasticsearchIndexUtils {
 							.map(s -> Tuples._2T(Either.<String, Tuple2<String, String>>right(Tuples._2T(s, "*")), false)),
 				Optionals.ofNullable(columnar_schema.field_type_include_list()).stream()
 							.map(s -> Tuples._2T(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", s)), true)),
-							(Stream<Tuple2<Either<String, Tuple2<String, String>>, Boolean>>)Optionals.ofNullable(columnar_schema.field_type_exclude_list()).stream()
-							.map(s -> Tuples._2T(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", s)), true)))
+				Optionals.ofNullable(columnar_schema.field_type_exclude_list()).stream()
+							.map(s -> Tuples._2T(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", s)), false)))
 				.flatMap(__->__)
 				.collect(Collectors.toMap(t2-> t2._1(), t2 -> t2._2()))
 				;
@@ -478,7 +478,7 @@ public class ElasticsearchIndexUtils {
 		
 		// Start with streams of tokenized, non-tokenized, and dual fields
 		return Stream.of(
-				maybe_search_index_schema.map(s -> s.tokenization_override())
+			maybe_search_index_schema.map(s -> s.tokenization_override())
 						.map(m -> m.get(DEFAULT_TOKENIZATION_TYPE))	
 						.map(columnar_schema -> createComplexStringLookups_partial(columnar_schema))
 						.orElse(Collections.emptyMap())

@@ -125,6 +125,9 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 	// - should always add _id (so it actually goes in _source - which it doesn't if it's auto generated ... arguably should just change that anyway...)
 	// - implement full CRUD
 
+	//TODO (ALEPH-20): have a basic type mapping capability (also custom Date ser(/deser?) for Jackson) - eg dates are a disaster at the momment ... just merge into
+	// the dynamic_templates (later on should probably map into a property)
+	
 	//TODO (ALEPH-20): if columnar then disable tokenization (test)
 	
 	//TODO (ALEPH-20): handle turning tokenization off (test)
