@@ -50,6 +50,7 @@ import com.ikanow.aleph2.analytics.hadoop.assets.ObjectNodeWritableComparable;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobService;
 import com.ikanow.aleph2.analytics.hadoop.data_model.HadoopTechnologyOverrideBean;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
+import com.ikanow.aleph2.analytics.hadoop.utils.HadoopBatchEnrichmentUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
@@ -128,7 +129,7 @@ public class BeJobLauncher implements IBeJobService{
 		    							Optional.ofNullable(testSpecVals.requested_num_objects()));
 		    
 		    //then gets applied to all the inputs:
-		    debug_max.ifPresent(val -> config.set(BatchEnrichmentJob.BE_DEBUG_MAX_SIZE, val.toString()));
+		    debug_max.ifPresent(val -> config.set(HadoopBatchEnrichmentUtils.BE_DEBUG_MAX_SIZE, val.toString()));
 		    
 		    final Aleph2MultiInputFormatBuilder inputBuilder = new Aleph2MultiInputFormatBuilder();
 
@@ -185,7 +186,7 @@ public class BeJobLauncher implements IBeJobService{
 						    inputJob.setInputFormatClass(BeFileInputFormat.class);				
 							paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(path))));
 							// (Add the input config in)
-							inputJob.getConfiguration().set(BatchEnrichmentJob.BE_BUCKET_INPUT_CONFIG, BeanTemplateUtils.toJson(input_with_test_settings).toString());
+							inputJob.getConfiguration().set(HadoopBatchEnrichmentUtils.BE_BUCKET_INPUT_CONFIG, BeanTemplateUtils.toJson(input_with_test_settings).toString());
 							inputBuilder.addInput(UuidUtils.get().getRandomUuid(), inputJob);
 						}
 						else { // not easily available in HDFS directory format, try getting from the context
@@ -217,7 +218,7 @@ public class BeJobLauncher implements IBeJobService{
 		    // Now do everything else
 		    
 			final String contextSignature = _batchEnrichmentContext.getEnrichmentContextSignature(Optional.of(bucket), Optional.empty()); 
-		    config.set(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE, contextSignature);
+		    config.set(HadoopBatchEnrichmentUtils.BE_CONTEXT_SIGNATURE, contextSignature);
 		    
 			final String jobName = BucketUtils.getUniqueSignature(bucket.full_name(), Optional.ofNullable(_batchEnrichmentContext.getJob().name()));
 			
@@ -320,7 +321,7 @@ public class BeJobLauncher implements IBeJobService{
     			})
     			.max(Integer::max)
     			;
-		max_requested_batch_size.ifPresent(i -> config.set(BatchEnrichmentJob.BATCH_SIZE_PARAM, Integer.toString(i)));
+		max_requested_batch_size.ifPresent(i -> config.set(HadoopBatchEnrichmentUtils.BATCH_SIZE_PARAM, Integer.toString(i)));
 		
 		// Take all the "task:" overrides and apply:
 		final Map<String, String> task_overrides =

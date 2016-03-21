@@ -74,6 +74,7 @@ import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
+import com.ikanow.aleph2.analytics.hadoop.utils.HadoopBatchEnrichmentUtils;
 import com.ikanow.aleph2.analytics.services.PassthroughService;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -87,12 +88,6 @@ import fj.data.Validation;
  * @author jfreydank
  */
 public class BatchEnrichmentJob{
-
-	public static String BATCH_SIZE_PARAM = "aleph2.batch.batchSize";
-	public static String BE_CONTEXT_SIGNATURE = "aleph2.batch.beContextSignature"; //(one of context signature or bucket signature must be filled in)
-	public static String BE_BUCKET_SIGNATURE = "aleph2.batch.beBucketSignature";  //(one of context signature or bucket signature must be filled in)
-	public static String BE_BUCKET_INPUT_CONFIG = "aleph2.batch.inputConfig";  //(one of context signature or bucket signature must be filled in)
-	public static String BE_DEBUG_MAX_SIZE = "aleph2.batch.debugMaxSize";
 
 	private static final Logger logger = LogManager.getLogger(BatchEnrichmentJob.class);
 	
@@ -338,7 +333,7 @@ public class BatchEnrichmentJob{
 	 */
 	public static void extractBeJobParameters(IBeJobConfigurable beJobConfigurable, Configuration configuration) throws Exception{
 		
-		final String contextSignature = configuration.get(BE_CONTEXT_SIGNATURE);  
+		final String contextSignature = configuration.get(HadoopBatchEnrichmentUtils.BE_CONTEXT_SIGNATURE);  
 		final BatchEnrichmentContext enrichmentContext = (BatchEnrichmentContext) ContextUtils.getEnrichmentContext(contextSignature);
 		
 		beJobConfigurable.setEnrichmentContext(enrichmentContext);
@@ -349,7 +344,7 @@ public class BatchEnrichmentJob{
 											? Arrays.asList(BeanTemplateUtils.build(EnrichmentControlMetadataBean.class).done().get())
 											: config
 				);
-		beJobConfigurable.setBatchSize(configuration.getInt(BATCH_SIZE_PARAM,100));	
+		beJobConfigurable.setBatchSize(configuration.getInt(HadoopBatchEnrichmentUtils.BATCH_SIZE_PARAM,100));	
 	}
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////

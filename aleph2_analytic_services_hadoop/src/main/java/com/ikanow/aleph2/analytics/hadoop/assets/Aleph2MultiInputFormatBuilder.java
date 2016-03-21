@@ -44,6 +44,8 @@ import com.ikanow.aleph2.data_model.utils.Tuples;
  */
 public class Aleph2MultiInputFormatBuilder {
 
+	// Aleph2 multi builder specific params
+	
 	public static final String ALEPH2_MULTI_INPUT_FORMAT_PREFIX = "aleph2.input.multi."; // (then the overwrite values
 	public static final String ALEPH2_MULTI_INPUT_FORMAT_JOBS = "aleph2.input.multi.list"; // (then the overwrite values
 	public static final String ALEPH2_MULTI_INPUT_FORMAT_CLAZZ = "aleph2.input.multi.clazz"; // (then the overwrite values

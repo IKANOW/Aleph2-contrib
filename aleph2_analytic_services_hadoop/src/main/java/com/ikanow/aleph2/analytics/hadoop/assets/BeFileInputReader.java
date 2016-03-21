@@ -47,6 +47,7 @@ import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher;
 import com.ikanow.aleph2.analytics.hadoop.services.BeXmlParser;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJsonParser;
 import com.ikanow.aleph2.analytics.hadoop.services.BeStreamParser;
+import com.ikanow.aleph2.analytics.hadoop.utils.HadoopBatchEnrichmentUtils;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
@@ -116,10 +117,10 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		_numFiles = _fileSplit.getNumPaths();
 		
 		// (can also get this from the input below, but leave this for legacy reasons)
-		_maxRecords = _config.getInt(BatchEnrichmentJob.BE_DEBUG_MAX_SIZE, Integer.MAX_VALUE);
+		_maxRecords = _config.getInt(HadoopBatchEnrichmentUtils.BE_DEBUG_MAX_SIZE, Integer.MAX_VALUE);
 		
 		// Get input configuration...
-		final AnalyticThreadJobInputBean input_settings = BeanTemplateUtils.from(_config.get(BatchEnrichmentJob.BE_BUCKET_INPUT_CONFIG, "{}"), AnalyticThreadJobInputBean.class).get();
+		final AnalyticThreadJobInputBean input_settings = BeanTemplateUtils.from(_config.get(HadoopBatchEnrichmentUtils.BE_BUCKET_INPUT_CONFIG, "{}"), AnalyticThreadJobInputBean.class).get();
 		
 		// ... Convert to parsers		
 		_parsers = Stream.concat(
@@ -141,13 +142,13 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 		
 		this.start =  new Date();
 		this._dataBucket = Lambdas.get(Lambdas.wrap_u(() -> {
-			final String contextSignature = context.getConfiguration().get(BatchEnrichmentJob.BE_CONTEXT_SIGNATURE);
+			final String contextSignature = context.getConfiguration().get(HadoopBatchEnrichmentUtils.BE_CONTEXT_SIGNATURE);
 			if (null != contextSignature) {
 				final IEnrichmentModuleContext enrichmentContext = ContextUtils.getEnrichmentContext(contextSignature);
 				return enrichmentContext.getBucket().get();				
 			}
 			else {
-				final String bucketSignature = context.getConfiguration().get(BatchEnrichmentJob.BE_BUCKET_SIGNATURE, "{}");
+				final String bucketSignature = context.getConfiguration().get(HadoopBatchEnrichmentUtils.BE_BUCKET_SIGNATURE, "{}");
 				return BeanTemplateUtils.from(bucketSignature, DataBucketBean.class).get();
 			}
 		}));

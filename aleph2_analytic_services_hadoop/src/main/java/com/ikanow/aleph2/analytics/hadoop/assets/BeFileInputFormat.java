@@ -31,6 +31,7 @@ import org.apache.logging.log4j.Logger;
 
 import scala.Tuple2;
 
+import com.ikanow.aleph2.analytics.hadoop.utils.HadoopBatchEnrichmentUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
@@ -87,7 +88,7 @@ public class BeFileInputFormat extends UpdatedCombineFileInputFormat<String, Tup
 			final List<InputSplit> splits = Lambdas.get(Lambdas.wrap_u(() -> {
 				final List<InputSplit> tmp = super.getSplits(context);
 				
-				String debug_max_str = context.getConfiguration().get(BatchEnrichmentJob.BE_DEBUG_MAX_SIZE);
+				String debug_max_str = context.getConfiguration().get(HadoopBatchEnrichmentUtils.BE_DEBUG_MAX_SIZE);
 				if (null != debug_max_str)
 				{
 					final int requested_records = Integer.parseInt(debug_max_str);

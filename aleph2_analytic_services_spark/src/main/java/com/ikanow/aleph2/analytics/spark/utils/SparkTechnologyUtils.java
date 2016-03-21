@@ -76,8 +76,8 @@ import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
-import com.ikanow.aleph2.analytics.hadoop.assets.BatchEnrichmentJob;
 import com.ikanow.aleph2.analytics.hadoop.services.BeJobLauncher.HadoopAccessContext;
+import com.ikanow.aleph2.analytics.hadoop.utils.HadoopBatchEnrichmentUtils;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.spark.assets.BeFileInputFormat_Pure;
 import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
@@ -415,7 +415,7 @@ public class SparkTechnologyUtils {
 				    input_job.setInputFormatClass(BeFileInputFormat_Pure.class);				
 					paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(input_job, new Path(path))));
 					// (Add the input config in)
-					input_job.getConfiguration().set(BatchEnrichmentJob.BE_BUCKET_INPUT_CONFIG, BeanTemplateUtils.toJson(input_with_test_settings).toString());
+					input_job.getConfiguration().set(HadoopBatchEnrichmentUtils.BE_BUCKET_INPUT_CONFIG, BeanTemplateUtils.toJson(input_with_test_settings).toString());
 					per_input_action.accept(input_with_test_settings, input_job);
 				}
 				else { // not easily available in HDFS directory format, try getting from the context
@@ -493,8 +493,8 @@ public class SparkTechnologyUtils {
 		final AnalyticThreadJobBean job = context.getJob().get();
 		
 		final Configuration config = HadoopTechnologyUtils.getHadoopConfig(context.getServiceContext().getGlobalProperties());
-		config.set(BatchEnrichmentJob.BE_BUCKET_SIGNATURE, BeanTemplateUtils.toJson(bucket).toString());
-		maybe_test_spec.ifPresent(test_spec -> Optional.ofNullable(test_spec.requested_num_objects()).ifPresent(num -> config.set(BatchEnrichmentJob.BE_DEBUG_MAX_SIZE, Long.toString(num))));
+		config.set(HadoopBatchEnrichmentUtils.BE_BUCKET_SIGNATURE, BeanTemplateUtils.toJson(bucket).toString());
+		maybe_test_spec.ifPresent(test_spec -> Optional.ofNullable(test_spec.requested_num_objects()).ifPresent(num -> config.set(HadoopBatchEnrichmentUtils.BE_DEBUG_MAX_SIZE, Long.toString(num))));
 		
 		final Multimap<String, JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>> mutable_builder = HashMultimap.create();
 		
