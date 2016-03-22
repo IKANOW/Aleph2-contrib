@@ -278,10 +278,10 @@ public class TestElasticsearchIndexUtils {
 		
 		// Templates, empty + non-empty
 
-		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> templates_test1 = ElasticsearchIndexUtils.getTemplates(properties_json, _mapper.readTree("{}"));
+		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> templates_test1 = ElasticsearchIndexUtils.getTemplates(properties_json, _mapper.readTree("{}"), Collections.emptySet());
 		assertTrue("Empty map if not present", templates_test1.isEmpty());
 		
-		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> templates_test2 = ElasticsearchIndexUtils.getTemplates(templates_json, _mapper.readTree("{}"));
+		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> templates_test2 = ElasticsearchIndexUtils.getTemplates(templates_json, _mapper.readTree("{}"), Collections.emptySet());
 		assertEquals("getTemplates: " + templates_test2, 2, templates_test2.size());
 		assertEquals(Arrays.asList(
 					Tuples._2T("*", "string"),
@@ -1003,6 +1003,7 @@ public class TestElasticsearchIndexUtils {
 																		)
 																.with(DataSchemaBean::columnar_schema, 
 																		BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class)
+																			//TODO (add an "_id" to here and check it
 																			.with(DataSchemaBean.ColumnarSchemaBean::field_type_include_list, Arrays.asList())
 																		.done().get()
 																		)
@@ -1023,19 +1024,104 @@ public class TestElasticsearchIndexUtils {
 		}
 		
 	}
+	
+	@Test
+	public void test_overrideMappings() throws IOException {
+		
+		 // use the pure defaults
+		
+		final ElasticsearchIndexServiceConfigBean config = ElasticsearchIndexConfigUtils.buildConfigBean(ConfigFactory.empty());
+		
+		// Build a bucket with a columnar and search index schema
+		{
+			final DataBucketBean search_index_test = BeanTemplateUtils.build(DataBucketBean.class)
+					.with(DataBucketBean::full_name, "/test/test")
+					.with(DataBucketBean::data_schema,
+							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::search_index_schema, 
+										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
+											.with(DataSchemaBean.SearchIndexSchemaBean::tokenize_by_default, false)
+											.with(DataSchemaBean.SearchIndexSchemaBean::tokenization_override,
+													ImmutableMap.of(
+															"_default_",
+															BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class)
+																	.with(DataSchemaBean.ColumnarSchemaBean::field_include_list, Arrays.asList("test_not_override1", "test_override", "test_dual_default"))
+																	.with(DataSchemaBean.ColumnarSchemaBean::field_include_pattern_list, Arrays.asList("test_not_override*", "test_override*"))
+																	.with(DataSchemaBean.ColumnarSchemaBean::field_type_include_list, Arrays.asList("string"))
+																.done().get()
+															,
+															"_none_",
+															BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class)
+																// (nothing needed here, see inverse version below)
+																.done().get()
+															)
+													)
+											.with(DataSchemaBean.SearchIndexSchemaBean::technology_override_schema,
+													ImmutableMap.of("dual_tokenization_override",
+															_mapper.convertValue(
+																	BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class)
+																		.with(DataSchemaBean.ColumnarSchemaBean::field_include_list, Arrays.asList("test_dual_default", "test_dual_none", "test_dual_column"))
+																		.with(DataSchemaBean.ColumnarSchemaBean::field_include_pattern_list, Arrays.asList("test_pattern1*", "test_dual_column*"))
+																	.done().get(), Map.class)
+															)
+													)
+										.done().get())
+								.with(DataSchemaBean::columnar_schema, 
+										BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class)
+											.with(DataSchemaBean.ColumnarSchemaBean::field_include_list, Arrays.asList("test_not_override2", "test_override", "test_dual_column"))
+											.with(DataSchemaBean.ColumnarSchemaBean::field_include_pattern_list, Arrays.asList("test_override*", "test_pattern2*", "test_dual_column*"))
+											.with(DataSchemaBean.ColumnarSchemaBean::field_type_include_list, Arrays.asList("date"))
+										.done().get())
+							.done().get())
+				.done().get();
+			
+			// Should have the following:
+			// test_not_override1 ... prop ... single/analyzed/disabled (CHECK)
+			// test_override ... prop ... single/not_analyzed/doc_values (CHECK)
+			// test_not_override* ... temp ... single/analyzed/disabled (CHECK)
+			// test_override* ... temp ... single/not_analyzed/doc_values (CHECK)
+			// string ... temp ... single/analyzed/disabled (CHECK)
+			//
+			// test_dual_default ... prop ... dual/both(raw)/disabled (CHECK)
+			// test_dual_none ... prop ... dual/both(token)/disabled (CHECK)
+			// test_dual_column ..prop ... dual/both(token)/doc_values+paged (CHECK)
+			// test_pattern1* ... temp ... dual/both(token)/disabled (CHECK)
+			// test_dual_column* ... temp ... dual/both(token)/doc_values+paged (CHECK)
+			//
+			// test_not_override2 ... prop ... single/not_analyzed/doc_values (CHECK)
+			// test_pattern2* ... temp ... single/not_analyzed/doc_values (CHECK)
+			// date ... temp ... single/not_analyized/doc_values (CHECK)
+			
+			// (timestamp, * - as their defaults) (CHECK)
+			
+			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(search_index_test, config, _mapper);
+			
+			final Optional<String> type = Optional.ofNullable(schema_config.search_technology_override()).map(t -> t.type_name_or_prefix());
+			final String index_type = CollidePolicy.new_type == Optional.ofNullable(schema_config.search_technology_override())
+					.map(t -> t.collide_policy()).orElse(CollidePolicy.new_type)
+						? "_default_"
+						: type.orElse(ElasticsearchIndexServiceConfigBean.DEFAULT_FIXED_TYPE_NAME);
+			
+			final XContentBuilder mapping = ElasticsearchIndexUtils.createIndexMapping(search_index_test, Optional.empty(), true, schema_config, _mapper, index_type);
+	
+			final String expected = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/mapping_override_test.json"), Charsets.UTF_8);
+			
+			assertEquals("Get expected search_index_test schema", _mapper.readTree(expected).toString(), mapping.bytes().toUtf8());
+		}
+	}
 
 	@Test
 	public void test_getMapping() {
 		
 		final JsonNode tokenized_single = _mapper.convertValue(_config.search_technology_override().tokenized_string_field(), JsonNode.class);
-		final JsonNode untokenized_single = _mapper.convertValue(_config.search_technology_override().untokenized_string_field(), JsonNode.class);
+		final JsonNode untokenized_single = _mapper.createObjectNode().set("mapping",_mapper.convertValue(_config.search_technology_override().untokenized_string_field(), JsonNode.class));
 		final JsonNode tokenized_dual = _mapper.convertValue(_config.search_technology_override().dual_tokenized_string_field(), JsonNode.class);
 		final JsonNode untokenized_dual = _mapper.convertValue(_config.search_technology_override().dual_untokenized_string_field(), JsonNode.class);
 		
-		assertEquals(tokenized_dual, ElasticsearchIndexUtils.getMapping(Tuples._2T(true, true), _config.search_technology_override(), _mapper));
-		assertEquals(untokenized_dual, ElasticsearchIndexUtils.getMapping(Tuples._2T(false, true), _config.search_technology_override(), _mapper));
-		assertEquals(tokenized_single, ElasticsearchIndexUtils.getMapping(Tuples._2T(true, false), _config.search_technology_override(), _mapper));
-		assertEquals(untokenized_single, ElasticsearchIndexUtils.getMapping(Tuples._2T(false, false), _config.search_technology_override(), _mapper));
+		assertEquals(tokenized_dual, ElasticsearchIndexUtils.getMapping(Tuples._2T(true, true), _config.search_technology_override(), _mapper, false));
+		assertEquals(untokenized_dual, ElasticsearchIndexUtils.getMapping(Tuples._2T(false, true), _config.search_technology_override(), _mapper, false));
+		assertEquals(tokenized_single, ElasticsearchIndexUtils.getMapping(Tuples._2T(true, false), _config.search_technology_override(), _mapper, false));
+		assertEquals(untokenized_single, ElasticsearchIndexUtils.getMapping(Tuples._2T(false, false), _config.search_technology_override(), _mapper, true));
 	}
 	
 	@Test
@@ -1149,18 +1235,18 @@ public class TestElasticsearchIndexUtils {
 				// same results for both:
 				final Map<Either<String, Tuple2<String, String>>, JsonNode> expected_res = 
 						ImmutableMap.<Either<String, Tuple2<String, String>>, JsonNode>builder()
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_notnone")), _mapper.createObjectNode().set("mapping", tok_single))								
 								.put(Either.<String, Tuple2<String, String>>left("test_def"), tok_dual)
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_notnone*", "*")), _mapper.createObjectNode().set("mapping", tok_single))
+								.put(Either.<String, Tuple2<String, String>>left("test_none"), untok_single)
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_notdef*", "*")), _mapper.createObjectNode().set("mapping", untok_single))
 								.put(Either.<String, Tuple2<String, String>>left("test_notdef"), untok_single)
 								.put(Either.<String, Tuple2<String, String>>left("test_notnone"), tok_single)
-								.put(Either.<String, Tuple2<String, String>>left("test_none"), untok_single)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_none*", "*")), untok_dual)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_def*", "*")), tok_single)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_notdef*", "*")), untok_single)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_notnone*", "*")), tok_single)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_def")), tok_dual)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_notdef")), untok_single)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_none")), untok_single)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_notnone")), tok_single)								
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_notdef")), _mapper.createObjectNode().set("mapping", untok_single))
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_def*", "*")), _mapper.createObjectNode().set("mapping", tok_single)	)							
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_none*", "*")), _mapper.createObjectNode().set("mapping", untok_dual))
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_def")), _mapper.createObjectNode().set("mapping", tok_dual))
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_none")), _mapper.createObjectNode().set("mapping", untok_single))
 								.build()
 								;
 				
@@ -1212,22 +1298,23 @@ public class TestElasticsearchIndexUtils {
 			// dual tokenization enabled by default
 			{				
 				// same results for both:
+				
 				final Map<Either<String, Tuple2<String, String>>, JsonNode> expected_res = 
 						ImmutableMap.<Either<String, Tuple2<String, String>>, JsonNode>builder()
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_notnone")), _mapper.createObjectNode().set("mapping", tok_single))								
 								.put(Either.<String, Tuple2<String, String>>left("test_def"), tok_dual)
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_notnone*", "*")), _mapper.createObjectNode().set("mapping", tok_dual))
+								.put(Either.<String, Tuple2<String, String>>left("test_none"), untok_dual)
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_notdef*", "*")), _mapper.createObjectNode().set("mapping", untok_dual))
 								.put(Either.<String, Tuple2<String, String>>left("test_notdef"), untok_dual)
 								.put(Either.<String, Tuple2<String, String>>left("test_notnone"), tok_single)
-								.put(Either.<String, Tuple2<String, String>>left("test_none"), untok_dual)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_none*", "*")), untok_dual)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_def*", "*")), tok_single)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_notdef*", "*")), untok_dual)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_notnone*", "*")), tok_dual)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_def")), tok_dual)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_notdef")), untok_dual)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_none")), untok_dual)
-								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_notnone")), tok_single)								
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_notdef")), _mapper.createObjectNode().set("mapping", untok_dual))
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_def*", "*")), _mapper.createObjectNode().set("mapping", tok_single)	)							
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("test_none*", "*")), _mapper.createObjectNode().set("mapping", untok_dual))
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_def")), _mapper.createObjectNode().set("mapping", tok_dual))
+								.put(Either.<String, Tuple2<String, String>>right(Tuples._2T("*", "type_none")), _mapper.createObjectNode().set("mapping", untok_dual))
 								.build()
-								;				
+								;
 				
 				// (includes pointlessly set includes)
 				{
@@ -1274,8 +1361,4 @@ public class TestElasticsearchIndexUtils {
 			}
 		}		
 	}
-
-	//TODO: add test to check the copy-over for columnar single-not-tokenized case
-	
-	//TODO: test bucket version with the various overrides
 }

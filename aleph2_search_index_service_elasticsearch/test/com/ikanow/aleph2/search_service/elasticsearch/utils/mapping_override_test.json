@@ -1,0 +1,238 @@
+{
+	"template": "test_test__f19167d49eac*",
+	"settings": {
+		"index.indices.fielddata.cache.size": "10%",
+		"index.refresh_interval": "5s"
+	},
+	"aliases": {
+		"r__test_test__f19167d49eac": {}
+	},
+	"mappings": {
+		"_default_": {
+			"_meta": {
+				"bucket_path": "/test/test",
+				"is_primary": "true",
+				"secondary_buffer": ""
+			},
+			"_all": {
+				"enabled": false
+			},
+			"_source": {
+				"enabled": true
+			},
+			"properties": {
+				"test_override": {
+					"fielddata": {
+						"format": "doc_values"
+					},
+					"ignore_above": 256,
+					"index": "not_analyzed",
+					"type": "string"
+				},
+				"test_dual_column": {
+					"fielddata": {
+						"format": "doc_values"
+					},
+					"fields": {
+						"token": {
+							"fielddata": {
+								"format": "paged_bytes"
+							},
+							"index": "analyzed",
+							"omit_norms": true,
+							"type": "string"
+						}
+					},
+					"ignore_above": 256,
+					"index": "not_analyzed",
+					"type": "string"
+				},
+				"test_dual_none": {
+					"fielddata": {
+						"format": "disabled"
+					},
+					"fields": {
+						"token": {
+							"fielddata": {
+								"format": "disabled"
+							},
+							"index": "analyzed",
+							"omit_norms": true,
+							"type": "string"
+						}
+					},
+					"ignore_above": 256,
+					"index": "not_analyzed",
+					"type": "string"
+				},
+				"test_not_override1": {
+					"fielddata": {
+						"format": "disabled"
+					},
+					"index": "analyzed",
+					"omit_norms": true,
+					"type": "string"
+				},
+				"test_dual_default": {
+					"fielddata": {
+						"format": "disabled"
+					},
+					"fields": {
+						"raw": {
+							"fielddata": {
+								"format": "disabled"
+							},
+							"ignore_above": 256,
+							"index": "not_analyzed",
+							"type": "string"
+						}
+					},
+					"index": "analyzed",
+					"omit_norms": true,
+					"type": "string"
+				},
+				"@timestamp": {
+					"fielddata": {
+						"format": "doc_values"
+					},
+					"index": "not_analyzed",
+					"type": "date"
+				}
+			},
+			"dynamic_templates": [{
+				"testBARnotBARoverride2_STAR": {
+					"mapping": {
+						"index": "not_analyzed",
+						"type": "{dynamic_type}",
+						"fielddata": {
+							"format": "doc_values"
+						}
+					},
+					"path_match": "test_not_override2",
+					"match_mapping_type": "*"
+				}
+			}, {
+				"testBARoverrideSTAR_STAR": {
+					"mapping": {
+						"fielddata": {
+							"format": "doc_values"
+						},
+						"ignore_above": 256,
+						"index": "not_analyzed",
+						"type": "string"
+					},
+					"path_match": "test_override*",
+					"match_mapping_type": "*"
+				}
+			}, {
+				"testBARpattern2STAR_STAR": {
+					"mapping": {
+						"index": "not_analyzed",
+						"type": "{dynamic_type}",
+						"fielddata": {
+							"format": "doc_values"
+						}
+					},
+					"path_match": "test_pattern2*",
+					"match_mapping_type": "*"
+				}
+			}, {
+				"testBARdualBARcolumnSTAR_STAR": {
+					"mapping": {
+						"fielddata": {
+							"format": "doc_values"
+						},
+						"fields": {
+							"token": {
+								"fielddata": {
+									"format": "paged_bytes"
+								},
+								"index": "analyzed",
+								"omit_norms": true,
+								"type": "string"
+							}
+						},
+						"ignore_above": 256,
+						"index": "not_analyzed",
+						"type": "string"
+					},
+					"path_match": "test_dual_column*",
+					"match_mapping_type": "*"
+				}
+			}, {
+				"STAR_date": {
+					"mapping": {
+						"index": "not_analyzed",
+						"type": "date",
+						"fielddata": {
+							"format": "doc_values"
+						}
+					},
+					"path_match": "*",
+					"match_mapping_type": "date"
+				}
+			}, {
+				"testBARnotBARoverrideSTAR_STAR": {
+					"mapping": {
+						"fielddata": {
+							"format": "disabled"
+						},
+						"index": "analyzed",
+						"omit_norms": true,
+						"type": "string"
+					},
+					"path_match": "test_not_override*",
+					"match_mapping_type": "*"
+				}
+			}, {
+				"STAR_string": {
+					"mapping": {
+						"fielddata": {
+							"format": "disabled"
+						},
+						"index": "analyzed",
+						"omit_norms": true,
+						"type": "string"
+					},
+					"path_match": "*",
+					"match_mapping_type": "string"
+				}
+			}, {
+				"testBARpattern1STAR_STAR": {
+					"mapping": {
+						"fielddata": {
+							"format": "disabled"
+						},
+						"fields": {
+							"token": {
+								"fielddata": {
+									"format": "disabled"
+								},
+								"index": "analyzed",
+								"omit_norms": true,
+								"type": "string"
+							}
+						},
+						"ignore_above": 256,
+						"index": "not_analyzed",
+						"type": "string"
+					},
+					"path_match": "test_pattern1*",
+					"match_mapping_type": "*"
+				}
+			}, {
+				"STAR_STAR": {
+					"mapping": {
+						"fielddata": {
+							"format": "disabled"
+						},
+						"index": "not_analyzed",
+						"type": "{dynamic_type}"
+					},
+					"match_mapping_type": "*",
+					"path_match": "*"
+				}
+			}]
+		}
+	}
+}

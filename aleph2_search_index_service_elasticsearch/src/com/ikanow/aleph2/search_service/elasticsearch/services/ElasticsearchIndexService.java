@@ -127,16 +127,8 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 
 	//TODO (ALEPH-20): have a basic type mapping capability (also custom Date ser(/deser?) for Jackson) - eg dates are a disaster at the momment ... just merge into
 	// the dynamic_templates (later on should probably map into a property)
-	
-	//TODO (ALEPH-20): if columnar then disable tokenization (test)
-	
-	//TODO (ALEPH-20): handle turning tokenization off (test)
-	
-	//TODO (ALEPH-20): handle not duplicating fields (test)
-	
-	//TODO (ALEPH-20): handle tokenization overrides (test)
-	
-	//TODO (ALEPH-20): handle columnar-izing the document dedup fields (check scenario with doc schema set, search index not set)
+
+	//TODO (ALEPH-20): test new schema validation
 
 	protected final IServiceContext _service_context; // (need the security service)
 	protected final IElasticsearchCrudServiceFactory _crud_factory;

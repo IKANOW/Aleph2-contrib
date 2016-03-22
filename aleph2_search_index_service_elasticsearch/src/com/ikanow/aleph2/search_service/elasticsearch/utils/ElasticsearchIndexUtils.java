@@ -192,9 +192,7 @@ public class ElasticsearchIndexUtils {
 		final boolean dual_tokenize_by_default = Optional.ofNullable(search_index_schema_override.dual_tokenize_by_default()).orElse(false); 
 		
 		final JsonNode default_string_mapping = 
-				((ObjectNode)(mapper.createObjectNode()
-					.set("mapping", 
-							ElasticsearchIndexUtils.getMapping(Tuples._2T(tokenize_by_default, dual_tokenize_by_default), search_index_schema_override, mapper))))
+				((ObjectNode)(ElasticsearchIndexUtils.getMapping(Tuples._2T(tokenize_by_default, dual_tokenize_by_default), search_index_schema_override, mapper, true)))
 					.put(TYPE_MATCH_NAME, "string")
 					.put(PATH_MATCH_NAME, "*")							
 					;
@@ -219,9 +217,9 @@ public class ElasticsearchIndexUtils {
 						// 2) then the tokenization overrides from createComplexStringLookups
 						// 3) then the existing templates
 						final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> props = new LinkedHashMap<>();						
-						props.putAll(getProperties(i));
-						props.putAll(createComplexStringLookups(maybe_search_index_schema, search_index_schema_override, mapper));
-						props.putAll(getTemplates(i, default_string_mapping));
+						props.putAll(createComplexStringLookups(maybe_search_index_schema, search_index_schema_override, mapper));					
+						props.putAll(getTemplates(i, default_string_mapping, props.keySet())); //TODO: ugh this doesn't distinguish between defaults and non-defaults
+						props.putAll(getProperties(i)); 
 						
 						return props;
 					})
@@ -303,7 +301,7 @@ public class ElasticsearchIndexUtils {
 	 * @param index
 	 * @return
 	 */
-	protected static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> getTemplates(final JsonNode index, final JsonNode default_string_mapping) {
+	protected static LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> getTemplates(final JsonNode index, final JsonNode default_string_mapping, final Set<Either<String, Tuple2<String, String>>> already_processed) {
 		return Optional.ofNullable(index.get("dynamic_templates"))
 					.filter(p -> !p.isNull())					
 					.map(p -> {
@@ -317,6 +315,7 @@ public class ElasticsearchIndexUtils {
 								return pf;
 							})
 							.flatMap(pp -> StreamSupport.stream(Spliterators.spliteratorUnknownSize(pp.fields(), Spliterator.ORDERED), false))
+							.filter(kv -> !kv.getKey().equals(STRING_OVERRIDE_NAME) || !already_processed.contains(Either.right(Tuples._2T("*", "string")))) // (don't override a specified string)
 							.map(kv -> !kv.getKey().equals(STRING_OVERRIDE_NAME) ? kv : Maps.immutableEntry(kv.getKey(), default_string_mapping)) //(special case - overwrite with system default)
 							.collect(Collectors.
 								<Map.Entry<String, JsonNode>, Either<String, Tuple2<String, String>>, JsonNode, LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode>>
@@ -429,7 +428,6 @@ public class ElasticsearchIndexUtils {
 	 * @return
 	 */
 	protected static Map<Either<String, Tuple2<String, String>>, Boolean> createComplexStringLookups_partial(final DataSchemaBean.ColumnarSchemaBean columnar_schema) {
-		
 		return Stream.<Stream<Tuple2<Either<String, Tuple2<String, String>>, Boolean>>>of(
 				Optionals.ofNullable(columnar_schema.field_include_list()).stream()
 							.map(s -> Tuples._2T(Either.<String, Tuple2<String, String>>left(s), true)),
@@ -453,13 +451,17 @@ public class ElasticsearchIndexUtils {
 	 * @param defaults
 	 * @return
 	 */
-	protected static JsonNode getMapping(final Tuple2<Boolean, Boolean> tokenize_dual, final SearchIndexSchemaDefaultBean defaults, final ObjectMapper mapper) {
-		return Patterns.match(tokenize_dual).<JsonNode>andReturn()
-				.when(td -> td.equals(Tuples._2T(true, true)), __ -> mapper.convertValue(defaults.dual_tokenized_string_field(), JsonNode.class))
-				.when(td -> td.equals(Tuples._2T(true, false)), __ -> mapper.convertValue(defaults.tokenized_string_field(), JsonNode.class))
-				.when(td -> td.equals(Tuples._2T(false, true)), __ -> mapper.convertValue(defaults.dual_untokenized_string_field(), JsonNode.class))
-				.when(td -> td.equals(Tuples._2T(false, false)), __ -> mapper.convertValue(defaults.untokenized_string_field(), JsonNode.class))
-				.otherwiseAssert();
+	protected static JsonNode getMapping(final Tuple2<Boolean, Boolean> tokenize_dual, final SearchIndexSchemaDefaultBean defaults, final ObjectMapper mapper, boolean is_dynamic_template) {
+		return Optional.of(Patterns.match(tokenize_dual).<JsonNode>andReturn()
+					.when(td -> td.equals(Tuples._2T(true, true)), __ -> mapper.convertValue(defaults.dual_tokenized_string_field(), JsonNode.class))
+					.when(td -> td.equals(Tuples._2T(true, false)), __ -> mapper.convertValue(defaults.tokenized_string_field(), JsonNode.class))
+					.when(td -> td.equals(Tuples._2T(false, true)), __ -> mapper.convertValue(defaults.dual_untokenized_string_field(), JsonNode.class))
+					.when(td -> td.equals(Tuples._2T(false, false)), __ -> mapper.convertValue(defaults.untokenized_string_field(), JsonNode.class))
+					.otherwiseAssert())
+				.map(j -> is_dynamic_template ?  mapper.createObjectNode().set("mapping", j) : j)
+				.get()
+				;
+				
 	}
 
 	
@@ -519,9 +521,9 @@ public class ElasticsearchIndexUtils {
 							getMapping(
 									Tuples._2T(
 											Optional.ofNullable(kv.getValue()._1()).orElse(tokenize_by_default),
-											Optional.ofNullable(kv.getValue()._2()).orElse(dual_tokenize_by_default)
+											Optional.ofNullable(kv.getValue()._2()).orElse(dual_tokenize_by_default)											
 									), 
-									search_index_schema_override, mapper)))
+									search_index_schema_override, mapper, kv.getKey().isRight())))
 			.collect(Collectors.toMap(t2 -> t2._1(), t2 -> t2._2()))
 			;
 	}
@@ -755,15 +757,16 @@ public class ElasticsearchIndexUtils {
 								: (ObjectNode) toplevel_eithermod._1().get("mapping");				
 			
 					
+								
+			// Special case ... if we're columnar and we're merging with tokenized and non-dual then convert to untokenized instead 
+			if (fielddata_info.filter(t3 -> t3._3()).isPresent() && 
+					mutable_field_mapping.equals(mapper.convertValue(search_index_schema_override.tokenized_string_field(), JsonNode.class)))
+			{
+				mutable_field_mapping.removeAll();
+				mutable_field_mapping.setAll((ObjectNode) mapper.convertValue(search_index_schema_override.untokenized_string_field(), ObjectNode.class)); 
+			}
+
 			if (toplevel_eithermod._2().isRight()) {
-				// Special case ... if we're columnar and we're merging with tokenized and non-dual then convert to untokenized instead 
-				if (fielddata_info.filter(t3 -> t3._3()).isPresent() && 
-						mutable_field_mapping.equals(mapper.convertValue(search_index_schema_override.tokenized_string_field(), JsonNode.class)))
-				{
-					mutable_field_mapping.removeAll();
-					mutable_field_mapping.setAll((ObjectNode) mapper.convertValue(search_index_schema_override.untokenized_string_field(), ObjectNode.class)); 
-				}
-				
 				if (!toplevel_eithermod._1().has(PATH_MATCH_NAME) && !toplevel_eithermod._1().has(RAW_MATCH_NAME)) {
 					toplevel_eithermod._1()
 						.put(PATH_MATCH_NAME, toplevel_eithermod._2().right().value()._1());
@@ -780,7 +783,7 @@ public class ElasticsearchIndexUtils {
 						mutable_field_mapping.put("type", toplevel_eithermod._2().right().value()._2());
 					}
 				}
-			}			
+			}	
 			handleMappingFields(mutable_field_mapping, fielddata_info, mapper, index_type);			
 			setMapping(mutable_field_mapping, fielddata_info, mapper, index_type);
 			return Tuples._2T(toplevel_eithermod._2(), toplevel_eithermod._1()); 
