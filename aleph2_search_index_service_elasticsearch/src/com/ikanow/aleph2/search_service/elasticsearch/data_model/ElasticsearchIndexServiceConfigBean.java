@@ -52,6 +52,7 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		public Map<String, Object> aliases() { return aliases; }
 		public Map<String, Object> settings() { return settings; }
 		public Map<String, Object> mappings() { return mappings; }
+		public Map<String, Object> extra_field_mappings() { return extra_field_mappings; }
 		public Map<String, Map<String, Object>> mapping_overrides() { return mapping_overrides; }
 		public String index_name_override() { return index_name_override; }
 		public Long target_index_size_mb() { return target_index_size_mb; }
@@ -72,6 +73,7 @@ public class ElasticsearchIndexServiceConfigBean extends ElasticsearchConfigurat
 		private Map<String, Object> settings;
 		private Map<String, Object> mappings;
 		private Map<String, Object> aliases;
+		private Map<String, Object> extra_field_mappings;
 		private Map<String, Map<String, Object>> mapping_overrides;
 		private String index_name_override;
 		private Long target_index_size_mb;

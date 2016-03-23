@@ -300,14 +300,14 @@ public class TestElasticsearchIndexUtils {
 		// Putting it all together...
 		
 		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> 
-			total_result1 = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.of("type_test"), Optional.empty(), _config.search_technology_override(), _mapper);
+			total_result1 = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.of("type_test"), Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
 		
 		assertEquals(4, total_result1.size());
 		assertEquals("{\"mapping\":{\"type\":\"number\",\"index\":\"analyzed\"},\"path_match\":\"test*\",\"match_mapping_type\":\"number\"}", total_result1.get(Either.right(Tuples._2T("test*", "number"))).toString());
 		assertEquals("{\"type\":\"date\"}", total_result1.get(Either.left("@timestamp1")).toString());
 		
 		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> 
-		total_result2 = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
+		total_result2 = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
 	
 		assertEquals(7, total_result2.size());
 		assertEquals(true, total_result2.get(Either.right(Tuples._2T("*", "string"))).get("mapping").get("omit_norms").asBoolean());
@@ -325,7 +325,7 @@ public class TestElasticsearchIndexUtils {
 		final String both = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/utils/full_mapping_test.json"), Charsets.UTF_8);
 		final JsonNode both_json = _mapper.readTree(both);		
 		
-		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
+		final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
 
 		//DEBUG
 //		System.out.println("(Field lookups = " + field_lookups + ")");
@@ -341,7 +341,7 @@ public class TestElasticsearchIndexUtils {
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class),
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class),
 								false, _config.search_technology_override(),
-							_mapper, "_default_");
+								Collections.emptyMap(), _mapper, "_default_");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
 					test_stream_result_1.collect(Collectors.toMap(
@@ -366,7 +366,7 @@ public class TestElasticsearchIndexUtils {
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class),
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 								true, _config.search_technology_override(),
-							_mapper, "_default_");
+								Collections.emptyMap(), _mapper, "_default_");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
 					test_stream_result_1.collect(Collectors.toMap(
@@ -387,7 +387,7 @@ public class TestElasticsearchIndexUtils {
 			
 			final Stream<Tuple2<Either<String, Tuple2<String, String>>, JsonNode>> test_stream_result_1 =
 					ElasticsearchIndexUtils.createFieldExcludeLookups(test_stream1, fn -> Either.left(fn), field_lookups, _config.search_technology_override(),
-							_mapper, "_default_");
+							Collections.emptyMap(), _mapper, "_default_");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
 					test_stream_result_1.collect(Collectors.toMap(
@@ -410,7 +410,7 @@ public class TestElasticsearchIndexUtils {
 					ElasticsearchIndexUtils.createFieldExcludeLookups(test_stream1, 
 							fn -> Either.right(Tuples._2T(fn, "*")), 
 							field_lookups, _config.search_technology_override(), 
-							_mapper, "_default_");
+							Collections.emptyMap(), _mapper, "_default_");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
 					test_stream_result_1.collect(Collectors.toMap(
@@ -442,7 +442,7 @@ public class TestElasticsearchIndexUtils {
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_notanalyzed(), JsonNode.class),
 								_mapper.convertValue(_config.columnar_technology_override().enabled_field_data_analyzed(), JsonNode.class), 
 								false, _config.search_technology_override(),
-							_mapper, "test_type_123");
+								Collections.emptyMap(), _mapper, "test_type_123");
 	
 			final Map<Either<String, Tuple2<String, String>>, JsonNode> test_map_result_1 = 		
 					test_stream_result_1.collect(Collectors.toMap(
@@ -484,7 +484,7 @@ public class TestElasticsearchIndexUtils {
 		
 		// 1) Default
 		{
-			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
 		
 			//DEBUG
 //			System.out.println("(Field lookups = " + field_lookups + ")");
@@ -566,7 +566,7 @@ public class TestElasticsearchIndexUtils {
 		
 		// 1d) Check if doc schema are enabled
 		{
-			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
 			
 			final XContentBuilder test_result = ElasticsearchIndexUtils.getColumnarMapping(
 					test_bucket, Optional.empty(), field_lookups, 
@@ -589,7 +589,7 @@ public class TestElasticsearchIndexUtils {
 			final JsonNode test_type_json = _mapper.readTree(test_type);		
 			
 			
-			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(test_type_json, Optional.of("type_test"), Optional.empty(), _config.search_technology_override(), _mapper);			
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(test_type_json, Optional.of("type_test"), Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);			
 			
 			final XContentBuilder test_result = ElasticsearchIndexUtils.getColumnarMapping(
 					test_bucket, Optional.of(XContentFactory.jsonBuilder().startObject()), field_lookups, 
@@ -606,7 +606,7 @@ public class TestElasticsearchIndexUtils {
 		// 2b) type doesn't exist, should fall back to _default_
 
 		{
-			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.of("no_such_type"), Optional.empty(), _config.search_technology_override(), _mapper);			
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.of("no_such_type"), Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);			
 			
 			final XContentBuilder test_result = ElasticsearchIndexUtils.getColumnarMapping(
 					test_bucket, Optional.of(XContentFactory.jsonBuilder().startObject()), field_lookups, 
@@ -829,7 +829,7 @@ public class TestElasticsearchIndexUtils {
 		
 		// 1) Sub method
 		{
-			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
+			final LinkedHashMap<Either<String, Tuple2<String, String>>, JsonNode> field_lookups = ElasticsearchIndexUtils.parseDefaultMapping(both_json, Optional.empty(), Optional.empty(), Optional.empty(), _config.search_technology_override(), _mapper);
 			
 			final XContentBuilder test_result = ElasticsearchIndexUtils.getFullMapping(
 					test_bucket, Optional.empty(), true, schema_config, field_lookups, 
@@ -890,7 +890,7 @@ public class TestElasticsearchIndexUtils {
 							BeanTemplateUtils.clone(search_index_test.data_schema())
 								.with(DataSchemaBean::document_schema,
 										BeanTemplateUtils.build(DataSchemaBean.DocumentSchemaBean.class)
-										//(empty)
+											.with(DataSchemaBean.DocumentSchemaBean::deduplication_fields, Arrays.asList("misc_id"))
 										.done().get())																
 							.done()
 						)
@@ -1003,7 +1003,6 @@ public class TestElasticsearchIndexUtils {
 																		)
 																.with(DataSchemaBean::columnar_schema, 
 																		BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class)
-																			//TODO (add an "_id" to here and check it
 																			.with(DataSchemaBean.ColumnarSchemaBean::field_type_include_list, Arrays.asList())
 																		.done().get()
 																		)
@@ -1032,20 +1031,44 @@ public class TestElasticsearchIndexUtils {
 		
 		final ElasticsearchIndexServiceConfigBean config = ElasticsearchIndexConfigUtils.buildConfigBean(ConfigFactory.empty());
 		
+		//TODO: ok the field ordering is a disaster here ... it should be sorted by most specific first
+		// eg !* > *!* > * and t2._1 then t2._2
+		
 		// Build a bucket with a columnar and search index schema
 		{
 			final DataBucketBean search_index_test = BeanTemplateUtils.build(DataBucketBean.class)
 					.with(DataBucketBean::full_name, "/test/test")
 					.with(DataBucketBean::data_schema,
 							BeanTemplateUtils.build(DataSchemaBean.class)
+								.with(DataSchemaBean::document_schema,
+										BeanTemplateUtils.build(DataSchemaBean.DocumentSchemaBean.class)
+											.with(DataSchemaBean.DocumentSchemaBean::deduplication_fields, 
+													Arrays.asList("id1", "test_timestamp1", "test_not_override1", "test_not_override2")) //TODO: check vs columnar
+													//(test timestamp and test_not_override2 are ignored because manually specified, test_not_override1 is duplicated as both string and dyn type)
+										.done().get()
+										)
 								.with(DataSchemaBean::search_index_schema, 
 										BeanTemplateUtils.build(DataSchemaBean.SearchIndexSchemaBean.class)
 											.with(DataSchemaBean.SearchIndexSchemaBean::tokenize_by_default, false)
+											.with(DataSchemaBean.SearchIndexSchemaBean::type_override,
+													ImmutableMap.of(
+															"string",
+															BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class)
+																				.with(DataSchemaBean.ColumnarSchemaBean::field_include_list, Arrays.asList("test_not_override1", "test.nested.string"))
+																			.done().get(),
+															"date",
+															BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class)
+																	.with(DataSchemaBean.ColumnarSchemaBean::field_include_list, Arrays.asList("test_timestamp1", "test_timestamp2"))
+																	.with(DataSchemaBean.ColumnarSchemaBean::field_include_pattern_list, Arrays.asList("test_timestamp1*", "test_timestamp2*"))
+																	.with(DataSchemaBean.ColumnarSchemaBean::field_type_include_list, Arrays.asList("string"))
+																.done().get()
+															)
+													)													
 											.with(DataSchemaBean.SearchIndexSchemaBean::tokenization_override,
 													ImmutableMap.of(
 															"_default_",
 															BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class)
-																	.with(DataSchemaBean.ColumnarSchemaBean::field_include_list, Arrays.asList("test_not_override1", "test_override", "test_dual_default"))
+																	.with(DataSchemaBean.ColumnarSchemaBean::field_include_list, Arrays.asList("test_not_override1", "test_override", "test_dual_default", "test.nested.string"))
 																	.with(DataSchemaBean.ColumnarSchemaBean::field_include_pattern_list, Arrays.asList("test_not_override*", "test_override*"))
 																	.with(DataSchemaBean.ColumnarSchemaBean::field_type_include_list, Arrays.asList("string"))
 																.done().get()
@@ -1057,10 +1080,26 @@ public class TestElasticsearchIndexUtils {
 															)
 													)
 											.with(DataSchemaBean.SearchIndexSchemaBean::technology_override_schema,
-													ImmutableMap.of("dual_tokenization_override",
+													ImmutableMap.of( // add some dummy extra field mappings to check they get included
+															"extra_field_mappings",
+															ImmutableMap.of(
+																	"properties",
+																	ImmutableMap.of("test1", ImmutableMap.of("type", "test_type1")),
+																	"dynamic_templates",
+																	Arrays.asList(ImmutableMap.of(
+																			"test2_name", 
+																			ImmutableMap.of(
+																					"mapping", ImmutableMap.of("type", "test_type2"),
+																					"path_match", "test2*",
+																					"match_mapping_type", "*"
+																			)
+																	))
+																	)
+															,
+															"dual_tokenization_override",
 															_mapper.convertValue(
 																	BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class)
-																		.with(DataSchemaBean.ColumnarSchemaBean::field_include_list, Arrays.asList("test_dual_default", "test_dual_none", "test_dual_column"))
+																		.with(DataSchemaBean.ColumnarSchemaBean::field_include_list, Arrays.asList("test_dual_default", "test_dual_none", "test_dual_column", "test.nested.string"))
 																		.with(DataSchemaBean.ColumnarSchemaBean::field_include_pattern_list, Arrays.asList("test_pattern1*", "test_dual_column*"))
 																	.done().get(), Map.class)
 															)
@@ -1068,8 +1107,8 @@ public class TestElasticsearchIndexUtils {
 										.done().get())
 								.with(DataSchemaBean::columnar_schema, 
 										BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class)
-											.with(DataSchemaBean.ColumnarSchemaBean::field_include_list, Arrays.asList("test_not_override2", "test_override", "test_dual_column"))
-											.with(DataSchemaBean.ColumnarSchemaBean::field_include_pattern_list, Arrays.asList("test_override*", "test_pattern2*", "test_dual_column*"))
+											.with(DataSchemaBean.ColumnarSchemaBean::field_include_list, Arrays.asList("test_not_override2", "test_override", "test_dual_column", "test_timestamp2", "test.nested.string"))
+											.with(DataSchemaBean.ColumnarSchemaBean::field_include_pattern_list, Arrays.asList("test_override*", "test_pattern2*", "test_dual_column*", "test_timestamp2*"))
 											.with(DataSchemaBean.ColumnarSchemaBean::field_type_include_list, Arrays.asList("date"))
 										.done().get())
 							.done().get())
@@ -1088,7 +1127,7 @@ public class TestElasticsearchIndexUtils {
 			// test_pattern1* ... temp ... dual/both(token)/disabled (CHECK)
 			// test_dual_column* ... temp ... dual/both(token)/doc_values+paged (CHECK)
 			//
-			// test_not_override2 ... prop ... single/not_analyzed/doc_values (CHECK)
+			// test_not_override2 ... temp ... single/not_analyzed/doc_values (CHECK)
 			// test_pattern2* ... temp ... single/not_analyzed/doc_values (CHECK)
 			// date ... temp ... single/not_analyized/doc_values (CHECK)
 			

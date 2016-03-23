@@ -68,18 +68,6 @@
          }
        },
        {
-         "STAR_string" : {
-           "mapping" : {
-             "type" : "string", "index" : "analyzed", "omit_norms" : true,
-               "fields" : {
-                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256, "fielddata":{"format":"doc_values"}}
-               }, "fielddata": {"format":"paged_bytes"}
-           },
-           "path_match" : "*",
-           "match_mapping_type" : "string"
-         }
-       }, 
-       {
          "STARnoindex_STAR" : {
            "mapping" : {
              "type" : "string", "index" : "not_analyzed", "fielddata": {"format":"disabled"}
@@ -97,6 +85,18 @@
            "match_mapping_type" : "*"
          }
        },
+       {
+         "STAR_string" : {
+           "mapping" : {
+             "type" : "string", "index" : "analyzed", "omit_norms" : true,
+               "fields" : {
+                 "raw" : {"type": "string", "index" : "not_analyzed", "ignore_above" : 256, "fielddata":{"format":"doc_values"}}
+               }, "fielddata": {"format":"paged_bytes"}
+           },
+           "path_match" : "*",
+           "match_mapping_type" : "string"
+         }
+       }, 
        {
          "STAR_number" : {
            "mapping" : {

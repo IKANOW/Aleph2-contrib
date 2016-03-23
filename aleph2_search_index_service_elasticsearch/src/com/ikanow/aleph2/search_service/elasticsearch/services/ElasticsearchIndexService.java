@@ -37,6 +37,7 @@ import java.util.stream.StreamSupport;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.InputFormat;
@@ -125,10 +126,8 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 	// - should always add _id (so it actually goes in _source - which it doesn't if it's auto generated ... arguably should just change that anyway...)
 	// - implement full CRUD
 
-	//TODO (ALEPH-20): have a basic type mapping capability (also custom Date ser(/deser?) for Jackson) - eg dates are a disaster at the momment ... just merge into
-	// the dynamic_templates (later on should probably map into a property)
-
-	//TODO (ALEPH-20): test new schema validation
+	//TODO (ALEPH-20): Custom Date ser(/deser?) for Jackson
+	// (related: http://wiki.fasterxml.com/JacksonFAQDateHandling)
 
 	protected final IServiceContext _service_context; // (need the security service)
 	protected final IElasticsearchCrudServiceFactory _crud_factory;
@@ -137,6 +136,8 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 	protected final static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 	
 	protected final Cache<String, Date> _bucket_template_cache = CacheBuilder.newBuilder().expireAfterAccess(2, TimeUnit.HOURS).build();
+	
+	protected final static ImmutableSet<String> _supported_types = ImmutableSet.of("string", "integer", "long", "float", "double", "boolean", "ip", "geo_point", "geo_shape", "attachment", "date");
 	
 	/** Guice generated constructor
 	 * @param crud_factory
@@ -885,6 +886,11 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 				errors.add(ErrorUtils.buildErrorMessage(bucket.full_name(), "validateSchema", SearchIndexErrorUtils.NOT_YET_SUPPORTED, 
 						"tokenization_overrides: " +  unsupported_tokenization_overrides.toString()));
 			}
+			Map<String, DataSchemaBean.ColumnarSchemaBean> type_overrides = Optionals.of(() -> schema.type_override()).orElse(Collections.emptyMap());
+			type_overrides.keySet().stream().filter(type -> !_supported_types.contains(type))
+				.forEach(type -> errors.add(
+						ErrorUtils.buildErrorMessage(bucket.full_name(), "validateSchema", SearchIndexErrorUtils.NOT_YET_SUPPORTED, 
+								"type: " +  type)));				
 			
 			// If the user is trying to override the index name then they have to be admin:
 			final Optional<String> manual_index_name = Optionals.<String>of(() -> 
@@ -900,7 +906,7 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 			boolean error = false; // (Warning mutable code)
 			final boolean is_verbose = is_verbose(schema);
 			final ElasticsearchIndexServiceConfigBean schema_config = ElasticsearchIndexConfigUtils.buildConfigBeanFromSchema(bucket, _config, _mapper);
-			
+
 			// 1) Check the schema:
 			
 			try {				

@@ -43,6 +43,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
+import scala.Tuple2;
+
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -72,6 +74,7 @@ import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.ManagementDbUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.TimeUtils;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean;
 import com.ikanow.aleph2.search_service.elasticsearch.data_model.ElasticsearchIndexServiceConfigBean.SearchIndexSchemaDefaultBean;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.ElasticsearchIndexConfigUtils;
@@ -89,8 +92,6 @@ import fj.data.Either;
 
 public class TestElasticsearchIndexService {
 
-	//TODO: test schema validation, one "test putting it all together" type test involving overrides
-	
 	public static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());	
 	
 	protected MockServiceContext _service_context;
@@ -335,6 +336,28 @@ public class TestElasticsearchIndexService {
 			final JsonNode mapping_json = _mapper.readTree(mapping_str.getBytes());
 			assertEquals(mapping_json.toString(), _mapper.readTree(res_search_message.next().message()).toString());
 			assertTrue("Sets the max index override: " + res_search.stream().skip(1).map(m->m.message()).collect(Collectors.joining()), res_search_message.next().message().contains("1,000 MB"));
+			
+			// 2b) Same but with valid overrides
+			
+			final DataSchemaBean.ColumnarSchemaBean empty_field_spec = BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class).done().get();
+			final Collection<BasicMessageBean> res_search_2 = _index_service.validateSchema(
+					BeanTemplateUtils.clone(bucket_verbose.data_schema().search_index_schema())
+						.with(DataSchemaBean.SearchIndexSchemaBean::type_override,
+								ElasticsearchIndexService._supported_types.stream()
+									.<Tuple2<String, DataSchemaBean.ColumnarSchemaBean>>map(s -> Tuples._2T(s, empty_field_spec))
+									.collect(Collectors.toMap((Tuple2<String, DataSchemaBean.ColumnarSchemaBean> t2) -> t2._1(), t2 -> t2._2()))
+								)
+						.with(DataSchemaBean.SearchIndexSchemaBean::tokenization_override, 
+								ImmutableMap.of(
+										"_default_", empty_field_spec,
+										"_none_", empty_field_spec
+										)
+								)
+					.done()
+					, 
+					bucket)._2();
+			
+			assertEquals(2, res_search_2.size());
 		}
 		
 		// 3) Temporal
@@ -441,6 +464,44 @@ public class TestElasticsearchIndexService {
 			
 			final Collection<BasicMessageBean> res_search_no = _index_service.validateSchema(bucket.data_schema().search_index_schema(), bucket_with_override)._2();
 			assertEquals(1, res_search_no.size());						
+		}
+		// 4) Check that we get an error if we try to apply non default tokenization schemes
+		{
+			final String bucket_str_2 = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_bucket_validate_success.json"), Charsets.UTF_8);
+			final DataBucketBean bucket2 = BeanTemplateUtils.build(bucket_str_2, DataBucketBean.class).done().get();
+			
+			final Collection<BasicMessageBean> res_search = _index_service.validateSchema(
+					BeanTemplateUtils.clone(bucket2.data_schema().search_index_schema())
+						.with(DataSchemaBean.SearchIndexSchemaBean::tokenization_override, 
+								ImmutableMap.of(
+										"_default_", BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class).done().get(),
+										"FAIL", BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class).done().get()
+										)
+								)
+					.done()
+					, 
+					bucket2)._2();
+			
+			assertEquals(1, res_search.size());						
+		}
+		// 5) Invalid type overrides
+		{
+			final String bucket_str_2 = Resources.toString(Resources.getResource("com/ikanow/aleph2/search_service/elasticsearch/services/test_bucket_validate_success.json"), Charsets.UTF_8);
+			final DataBucketBean bucket2 = BeanTemplateUtils.build(bucket_str_2, DataBucketBean.class).done().get();
+			
+			final Collection<BasicMessageBean> res_search = _index_service.validateSchema(
+					BeanTemplateUtils.clone(bucket2.data_schema().search_index_schema())
+						.with(DataSchemaBean.SearchIndexSchemaBean::type_override, 
+								ImmutableMap.of(
+										"fail1", BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class).done().get(),
+										"fail2", BeanTemplateUtils.build(DataSchemaBean.ColumnarSchemaBean.class).done().get()
+										)
+								)
+					.done()
+					, 
+					bucket2)._2();
+			
+			assertEquals(2, res_search.size());
 		}
 		
 	}

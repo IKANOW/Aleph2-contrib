@@ -21,6 +21,32 @@
 				"enabled": true
 			},
 			"properties": {
+				"__a": {
+					"properties": {
+						"tc": {
+							"fielddata": {
+								"format": "doc_values"
+							},
+							"index": "not_analyzed",
+							"type": "date"
+						},
+						"tm": {
+							"fielddata": {
+								"format": "doc_values"
+							},
+							"index": "not_analyzed",
+							"type": "date"
+						},
+						"tp": {
+							"fielddata": {
+								"format": "doc_values"
+							},
+							"index": "not_analyzed",
+							"type": "date"
+						}
+					},
+					"type": "object"
+				},
 				"test_override": {
 					"fielddata": {
 						"format": "doc_values"
@@ -46,6 +72,13 @@
 					"ignore_above": 256,
 					"index": "not_analyzed",
 					"type": "string"
+				},
+				"test_timestamp2": {
+					"index": "not_analyzed",
+					"type": "date",
+					"fielddata": {
+						"format": "doc_values"
+					}
 				},
 				"test_dual_none": {
 					"fielddata": {
@@ -91,15 +124,66 @@
 					"omit_norms": true,
 					"type": "string"
 				},
+				"test1": {
+					"type": "test_type1",
+					"fielddata": {
+						"format": "disabled"
+					}
+				},
 				"@timestamp": {
 					"fielddata": {
 						"format": "doc_values"
 					},
 					"index": "not_analyzed",
 					"type": "date"
+				},
+				"test_timestamp1": {
+					"index": "not_analyzed",
+					"type": "date",
+					"fielddata": {
+						"format": "disabled"
+					}
 				}
 			},
 			"dynamic_templates": [{
+				"testDOTnestedDOTstring_string": {
+					"mapping": {
+						"index": "not_analyzed",
+						"type": "string",
+						"fielddata": {
+							"format": "doc_values"
+						}
+					},
+					"path_match": "test.nested.string",
+					"match_mapping_type": "string"
+				}
+			}, {
+				"testBARnotBARoverride2_string": {
+					"mapping": {
+						"fielddata": {
+							"format": "disabled"
+						},
+						"ignore_above": 256,
+						"index": "not_analyzed",
+						"type": "string"
+					},
+					"match_mapping_type": "string",
+					"path_match": "test_not_override2"
+				}
+			}, {
+				"id1_string": {
+					"mapping": {
+						"fielddata": {
+							"format": "disabled"
+						},
+						"ignore_above": 256,
+						"index": "not_analyzed",
+						"type": "string"
+					},
+					"match_mapping_type": "string",
+					"path_match": "id1"
+				}
+			}, {
 				"testBARnotBARoverride2_STAR": {
 					"mapping": {
 						"index": "not_analyzed",
@@ -110,6 +194,30 @@
 					},
 					"path_match": "test_not_override2",
 					"match_mapping_type": "*"
+				}
+			}, {
+				"testBARtimestamp2STAR_date": {
+					"mapping": {
+						"index": "not_analyzed",
+						"type": "date",
+						"fielddata": {
+							"format": "doc_values"
+						}
+					},
+					"path_match": "test_timestamp2*",
+					"match_mapping_type": "date"
+				}
+			}, {
+				"testBARtimestamp1STAR_date": {
+					"mapping": {
+						"index": "not_analyzed",
+						"type": "date",
+						"fielddata": {
+							"format": "disabled"
+						}
+					},
+					"path_match": "test_timestamp1*",
+					"match_mapping_type": "date"
 				}
 			}, {
 				"testBARoverrideSTAR_STAR": {
@@ -160,18 +268,6 @@
 					"match_mapping_type": "*"
 				}
 			}, {
-				"STAR_date": {
-					"mapping": {
-						"index": "not_analyzed",
-						"type": "date",
-						"fielddata": {
-							"format": "doc_values"
-						}
-					},
-					"path_match": "*",
-					"match_mapping_type": "date"
-				}
-			}, {
 				"testBARnotBARoverrideSTAR_STAR": {
 					"mapping": {
 						"fielddata": {
@@ -183,19 +279,6 @@
 					},
 					"path_match": "test_not_override*",
 					"match_mapping_type": "*"
-				}
-			}, {
-				"STAR_string": {
-					"mapping": {
-						"fielddata": {
-							"format": "disabled"
-						},
-						"index": "analyzed",
-						"omit_norms": true,
-						"type": "string"
-					},
-					"path_match": "*",
-					"match_mapping_type": "string"
 				}
 			}, {
 				"testBARpattern1STAR_STAR": {
@@ -219,6 +302,42 @@
 					},
 					"path_match": "test_pattern1*",
 					"match_mapping_type": "*"
+				}
+			}, {
+				"test2STAR_STAR": {
+					"mapping": {
+						"type": "test_type2",
+						"fielddata": {
+							"format": "disabled"
+						}
+					},
+					"path_match": "test2*",
+					"match_mapping_type": "*"
+				}
+			}, {
+				"STAR_date": {
+					"mapping": {
+						"index": "not_analyzed",
+						"type": "date",
+						"fielddata": {
+							"format": "doc_values"
+						}
+					},
+					"path_match": "*",
+					"match_mapping_type": "date"
+				}
+			}, {
+				"STAR_string": {
+					"mapping": {
+						"fielddata": {
+							"format": "disabled"
+						},
+						"index": "analyzed",
+						"omit_norms": true,
+						"type": "string"
+					},
+					"path_match": "*",
+					"match_mapping_type": "string"
 				}
 			}, {
 				"STAR_STAR": {
