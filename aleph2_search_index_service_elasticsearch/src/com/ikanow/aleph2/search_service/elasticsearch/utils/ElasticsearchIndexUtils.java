@@ -750,7 +750,7 @@ public class ElasticsearchIndexUtils {
 						// (filter - convert name/* to name/type and check if I've already created such an entry using the type map)
 						.filter(kv -> !column_lookups_pretypes.containsKey(kv.getKey().either(s -> s, t2 -> Tuples._2T(t2._1(), kv.getValue()))))
 						.flatMap(kv -> createFieldIncludeLookups(Stream.of(kv.getKey().toString()), 
-								__ -> kv.getKey().either(s -> Either.left(s), t2 -> Either.right(Tuples._2T(t2._1(), kv.getValue()))),
+								__ -> kv.getKey().<Either<String, Tuple2<String, String>>>either(s -> Either.left(s), t2 -> Either.right(Tuples._2T(t2._1(), kv.getValue()))),
 								field_lookups, default_not_analyzed, default_analyzed, false, search_index_schema_override, type_override, mapper, index_type
 								))
 						.collect(Collectors.toMap(
@@ -877,7 +877,7 @@ public class ElasticsearchIndexUtils {
 			// add type if present
 			final Either<String, Tuple2<String, String>> either = 
 					maybe_type.<Either<String, Tuple2<String, String>>>map(type -> {
-						return either_tmp.either(
+						return either_tmp.<Either<String, Tuple2<String, String>>>either(
 								s -> Either.left(s)
 								, 
 								t2 -> Either.right(Tuples._2T(t2._1(), type))
