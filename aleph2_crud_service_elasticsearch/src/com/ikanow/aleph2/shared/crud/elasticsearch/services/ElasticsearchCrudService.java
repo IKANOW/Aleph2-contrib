@@ -59,6 +59,7 @@ import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchPhaseExecutionException;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
@@ -153,6 +154,8 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 */
 	public class ElasticsearchCursor extends Cursor<O> {
 				
+		//TODO (ALEPH-14): if there's no limit then should convert this to a scroll query...
+		
 		protected ElasticsearchCursor(final SearchResponse sr) {
 			_hits = sr == null ? null : sr.getHits();
 		}
@@ -836,8 +839,43 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 */
 	@Override
 	public CompletableFuture<Boolean> deleteObjectById(Object id) {
-		// TODO Auto-generated method stub
-		return null;
+		try {
+			final List<String> indexes = _state.es_context.indexContext().getReadableIndexList(Optional.empty());
+			final List<String> types = _state.es_context.typeContext().getReadableTypeList();
+			if ((indexes.size() != 1) || (indexes.size() > 1)) {
+				// Multi index request, so use a query (which may not always return the most recent value, depending on index refresh settings/timings)
+				return deleteObjectBySpec(CrudUtils.anyOf(_state.clazz).when("_id", id.toString()));			
+			}
+			else {
+				
+				final DeleteRequestBuilder srb = Optional
+						.of(
+							_state.client.prepareDelete()
+								.setIndex(indexes.get(0))
+								.setId(id.toString())
+							)
+						.map(s -> (1 == types.size()) ? s.setType(types.get(0)) : s)
+						.get();
+				
+				return ElasticsearchFutureUtils.wrap(srb.execute(), sr -> {
+					return sr.isFound();
+				},
+				(err, future) -> {
+					if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+					{ 
+						// just treat this like an "object not found"
+						future.complete(false);
+					}
+					else {
+						future.completeExceptionally(err);
+					}
+				}
+				);			
+			}
+		}
+		catch (Exception e) {
+			return FutureUtils.returnError(e);
+		}
 	}
 
 	/* (non-Javadoc)
@@ -846,8 +884,54 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	@Override
 	public CompletableFuture<Boolean> deleteObjectBySpec(
 			QueryComponent<O> unique_spec) {
-		// TODO Auto-generated method stub
-		return null;
+		try {
+			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(unique_spec, _state.id_ranges_ok);
+			
+			final SearchRequestBuilder srb = 
+					Optional
+						.of(
+							_state.client.prepareSearch()
+							.setIndices(_state.es_context.indexContext().getReadableIndexArray(Optional.empty()))
+							.setTypes(_state.es_context.typeContext().getReadableTypeArray())
+							.setQuery(QueryBuilders.constantScoreQuery(query._1()))
+							.setSize(1))
+						.get();
+			
+			return ElasticsearchFutureUtils.wrap(srb.execute(), sr -> {
+				final SearchHit[] sh = sr.getHits().hits();
+				
+				if (sh.length > 0) {
+					
+					final DeleteRequestBuilder drb = Optional
+							.of(
+								_state.client.prepareDelete()
+									.setIndex(sh[0].index())
+									.setId(sh[0].id())
+									.setType(sh[0].type())
+								)
+							.get();
+					
+					return drb.execute().actionGet().isFound();
+				}
+				else {
+					return false;
+				}
+			},
+			(err, future) -> {
+				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				{ 
+					// just treat this like an "object not found"
+					future.complete(false);
+				}
+				else {
+					future.completeExceptionally(err);
+				}
+			}
+			);
+		}
+		catch (Exception e) {
+			return FutureUtils.returnError(e);
+		}
 	}
 
 	/* (non-Javadoc)
@@ -855,8 +939,62 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 */
 	@Override
 	public CompletableFuture<Long> deleteObjectsBySpec(QueryComponent<O> spec) {
-		// TODO Auto-generated method stub
-		return null;
+		try {		
+			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(spec, _state.id_ranges_ok);
+			
+			final List<String> indexes = _state.es_context.indexContext().getReadableIndexList(Optional.empty());
+			final List<String> types = _state.es_context.typeContext().getReadableTypeList();
+			
+			final SearchRequestBuilder srb = _state.client.prepareSearch()
+					.setIndices(indexes.stream().toArray(String[]::new))
+					.setTypes(types.stream().toArray(String[]::new))				
+					.setSearchType(SearchType.SCAN)
+					.setScroll(new TimeValue(60000))
+					.setQuery(QueryBuilders.constantScoreQuery(query._1()))
+					.setSize(1000)
+					.setFetchSource(false)
+					.setNoFields()
+					;
+			
+			return ElasticsearchFutureUtils.wrap(srb.execute(), sr -> {
+				long mutable_count = 0L; 
+				while (true) {
+					BulkRequestBuilder bulk_request = _state.client.prepareBulk();
+				    for (SearchHit sh : sr.getHits().getHits()) {
+				    	bulk_request.add(
+								_state.client.prepareDelete()
+									.setIndex(sh.index())
+									.setId(sh.id())
+									.setType(sh.type()));
+
+				    	mutable_count++; // (for now we'll just report on the _ids we found)
+				        //Handle the hit...
+				    }
+				    _state.client.prepareDelete().execute(); // (fire and forget these requests)
+				    
+				    sr = _state.client.prepareSearchScroll(sr.getScrollId()).setScroll(new TimeValue(60000)).execute().actionGet();
+				    //Break condition: No hits are returned
+				    if (sr.getHits().getHits().length == 0) {
+				        break;
+				    }				
+				}				
+				return mutable_count;
+			},
+			(err, future) -> {
+				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				{ 
+					// just treat this like an "object not found"
+					future.complete(0L);
+				}
+				else {
+					future.completeExceptionally(err);
+				}
+			}
+			);
+		}
+		catch (Exception e) {
+			return FutureUtils.returnError(e);
+		}
 	}
 
 	/* (non-Javadoc)
