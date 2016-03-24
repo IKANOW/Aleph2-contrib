@@ -17,6 +17,7 @@ package com.ikanow.aleph2.shared.crud.elasticsearch.services;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -35,6 +36,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import org.apache.metamodel.DataContext;
@@ -88,6 +90,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
@@ -838,7 +841,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#deleteObjectById(java.lang.Object)
 	 */
 	@Override
-	public CompletableFuture<Boolean> deleteObjectById(Object id) {
+	public CompletableFuture<Boolean> deleteObjectById(final Object id) {
 		try {
 			final List<String> indexes = _state.es_context.indexContext().getReadableIndexList(Optional.empty());
 			final List<String> types = _state.es_context.typeContext().getReadableTypeList();
@@ -882,8 +885,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#deleteObjectBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent)
 	 */
 	@Override
-	public CompletableFuture<Boolean> deleteObjectBySpec(
-			QueryComponent<O> unique_spec) {
+	public CompletableFuture<Boolean> deleteObjectBySpec(final QueryComponent<O> unique_spec) {
 		try {
 			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(unique_spec, _state.id_ranges_ok);
 			
@@ -934,31 +936,85 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		}
 	}
 
+	/** Utility class to support ping/pong buffering within lists
+	 * @author Alex
+	 *
+	 * @param <T>
+	 */
+	protected static class PingPongList<T> {
+		private final int _batch_size;
+		private ArrayList<T> _mutable_write_to;
+		private ArrayList<T> _mutable_read_from;
+		public PingPongList(final int batch_size) {
+			_batch_size = batch_size;
+			_mutable_write_to = new ArrayList<T>(batch_size);
+			_mutable_read_from = new ArrayList<T>(batch_size);
+		}
+		/** Adds an element to the list, returns true if the next add would lose data
+		 *  (the caller should then process and clear getAboutToBeOverwrittenStream)
+		 *  Sample flow: (R00,W00)F -> (R00,W50a).(R50a,W00)F -> (R50a,W50b).(R50b,W50a)T -> (R50b,00) -> (R50b,W50c).(R50c,W50b)T -> (R50c,00) etc
+		 * @param t
+		 * @return
+		 */
+		public boolean add(final T t) {
+			_mutable_write_to.add(t);
+			if (_mutable_write_to.size() >= _batch_size) {
+				final ArrayList<T> tmp = _mutable_write_to;
+				_mutable_write_to = _mutable_read_from;
+				_mutable_read_from = tmp;
+				return !_mutable_write_to.isEmpty();
+			}
+			else {
+				return false;
+			}
+		}
+		public Stream<T> getCompleteStream() { return Stream.concat(_mutable_read_from.stream(), _mutable_write_to.stream()); }
+		public List<T> getAboutToBeOverwrittenList() { return _mutable_write_to; }
+	}
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#deleteObjectsBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent)
 	 */
 	@Override
-	public CompletableFuture<Long> deleteObjectsBySpec(QueryComponent<O> spec) {
+	public CompletableFuture<Long> deleteObjectsBySpec(final QueryComponent<O> spec) {
 		try {		
 			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(spec, _state.id_ranges_ok);
 			
-			final List<String> indexes = _state.es_context.indexContext().getReadableIndexList(Optional.empty());
-			final List<String> types = _state.es_context.typeContext().getReadableTypeList();
+			final Optional<Long> maybe_size = Optional.ofNullable(spec.getLimit()).filter(x -> x > 0);
+			// (don't scroll if a limit is set and we're sorting - note sorting is ignored otherwise)
+			final boolean scroll = !(maybe_size.isPresent() && !Optionals.ofNullable(spec.getOrderBy()).isEmpty());
+			final long max_size = maybe_size.orElse((long)Integer.MAX_VALUE).intValue();
 			
-			final SearchRequestBuilder srb = _state.client.prepareSearch()
-					.setIndices(indexes.stream().toArray(String[]::new))
-					.setTypes(types.stream().toArray(String[]::new))				
-					.setSearchType(SearchType.SCAN)
-					.setScroll(new TimeValue(60000))
-					.setQuery(QueryBuilders.constantScoreQuery(query._1()))
-					.setSize(1000)
-					.setFetchSource(false)
-					.setNoFields()
-					;
+			final SearchRequestBuilder srb = Optional.of(_state.client.prepareSearch()
+						.setIndices(_state.es_context.indexContext().getReadableIndexArray(Optional.empty()))
+						.setTypes(_state.es_context.typeContext().getReadableTypeArray())
+						.setQuery(QueryBuilders.constantScoreQuery(query._1()))
+						.setSize(1000)
+						.setFetchSource(false)
+						.setNoFields())
+					.map(s -> (!scroll && (null != spec.getOrderBy()))
+								? spec.getOrderBy().stream()
+										.reduce(s, 
+												(ss, sort) -> ss.addSort(sort._1(), sort._2() > 0 ? SortOrder.ASC : SortOrder.DESC), 
+												(s1, s2) -> s1)
+								: s)
+					.map(s -> scroll ? 
+							s.setSearchType(SearchType.SCAN).setScroll(new TimeValue(60000))
+							: s 
+							)
+					.get()
+					;			
 			
 			return ElasticsearchFutureUtils.wrap(srb.execute(), sr -> {
 				long mutable_count = 0L; 
-				while (true) {
+				final int batch_size = 50; 
+				PingPongList<CompletableFuture<?>> mutable_future_batches = new PingPongList<>(batch_size);
+				
+				if (scroll && ((sr.getHits().totalHits() > 0) && (0 == sr.getHits().getHits().length))) { 
+					//(odd workaround, if number of hits < scroll size, then the reply contains no hits, need to scroll an extra time to get it)
+					sr = _state.client.prepareSearchScroll(sr.getScrollId()).setScroll(new TimeValue(60000)).execute().actionGet();
+				}
+				while ((sr.getHits().getHits().length > 0) && (mutable_count < max_size)) {
 					BulkRequestBuilder bulk_request = _state.client.prepareBulk();
 				    for (SearchHit sh : sr.getHits().getHits()) {
 				    	bulk_request.add(
@@ -968,17 +1024,26 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 									.setType(sh.type()));
 
 				    	mutable_count++; // (for now we'll just report on the _ids we found)
-				        //Handle the hit...
+				    	if (mutable_count >= max_size) break;
 				    }
-				    _state.client.prepareDelete().execute(); // (fire and forget these requests)
-				    
-				    sr = _state.client.prepareSearchScroll(sr.getScrollId()).setScroll(new TimeValue(60000)).execute().actionGet();
-				    //Break condition: No hits are returned
-				    if (sr.getHits().getHits().length == 0) {
-				        break;
-				    }				
-				}				
-				return mutable_count;
+				    // We're full, so wait for the first half of the data to complete
+				    if (mutable_future_batches.add(ElasticsearchFutureUtils.wrap(bulk_request.execute(), __ -> null))) {
+				    	try {
+				    		CompletableFuture.allOf(mutable_future_batches.getAboutToBeOverwrittenList().stream().toArray(CompletableFuture[]::new)).join();
+				    	}
+				    	catch (Exception e) {} // just carry on if fails, probably more important to keep trying to delete
+				    	
+				    	mutable_future_batches.getAboutToBeOverwrittenList().clear();
+				    }
+				    if (scroll && (mutable_count < max_size)) sr = _state.client.prepareSearchScroll(sr.getScrollId()).setScroll(new TimeValue(60000)).execute().actionGet();
+				    else break;
+				}
+				if (scroll) _state.client.prepareClearScroll().addScrollId(sr.getScrollId());
+
+				//(wait for any remaining batches - this one we'll allow to error out since we've completed all our operations)
+    			CompletableFuture.allOf(mutable_future_batches.getCompleteStream().toArray(CompletableFuture[]::new)).join();
+
+				return mutable_count; //(just return an estimate)
 			},
 			(err, future) -> {
 				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)

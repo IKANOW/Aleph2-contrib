@@ -66,6 +66,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils.BeanTemplate;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -1206,241 +1207,323 @@ public class TestElasticsearchCrudService {
 	////////////////////////////////////////////////
 	
 	//TODO
+	
+	//TODO (probably going to need a bigger bulk delete function also, eg 10K objects)
+	
 	// DELETION
 
-//	protected static void replenishDocsForDeletion(MongoDbCrudService<TestBean, String> service) {
-//		
-//		final List<TestBean> l = IntStream.rangeClosed(0, 9).boxed()
-//				.map(i -> BeanTemplateUtils.build(TestBean.class)
-//								.with("_id", "id" + i)
-//								.with("test_string", "test_string" + i)
-//								.with("test_long", (Long)(long)i)
-//								.done().get())
-//				.collect(Collectors.toList());
-//
-//		service.storeObjects(l, true);
-//		
-//		assertEquals(10, service._state.orig_coll.count());
-//	}
-//	
-//	protected static void replenishDocsForDeletion_JSON(MongoDbCrudService<JsonNode, String> service) {
-//		
-//		final List<JsonNode> l = IntStream.rangeClosed(0, 9).boxed()
-//				.map(i -> BeanTemplateUtils.build(TestBean.class)
-//								.with("_id", "id" + i)
-//								.with("test_string", "test_string" + i)
-//								.with("test_long", (Long)(long)i)
-//								.done().get())
-//				.map(b -> BeanTemplateUtils.toJson(b))
-//				.collect(Collectors.toList());
-//
-//		service.storeObjects(l, true);
-//		
-//		assertEquals(10, service._state.orig_coll.count());
-//	}
-//	
-//	@Test
-//	public void test_Deletion() throws InterruptedException, ExecutionException {
-//		
-//		final MongoDbCrudService<TestBean, String> service = getTestService("testDeletion", TestBean.class, String.class);
-//
-//		service.optimizeQuery(Arrays.asList("test_string")).get(); // (The get() waits for completion)
-//		
-//		// 1) Doc by id
-//		
-//		// 1a) No such doc exists
-//		
-//		replenishDocsForDeletion(service);
-//		
-//		assertEquals(false, service.deleteObjectById("hgfhghfg").get());
-//		
-//		assertEquals(10L, (long)service._state.coll.count());		
-//		
-//		// 1b) Deletes doc
-//		
-//		assertEquals(true, service.deleteObjectById("id3").get());
-//
-//		assertEquals(9L, (long)service._state.coll.count());		
-//		
-//		assertEquals(Optional.empty(), service.getObjectById("id3").get());
-//		
-//		// 2) Doc by spec
-//
-//		// 2a) Does match
-//		
-//		replenishDocsForDeletion(service);
-//
-//		assertEquals(false, service.deleteObjectBySpec(CrudUtils.allOf(TestBean.class).when("_id", "fhgfhjg")).get());
-//		
-//		assertEquals(10L, (long)service._state.coll.count());		
-//		
-//		// 2b) Matches >1, only deletes the first
-//		
-//		assertEquals(true, service.deleteObjectBySpec(CrudUtils.allOf(TestBean.class).rangeAbove("_id", "id1", false)).get());
-//		
-//		assertEquals(9L, (long)service._state.coll.count());		
-//		
-//		// 3) all docs
-//		
-//		replenishDocsForDeletion(service);
-//		
-//		assertEquals(10L, (long)service.deleteObjectsBySpec(CrudUtils.anyOf(TestBean.class)).get());
-//		
-//		assertEquals(0L, (long)service._state.coll.count());		
-//		
-//		// (check index is still present)
-//		
-//		assertEquals(2, service._state.coll.getIndexInfo().size());
-//		
-//		// 4) subset of docs
-//
-//		replenishDocsForDeletion(service);
-//		
-//		final QueryComponent<TestBean> query_4 = CrudUtils.allOf(TestBean.class)
-//				.rangeAbove("_id", "id4", false)
-//				.withPresent("test_long")
-//				.orderBy(Tuples._2T("test_long", 1));
-//
-//		assertEquals(6L, (long)service.deleteObjectsBySpec(query_4).get());		
-//
-//		assertEquals(4L, (long)service._state.coll.count());		
-//
-//		// 5) subset of docs (limit and sort combos)
-//		
-//		// 5a) Sort - no limit
-//		
-//		replenishDocsForDeletion(service);
-//		
-//		final QueryComponent<TestBean> query_5a = CrudUtils.allOf(TestBean.class)
-//				.rangeAbove("_id", "id4", false)
-//				.withPresent("test_long")
-//				.orderBy(Tuples._2T("test_long", -1));
-//
-//		assertEquals(6L, (long)service.deleteObjectsBySpec(query_5a).get());		
-//		
-//		assertEquals(4L, (long)service._state.coll.count());		
-//
-//		assertEquals(Optional.empty(), service.getObjectById("id9").get());
-//		
-//		// 5b) Limit - no sort
-//		
-//		replenishDocsForDeletion(service);
-//		
-//		final QueryComponent<TestBean> query_5b = CrudUtils.allOf(TestBean.class)
-//				.rangeAbove("_id", "id4", false)
-//				.withPresent("test_long")
-//				.orderBy(Tuples._2T("test_long", 1)).limit(4);
-//
-//		assertEquals(4L, (long)service.deleteObjectsBySpec(query_5b).get());
-//		
-//		assertEquals(6L, (long)service._state.coll.count());				
-//		
-//		// 5c) Limit and sort
-//		
-//		replenishDocsForDeletion(service);
-//		
-//		final QueryComponent<TestBean> query_5c = CrudUtils.allOf(TestBean.class)
-//				.rangeAbove("_id", "id4", false)
-//				.withPresent("test_long")
-//				.orderBy(Tuples._2T("test_string", 1)).limit(3);
-//
-//		assertEquals(3L, (long)service.deleteObjectsBySpec(query_5c).get());		
-//		
-//		assertEquals(7L, (long)service._state.coll.count());		
-//
-//		assertEquals(Optional.empty(), service.getObjectById("id4").get());
-//		assertEquals(Optional.empty(), service.getObjectById("id5").get());
-//		assertEquals(Optional.empty(), service.getObjectById("id6").get());
-//				
-//		// 6) no docs
-//		
-//		replenishDocsForDeletion(service);
-//		
-//		final QueryComponent<TestBean> query_6 = CrudUtils.allOf(TestBean.class)
-//				.rangeAbove("_id", "id99", false)
-//				.withPresent("test_long");
-//
-//		assertEquals(0L, (long)service.deleteObjectsBySpec(query_6).get());
-//		
-//		assertEquals(10L, (long)service._state.coll.count());				
-//		
-//		// 7) erase data store
-//		
-//		replenishDocsForDeletion(service);
-//				
-//		service.deleteDatastore().get();
-//		
-//		assertEquals(0L, (long)service._state.coll.count());		
-//		
-//		// (check index has gone)
-//
-//		if (null != this._real_mongodb_connection) { // (doesn't work with fongo?)
-//			assertEquals(0, service._state.coll.getIndexInfo().size());
-//		}
-//	}
+	@Test
+	public void test_Deletion() throws InterruptedException, ExecutionException {
+		
+		final ElasticsearchCrudService<TestBean> service = getTestService("testDeletion", TestBean.class);
+
+		service.optimizeQuery(Arrays.asList("test_string")).get(); // (The get() waits for completion)
+		
+		// 1) Doc by id
+		
+		// 1a) No such doc exists
+		
+		replenishDocsForDeletion(service);
+		
+		assertEquals(false, service.deleteObjectById("hgfhghfg").get());
+		
+		assertEquals(10L, service.countObjects().join().longValue());		
+		
+		// 1b) Deletes doc
+		
+		assertEquals(true, service.deleteObjectById("id3").get());
+
+		for (int i = 0; i < 5000L; i += 250) {
+			if (9L == service.countObjects().join().longValue()) {
+				System.out.println("(objects deleted after " + i + " ms)");
+				break;
+			}
+			Thread.sleep(250L);
+		}
+		assertEquals(9L, service.countObjects().join().longValue());				
+		assertEquals(Optional.empty(), service.getObjectById("id3").get());
+		
+		// 2) Doc by spec
+
+		// 2a) Does match
+		
+		replenishDocsForDeletion(service);
+
+		assertEquals(false, service.deleteObjectBySpec(CrudUtils.allOf(TestBean.class).when("_id", "fhgfhjg")).get());
+		
+		assertEquals(10L, service.countObjects().join().longValue());		
+		
+		// 2b) Matches >1, only deletes the first
+		
+		assertEquals(true, service.deleteObjectBySpec(CrudUtils.allOf(TestBean.class).rangeAbove("test_string", "test_string1", false)).get());
+		
+		for (int i = 0; i < 5000L; i += 250) {
+			if (9L == service.countObjects().join().longValue()) {
+				System.out.println("(objects deleted after " + i + " ms)");
+				break;
+			}
+			Thread.sleep(250L);
+		}
+		assertEquals(9L, service.countObjects().join().longValue());		
+		
+		// 3) all docs
+		
+		replenishDocsForDeletion(service);
+		assertEquals(10L, (long)service.deleteObjectsBySpec(CrudUtils.anyOf(TestBean.class)).get());
+		
+		for (int i = 0; i < 5000L; i += 250) {
+			if (0L == service.countObjects().join().longValue()) {
+				System.out.println("(objects deleted after " + i + " ms)");
+				break;
+			}
+			Thread.sleep(250L);
+		}
+		assertEquals(0L, service.countObjects().join().longValue());		
+		
+		// 4) subset of docs
+
+		replenishDocsForDeletion(service);
+		
+		final QueryComponent<TestBean> query_4 = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("test_string", "test_string4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", 1));
+
+		assertEquals(6L, (long)service.deleteObjectsBySpec(query_4).get());		
+
+		for (int i = 0; i < 5000L; i += 250) {
+			if (4L == service.countObjects().join().longValue()) {
+				System.out.println("(objects deleted after " + i + " ms)");
+				break;
+			}
+			Thread.sleep(250L);
+		}
+		assertEquals(4L, service.countObjects().join().longValue());		
+
+		// 5) subset of docs (limit and sort combos)
+		
+		// 5a) Sort (ignored) - no limit
+		
+		replenishDocsForDeletion(service);
+		
+		final QueryComponent<TestBean> query_5a = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("test_string", "test_string4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", -1));
+
+		assertEquals(6L, (long)service.deleteObjectsBySpec(query_5a).get());		
+		
+		for (int i = 0; i < 5000L; i += 250) {
+			if (4L == service.countObjects().join().longValue()) {
+				System.out.println("(objects deleted after " + i + " ms)");
+				break;
+			}
+			Thread.sleep(250L);
+		}
+		assertEquals(4L, service.countObjects().join().longValue());		
+
+		assertEquals(Optional.empty(), service.getObjectById("id9").get());
+		
+		// 5b) Limit - no sort
+		
+		replenishDocsForDeletion(service);
+		
+		final QueryComponent<TestBean> query_5b = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("test_string", "test_string4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", 1)).limit(4);
+
+		assertEquals(4L, (long)service.deleteObjectsBySpec(query_5b).get());
+		
+		for (int i = 0; i < 5000L; i += 250) {
+			if (6L == service.countObjects().join().longValue()) {
+				System.out.println("(objects deleted after " + i + " ms)");
+				break;
+			}
+			Thread.sleep(250L);
+		}
+		assertEquals(6L, service.countObjects().join().longValue());				
+		
+		// 5c) Limit and sort
+		
+		replenishDocsForDeletion(service);
+		
+		final QueryComponent<TestBean> query_5c = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("test_string", "test_string4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_string", 1)).limit(3);
+		
+		assertEquals(3L, (long)service.deleteObjectsBySpec(query_5c).get());		
+		
+		for (int i = 0; i < 5000L; i += 250) {
+			if (7L == service.countObjects().join().longValue()) {
+				System.out.println("(objects deleted after " + i + " ms)");
+				break;
+			}
+			Thread.sleep(250L);
+		}
+		assertEquals(7L, service.countObjects().join().longValue());		
+
+		assertEquals(Optional.empty(), service.getObjectById("id4").get());
+		assertEquals(Optional.empty(), service.getObjectById("id5").get());
+		assertEquals(Optional.empty(), service.getObjectById("id6").get());
+				
+		// 6) no docs
+		
+		replenishDocsForDeletion(service);
+		
+		final QueryComponent<TestBean> query_6 = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("test_string", "test_string99", false)
+				.withPresent("test_long");
+
+		assertEquals(0L, (long)service.deleteObjectsBySpec(query_6).get());
+		
+		Thread.sleep(2000L); // (just wait to demo)
+		assertEquals(10L, service.countObjects().join().longValue());				
+		
+		// 7) erase data store
+		
+		replenishDocsForDeletion(service);
+				
+		service.deleteDatastore().get();
+		
+		for (int i = 0; i < 5000L; i += 250) {
+			if (0L == service.countObjects().join().longValue()) {
+				System.out.println("(objects deleted after " + i + " ms)");
+				break;
+			}
+			Thread.sleep(250L);
+		}
+		assertEquals(0L, service.countObjects().join().longValue());	
+		
+		// 7b) Check that after erasing the data store that delete returns 0 (rather than crashing)
+		
+		assertEquals(0L, (long)service.deleteObjectsBySpec(CrudUtils.allOf(TestBean.class)).get());
+	}
 	
-	//TODO
-//	@Test
-//	public void test_JsonRepositoryCalls() throws InterruptedException, ExecutionException {
-//		final MongoDbCrudService<TestBean, String> bean_service = getTestService("testJsonRepositoryCalls", TestBean.class, String.class);
-//		final MongoDbCrudService<JsonNode, String> json_service = getTestService("testJsonRepositoryCalls", JsonNode.class, String.class);
-//		
-//		replenishDocsForDeletion_JSON(json_service);
-//
-//		testJsonRepositoryCalls_common(json_service, json_service);
-//
-//		replenishDocsForDeletion(bean_service);
-//		
-//		testJsonRepositoryCalls_common(bean_service.getRawCrudService(), json_service);
-//	}
-//	
-//	public void test_JsonRepositoryCalls_common(final ICrudService<JsonNode> service,  MongoDbCrudService<JsonNode, String> original) throws InterruptedException, ExecutionException {
-//		
-//		// Single object get
-//
-//		final Future<Optional<JsonNode>> obj1 = service.getObjectById("id1");
-//
-//		assertEquals("{ \"_id\" : \"id1\" , \"test_string\" : \"test_string1\" , \"test_long\" : 1}", original.convertToBson(obj1.get().get()).toString());
-//
-//		// Multi object get
-//		
-//		final QueryComponent<JsonNode> query_2 = CrudUtils.allOf()
-//				.rangeAbove("_id", "id4", false)
-//				.withPresent("test_long")
-//				.orderBy(Tuples._2T("test_long", 1)).limit(4);
-//		
-//		try (Cursor<JsonNode> cursor = service.getObjectsBySpec(query_2, Arrays.asList("test_string"), false).get()) {
-//		
-//			assertEquals(6, cursor.count()); // (count ignores limit)
-//			
-//			final List<JsonNode> objs = StreamSupport.stream(Optionals.ofNullable(cursor).spliterator(), false).collect(Collectors.toList());
-//			
-//			assertEquals(4, objs.size());
-//			
-//			final DBObject first_obj = original.convertToBson(objs.get(0));
-//			
-//			assertEquals("{ \"_id\" : \"id4\" , \"test_long\" : 4}", first_obj.toString());			
-//		} 
-//		catch (Exception e) {
-//			//(fail on close, normally carry on - but here error out)
-//			fail("getObjectsBySpec errored on close"); 
-//		}
-//		
-//		// Delete
-//		
-//		assertEquals(10L, (long)service.countObjects().get());				
-//		
-//		final QueryComponent<JsonNode> query_5b = CrudUtils.allOf()
-//				.rangeAbove("_id", "id4", false)
-//				.withPresent("test_long")
-//				.orderBy(Tuples._2T("test_long", 1)).limit(4);
-//
-//		assertEquals(4L, (long)service.deleteObjectsBySpec(query_5b).get());
-//		
-//		assertEquals(6L, (long)original._state.coll.count());				
-//		
-//		//TODO: also need to do an update and a findAndModify
-//	}
+	@Test
+	public void large_deletionTest() throws InterruptedException, ExecutionException {
+		final ElasticsearchCrudService<TestBean> service = getTestService("testDeletion", TestBean.class);
+		
+		replenishDocsForDeletion(service, 300000);
+		System.out.println("Filled service, starting test");
+		
+		final QueryComponent<TestBean> query_bottom_range = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("test_string", "test_string4", false)
+				.withPresent("test_long")
+				.limit(1500)
+				;
+		
+		assertEquals(1500L, (long)service.deleteObjectsBySpec(query_bottom_range).get());
+		for (int i = 0; i < 5000L; i += 250) {
+			if (198500L == service.countObjects().join().longValue()) {
+				System.out.println("(objects deleted after " + i + " ms)");
+				break;
+			}
+			Thread.sleep(250L);
+		}
+		assertEquals(298500L, service.countObjects().join().longValue());	
+		
+		final QueryComponent<TestBean> query_top_range = CrudUtils.allOf(TestBean.class)
+				.rangeAbove("test_long", 249000L, false)
+				.withPresent("test_long")
+				;
+		assertEquals(51000L, (long)service.deleteObjectsBySpec(query_top_range).get()); 
+		//(ie > 1 batch, but not > 2)
+		for (int i = 0; i < 5000L; i += 250) {
+			if (247500L == service.countObjects().join().longValue()) {
+				System.out.println("(objects deleted after " + i + " ms)");
+				break;
+			}
+			Thread.sleep(250L);
+		}
+		assertEquals(247500L, service.countObjects().join().longValue());	
+		
+		System.out.println("Deleting remaining DB");
+		final QueryComponent<TestBean> query_all = CrudUtils.allOf(TestBean.class);
+		assertEquals(247500L, (long)service.deleteObjectsBySpec(query_all).get()); 
+		
+		for (int i = 0; i < 5000L; i += 250) {
+			if (0L == service.countObjects().join().longValue()) {
+				System.out.println("(objects deleted after " + i + " ms)");
+				break;
+			}
+			Thread.sleep(250L);
+		}
+		assertEquals(0L, service.countObjects().join().longValue());	
+	}
+	
+	///////////////////////////////////////////////////////////////////////////////////////
+	
+	// MISC
+	
+	@Test
+	public void test_JsonRepositoryCalls() throws InterruptedException, ExecutionException {
+		final ElasticsearchCrudService<TestBean> bean_service = getTestService("testJsonRepositoryCalls", TestBean.class);
+		final ElasticsearchCrudService<JsonNode> json_service = getTestService("testJsonRepositoryCalls", JsonNode.class);
+		
+		replenishDocsForDeletion_JSON(json_service);
+
+		test_JsonRepositoryCalls_common(json_service, json_service);
+
+		replenishDocsForDeletion(bean_service);
+		
+		test_JsonRepositoryCalls_common(bean_service.getRawService(), json_service);
+	}
+	
+	public void test_JsonRepositoryCalls_common(final ICrudService<JsonNode> service,  ICrudService<JsonNode> original) throws InterruptedException, ExecutionException {
+		
+		// Single object get
+
+		final Future<Optional<JsonNode>> obj1 = service.getObjectById("id1");
+
+		assertEquals("{\"test_string\":\"test_string1\",\"_id\":\"id1\",\"test_long\":1}", obj1.get().get().toString());
+
+		// Multi object get
+		
+		final QueryComponent<JsonNode> query_2 = CrudUtils.allOf()
+				.rangeAbove("test_string", "test_string4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", 1)).limit(4);
+		
+		try (Cursor<JsonNode> cursor = service.getObjectsBySpec(query_2, Arrays.asList("test_string"), false).get()) {
+		
+			assertEquals(6, cursor.count()); // (count ignores limit)
+			
+			final List<JsonNode> objs = StreamSupport.stream(Optionals.ofNullable(cursor).spliterator(), false).collect(Collectors.toList());
+			
+			assertEquals(4, objs.size());
+			
+			assertEquals("{\"_id\":\"id4\",\"test_long\":4}", objs.get(0).toString());			
+		} 
+		catch (Exception e) {
+			//DEBUG
+			//e.printStackTrace();
+			//(fail on close, normally carry on - but here error out)
+			fail("getObjectsBySpec errored on close: " + ErrorUtils.getLongForm("{0}", e)); 
+		}
+		
+		// Delete
+		
+		assertEquals(10L, (long)service.countObjects().get());				
+		
+		final QueryComponent<JsonNode> query_5b = CrudUtils.allOf()
+				.rangeAbove("test_string", "test_string4", false)
+				.withPresent("test_long")
+				.orderBy(Tuples._2T("test_long", 1)).limit(4);
+
+		assertEquals(4L, (long)service.deleteObjectsBySpec(query_5b).get());
+		for (int i = 0; i < 5000L; i += 250) {
+			if (0L == service.countObjects().join().longValue()) {
+				System.out.println("(objects deleted after " + i + " ms)");
+				break;
+			}
+			Thread.sleep(250L);
+		}		
+		assertEquals(6L, service.countObjects().join().longValue());			
+		
+		//TODO: also need to do an update and a findAndModify
+	}
 
 	@Test
 	public void test_MiscFunctions() throws InterruptedException, ExecutionException {
@@ -1490,11 +1573,13 @@ public class TestElasticsearchCrudService {
 		assertEquals(4,count);
 	}
 
+	///////////////////////////////////////////////////////////////////////////////////////
+	
 	// UTILITY
 	
-	protected static void replenishDocsForDeletion(ICrudService<TestBean> service) throws InterruptedException, ExecutionException {
+	protected static void replenishDocsForDeletion(ICrudService<TestBean> service, int size) throws InterruptedException, ExecutionException {
 		
-		final List<TestBean> l = IntStream.rangeClosed(0, 9).boxed()
+		final List<TestBean> l = IntStream.rangeClosed(0, size - 1).boxed()
 				.map(i -> BeanTemplateUtils.build(TestBean.class)
 								.with("_id", "id" + i)
 								.with("test_string", "test_string" + i)
@@ -1504,25 +1589,30 @@ public class TestElasticsearchCrudService {
 
 		service.storeObjects(l, false).get();
 		
-		assertEquals(10, service.countObjects().get().intValue());
+		assertEquals(size, service.countObjects().get().intValue());
+	}
+	
+	
+	protected static void replenishDocsForDeletion(ICrudService<TestBean> service) throws InterruptedException, ExecutionException {
+		replenishDocsForDeletion(service, 10);
 	}
 	
 	// (not yet needed)
-//	protected static void replenishDocsForDeletion_JSON(ICrudService<JsonNode> service) {
-//		
-//		final List<JsonNode> l = IntStream.rangeClosed(0, 9).boxed()
-//				.map(i -> BeanTemplateUtils.build(TestBean.class)
-//								.with("_id", "id" + i)
-//								.with("test_string", "test_string" + i)
-//								.with("test_long", (Long)(long)i)
-//								.done().get())
-//				.map(b -> BeanTemplateUtils.toJson(b))
-//				.collect(Collectors.toList());
-//
-//		service.storeObjects(l, false).get();
-//		
-//		assertEquals(10, service.countObjects().get().intValue());
-//	}
+	protected static void replenishDocsForDeletion_JSON(ICrudService<JsonNode> service) throws InterruptedException, ExecutionException {
+		
+		final List<JsonNode> l = IntStream.rangeClosed(0, 9).boxed()
+				.map(i -> BeanTemplateUtils.build(TestBean.class)
+								.with("_id", "id" + i)
+								.with("test_string", "test_string" + i)
+								.with("test_long", (Long)(long)i)
+								.done().get())
+				.map(b -> BeanTemplateUtils.toJson(b))
+				.collect(Collectors.toList());
+
+		service.storeObjects(l, false).get();
+		
+		assertEquals(10, service.countObjects().get().intValue());
+	}
 
 	///////////////////////////////////////////////////////////////////////////////////////
 	
