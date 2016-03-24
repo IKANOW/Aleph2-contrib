@@ -1403,11 +1403,11 @@ public class TestElasticsearchCrudService {
 	
 	@Test
 	public void large_deletionTest() throws InterruptedException, ExecutionException {
-		final ElasticsearchCrudService<TestBean> service = getTestService("testDeletion", TestBean.class);
+		final ElasticsearchCrudService<TestBean> service = getTestService("testLargeDeletion", TestBean.class);
 		
 		// Skip if we don't have enough memory:
 		long heapSize = Runtime.getRuntime().maxMemory();
-		if (heapSize < 512L*1024L*1024L) {
+		if (heapSize < 1024L*1024L*1024L) {
 			System.out.println("(Too little memory for large deletion test - skip");
 			return;
 		}
