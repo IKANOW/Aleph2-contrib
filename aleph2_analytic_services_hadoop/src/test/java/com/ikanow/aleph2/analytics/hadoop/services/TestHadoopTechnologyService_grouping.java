@@ -33,7 +33,9 @@ import java.util.concurrent.ExecutionException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.util.FileUtils;
+
 import com.google.common.collect.ImmutableMap;
+
 import org.junit.Before;
 import org.junit.Test;
 
@@ -42,6 +44,7 @@ import com.google.inject.Injector;
 import com.ikanow.aleph2.analytics.hadoop.assets.SampleReduceEnrichmentModule;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IStorageService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ILoggingService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
@@ -177,7 +180,9 @@ public class TestHadoopTechnologyService_grouping {
 	
 	@Test
 	public void test_enrichment_withGrouping() throws IOException, InterruptedException, ExecutionException {
+		System.out.println("RUN test_enrichment_withGroupingBase " + _service_context + ": " + _service_context.getService(ILoggingService.class, Optional.empty()));
 		test_enrichment_withGroupingBase(false, "");
+		System.out.println("RUN test_enrichment_withGroupingBase2 " + _service_context + ": " + _service_context.getService(ILoggingService.class, Optional.empty()));
 		test_enrichment_withGroupingBase(true, "/then/map");
 	}
 
