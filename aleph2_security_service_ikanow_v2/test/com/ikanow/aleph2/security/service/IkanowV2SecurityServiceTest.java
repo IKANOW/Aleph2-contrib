@@ -28,6 +28,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.shiro.session.Session;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.inject.Inject;
@@ -87,6 +88,7 @@ public class IkanowV2SecurityServiceTest  extends MockDbBasedTest{
 	}
 
 	@Test
+	@Ignore
 	public void testSessionDb(){
 		SessionDb sessionDb = new SessionDb(_service_context);		
 		Session session1 = mock(Session.class);
