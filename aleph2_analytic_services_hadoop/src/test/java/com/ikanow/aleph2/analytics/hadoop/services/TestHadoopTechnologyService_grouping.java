@@ -322,11 +322,19 @@ public class TestHadoopTechnologyService_grouping {
 
 	
 	@Test
-	public void test_enrichment_withRealGroupingExample() throws IOException, InterruptedException, ExecutionException {
-		
+	public void test_enrichment_withRealGroupingExample_1() throws IOException, InterruptedException, ExecutionException {		
 		test_enrichment_withRealGroupingExample_Base(true, false, "/combine_standalone");
+	}
+	@Test
+	public void test_enrichment_withRealGroupingExample_2() throws IOException, InterruptedException, ExecutionException {		
 		test_enrichment_withRealGroupingExample_Base(false, false, "/nocombine_standalone");
+	}
+	@Test
+	public void test_enrichment_withRealGroupingExample_3() throws IOException, InterruptedException, ExecutionException {		
 		test_enrichment_withRealGroupingExample_Base(true, true, "/combine_pipeline");
+	}
+	@Test
+	public void test_enrichment_withRealGroupingExample_4() throws IOException, InterruptedException, ExecutionException {		
 		test_enrichment_withRealGroupingExample_Base(false, true, "/nocombine_pipeline");
 	}
 	public void test_enrichment_withRealGroupingExample_Base(boolean combine, boolean bookend, final String bucket_suffix) throws IOException, InterruptedException, ExecutionException {
