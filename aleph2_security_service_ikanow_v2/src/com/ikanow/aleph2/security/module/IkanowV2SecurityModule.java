@@ -17,7 +17,7 @@ package com.ikanow.aleph2.security.module;
 
 import com.google.inject.multibindings.Multibinder;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
-import com.ikanow.aleph2.security.service.IkanowV2Realm;
+import com.ikanow.aleph2.security.shiro.IkanowV2Realm;
 
 public class IkanowV2SecurityModule extends CoreSecurityModule{
 	

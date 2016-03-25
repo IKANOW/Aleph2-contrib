@@ -31,6 +31,7 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISubject;
 import com.ikanow.aleph2.security.module.IkanowV2SecurityModule;
+import com.ikanow.aleph2.security.shiro.IkanowV2Realm;
 
 public class IkanowV2SecurityService extends SecurityService implements ISecurityService, IExtraDependencyLoader{
 	

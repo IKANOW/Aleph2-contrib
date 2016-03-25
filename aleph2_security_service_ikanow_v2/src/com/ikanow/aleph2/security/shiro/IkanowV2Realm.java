@@ -1,4 +1,4 @@
-package com.ikanow.aleph2.security.service;
+package com.ikanow.aleph2.security.shiro;
 
 import org.apache.shiro.realm.ldap.JndiLdapRealm;
 
