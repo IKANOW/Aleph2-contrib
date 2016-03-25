@@ -178,14 +178,27 @@ public class TestHadoopTechnologyService_grouping {
 
 	}
 	
+	/** These used to be the same test, but the service_context seemed to be getting messed up by running multiple analytic tests in memory
+	 * @throws IOException
+	 * @throws InterruptedException
+	 * @throws ExecutionException
+	 */
 	@Test
-	public void test_enrichment_withGrouping() throws IOException, InterruptedException, ExecutionException {
+	public void test_enrichment_withGrouping_1() throws IOException, InterruptedException, ExecutionException {
 		System.out.println("RUN test_enrichment_withGroupingBase " + _service_context + ": " + _service_context.getService(ILoggingService.class, Optional.empty()));
 		test_enrichment_withGroupingBase(false, "");
+	}
+	/** These used to be the same test, but the service_context seemed to be getting messed up by running multiple analytic tests in memory
+	 * @throws IOException
+	 * @throws InterruptedException
+	 * @throws ExecutionException
+	 */
+	@Test
+	public void test_enrichment_withGrouping_2() throws IOException, InterruptedException, ExecutionException {
 		System.out.println("RUN test_enrichment_withGroupingBase2 " + _service_context + ": " + _service_context.getService(ILoggingService.class, Optional.empty()));
 		test_enrichment_withGroupingBase(true, "/then/map");
 	}
-
+	
 	public void test_enrichment_withGroupingBase(boolean bookend, String bucket_suffix) throws IOException, InterruptedException, ExecutionException {
 	
 		if (isWindows()) return;
@@ -309,11 +322,19 @@ public class TestHadoopTechnologyService_grouping {
 
 	
 	@Test
-	public void test_enrichment_withRealGroupingExample() throws IOException, InterruptedException, ExecutionException {
-		
+	public void test_enrichment_withRealGroupingExample_1() throws IOException, InterruptedException, ExecutionException {		
 		test_enrichment_withRealGroupingExample_Base(true, false, "/combine_standalone");
+	}
+	@Test
+	public void test_enrichment_withRealGroupingExample_2() throws IOException, InterruptedException, ExecutionException {		
 		test_enrichment_withRealGroupingExample_Base(false, false, "/nocombine_standalone");
+	}
+	@Test
+	public void test_enrichment_withRealGroupingExample_3() throws IOException, InterruptedException, ExecutionException {		
 		test_enrichment_withRealGroupingExample_Base(true, true, "/combine_pipeline");
+	}
+	@Test
+	public void test_enrichment_withRealGroupingExample_4() throws IOException, InterruptedException, ExecutionException {		
 		test_enrichment_withRealGroupingExample_Base(false, true, "/nocombine_pipeline");
 	}
 	public void test_enrichment_withRealGroupingExample_Base(boolean combine, boolean bookend, final String bucket_suffix) throws IOException, InterruptedException, ExecutionException {
