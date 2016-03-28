@@ -53,25 +53,46 @@ public abstract class AbstractDb {
 	}
 
 	protected abstract String getDbOptions();
-	
+	protected abstract JsonNode serialize(Object value);
+	protected abstract Object deserialize(JsonNode node);
+
+	protected ICrudService<JsonNode> getStore(){
+		if(db == null){
+			initDb();
+		}
+	      return db;		
+	}
+
+
+
+	public Session load(Object id) {
+		Session s = null;
+		try {
+			Optional<JsonNode> ojs = getStore().getObjectById(id).get();
+			if (ojs.isPresent()) {
+				s = (Session) deserialize(ojs.get());
+			}
+		} catch (Exception e) {
+			logger.error("Caught Exception loading from db:", e);
+		}
+		return s;
+	}
+
 	/**
-	 * This method converts to a JsonNode, stires the JsonNodein the database and returns the node. 
+	 * This method converts to a JsonNode, stores the JsonNode in the database and returns the node. 
 	 * @param session
 	 * @return
 	 */
 	public JsonNode store(Object session) {
-		// TODO Auto-generated method stub
-		return null;		
-	}
-
-	public void delete(String id) {
-		// TODO Auto-generated method stub
+		JsonNode js = serialize(session);
+		getStore().storeObject(js,true).join();
+		return js;
 		
 	}
 
-	public Session load(String id) {
-		// TODO Auto-generated method stub
-		return null;
+
+	public boolean delete(Object id) {
+		return getStore().deleteObjectById(id).join().booleanValue();	
 	}
 
 }
