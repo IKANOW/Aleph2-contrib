@@ -165,4 +165,32 @@
 			<scope>test</scope>
 		</dependency>        
 	</dependencies>	
+		  <profiles>
+		<profile>
+		    <id>test_dependencies</id>
+			<activation>
+				<property>
+					<name>skipTests</name>
+					<value>!true</value>
+				</property>
+			</activation>
+			<properties>
+				<maven.test.skip>false</maven.test.skip>
+			</properties>
+			<dependencies>
+				<dependency>
+					<groupId>com.ikanow.aleph2</groupId>
+					<artifactId>aleph2_storage_service_hdfs</artifactId>
+					<version>${aleph2.version}</version>
+					<scope>test</scope>
+				</dependency>
+				<dependency>
+					<groupId>com.ikanow.aleph2</groupId>
+					<artifactId>aleph2_hadoop_dependencies</artifactId>
+					<version>${aleph2.version}</version>
+					<scope>test</scope>
+				</dependency>
+			</dependencies>
+	</profile>	
+  </profiles>	
 </project>

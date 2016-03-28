@@ -15,6 +15,9 @@
  *******************************************************************************/
 package com.ikanow.aleph2.security.service;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -28,7 +31,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.shiro.session.Session;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.inject.Inject;
@@ -67,7 +69,8 @@ public class IkanowV2SecurityServiceTest  extends MockDbBasedTest{
 			final String temp_dir = System.getProperty("java.io.tmpdir");
 	
 			// OK we're going to use guice, it was too painful doing this by hand...
-			config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v2.properties")))
+			//config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v2.properties")))
+	        config = ConfigFactory.parseReader(new InputStreamReader(this.getClass().getResourceAsStream("/test_security_service_v2_remote.properties")))
 					.withValue("globals.local_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 					.withValue("globals.local_cached_jar_dir", ConfigValueFactory.fromAnyRef(temp_dir))
 					.withValue("globals.distributed_root_dir", ConfigValueFactory.fromAnyRef(temp_dir))
@@ -88,7 +91,6 @@ public class IkanowV2SecurityServiceTest  extends MockDbBasedTest{
 	}
 
 	@Test
-	@Ignore
 	public void testSessionDb(){
 		SessionDb sessionDb = new SessionDb(_service_context);		
 		Session session1 = mock(Session.class);
@@ -101,6 +103,16 @@ public class IkanowV2SecurityServiceTest  extends MockDbBasedTest{
 		when(session1.getAttributeKeys()).thenReturn(Arrays.asList("currentUser"));
 		when(session1.getAttribute(any())).thenReturn("doesnotexist@ikanow.com");		
 		sessionDb.store(session1);
+		Session session2 = sessionDb.load("123");
+		assertNotNull(session2);
+		assertEquals(session1.getId(), session2.getId());		
+		assertEquals(session1.getHost(), session2.getHost());		
+		assertEquals(session1.getLastAccessTime(), session2.getLastAccessTime());		
+		assertEquals(session1.getStartTimestamp(), session2.getStartTimestamp());		
+		assertEquals(session1.getAttribute("currentUser"), session2.getAttribute("currentUser"));		
+		sessionDb.delete("123");
+		Session session3 = sessionDb.load("123");
+		assertNull(session3);
 		
 	}
 	

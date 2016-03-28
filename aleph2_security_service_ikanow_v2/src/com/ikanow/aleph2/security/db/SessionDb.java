@@ -18,7 +18,6 @@ package com.ikanow.aleph2.security.db;
 import java.text.SimpleDateFormat;
 import java.util.Iterator;
 import java.util.Map.Entry;
-import java.util.Optional;
 
 import org.apache.shiro.session.Session;
 import org.apache.shiro.session.mgt.SimpleSession;
@@ -27,7 +26,6 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 
 public class SessionDb extends AbstractDb{
@@ -41,28 +39,16 @@ public class SessionDb extends AbstractDb{
 	protected String getDbOptions(){
 		return "aleph2_security.session";
 	}
-	protected ICrudService<JsonNode> getStore(){
-		if(db == null){
-			initDb();
-		}
-	      return db;		
-	}
 
-	public JsonNode store(Object session) {
-		JsonNode js = serialize(session);
-		db.storeObject(js);
-		return js;
-		
-	}
 
 	protected JsonNode serialize(Object session) {
-		JsonNode js= null;
+		ObjectNode sessionOb = null;
 		if(session instanceof Session){
 			Session s  = (Session)session;
 			ObjectMapper mapper = new ObjectMapper();
 			mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-			 ObjectNode root = mapper.createObjectNode();			 
-			 ObjectNode sessionOb = root.putObject("session");
+			 sessionOb = mapper.createObjectNode();			 
+			 //ObjectNode sessionOb = js.putObject("session");
 			 sessionOb.put("_id", s.getId().toString());
 			 sessionOb.put("last_access_time", sdf.format(s.getLastAccessTime()));
 			 sessionOb.put("start_time_stamp", sdf.format(s.getStartTimestamp()));
@@ -78,12 +64,9 @@ public class SessionDb extends AbstractDb{
 				}
 			}
 		}
-		return js;
+		return sessionOb;
 	}
 
-	public void delete(Object id) {
-		db.deleteObjectById(id);		
-	}
 
 	protected Object deserialize(JsonNode sessionOb) {
 		SimpleSession s  = null;
@@ -107,17 +90,5 @@ public class SessionDb extends AbstractDb{
 		return s;
 	}
 	
-	public Session load(Object id) {
-		Session s = null;
-		try {
-			Optional<JsonNode> ojs = db.getObjectById(id).get();
-			if (ojs.isPresent()) {
-				s = (Session) deserialize(ojs.get());
-			}
-		} catch (Exception e) {
-			logger.error("Caught Exception loading from db:", e);
-		}
-		return s;
-	}
 
 }
