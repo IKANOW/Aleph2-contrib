@@ -414,14 +414,14 @@ public class IkanowV1SyncService_LibraryJars {
 				share_db.getObjectsBySpec(
 						CrudUtils.allOf().when("type", "binary")
 							.rangeIn("title", "/app/aleph2/library/", true, "/app/aleph2/library0", true),
-							Arrays.asList("_id", "modified"), true
+							Arrays.asList(JsonUtils._ID, "modified"), true
 						);
 		
 		return f_v1_jars
 			.<Map<String, String>>thenApply(v1_jars -> {
 				return StreamSupport.stream(v1_jars.spliterator(), false)
 					.collect(Collectors.toMap(
-							j -> safeJsonGet("_id", j).asText(),
+							j -> safeJsonGet(JsonUtils._ID, j).asText(),
 							j -> safeJsonGet("modified", j).asText()
 							));
 			})
@@ -431,7 +431,7 @@ public class IkanowV1SyncService_LibraryJars {
 						.rangeIn(SharedLibraryBean::_id, "v1_", true, "v1a", true)
 						;						
 				
-				return library_mgmt.getObjectsBySpec(library_query, Arrays.asList("_id", "modified"), true)
+				return library_mgmt.getObjectsBySpec(library_query, Arrays.asList(JsonUtils._ID, "modified"), true)
 						.<Tuple2<Map<String, String>, Map<String, Date>>>
 						thenApply(c -> {							
 							final Map<String, Date> v2_id_date_map = 
@@ -550,7 +550,7 @@ public class IkanowV1SyncService_LibraryJars {
 		
 		// Create a status bean:
 
-		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when("_id", new ObjectId(id));
+		final SingleQueryComponent<JsonNode> v1_query = CrudUtils.allOf().when(JsonUtils._ID, new ObjectId(id));
 		return FutureUtils.denestManagementFuture(share_db.getObjectBySpec(v1_query)
 			.<ManagementFuture<Supplier<Object>>>thenApply(Lambdas.wrap_u(jsonopt -> {
 					final SharedLibraryBean new_object = getLibraryBeanFromV1Share(jsonopt.get());
@@ -723,7 +723,7 @@ public class IkanowV1SyncService_LibraryJars {
 		final String[] description_lines = Optional.ofNullable(safeJsonGet("description", src_json).asText())
 											.orElse("unknown").split("\r\n?|\n");
 		
-		final String _id = "v1_" + safeJsonGet("_id", src_json).asText();
+		final String _id = "v1_" + safeJsonGet(JsonUtils._ID, src_json).asText();
 		final String created = safeJsonGet("created", src_json).asText();
 		final String modified = safeJsonGet("modified", src_json).asText();
 		final String display_name = safeJsonGet("title", src_json).asText();
@@ -769,7 +769,7 @@ public class IkanowV1SyncService_LibraryJars {
 				.collect(Collectors.joining("\n"));
 		
 		final LibraryType type = LibraryType.misc_archive;
-		final String owner_id = safeJsonGet("_id", safeJsonGet("owner", src_json)).asText();
+		final String owner_id = safeJsonGet(JsonUtils._ID, safeJsonGet("owner", src_json)).asText();
 		//final JsonNode comm_objs = safeJsonGet("communities", src_json); // collection of { _id: $oid } types
 		final String misc_entry_point = description_lines[0];
 		

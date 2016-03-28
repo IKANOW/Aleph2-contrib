@@ -27,6 +27,7 @@ import org.bson.types.ObjectId;
 import scala.Tuple2;
 import scala.Tuple4;
 
+import com.ikanow.aleph2.data_model.utils.JsonUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.infinit.e.data_model.api.knowledge.AdvancedQueryPojo;
 import com.ikanow.infinit.e.data_model.custom.InfiniteMongoSplitter;
@@ -152,7 +153,7 @@ public class LegacyV1HadoopUtils {
 				else {
 					oldQueryObj.put(DocumentPojo.communityId_, new BasicDBObject(DbManager.in_, communityIds));
 					if ((null != fromOverride) || (null != toOverride)) {
-						oldQueryObj.put("_id", createDateRange(fromOverride, toOverride, false));
+						oldQueryObj.put(JsonUtils._ID, createDateRange(fromOverride, toOverride, false));
 					}//TESTED			
 					if (input.equals("doc_metadata.metadata")) {
 						oldQueryObj.put(DocumentPojo.index_, new BasicDBObject(DbManager.ne_, "?DEL?")); // (ensures not soft-deleted)
@@ -164,7 +165,7 @@ public class LegacyV1HadoopUtils {
 		{
 			throw new RuntimeException("Custom Tables not currently supported (no plans to)");
 //			if ((null != fromOverride) || (null != toOverride)) {
-//				oldQueryObj.put("_id", createDateRange(fromOverride, toOverride, false));
+//				oldQueryObj.put(JsonUtils._ID, createDateRange(fromOverride, toOverride, false));
 //			}//TESTED
 //			//get the custom table (and database)
 //

@@ -50,6 +50,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
+import com.ikanow.aleph2.data_model.utils.JsonUtils;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.shared.crud.mongodb.utils.ErrorUtils;
@@ -101,7 +102,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 		}		
 	}
 	
-	public final static String _ID = "_id";
+	public final static String _ID = JsonUtils._ID;
 	
 	/** Constructor
 	 * @param bean_clazz - the class to which this CRUD service is being mapped
@@ -482,7 +483,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	@Override
 	public CompletableFuture<Boolean> updateObjectById(final Object id, final UpdateComponent<O> update) {
-		return updateObjectBySpec(emptyQuery(_state.bean_clazz).when("_id", id), Optional.of(false), update);
+		return updateObjectBySpec(emptyQuery(_state.bean_clazz).when(_ID, id), Optional.of(false), update);
 	}
 
 	/* (non-Javadoc)
@@ -582,7 +583,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			// Delete and return the object
 			final CompletableFuture<Optional<O>> ret_val =
 					updateAndReturnObjectBySpec(unique_spec, Optional.of(false), CrudUtils.update(_state.bean_clazz).deleteObject(),
-													Optional.of(true), Arrays.asList("_id"), true); 					
+													Optional.of(true), Arrays.asList(_ID), true); 					
 
 			// Return a future that just wraps ret_val - ie returns true if the doc is present, ie was just deleted
 			return ret_val.thenApply(opt -> opt.isPresent());
@@ -609,7 +610,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 			else {
 				
 				final com.mongodb.DBCursor cursor = 
-						Optional.of(_state.orig_coll.find(query_and_meta._1(), new BasicDBObject("_id", 1)))
+						Optional.of(_state.orig_coll.find(query_and_meta._1(), new BasicDBObject(_ID, 1)))
 							// (now we're processing on a cursor "c")
 							.map(c -> {
 								return (null != sort) ? c.sort(sort) : c; 
@@ -619,9 +620,9 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 							})
 							.get();
 				
-				final List<Object> ids = StreamSupport.stream(cursor.spliterator(), false).map(o -> o.get("_id")).collect(Collectors.toList());
+				final List<Object> ids = StreamSupport.stream(cursor.spliterator(), false).map(o -> o.get(_ID)).collect(Collectors.toList());
 				
-				return deleteObjectsBySpec(emptyQuery(_state.bean_clazz).withAny("_id", ids));
+				return deleteObjectsBySpec(emptyQuery(_state.bean_clazz).withAny(_ID, ids));
 			}			
 		}
 		catch (Exception e) {			
@@ -733,7 +734,7 @@ public class MongoDbCrudService<O, K> implements ICrudService<O> {
 	 */
 	private static BasicDBObject getFields(List<String> field_list, boolean include) {
 		final BasicDBObject fields = new BasicDBObject(field_list.stream().collect(Collectors.toMap(f -> f, f -> include ? 1 : 0)));
-		if (include && !fields.containsField("_id")) fields.put("_id", 0); // (mongodb adds this by default)
+		if (include && !fields.containsField(_ID)) fields.put(_ID, 0); // (mongodb adds this by default)
 		return fields;
 	}
 }

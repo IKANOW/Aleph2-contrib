@@ -89,6 +89,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
+import com.ikanow.aleph2.data_model.utils.JsonUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
@@ -175,7 +176,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 					: Arrays.stream(_hits.hits())
 						.<O>map(hit -> {
 							final Map<String, Object> src_fields = hit.getSource();
-							src_fields.computeIfAbsent("_id", __ -> hit.getId());
+							src_fields.computeIfAbsent(JsonUtils._ID, __ -> hit.getId());
 							return _object_mapper.convertValue(src_fields, _state.clazz);
 						})
 						.iterator();
@@ -220,7 +221,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 					.setRefresh(!bulk && CreationPolicy.OPTIMIZED != _state.creation_policy)
 					.setSource(json_object.<String>either(left -> left.toString(), right -> right._2()))
 						)
-				.map(i -> json_object.<IndexRequestBuilder>either(left -> left.has("_id") ? i.setId(left.get("_id").asText()) : i, right -> i.setId(right._1())))
+				.map(i -> json_object.<IndexRequestBuilder>either(left -> left.has(JsonUtils._ID) ? i.setId(left.get(JsonUtils._ID).asText()) : i, right -> i.setId(right._1())))
 				//DEBUG
 				//.map(irb -> { System.out.println("REQUEST INDICES = " + Arrays.toString(irb.request().indices())); return irb; })
 				.get();		
@@ -574,7 +575,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				
 				if (sh.length > 0) {
 					final Map<String, Object> src_fields = sh[0].getSource();
-					src_fields.computeIfAbsent("_id", __ -> sh[0].getId());
+					src_fields.computeIfAbsent(JsonUtils._ID, __ -> sh[0].getId());
 					return Optional.ofNullable(_object_mapper.convertValue(src_fields, _state.clazz));
 				}
 				else {
@@ -616,7 +617,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			final List<String> types = _state.es_context.typeContext().getReadableTypeList();
 			if ((indexes.size() != 1) || (indexes.size() > 1)) {
 				// Multi index request, so use a query (which may not always return the most recent value, depending on index refresh settings/timings)
-				return getObjectBySpec(CrudUtils.anyOf(_state.clazz).when("_id", id.toString()), field_list, include);			
+				return getObjectBySpec(CrudUtils.anyOf(_state.clazz).when(JsonUtils._ID, id.toString()), field_list, include);			
 			}
 			else {
 				
@@ -847,7 +848,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			final List<String> types = _state.es_context.typeContext().getReadableTypeList();
 			if ((indexes.size() != 1) || (indexes.size() > 1)) {
 				// Multi index request, so use a query (which may not always return the most recent value, depending on index refresh settings/timings)
-				return deleteObjectBySpec(CrudUtils.anyOf(_state.clazz).when("_id", id.toString()));			
+				return deleteObjectBySpec(CrudUtils.anyOf(_state.clazz).when(JsonUtils._ID, id.toString()));			
 			}
 			else {
 				
@@ -1197,7 +1198,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			if (is_replace_mode && ObjectNode.class.isAssignableFrom(object.getClass())) {
 				final ObjectNode j = (ObjectNode) object;
 				if (1 == j.size()) { // ie empty... apart from...
-					final JsonNode _id = j.get("_id");
+					final JsonNode _id = j.get(JsonUtils._ID);
 					if ((null != _id) && _id.isTextual()) {  // ... an _id
 						return _id.asText();
 					}

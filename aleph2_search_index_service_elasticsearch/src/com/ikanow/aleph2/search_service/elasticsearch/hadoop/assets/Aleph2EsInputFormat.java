@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 
 
 
+
 import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.RecordReader;
@@ -40,7 +41,9 @@ import org.elasticsearch.hadoop.mr.EsInputFormat;
 
 
 
+
 import scala.Tuple2;
+
 
 
 
@@ -49,6 +52,7 @@ import scala.Tuple2;
 
 import com.ikanow.aleph2.core.shared.utils.BatchRecordUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
+import com.ikanow.aleph2.data_model.utils.JsonUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.JsonNodeWritableUtils;
@@ -147,7 +151,7 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 			}).get();
 		}
 
-		protected static final Text _ID = new Text("_id");
+		protected static final Text _ID = new Text(JsonUtils._ID);
 		
 		/* (non-Javadoc)
 		 * @see org.elasticsearch.hadoop.mr.EsInputFormat.ShardRecordReader#getCurrentValue()

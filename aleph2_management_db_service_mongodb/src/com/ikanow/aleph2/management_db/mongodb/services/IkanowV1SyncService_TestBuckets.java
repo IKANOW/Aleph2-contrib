@@ -61,6 +61,7 @@ import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.JsonUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
@@ -493,7 +494,7 @@ public class IkanowV1SyncService_TestBuckets {
 		if ( message.isPresent() )
 			update_component.set(TestQueueBean::message, message.get());
 										
-		final SingleQueryComponent<TestQueueBean> v1_query = CrudUtils.allOf(TestQueueBean.class).when("_id", id);
+		final SingleQueryComponent<TestQueueBean> v1_query = CrudUtils.allOf(TestQueueBean.class).when(JsonUtils._ID, id);
 		return source_test_db.updateObjectBySpec(v1_query, Optional.empty(), update_component);		
 	}
 	

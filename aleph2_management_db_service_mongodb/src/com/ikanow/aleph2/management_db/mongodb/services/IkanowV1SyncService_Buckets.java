@@ -72,6 +72,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
+import com.ikanow.aleph2.data_model.utils.JsonUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -402,7 +403,7 @@ public class IkanowV1SyncService_Buckets {
 						.rangeIn(DataBucketBean::_id, "aleph...bucket.", true, "aleph...bucket/", true)
 						;						
 				
-				return bucket_mgmt.getObjectsBySpec(bucket_query, Arrays.asList("_id", "modified"), true)
+				return bucket_mgmt.getObjectsBySpec(bucket_query, Arrays.asList(JsonUtils._ID, "modified"), true)
 						.<Tuple2<Map<String, String>, Map<String, Date>>>
 						thenApply(c -> {							
 							final Map<String, Date> v2_key_date_map = 
@@ -609,7 +610,7 @@ public class IkanowV1SyncService_Buckets {
 	 */
 	protected static DataBucketBean getBucketFromV1Source(final JsonNode src_json) throws JsonParseException, JsonMappingException, IOException, ParseException {
 		// (think we'll use key instead of _id):
-		//final String _id = safeJsonGet("_id", src_json).asText(); 
+		//final String _id = safeJsonGet(JsonUtils._ID, src_json).asText(); 
 		final String key = safeJsonGet("key", src_json).asText();
 		final String created = safeJsonGet("created", src_json).asText();
 		final String modified = safeJsonGet("modified", src_json).asText();

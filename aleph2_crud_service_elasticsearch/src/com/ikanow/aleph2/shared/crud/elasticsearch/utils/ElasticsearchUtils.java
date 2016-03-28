@@ -122,7 +122,7 @@ public class ElasticsearchUtils {
 		return Patterns.match(operator_args).<FilterBuilder>andReturn()
 
 				//(es - handle _ids/_types differently)
-				.when(op_args -> field.equals("_id") && Operator.exists == op_args._1(), op_args -> { throw new RuntimeException(ErrorUtils.EXISTS_ON_IDS); })				
+				.when(op_args -> field.equals(JsonUtils._ID) && Operator.exists == op_args._1(), op_args -> { throw new RuntimeException(ErrorUtils.EXISTS_ON_IDS); })				
 				.when(op_args -> field.equals("_type") && Operator.exists == op_args._1(), op_args -> { throw new RuntimeException(ErrorUtils.EXISTS_ON_TYPES); })				
 				
 				.when(op_args -> Operator.exists == op_args._1(), op_args -> {
@@ -131,9 +131,9 @@ public class ElasticsearchUtils {
 				})
 
 				//(es - handle _ids/_types differently)
-				.when(op_args -> field.equals("_id") && (Operator.any_of == op_args._1()), op_args -> 
+				.when(op_args -> field.equals(JsonUtils._ID) && (Operator.any_of == op_args._1()), op_args -> 
 					FilterBuilders.idsFilter().addIds(StreamSupport.stream(((Iterable<?>)op_args._2()._1()).spliterator(), false).map(x -> x.toString()).collect(Collectors.toList()).toArray(new String[0])))										
-				.when(op_args -> field.equals("_id") && (Operator.all_of == op_args._1()), __ -> { throw new RuntimeException(ErrorUtils.ALL_OF_ON_IDS); }) 				
+				.when(op_args -> field.equals(JsonUtils._ID) && (Operator.all_of == op_args._1()), __ -> { throw new RuntimeException(ErrorUtils.ALL_OF_ON_IDS); }) 				
 				.when(op_args -> field.equals("_type") && (Operator.any_of == op_args._1()), __ -> { throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "any_of/_type")); })
 				.when(op_args -> field.equals("_type") && (Operator.all_of == op_args._1()), __ -> { throw new RuntimeException(ErrorUtils.ALL_OF_ON_TYPES); }) 				
 				
@@ -141,8 +141,8 @@ public class ElasticsearchUtils {
 				.when(op_args -> (Operator.all_of == op_args._1()), op_args -> FilterBuilders.termsFilter(field, (Iterable<?>)op_args._2()._1()).execution("and")) 
 
 				//(es - handle _ids/_types differently)
-				.when(op_args -> field.equals("_id") && (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> FilterBuilders.notFilter(FilterBuilders.idsFilter().addIds(op_args._2()._2().toString())) )
-				.when(op_args -> field.equals("_id") && (Operator.equals == op_args._1()), op_args -> FilterBuilders.idsFilter().addIds(op_args._2()._1().toString()) )				
+				.when(op_args -> field.equals(JsonUtils._ID) && (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> FilterBuilders.notFilter(FilterBuilders.idsFilter().addIds(op_args._2()._2().toString())) )
+				.when(op_args -> field.equals(JsonUtils._ID) && (Operator.equals == op_args._1()), op_args -> FilterBuilders.idsFilter().addIds(op_args._2()._1().toString()) )				
 				.when(op_args -> field.equals("_type") && (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> FilterBuilders.notFilter(FilterBuilders.typeFilter(op_args._2()._2().toString())) )
 				.when(op_args -> field.equals("_type") && (Operator.equals == op_args._1()), op_args -> FilterBuilders.typeFilter(op_args._2()._1().toString()) )				
 				
@@ -150,7 +150,7 @@ public class ElasticsearchUtils {
 				.when(op_args -> (Operator.equals == op_args._1()), op_args -> FilterBuilders.termFilter(field, op_args._2()._1()) )
 										
 				// unless id_ranges_ok, exception out here:
-				.when(op_args -> field.equals("_id") && !id_ranges_ok && _RANGE_OP.contains(op_args._1()), __ -> {
+				.when(op_args -> field.equals(JsonUtils._ID) && !id_ranges_ok && _RANGE_OP.contains(op_args._1()), __ -> {
 					throw new RuntimeException(ErrorUtils.NO_ID_RANGES_UNLESS_IDS_INDEXED);
 				})
 				.when(op_args -> field.equals("_type"),  __ -> { throw new RuntimeException(ErrorUtils.RANGES_ON_TYPES); })
