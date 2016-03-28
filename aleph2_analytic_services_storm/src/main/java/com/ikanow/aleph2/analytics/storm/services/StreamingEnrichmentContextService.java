@@ -47,6 +47,7 @@ import com.ikanow.aleph2.analytics.storm.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentStreamingTopology;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService;
@@ -378,25 +379,6 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 	}
 
 	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#logStatusForBucketOwner(java.util.Optional, com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean, boolean)
-	 */
-	@Override
-	public void logStatusForBucketOwner(Optional<DataBucketBean> bucket,
-			BasicMessageBean message, boolean roll_up_duplicates) {
-		throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "logStatusForBucketOwner"));
-		
-	}
-
-	/* (non-Javadoc)
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#logStatusForBucketOwner(java.util.Optional, com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean)
-	 */
-	@Override
-	public void logStatusForBucketOwner(Optional<DataBucketBean> bucket,
-			BasicMessageBean message) {
-		throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "logStatusForBucketOwner"));
-	}
-
-	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emergencyDisableBucket(java.util.Optional)
 	 */
 	@Override
@@ -475,4 +457,11 @@ public class StreamingEnrichmentContextService implements IEnrichmentModuleConte
 		return _delegate.get().flushBatchOutput(bucket, _job.get());
 	}
 
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#getLogger(java.util.Optional)
+	 */
+	@Override
+	public IBucketLogger getLogger(Optional<DataBucketBean> bucket) {
+		return _delegate.get().getLogger(bucket);
+	}
 }
