@@ -508,20 +508,6 @@ public class TestBatchEnrichmentContext {
 		catch (Exception e) {
 			assertEquals(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "emergencyDisableBucket"), e.getMessage());
 		}
-		try {
-			test_context.logStatusForBucketOwner(null, null);
-			fail("Should have thrown exception");
-		}
-		catch (Exception e) {
-			assertEquals(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "logStatusForBucketOwner"), e.getMessage());
-		}
-		try {
-			test_context.logStatusForBucketOwner(null, null, false);
-			fail("Should have thrown exception");
-		}
-		catch (Exception e) {
-			assertEquals(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "logStatusForBucketOwner"), e.getMessage());
-		}
 		// (This has now been implemented, though not ready to test yet)
 //		try {
 //			test_context.getBucketStatus(null);

@@ -20,6 +20,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
+import com.ikanow.aleph2.data_model.objects.data_import.AnnotationBean;
+
 /** Allows user to configure how the incoming file is treated
  * @author Alex
  */
@@ -55,7 +57,7 @@ public class BeFileInputConfigBean {
 		public String primary_key_prefix() {  return Optional.ofNullable(primary_key_prefix).orElse(""); }
 		public String primary_key_field() {  return Optional.ofNullable(primary_key_field).orElse(""); }
 		public boolean set_id_from_content() { return Optional.ofNullable(set_id_from_content).orElse(false); }
-		public String id_field() { return Optional.ofNullable(id_field).orElse("_id"); }
+		public String id_field() { return Optional.ofNullable(id_field).orElse(AnnotationBean._ID); }
 		// These can be null, meaning disable the funcionality
 		public String attribute_prefix() { return attribute_prefix; }		
 		public String xml_text_field() { return xml_text_field; }
