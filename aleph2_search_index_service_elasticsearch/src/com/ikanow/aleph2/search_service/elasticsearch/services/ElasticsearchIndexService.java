@@ -71,6 +71,7 @@ import com.ikanow.aleph2.data_model.interfaces.data_services.IDocumentService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ISearchIndexService;
 import com.ikanow.aleph2.data_model.interfaces.data_services.ITemporalService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.IReadOnlyCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
@@ -426,7 +427,17 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getReadableCrudService(java.lang.Class, java.util.Collection, java.util.Optional)
 		 */
 		@Override
-		public <O> Optional<ICrudService<O>> getReadableCrudService(
+		public <O> Optional<IReadOnlyCrudService<O>> getReadableCrudService(
+				Class<O> clazz, Collection<DataBucketBean> buckets,
+				Optional<String> options) {
+			return getUpdatableCrudService(clazz, buckets, options).map(crud -> crud.readOnlyVersion());
+		}
+		
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService#getReadableCrudService(java.lang.Class, java.util.Collection, java.util.Optional)
+		 */
+		@Override
+		public <O> Optional<ICrudService<O>> getUpdatableCrudService(
 				Class<O> clazz, Collection<DataBucketBean> buckets,
 				Optional<String> options) {
 
