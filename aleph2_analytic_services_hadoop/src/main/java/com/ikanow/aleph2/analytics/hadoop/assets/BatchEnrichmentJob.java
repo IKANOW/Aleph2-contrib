@@ -62,6 +62,7 @@ import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModul
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule.ProcessingStage;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ILoggingService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
@@ -74,6 +75,7 @@ import com.ikanow.aleph2.data_model.utils.JsonUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
+import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobConfigurable;
 import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
@@ -144,7 +146,7 @@ public class BatchEnrichmentJob{
 		
 		protected List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> _batch = new ArrayList<>();		
 		
-		protected IBucketLogger _logger = null; 
+		protected SetOnce<IBucketLogger> _logger = new SetOnce<>(); 
 		
 		/** Returns the starting stage for this element type
 		 * @return
@@ -192,6 +194,11 @@ public class BatchEnrichmentJob{
 			}			
 			_v1_logger.ifPresent(logger -> logger.info("Setup BatchEnrichmentJob for " + this._enrichment_context.getBucket().map(b -> b.full_name()).orElse("unknown") + " Stage: " + this.getClass().getSimpleName() + ", Grouping = " + this._grouping_element));
 			logger.info("Setup BatchEnrichmentJob for " + this._enrichment_context.getBucket().map(b -> b.full_name()).orElse("unknown") + " Stage: " + this.getClass().getSimpleName() + ", Grouping = " + this._grouping_element);
+			
+			this._enrichment_context.getServiceContext().getService(ILoggingService.class, Optional.empty())
+					.<IBucketLogger>flatMap(s -> this._enrichment_context.getBucket().map(b -> s.getSystemLogger(b)))
+					.ifPresent(l-> _logger.set(l))
+					;
 			
 			final Iterator<Tuple4<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean, MutableStats>> it = _ec_metadata.iterator();
 			ProcessingStage mutable_prev_stage = this.getStartingStage();
@@ -257,33 +264,35 @@ public class BatchEnrichmentJob{
 					t4._4().in += batch_in;
 					t4._4().out += batch_out;
 					
-					_logger.log(Level.TRACE, 						
+					_logger.optional().ifPresent(l -> l.log(Level.TRACE, 						
 							ErrorUtils.lazyBuildMessage(true, () -> "BatchEnrichmentJob", 
 									() -> Optional.ofNullable(t4._3().name()).orElse("no_name") + ".onObjectBatch", 
 									() -> null, 
 									() -> ErrorUtils.get("New batch stage {0} task={1} in={2} out={3} cumul_in={4}, cumul_out={5}", 
 											Optional.ofNullable(t4._3().name()).orElse("(no name)"),  hadoop_context.getTaskAttemptID().toString(), batch_in, batch_out, t4._4().in,  t4._4().out),
 									() -> null)
-									);						
+									));						
 					
-					if (flush) {
+					if (flush) { // (means it's the last one)
 						if (_v1_logger.isPresent()) // (have to do it this way because of mutable var) 
 							_v1_logger.get().info("Stage " + Optional.ofNullable(t4._3().name()).orElse("(no name)") + " output records=" + mutable_start.size() + " final_stage=" + !it.hasNext());
 						logger.info("Stage " + Optional.ofNullable(t4._3().name()).orElse("(no name)") + " output records=" + mutable_start.size() + " final_stage=" + !it.hasNext());
-					}
-					
-					if (!it.hasNext()) { // final stage output anything we have here
 						
-						completeBatchFinalStage(mutable_start, hadoop_context);
-						
-						_logger.log(Level.INFO, 						
+						_logger.optional().ifPresent(l -> l.log(Level.INFO, 						
 								ErrorUtils.lazyBuildMessage(true, () -> "BatchEnrichmentJob", 
 										() -> Optional.ofNullable(t4._3().name()).orElse("no_name") + ".completeBatchFinalStage", 
 										() -> null, 
 										() -> ErrorUtils.get("Completed stage {0} task={1} in={2} out={3}", 
 												Optional.ofNullable(t4._3().name()).orElse("(no name)"),  hadoop_context.getTaskAttemptID().toString(), t4._4().in,  t4._4().out),
 										() -> _mapper.convertValue(t4._4(), Map.class))
-										);						
+										));
+						
+						_logger.optional().ifPresent(l -> l.flush());
+					}
+					
+					if (!it.hasNext()) { // final stage output anything we have here
+						
+						completeBatchFinalStage(mutable_start, hadoop_context);						
 					}
 				}				
 				_batch.clear();
@@ -345,13 +354,13 @@ public class BatchEnrichmentJob{
 													}
 													catch (Throwable t) {
 														
-														_logger.log(Level.ERROR, 						
+														_logger.optional().ifPresent(l -> l.log(Level.ERROR, 						
 																ErrorUtils.lazyBuildMessage(false, () -> "BatchEnrichmentJob", 
 																		() -> Optional.ofNullable(ecm.name()).orElse("no_name") + ".onStageInitialize", 
 																		() -> null, 
 																		() -> ErrorUtils.get("Error initializing {1}:{2}: {0}", Optional.ofNullable(ecm.name()).orElse("(no name)"), entryPoint.orElse("(unknown entry"), t.getMessage()), 
 																		() -> ImmutableMap.<String, Object>of("full_error", ErrorUtils.getLongForm("{0}", t)))
-																);
+																));
 														
 														_v1_logger.ifPresent(logger -> logger.info(ErrorUtils.getLongForm("Error initializing {1}:{2}: {0}", t,
 																Optional.ofNullable(ecm.name()).orElse("(no name)"), entryPoint
@@ -361,13 +370,13 @@ public class BatchEnrichmentJob{
 												}))
 												.map(mod -> {			
 													
-													_logger.log(Level.INFO, 						
+													_logger.optional().ifPresent(l -> l.log(Level.INFO, 						
 															ErrorUtils.lazyBuildMessage(true, () -> "BatchEnrichmentJob", 
 																	() -> Optional.ofNullable(ecm.name()).orElse("no_name") + ".onStageInitialize", 
 																	() -> null, 
 																	() -> ErrorUtils.get("Initialized stage {1}:{2}", Optional.ofNullable(ecm.name()).orElse("(no name)"), entryPoint.orElse("(unknown entry")), 
 																	() -> null)
-															);
+															));
 													
 													_v1_logger.ifPresent(logger -> logger.info("Completed initialization of stage " + Optional.ofNullable(ecm.name()).orElse("(no name)")));
 													logger.info("Completed initialization of stage " + Optional.ofNullable(ecm.name()).orElse("(no name)"));
