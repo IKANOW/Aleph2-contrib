@@ -27,8 +27,6 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.Optional;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.apache.shiro.session.Session;
 import org.junit.Before;
 import org.junit.Test;
@@ -45,7 +43,6 @@ import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigValueFactory;
 
 public class IkanowV2SecurityServiceTest  extends MockDbBasedTest{
-	private static final Logger logger = LogManager.getLogger(IkanowV2SecurityServiceTest.class);
 
 	protected Config config = null;
 

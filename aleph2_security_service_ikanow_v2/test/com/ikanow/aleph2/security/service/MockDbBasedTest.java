@@ -29,7 +29,7 @@ import com.mongodb.DBObject;
 import com.mongodb.util.JSON;
 
 public class MockDbBasedTest {
-	private static final Logger logger = LogManager.getLogger(MockDbBasedTest.class);
+	protected static final Logger logger = LogManager.getLogger(MockDbBasedTest.class);
 
 	private String postFix="2";
 	
