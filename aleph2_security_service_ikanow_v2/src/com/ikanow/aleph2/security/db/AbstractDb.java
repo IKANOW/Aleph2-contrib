@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IManagementDbService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 
 public abstract class AbstractDb {
 
@@ -65,10 +66,23 @@ public abstract class AbstractDb {
 
 
 
-	public Session load(Object id) {
+	public Object loadById(Object id) {
 		Session s = null;
 		try {
 			Optional<JsonNode> ojs = getStore().getObjectById(id).get();
+			if (ojs.isPresent()) {
+				s = (Session) deserialize(ojs.get());
+			}
+		} catch (Exception e) {
+			logger.error("Caught Exception loading from db:", e);
+		}
+		return s;
+	}
+
+	public Object loadBySpec(QueryComponent<JsonNode> spec) {
+		Session s = null;
+		try {
+			Optional<JsonNode> ojs = getStore().getObjectBySpec(spec).get();
 			if (ojs.isPresent()) {
 				s = (Session) deserialize(ojs.get());
 			}

@@ -15,7 +15,7 @@
  *******************************************************************************/
 package com.ikanow.aleph2.security.db;
 
-import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.Map.Entry;
 
@@ -30,8 +30,9 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 
 public class SessionDb extends AbstractDb{
 
-	SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmssSSS");
-			
+	protected String DOTREPLACE = "@DOT@";
+	protected String DOLLARREPLACE = "@USD@";
+	
 	public SessionDb(final IServiceContext service_context){
 		super(service_context);
 	}
@@ -48,10 +49,9 @@ public class SessionDb extends AbstractDb{
 			ObjectMapper mapper = new ObjectMapper();
 			mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 			 sessionOb = mapper.createObjectNode();			 
-			 //ObjectNode sessionOb = js.putObject("session");
 			 sessionOb.put("_id", s.getId().toString());
-			 sessionOb.put("last_access_time", sdf.format(s.getLastAccessTime()));
-			 sessionOb.put("start_time_stamp", sdf.format(s.getStartTimestamp()));
+			 sessionOb.put("last_access_time", s.getLastAccessTime().getTime());
+			 sessionOb.put("start_time_stamp", s.getStartTimestamp().getTime());
 			 sessionOb.put("timeout", s.getTimeout());
 			 sessionOb.put("host", s.getHost());
 			 ObjectNode attributesOb = sessionOb.putObject("attributes");
@@ -60,7 +60,8 @@ public class SessionDb extends AbstractDb{
 				Object value = s.getAttribute(key);
 				if(value!=null){
 					// base64 encode objects in session
-					attributesOb.put(""+key, SerializableUtils.serialize(value));	
+					logger.debug("Storing session attribute:"+key+"="+value);
+					attributesOb.put(escapeMongoCharacters(""+key), SerializableUtils.serialize(value));	
 				}
 			}
 		}
@@ -74,14 +75,14 @@ public class SessionDb extends AbstractDb{
 			if(sessionOb!= null){				
 				s =  new SimpleSession();
 				 s.setId(sessionOb.get("_id").asText());
-				 s.setLastAccessTime(sdf.parse(sessionOb.get("last_access_time").asText()));
-				 s.setStartTimestamp(sdf.parse(sessionOb.get("start_time_stamp").asText()));
+				 s.setLastAccessTime(new Date(sessionOb.get("last_access_time").asLong()));
+				 s.setStartTimestamp(new Date(sessionOb.get("start_time_stamp").asLong()));
 				 s.setTimeout(sessionOb.get("timeout").asLong());
 				 s.setHost(sessionOb.get("host").asText());
 				 JsonNode attributesOb = sessionOb.get("attributes");
 				 for (Iterator<Entry<String, JsonNode>> it = attributesOb.fields(); it.hasNext();) {
 					 Entry<String, JsonNode> e = it.next();
-					 s.setAttribute(e.getKey(), SerializableUtils.deserialize(e.getValue().asText()));
+					 s.setAttribute(deescapeMongoCharacters(e.getKey()), SerializableUtils.deserialize(e.getValue().asText()));
 				}
 			}		
 		} catch (Exception e) {
@@ -91,4 +92,27 @@ public class SessionDb extends AbstractDb{
 	}
 	
 
+	protected String escapeMongoCharacters(String fieldName){
+		String value = null;
+		if(fieldName!=null){
+			value = fieldName.replace(".", DOTREPLACE);
+			value = value.replace("$", DOLLARREPLACE);
+		}
+		return value;
+	}
+
+	protected String deescapeMongoCharacters(String fieldName){
+		String value = null;
+		if(fieldName!=null){
+			value = fieldName.replace(DOTREPLACE,".");
+			value = value.replace(DOLLARREPLACE,"$");
+		}
+		return value;
+	}
+	
+	
+//	public Session loadSessionByPrincipal(String principal){
+//		Session s = loadBySpec(spec);
+//		return s;
+//	}
 }
