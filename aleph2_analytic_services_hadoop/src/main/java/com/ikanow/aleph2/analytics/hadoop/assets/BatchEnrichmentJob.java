@@ -265,7 +265,7 @@ public class BatchEnrichmentJob{
 										() -> Optional.ofNullable(t4._3().name()).orElse("no_name") + ".onObjectBatch", 
 										() -> null, 
 										() -> ErrorUtils.get("New batch stage {0} task={1} in={2} out={3} cumul_in={4}, cumul_out={5}", 
-												Optional.ofNullable(t4._3().name()).orElse("(no name)"),  hadoop_context.getTaskAttemptID().toString(), batch_in, batch_out, t4._4().in,  t4._4().out),
+												Optional.ofNullable(t4._3().name()).orElse("(no name)"),  hadoop_context.getTaskAttemptID().toString(), batch_in, batch_out, Integer.toString(t4._4().in),  Integer.toString(t4._4().out)),
 										() -> null)
 										));						
 					}
@@ -281,7 +281,7 @@ public class BatchEnrichmentJob{
 										() -> Optional.ofNullable(t4._3().name()).orElse("no_name") + ".completeBatchFinalStage", 
 										() -> null, 
 										() -> ErrorUtils.get("Completed stage {0} task={1} in={2} out={3}", 
-												Optional.ofNullable(t4._3().name()).orElse("(no name)"),  hadoop_context.getTaskAttemptID().toString(), t4._4().in,  t4._4().out),
+												Optional.ofNullable(t4._3().name()).orElse("(no name)"),  hadoop_context.getTaskAttemptID().toString(), Integer.toString(t4._4().in),  Integer.toString(t4._4().out)),
 										() -> _mapper.convertValue(t4._4(), Map.class))
 										));
 						
@@ -330,7 +330,7 @@ public class BatchEnrichmentJob{
 		public void setEcMetadata(List<EnrichmentControlMetadataBean> ecMetadata, UnaryOperator<Stream<EnrichmentControlMetadataBean>> streamGenerator)
 		{
 			// (set up logging, have to do this here, since needed below and can't be setup until the context is set)
-			this._enrichment_context.getServiceContext().getService(ILoggingService.class, Optional.empty())
+			_enrichment_context.getServiceContext().getService(ILoggingService.class, Optional.empty())
 				.<IBucketLogger>flatMap(s -> this._enrichment_context.getBucket().map(b -> s.getSystemLogger(b)))
 				.ifPresent(l-> _logger.set(l))
 				;
