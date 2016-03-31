@@ -100,7 +100,7 @@ public class IkanowV2SecurityServiceTest  extends MockDbBasedTest{
 		when(session1.getAttributeKeys()).thenReturn(Arrays.asList("currentUser"));
 		when(session1.getAttribute(any())).thenReturn("doesnotexist@ikanow.com");		
 		sessionDb.store(session1);
-		Session session2 = sessionDb.load("123");
+		Session session2 = (Session)sessionDb.loadById("123");
 		assertNotNull(session2);
 		assertEquals(session1.getId(), session2.getId());		
 		assertEquals(session1.getHost(), session2.getHost());		
@@ -108,7 +108,7 @@ public class IkanowV2SecurityServiceTest  extends MockDbBasedTest{
 		assertEquals(session1.getStartTimestamp(), session2.getStartTimestamp());		
 		assertEquals(session1.getAttribute("currentUser"), session2.getAttribute("currentUser"));		
 		sessionDb.delete("123");
-		Session session3 = sessionDb.load("123");
+		Session session3 = (Session)sessionDb.loadById("123");
 		assertNull(session3);
 		
 	}
