@@ -195,11 +195,6 @@ public class BatchEnrichmentJob{
 			_v1_logger.ifPresent(logger -> logger.info("Setup BatchEnrichmentJob for " + this._enrichment_context.getBucket().map(b -> b.full_name()).orElse("unknown") + " Stage: " + this.getClass().getSimpleName() + ", Grouping = " + this._grouping_element));
 			logger.info("Setup BatchEnrichmentJob for " + this._enrichment_context.getBucket().map(b -> b.full_name()).orElse("unknown") + " Stage: " + this.getClass().getSimpleName() + ", Grouping = " + this._grouping_element);
 			
-			this._enrichment_context.getServiceContext().getService(ILoggingService.class, Optional.empty())
-					.<IBucketLogger>flatMap(s -> this._enrichment_context.getBucket().map(b -> s.getSystemLogger(b)))
-					.ifPresent(l-> _logger.set(l))
-					;
-			
 			final Iterator<Tuple4<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean, MutableStats>> it = _ec_metadata.iterator();
 			ProcessingStage mutable_prev_stage = this.getStartingStage();
 			while (it.hasNext()) {
@@ -240,7 +235,7 @@ public class BatchEnrichmentJob{
 				logger.info("Completing job.");
 			}
 			
-			if((_batch.size() >= _batch_size) || (!_batch.isEmpty() && flush)) {
+			if((_batch.size() >= _batch_size) || flush) {
 				hadoop_context.progress(); // (for little performance may in some cases prevent timeouts)
 				
 				final Iterator<Tuple4<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean, MutableStats>> it = _ec_metadata.iterator();
@@ -250,30 +245,33 @@ public class BatchEnrichmentJob{
 				while (it.hasNext()) {
 					final Tuple4<IEnrichmentBatchModule, BatchEnrichmentContext, EnrichmentControlMetadataBean, MutableStats> t4 = it.next();
 					
-					// Skip over the grouping element, we've already processed it
-					if (this._grouping_element.filter(g -> g == t4._3()).isPresent()) continue;
-					t4._2().clearOutputRecords();
+					if (!_batch.isEmpty()) { // only do this is there's something to process
+						// Skip over the grouping element, we've already processed it
+						if (this._grouping_element.filter(g -> g == t4._3()).isPresent()) continue;
+						t4._2().clearOutputRecords();
+						
+						final int batch_in = mutable_start.size();
+						
+						t4._1().onObjectBatch(mutable_start.stream().map(t2 -> t2._1()), Optional.of(mutable_start.size()), Optional.empty());
+						mutable_start = t4._2().getOutputRecords();
+						
+						final int batch_out = mutable_start.size();
+		
+						t4._4().in += batch_in;
+						t4._4().out += batch_out;
+						
+						_logger.optional().ifPresent(l -> l.log(Level.TRACE, 						
+								ErrorUtils.lazyBuildMessage(true, () -> "BatchEnrichmentJob", 
+										() -> Optional.ofNullable(t4._3().name()).orElse("no_name") + ".onObjectBatch", 
+										() -> null, 
+										() -> ErrorUtils.get("New batch stage {0} task={1} in={2} out={3} cumul_in={4}, cumul_out={5}", 
+												Optional.ofNullable(t4._3().name()).orElse("(no name)"),  hadoop_context.getTaskAttemptID().toString(), batch_in, batch_out, t4._4().in,  t4._4().out),
+										() -> null)
+										));						
+					}
 					
-					final int batch_in = mutable_start.size();
-					
-					t4._1().onObjectBatch(mutable_start.stream().map(t2 -> t2._1()), Optional.of(mutable_start.size()), Optional.empty());
-					mutable_start = t4._2().getOutputRecords();
-					
-					final int batch_out = mutable_start.size();
-	
-					t4._4().in += batch_in;
-					t4._4().out += batch_out;
-					
-					_logger.optional().ifPresent(l -> l.log(Level.TRACE, 						
-							ErrorUtils.lazyBuildMessage(true, () -> "BatchEnrichmentJob", 
-									() -> Optional.ofNullable(t4._3().name()).orElse("no_name") + ".onObjectBatch", 
-									() -> null, 
-									() -> ErrorUtils.get("New batch stage {0} task={1} in={2} out={3} cumul_in={4}, cumul_out={5}", 
-											Optional.ofNullable(t4._3().name()).orElse("(no name)"),  hadoop_context.getTaskAttemptID().toString(), batch_in, batch_out, t4._4().in,  t4._4().out),
-									() -> null)
-									));						
-					
-					if (flush) { // (means it's the last one)
+					if (flush && (t4._4().in > 0)) { // (means it's the last one) always logs if this module had any inputs
+						
 						if (_v1_logger.isPresent()) // (have to do it this way because of mutable var) 
 							_v1_logger.get().info("Stage " + Optional.ofNullable(t4._3().name()).orElse("(no name)") + " output records=" + mutable_start.size() + " final_stage=" + !it.hasNext());
 						logger.info("Stage " + Optional.ofNullable(t4._3().name()).orElse("(no name)") + " output records=" + mutable_start.size() + " final_stage=" + !it.hasNext());
@@ -290,8 +288,7 @@ public class BatchEnrichmentJob{
 						_logger.optional().ifPresent(l -> l.flush());
 					}
 					
-					if (!it.hasNext()) { // final stage output anything we have here
-						
+					if (!it.hasNext() && !_batch.isEmpty()) { // final stage output anything we have here (only do this is there's something to process)						
 						completeBatchFinalStage(mutable_start, hadoop_context);						
 					}
 				}				
@@ -332,6 +329,12 @@ public class BatchEnrichmentJob{
 		 */
 		public void setEcMetadata(List<EnrichmentControlMetadataBean> ecMetadata, UnaryOperator<Stream<EnrichmentControlMetadataBean>> streamGenerator)
 		{
+			// (set up logging, have to do this here, since needed below and can't be setup until the context is set)
+			this._enrichment_context.getServiceContext().getService(ILoggingService.class, Optional.empty())
+				.<IBucketLogger>flatMap(s -> this._enrichment_context.getBucket().map(b -> s.getSystemLogger(b)))
+				.ifPresent(l-> _logger.set(l))
+				;
+			
 			_grouping_element = 
 					ecMetadata.stream()
 						.filter(cfg -> Optional.ofNullable(cfg.enabled()).orElse(true))
