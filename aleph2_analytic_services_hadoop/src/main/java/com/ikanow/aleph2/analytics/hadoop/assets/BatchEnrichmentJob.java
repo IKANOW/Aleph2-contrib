@@ -386,7 +386,7 @@ public class BatchEnrichmentJob{
 															ErrorUtils.lazyBuildMessage(true, () -> "BatchEnrichmentJob", 
 																	() -> Optional.ofNullable(ecm.name()).orElse("no_name") + ".onStageInitialize", 
 																	() -> null, 
-																	() -> ErrorUtils.get("Initialized stage {1}:{2}", Optional.ofNullable(ecm.name()).orElse("(no name)"), entryPoint.orElse("(unknown entry")), 
+																	() -> ErrorUtils.get("Initialized stage {0}:{1}", Optional.ofNullable(ecm.name()).orElse("(no name)"), entryPoint.orElse("(unknown entry")), 
 																	() -> null)
 															));
 													
