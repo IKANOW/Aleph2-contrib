@@ -183,6 +183,30 @@
          		<artifactId>curator-recipes</artifactId>
          		<groupId>org.apache.curator</groupId>
          	</exclusion>
+			<exclusion>
+				<artifactId>servlet-api</artifactId>
+				<groupId>javax.servlet</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jasper-runtime</artifactId>
+				<groupId>tomcat</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jasper-compiler</artifactId>
+				<groupId>tomcat</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jetty-util</artifactId>
+				<groupId>org.mortbay.jetty</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jetty</artifactId>
+				<groupId>org.mortbay.jetty</groupId>
+			</exclusion>
+			<exclusion>
+				<artifactId>jsp-api</artifactId>
+				<groupId>javax.servlet.jsp</groupId>
+			</exclusion>
 		</exclusions>
 	</dependency>
   	<dependency>

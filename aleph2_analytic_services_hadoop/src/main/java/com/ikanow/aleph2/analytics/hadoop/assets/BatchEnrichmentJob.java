@@ -351,9 +351,10 @@ public class BatchEnrichmentJob{
 										logger.info("Trying to launch stage " + Optional.ofNullable(ecm.name()).orElse("(no name)") + " with entry point = " + entryPoint);
 										
 										return entryPoint.map(Stream::of).orElseGet(() -> Stream.of(PassthroughService.class.getName()))
-												.flatMap(Lambdas.flatWrap_i(ep -> {
+												.map(Lambdas.wrap_u(ep -> {
 													try {
-														return (IEnrichmentBatchModule)Class.forName(ep).newInstance();
+														// (need the context classloader bit in order to the JCL classpath with the user JARs when called as part of validation from within the service)
+														return (IEnrichmentBatchModule)Class.forName(ep, true, Thread.currentThread().getContextClassLoader()).newInstance();
 													}
 													catch (Throwable t) {
 														
@@ -368,7 +369,8 @@ public class BatchEnrichmentJob{
 														_v1_logger.ifPresent(logger -> logger.info(ErrorUtils.getLongForm("Error initializing {1}:{2}: {0}", t,
 																Optional.ofNullable(ecm.name()).orElse("(no name)"), entryPoint
 																)));
-														throw t; // (will be ignored)
+														
+														throw t; // (will trigger a mass failure of the job, which is I think what we want...)
 													}
 												}))
 												.map(mod -> {			

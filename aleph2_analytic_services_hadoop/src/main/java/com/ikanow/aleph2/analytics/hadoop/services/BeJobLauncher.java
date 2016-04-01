@@ -142,13 +142,11 @@ public class BeJobLauncher implements IBeJobService{
 			    			));
 			    }
 		    }
-		    catch (Throwable t) { // we'll log but carry on in this case...(in case there's some classloading shenanigans which won't affect the operation in hadoop)
-		    	logger.error(ErrorUtils.getLongForm("Failed validation, bucket: {1} error: {0}", t, bucket.full_name()));
+		    catch (Throwable t) { // exit out here
+		    	return Validation.fail(ErrorUtils.getLongForm("Failed validation, bucket: {1} error: {0}", t, bucket.full_name()));
 		    }
 		    
 		    // Create a separate InputFormat for every input (makes testing life easier)
-		    
-		    //TODO: detect if there are inputs here
 		    
 			Optional.ofNullable(_batchEnrichmentContext.getJob().inputs())
 						.orElse(Collections.emptyList())
