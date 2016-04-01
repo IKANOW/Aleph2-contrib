@@ -24,25 +24,17 @@ import org.apache.shiro.authc.AuthenticationToken;
 import org.apache.shiro.authc.credential.SimpleCredentialsMatcher;
 
 /**
- * This class checks if the account status is Active. No other Authentication is checked. Used instead of NoCredentialMatcher but limits authentication to active accounts only.
+ * This class checks denies authentication.Used only for cases where the session is picked up from the database or other storage. Any direct authentication should fail.
  * @author jfreydank
  *
  */
-public class ActiveSessionCredentialMatcher extends SimpleCredentialsMatcher {
-	private static final Logger logger = LogManager.getLogger(ActiveSessionCredentialMatcher.class);
+public class DeniedCredentialMatcher extends SimpleCredentialsMatcher {
+	private static final Logger logger = LogManager.getLogger(DeniedCredentialMatcher.class);
 
 	
     @Override
     public boolean doCredentialsMatch(AuthenticationToken token, AuthenticationInfo info) {
-    	 try {
-    	    
-        	//AuthenticationBean ab = ((IkanowV1AuthenticationInfo)info).getAuthenticationBean();        	 
-        	//return checkStatus(ab);
-    		 return false;
-		} catch (Exception e) {
-			logger.error("Caught error matching credentials:"+e.getMessage(),e);
-		
-    	}
+    	logger.debug("DeniedCredentialMatcher.doCredentialsMatch:"+token.getPrincipal());
         return false;
     }
 

@@ -51,7 +51,11 @@ import com.ikanow.aleph2.security.interfaces.IClearableRealmCache;
 import com.ikanow.aleph2.security.interfaces.IRoleProvider;
 import com.ikanow.aleph2.security.service.CoreEhCacheManager;
 
-
+/** 
+ * Class checks against an active session. =Functionality might not be necessary if the SessionDAO works.
+ * @author jfreydank
+ *
+ */
 public class ActiveSessionRealm extends AuthorizingRealm implements IClearableRealmCache {
 	private static final Logger logger = LogManager.getLogger(ActiveSessionRealm.class);
 
