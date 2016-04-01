@@ -36,6 +36,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -285,7 +288,7 @@ public class BatchEnrichmentJob{
 										() -> _mapper.convertValue(t4._4(), Map.class))
 										));
 						
-						_logger.optional().ifPresent(l -> l.flush());
+						_logger.optional().ifPresent(Lambdas.wrap_consumer_u(l -> l.flush().get(60,  TimeUnit.SECONDS)));
 					}
 					
 					if (!it.hasNext() && !_batch.isEmpty()) { // final stage output anything we have here (only do this is there's something to process)						
@@ -311,7 +314,11 @@ public class BatchEnrichmentJob{
 			
 			_ec_metadata.stream().forEach(ecm -> ecm._1().onStageComplete(true));
 			if (null != _enrichment_context) {
-				_enrichment_context.flushBatchOutput(Optional.empty()).join();
+				try {
+					_enrichment_context.flushBatchOutput(Optional.empty()).get(60, TimeUnit.SECONDS);
+				} catch (ExecutionException | TimeoutException e) {
+					throw new RuntimeException(e);
+				}
 			}
 						
 			//DEBUG
@@ -705,7 +712,11 @@ public class BatchEnrichmentJob{
 			// do this one first
 			_first_element._1().onStageComplete(true);
 			if (null != _enrichment_context) {
-				_enrichment_context.flushBatchOutput(Optional.empty()).join();
+				try {
+					_enrichment_context.flushBatchOutput(Optional.empty()).get(60, TimeUnit.SECONDS);
+				} catch (ExecutionException | TimeoutException e) {
+					throw new RuntimeException(e);
+				}
 			}
 						
 			//DEBUG
