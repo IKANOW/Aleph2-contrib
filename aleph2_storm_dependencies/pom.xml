@@ -134,12 +134,20 @@
 		</pluginManagement>
 	</build>
 	<repositories>
-    <repository>
-      <id>hdp_repo</id>
-      <name>hortonworks repo</name>
-      <url>http://repo.hortonworks.com/content/repositories/releases</url>
-    </repository>
-  </repositories>
+		<!-- Original HDP repo from which the HDP compatible storm is taken - repo not reliably up, so cached in the local repo -->
+		<!-- 
+	    <repository>
+	      <id>hdp_repo</id>
+	      <name>hortonworks repo</name>
+	      <url>http://repo.hortonworks.com/content/repositories/releases</url>
+	    </repository>
+	     -->
+	    <repository>
+	      <id>local_repo</id>
+	      <name>local_repo</name>
+	      <url>file://${basedir}/local_maven_repo</url>
+	    </repository>
+  	</repositories>
 	<dependencies>
 		<dependency>
 			<groupId>jdk.tools</groupId>

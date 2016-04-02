@@ -1,0 +1,10 @@
+#NOTE: This is an Aether internal implementation file, its format can be changed without prior notice.
+#Sat Apr 02 18:15:09 EDT 2016
+http\://repo.hortonworks.com/nexus/content/groups/public/.lastUpdated=1459635309179
+https\://clojars.org/repo/.error=
+http\://repo.hortonworks.com/nexus/content/groups/public/.error=
+https\://repo.maven.apache.org/maven2/.lastUpdated=1459635309113
+file\:///home/Alex/github/Aleph2-contrib/aleph2_storm_dependencies/local_maven_repo/.lastUpdated=1459635309095
+https\://clojars.org/repo/.lastUpdated=1459635309143
+file\:///home/Alex/github/Aleph2-contrib/aleph2_storm_dependencies/local_maven_repo/.error=
+https\://repo.maven.apache.org/maven2/.error=

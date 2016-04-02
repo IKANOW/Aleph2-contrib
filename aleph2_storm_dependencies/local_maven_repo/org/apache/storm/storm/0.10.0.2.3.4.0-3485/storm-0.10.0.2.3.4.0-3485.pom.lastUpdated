@@ -1,0 +1,15 @@
+#NOTE: This is an Aether internal implementation file, its format can be changed without prior notice.
+#Sat Apr 02 17:56:03 EDT 2016
+@default-local_repo-/home/Alex/github/Aleph2-contrib/aleph2_storm_dependencies/local_maven_repo/.lastUpdated=1459634149822
+file\://C\:\\Users\\Alex\\git\\Aleph2-contrib\\aleph2_storm_dependencies/local_maven_repo/.lastUpdated=1459633843096
+@default-/home/Alex/github/Aleph2-contrib/aleph2_storm_dependencies/local_maven_repo/.lastUpdated=1459634146933
+file\:///home/Alex/github/Aleph2-contrib/aleph2_storm_dependencies/local_maven_repo/.lastUpdated=1459634163530
+http\://repo.maven.apache.org/maven2/.lastUpdated=1459633843117
+http\://repo.maven.apache.org/maven2/.error=
+file\://C\:\\Users\\Alex\\git\\Aleph2-contrib\\aleph2_storm_dependencies/local_maven_repo/.error=
+@default-./local_maven_repo/.lastUpdated=1459633755007
+file\:///home/Alex/github/Aleph2-contrib/aleph2_storm_dependencies/local_maven_repo/.error=
+https\://repo.maven.apache.org/maven2/.lastUpdated=1459634098163
+/home/Alex/github/Aleph2-contrib/aleph2_storm_dependencies/local_maven_repo/.error=Could not transfer artifact org.apache.storm\:storm\:pom\:0.10.0.2.3.4.0-3485 from/to local_repo (/home/Alex/github/Aleph2-contrib/aleph2_storm_dependencies/local_maven_repo)\: Cannot access /home/Alex/github/Aleph2-contrib/aleph2_storm_dependencies/local_maven_repo with type default using the available connector factories\: BasicRepositoryConnectorFactory
+https\://repo.maven.apache.org/maven2/.error=
+./local_maven_repo/.error=Could not transfer artifact org.apache.storm\:storm\:pom\:0.10.0.2.3.4.0-3485 from/to local_repo (./local_maven_repo)\: No connector available to access repository local_repo (./local_maven_repo) of type default using the available factories AetherRepositoryConnectorFactory, WagonRepositoryConnectorFactory
