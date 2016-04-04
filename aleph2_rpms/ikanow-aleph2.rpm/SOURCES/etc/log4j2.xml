@@ -10,8 +10,17 @@
                         <PatternLayout pattern="%d{YYYY-MM-dd HH:mm:ss} [%t] %-5p %c{1}:%L - %msg%n" />
             <TimeBasedTriggeringPolicy/>
         </RollingFile>
+        <RollingFile name="fileWriter_ALEPH2"
+                     fileName="/opt/aleph2-home/logs/v1_sync_service.log"
+                     filePattern="/opt/aleph2-home/logs/v1_sync_service.%d{yyyy-MM-dd}.gz">
+                        <PatternLayout pattern="%m%n" />
+            <TimeBasedTriggeringPolicy/>
+        </RollingFile>
         </Appenders>
         <Loggers>
+                <Logger name="com.ikanow.aleph2.logging.service.LoggingService" level="ALL" additivity="false">
+			<AppenderRef ref="fileWriter_ALEPH2"/>
+		</Logger>
                 <logger name="com.joestelmach.natty.Parser" level="WARN"/>        
                 <Root level="info">
                         <AppenderRef ref="fileWriter" />
