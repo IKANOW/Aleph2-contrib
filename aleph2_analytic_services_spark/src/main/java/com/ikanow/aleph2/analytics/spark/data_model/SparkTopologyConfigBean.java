@@ -35,7 +35,7 @@ public class SparkTopologyConfigBean implements Serializable {
 	public static final String DEFAULT_CLUSTER_MODE = "yarn-cluster";
 	public static final String JOB_CONFIG_KEY = "spark.aleph2_job_config";
 	
-	public enum SparkType { r, python, jvm }
+	public enum SparkType { r, python, jvm, js }
 	
 	/** Guice/Jackson/User c'tor
 	 */
@@ -103,6 +103,8 @@ public class SparkTopologyConfigBean implements Serializable {
 	public List<String> uploaded_files() { return Optional.ofNullable(uploaded_files).orElse(Collections.emptyList()); }
 	
 	/** Allows the specification of language specific libraries from the shared library
+	 *  (In JS mode this refers to packages within the specified JARs that are evaluated before any user code, eg "/package.js" which must then
+	 *   be in one of the job's JAR files) 
 	 * @return
 	 */
 	public List<String> uploaded_lang_files() { return Optional.ofNullable(uploaded_lang_files).orElse(Collections.emptyList()); }	
