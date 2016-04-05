@@ -57,25 +57,26 @@ function _a2_bucket_log(level, msg) {
 			);
 }
 
-var Aleph2Api = Java.extend( Java.type("java.lang.Object") , Java.type("java.io.Serializable") );
-var _a2 = new Aleph2Api({
-	context: _a2_global_context,
-	spark_context: _a2_spark_context,
-	inputs: _a2_spark_inputs,
-	all_inputs: _a2_spark_inputs_all,
-	config: _a2_global_to_json(_a2_global_config),
-	bucket: _a2_global_bucket,
-	job: _a2_global_job,
-	emit: _a2_global_emit,
-	externalEmit: _a2_global_emit_external,
-	to_json: _a2_global_to_json,
-	list_to_js: _a2_global_list_to_js,
+var Aleph2Api = Java.extend( Java.type("java.io.Serializable"),
+{
+	context: function() { return function_a2_global_context; },
+	spark_context: function() { return _a2_spark_context; },
+	inputs: function() { return _a2_spark_inputs; },
+	all_inputs: function() { return _a2_spark_inputs_all; },
+	config: function() { return _a2_global_to_json(_a2_global_config); },
+	bucket: function() { return _a2_global_bucket; },
+	job: function() { return _a2_global_job; },
+	emit: function() { return _a2_global_emit; },
+	externalEmit: function() { return _a2_global_emit_external; },
+	to_json: function() { return _a2_global_to_json; },
+	list_to_js: function() { return _a2_global_list_to_js; },
 	//TODO (until bucket logger is serializable, don't allow anywhere)
-	//logger: _a2_bucket_logger,
+	//logger: function() { return _a2_bucket_logger; },
 	log_trace: function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.TRACE, msg); },
 	log_debug: function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.DEBUG, msg); },
 	log_info: function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.INFO, msg); },
 	log_warn: function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.WARN, msg); },
 	log_error: function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.ERROR, msg); }
 });
+var _a2 = new Aleph2Api();
 
