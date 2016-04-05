@@ -39,6 +39,7 @@ import scala.Tuple2;
 
 import com.google.inject.Module;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
+import com.ikanow.aleph2.analytics.spark.assets.SparkJsInterpreterTopology;
 import com.ikanow.aleph2.analytics.spark.data_model.GlobalSparkConfigBean;
 import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
 import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean.SparkType;
@@ -393,7 +394,10 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 						_global_spark_config.get().spark_home(),
 						globals.local_yarn_config_dir(), 
 						spark_job_config.cluster_mode(),
-						Optional.ofNullable(spark_job_config.entry_point()).filter(__ -> SparkType.jvm == spark_job_config.language()), 
+						Patterns.match(spark_job_config.language()).<Optional<String>>andReturn()
+								.when(l -> SparkType.jvm == l, __ -> Optional.ofNullable(spark_job_config.entry_point()))
+								.when(l -> SparkType.js == l, __ -> Optional.of(SparkJsInterpreterTopology.class.getName()))
+								.otherwise(__ -> Optional.empty()),
 						new String(Base64.getEncoder().encode(context.getAnalyticsContextSignature(Optional.of(analytic_bucket), Optional.empty()).getBytes())),
 						test_spec.map(ts -> new String(Base64.getEncoder().encode(BeanTemplateUtils.toJson(ts).toString().getBytes()))),
 						main_jar_or_script,  

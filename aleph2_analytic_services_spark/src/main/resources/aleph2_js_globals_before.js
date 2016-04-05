@@ -4,7 +4,7 @@
 // _a2_global_mapper - com.fasterxml.jackson.databind.ObjectMapper
 // _a2_global_bucket - com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean
 // _a2_global_job - com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean
-// _a2_bucket_logger - com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger
+// _a2_bucket_logger - com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger (NOT UNTIL SERIALIZABLE)
 // _a2_enrichment_name - String
 // _a2_spark_inputs - Multimap<String, JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>>
 // _a2_spark_inputs_all - JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>
@@ -50,29 +50,32 @@ function _a2_global_list_to_js(jlist) {
 //TODO (make this more sophisticated)
 function _a2_bucket_log(level, msg) {
 	var success = (level != org.apache.logging.log4j.Level.ERROR) && (level != org.apache.logging.log4j.Level.WARN);
-	_a2_bucket_logger.inefficientLog(level,
+	//TODO (until bucket logger is serializable, don't allow anywhere)
+	//_a2_bucket_logger.inefficientLog(level,
+	  _a2_global_context.getLogger(java.lang.Optional.of(_a2_global_bucket)).inefficientLog(level,
 			com.ikanow.aleph2.data_model.utils.ErrorUtils.buildMessage(success, "SparkJsInterpreterTopology." + _a2_enrichment_name, _a2_enrichment_name + ".main", msg)
 			);
 }
 
-function Aleph2Api() {
-	this.context = _a2_global_context;
-	this.spark_context = _a2_spark_context;
-	this.inputs = _a2_spark_inputs;
-	this.all_inputs = _a2_spark_inputs_all;
-	this.config = _a2_global_to_json(_a2_global_config);
-	this.bucket = _a2_global_bucket;
-	this.job = _a2_global_job;
-	this.emit = _a2_global_emit;
-	this.externalEmit = _a2_global_emit_external;
-	this.to_json = _a2_global_to_json;
-	this.list_to_js = _a2_global_list_to_js;
-	this.logger = _a2_bucket_logger;
-	this.log_trace = function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.TRACE, msg); }
-	this.log_debug = function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.DEBUG, msg); }
-	this.log_info = function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.INFO, msg); }
-	this.log_warn = function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.WARN, msg); }
-	this.log_error = function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.ERROR, msg); }
-}
-var _a2 = new Aleph2Api();
+var Aleph2Api = Java.extend( Java.type("java.lang.Object") , Java.type("java.io.Serializable") );
+var _a2 = new Aleph2Api({
+	context: _a2_global_context,
+	spark_context: _a2_spark_context,
+	inputs: _a2_spark_inputs,
+	all_inputs: _a2_spark_inputs_all,
+	config: _a2_global_to_json(_a2_global_config),
+	bucket: _a2_global_bucket,
+	job: _a2_global_job,
+	emit: _a2_global_emit,
+	externalEmit: _a2_global_emit_external,
+	to_json: _a2_global_to_json,
+	list_to_js: _a2_global_list_to_js,
+	//TODO (until bucket logger is serializable, don't allow anywhere)
+	//logger: _a2_bucket_logger,
+	log_trace: function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.TRACE, msg); },
+	log_debug: function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.DEBUG, msg); },
+	log_info: function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.INFO, msg); },
+	log_warn: function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.WARN, msg); },
+	log_error: function(msg) { _a2_bucket_log(org.apache.logging.log4j.Level.ERROR, msg); }
+});
 

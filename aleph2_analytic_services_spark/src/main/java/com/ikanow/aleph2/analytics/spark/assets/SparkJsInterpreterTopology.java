@@ -118,7 +118,8 @@ public class SparkJsInterpreterTopology {
 				engine.put("_a2_global_job", context.getJob().get());
 				engine.put("_a2_global_config", BeanTemplateUtils.configureMapper(Optional.empty()).convertValue(config, JsonNode.class));
 				engine.put("_a2_global_mapper", BeanTemplateUtils.configureMapper(Optional.empty()));
-				engine.put("_a2_bucket_logger", bucket_logger.optional().orElse(null));
+				//TODO (until bucket logger is serializable, don't allow anywhere)
+				//engine.put("_a2_bucket_logger", bucket_logger.optional().orElse(null));
 				engine.put("_a2_enrichment_name", job_name.get());
 				engine.put("_a2_spark_inputs", inputs);
 				engine.put("_a2_spark_inputs_all", all_inputs);

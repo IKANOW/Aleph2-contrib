@@ -66,9 +66,9 @@ public class SparkSqlTopology {
 			final String sql_string = Optional.ofNullable(config.script()).orElse("");
 			
 			//INFO:
-			System.out.println("Starting SparkPassthroughTopology");
+			System.out.println("Starting SparkSqlTopology");
 			
-			SparkConf spark_context = new SparkConf().setAppName("SparkPassthroughTopology");
+			SparkConf spark_context = new SparkConf().setAppName("SparkSqlTopology");
 
 			final Optional<Double> sub_sample = test_spec
 												.map(__ -> Optional.ofNullable(spark_context.getDouble(SUBSAMPLE_TEST, -1)))
