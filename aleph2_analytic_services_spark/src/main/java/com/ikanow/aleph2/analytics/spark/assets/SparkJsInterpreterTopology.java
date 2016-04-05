@@ -71,6 +71,12 @@ import com.ikanow.aleph2.data_model.utils.SetOnce;
 @SuppressWarnings("unused")
 public class SparkJsInterpreterTopology {
 
+	//TODO (ALEPH-63): ok this is unfortunately quite complex because of the requirement that the functions be serializble, which
+	// JS functions _aren't_
+	// The way that https://github.com/EclairJS/eclairjs-nashorn handles this is to create its own "RDD mirror", which invokes the underlying RDD
+	// with a serializable version of the function by way of (func, closure_args) -> { f: func.toString(), o: Object[] }, so you'd need to do
+	// rdd.filter(function(x, yy) x + yy, [y]) to use "y" from the enclosing scope 
+	
 	// Params:
 	
 	//(not needed)

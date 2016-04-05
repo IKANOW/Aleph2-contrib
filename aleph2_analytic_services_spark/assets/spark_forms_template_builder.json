@@ -2695,7 +2695,7 @@
       "root": false,
       "label": "Template Builder",
       "element": {
-        "enabled": true,
+        "enabled": false,
         "short_name": "Spark JS/Java Job",
         "summary": "Runs JS and Java code using the Nashorn framework",
         "row": 0,
