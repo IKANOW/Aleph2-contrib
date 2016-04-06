@@ -74,8 +74,11 @@ public class SparkJsInterpreterTopology {
 	//TODO (ALEPH-63): ok this is unfortunately quite complex because of the requirement that the functions be serializble, which
 	// JS functions _aren't_
 	// The way that https://github.com/EclairJS/eclairjs-nashorn handles this is to create its own "RDD mirror", which invokes the underlying RDD
+	// (this is the key bit: https://github.com/EclairJS/eclairjs-nashorn/tree/master/src/main/java/org/eclairjs/nashorn)
 	// with a serializable version of the function by way of (func, closure_args) -> { f: func.toString(), o: Object[] }, so you'd need to do
-	// rdd.filter(function(x, yy) x + yy, [y]) to use "y" from the enclosing scope 
+	// rdd.filter(function(x, yy) x + yy, [y]) to use "y" from the enclosing scope
+	// I like the idea of having _2s.f(..., bind[]) for each of
+	// https://spark.apache.org/docs/1.6.0/api/java/org/apache/spark/api/java/function/package-tree.html (.f0, .f2, etc)
 	
 	// Params:
 	
