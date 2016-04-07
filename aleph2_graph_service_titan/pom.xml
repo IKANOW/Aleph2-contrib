@@ -118,6 +118,11 @@
 			<scope>${aleph2.scope}</scope>
 		</dependency>
 		<!-- Other external dependencies here -->
+		<dependency>
+			<groupId>com.thinkaurelius.titan</groupId>
+			<artifactId>titan-core</artifactId>
+			<version>1.0.0</version>
+		</dependency>
 	</dependencies>
 	<!-- Test dependencies -->
 	<profiles>
