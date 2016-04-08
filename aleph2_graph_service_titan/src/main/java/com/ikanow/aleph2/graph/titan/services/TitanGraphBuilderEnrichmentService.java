@@ -41,6 +41,7 @@ import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.graph.titan.data_model.GraphConfigBean;
+import com.thinkaurelius.titan.core.TitanGraph;
 
 /** Service for building the edges and vertices from the incoming records and updating any existing entries in the database
  *  NOTE: there should be a non-tech-specific GraphBuilderEnrichmentService in the analytics context library that wraps this one
@@ -55,6 +56,8 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 	protected final SetOnce<IEnrichmentBatchModule> _custom_graph_merge_handler = new SetOnce<>();
 	protected final SetOnce<GraphMergeEnrichmentContext> _custom_graph_merge_context = new SetOnce<>();
 		
+	protected final SetOnce<TitanGraph> _titan = new SetOnce<>();
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule#onStageInitialize(com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean, scala.Tuple2, java.util.Optional)
 	 */
@@ -72,11 +75,9 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 		
 		context.getServiceContext()
 			.getService(IGraphService.class, Optional.ofNullable(graph_schema.service_name()))
-			.flatMap(graph_service -> graph_service.getUnderlyingPlatformDriver(IEnrichmentBatchModule.class, Optional.of(this.getClass().getName())))
-			//TODO
-//			.ifPresent(delegate -> _delegate.set(delegate));
-			;
-		
+			.flatMap(graph_service -> graph_service.getUnderlyingPlatformDriver(TitanGraph.class, Optional.empty()))
+			.ifPresent(titan -> _titan.set(titan));
+			;		
 		
 		// Set up decomposition enrichment
 		
@@ -150,6 +151,8 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 		// First off build the edges and vertices
 		
 		_custom_graph_decomp_handler.optional().ifPresent(handler -> handler.onObjectBatch(batch, batch_size, grouping_key));
+		
+		final List<JsonNode> vertices = _custom_graph_decomp_context.optional().map(context -> context.getAndResetVertexList()).orElse(Collections.emptyList());
 		
 		// Now grab all the existing edges and vertices
 

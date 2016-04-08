@@ -18,7 +18,6 @@ package com.ikanow.aleph2.graph.titan.services;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
@@ -48,9 +47,11 @@ public class MockTitanGraphService implements IGraphService {
 	
 	@Inject
 	public MockTitanGraphService() {
-		_titan = TitanFactory.build().set("storage.backend", "inmemory").open();
-		
-		//TODO: set up indices?
+		_titan = TitanFactory.build()
+						.set("storage.backend", "inmemory")
+						.set("query.force-index", true)
+					.open();
+		//TODO: set up indices somewhere .. need to write one of those handleBucketUpdate things?
 	}
 	
 	/* (non-Javadoc)
