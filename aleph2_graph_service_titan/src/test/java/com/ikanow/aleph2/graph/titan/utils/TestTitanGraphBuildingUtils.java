@@ -42,8 +42,6 @@ import com.thinkaurelius.titan.core.TitanFactory;
 import com.thinkaurelius.titan.core.TitanGraph;
 import com.thinkaurelius.titan.core.TitanTransaction;
 import com.thinkaurelius.titan.core.TitanVertex;
-import com.thinkaurelius.titan.graphdb.vertices.CacheVertex;
-import com.thinkaurelius.titan.graphdb.vertices.StandardVertex;
 
 /**
  * @author Alex
@@ -51,6 +49,7 @@ import com.thinkaurelius.titan.graphdb.vertices.StandardVertex;
  */
 public class TestTitanGraphBuildingUtils {
 
+	@SuppressWarnings("unchecked")
 	@Test
 	public void test_someBasicGraphProperties() throws IOException {
 	
@@ -101,11 +100,27 @@ public class TestTitanGraphBuildingUtils {
 		// Looking at how to import vertices ..  
 		final String s1 = "{\"id\":4200,\"label\":\"test2\",\"type\":\"vertex\",\"properties\":{\"set\":[{\"id\":\"1l9-38o-5j9\",\"value\":[\"val1\",\"val2\"]}],\"type\":[{\"id\":\"171-38o-4qt\",\"value\":\"rabbit\"}]}}";
 		final ObjectMapper m = titan.io(IoCore.graphson()).mapper().create().createMapper();
+		// confirmation that can't go JsonNode -> vertex directly
 		//final CacheVertex v1 = m.convertValue(s1, CacheVertex.class);
 		//final StandardVertex v1 = m.convertValue(m.readTree(s1), StandardVertex.class);		
+		//m.convertValue(m.readTree(s1), org.apache.tinkerpop.gremlin.structure.util.star.StarGraph.StarVertex.class);
+		// But string -> vertex does work
 		final Vertex read_vertex1 = titan.io(IoCore.graphson()).reader().create().readVertex(new ByteArrayInputStream(s1.getBytes(StandardCharsets.UTF_8)), v -> v.get());
-		System.out.println("read: " + m.convertValue(read_vertex1, JsonNode.class).toString());
+		System.out.println("read: " + read_vertex1.getClass().toString() + ": " + m.convertValue(read_vertex1, JsonNode.class).toString());
 		// (note the properties _have_ to be that complicated)
+			
+		
+		System.out.println("---- property query ------");
+		
+		Optionals.streamOf(tx.query().has("type", "rabbit").vertices(), false).findFirst()
+			.map(v -> titan.io(IoCore.graphson()).mapper().create().createMapper().convertValue(v, JsonNode.class))
+			.ifPresent(j -> System.out.println("?? " + j.toString()));
+		
+		System.out.println("---- label query, returns nothing (can query edge labels, not vertex labels) ------");
+			
+		Optionals.streamOf(tx.query().has("label", "test2").vertices(), false).findFirst()
+			.map(v -> titan.io(IoCore.graphson()).mapper().create().createMapper().convertValue(v, JsonNode.class))
+			.ifPresent(j -> System.out.println("?? " + j.toString()));
 	}
 	
 	
