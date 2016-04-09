@@ -16,12 +16,15 @@
 
 package com.ikanow.aleph2.graph.titan.utils;
 
+import static org.junit.Assert.*;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.function.Supplier;
 
 import org.apache.tinkerpop.gremlin.structure.Direction;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
@@ -30,6 +33,7 @@ import org.apache.tinkerpop.gremlin.structure.io.graphson.GraphSONIo;
 import org.apache.tinkerpop.gremlin.structure.io.graphson.GraphSONMapper;
 import org.apache.tinkerpop.gremlin.structure.io.graphson.GraphSONReader;
 import org.apache.tinkerpop.gremlin.structure.io.graphson.GraphSONWriter;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -37,11 +41,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.thinkaurelius.titan.core.PropertyKey;
 import com.thinkaurelius.titan.core.TitanEdge;
+import com.thinkaurelius.titan.core.TitanException;
 import com.thinkaurelius.titan.core.TitanFactory;
 import com.thinkaurelius.titan.core.TitanGraph;
 import com.thinkaurelius.titan.core.TitanTransaction;
 import com.thinkaurelius.titan.core.TitanVertex;
+import com.thinkaurelius.titan.core.schema.SchemaAction;
+import com.thinkaurelius.titan.core.schema.SchemaStatus;
+import com.thinkaurelius.titan.core.schema.TitanManagement;
 
 /**
  * @author Alex
@@ -123,9 +132,134 @@ public class TestTitanGraphBuildingUtils {
 			.ifPresent(j -> System.out.println("?? " + j.toString()));
 	}
 	
+	@Test
+	public void test_someGraphErrors() throws IOException {
 	
+		// Test some graph errors
+		
+		TitanGraph titan = TitanFactory.build()
+				.set("storage.backend", "inmemory")
+				.set("query.force-index", true) //(disabled for testing)
+			.open();
+		
+		buildSmallGraph(titan);
+		
+		// 1) Check what happens if you try to do a non-indexed query:
+		
+		try {
+			Optionals.streamOf(titan.query().vertices(), false).findFirst();
+		}
+		catch (TitanException e) {
+			System.out.println("Threw expected titan exception: " + e.getClass().toString() + " / cause = " + e.getCause());
+		}
+		
+		// 2) Play around with indexes
+		// I THINK THIS DOESN'T WORK BECAUSE INDEXES AREN'T SUPPORTED IN THIS VERSION OF TITAN...
+		
+		// This fails because type isn't unique:
+		try {
+			titan.openManagement().makePropertyKey("type").dataType(String.class).make();
+		}
+		catch (com.thinkaurelius.titan.core.SchemaViolationException e) {
+			System.out.println("Threw expected titan exception: " + e.getClass().toString() + " / cause = " + e.getCause());		
+		}
+		try {
+			final TitanManagement mgmt = titan.openManagement();
+			final PropertyKey type_key = mgmt.getPropertyKey("type");
+			mgmt.buildIndex("byType", Vertex.class).addKey(type_key).buildCompositeIndex();
+			//(this fails, as you'd expect)
+			//mgmt.updateIndex(mgmt.getGraphIndex("byType"), SchemaAction.REINDEX).get();
+			mgmt.commit();
+		}
+		catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+		// (Reindex existing data)
+		try {
+			for (int i = 0; i < 10; ++i) {
+				com.thinkaurelius.titan.graphdb.database.management.ManagementSystem.awaitGraphIndexStatus(titan, "byType");
+				
+				final TitanManagement mgmt = titan.openManagement();
+				final PropertyKey type_key = mgmt.getPropertyKey("type");
+				final SchemaStatus status = mgmt.getGraphIndex("byType").getIndexStatus(type_key);
+				if (status != SchemaStatus.INSTALLED) break;
+				System.out.println(status.toString());
+				Thread.sleep(250L);
+			}
+			{
+				final TitanManagement mgmt = titan.openManagement();
+				mgmt.updateIndex(mgmt.getGraphIndex("byType"), SchemaAction.REINDEX).get();
+				mgmt.commit();
+			}
+		}
+		catch (Exception e) {
+			System.out.println("Threw expected titan exception: " + e.getClass().toString() + " / cause = " + e.getCause());
+		}
+	}
 	
-	//TODO: don't forget to check what happens if you mess around with concurrent transactions (should fail, retry and run again)
+	@SuppressWarnings("unchecked")
+	@Test
+	public void test_concurrentChanges_conflicting() throws IOException {
+		
+		// Test some graph errors
+		
+		TitanGraph titan = TitanFactory.build()
+				.set("storage.backend", "inmemory")
+				.set("query.force-index", false) //(not supported)
+			.open();
+		
+		buildSmallGraph(titan);
+		
+		final Supplier<TitanTransaction> build_trans = () -> {
+			final TitanTransaction tx = titan.buildTransaction().start();		
+			Optionals.<Vertex>streamOf(tx.query().has("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something"));
+			return tx;
+		};
+		final TitanTransaction tx1 = build_trans.get();
+		
+		final TitanTransaction tx2 = titan.buildTransaction().start();
+		Optionals.<Vertex>streamOf(tx2.query().has("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something_else"));
+		tx2.commit();
+		
+		try {
+			tx1.commit();
+		}
+		catch (TitanException e) {
+			System.out.println("Threw expected titan exception: " + e.getClass().toString() + " / cause = " + e.getCause() + " .. "  + e.getCause().getCause());
+			assertEquals(com.thinkaurelius.titan.diskstorage.locking.PermanentLockingException.class, e.getCause().getCause().getClass());
+		}
+		// Check can retry:
+		build_trans.get().commit();
+	}	
+	
+	//TODO: this fails even though the 2 commits are unrelated
+	
+	@SuppressWarnings("unchecked")
+	@Ignore
+	@Test
+	public void test_concurrentChanges_nonConflicting() throws IOException {
+		
+		// Test some graph errors
+		
+		TitanGraph titan = TitanFactory.build()
+				.set("storage.backend", "inmemory")
+				.set("query.force-index", false) //(not supported)
+			.open();
+		
+		buildSmallGraph(titan);
+		
+		final Supplier<TitanTransaction> build_trans = () -> {
+			final TitanTransaction tx = titan.buildTransaction().start();		
+			Optionals.<Vertex>streamOf(tx.query().has("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something"));
+			return tx;
+		};
+		final TitanTransaction tx1 = build_trans.get();
+		
+		final TitanTransaction tx2 = titan.buildTransaction().start();
+		Optionals.<Vertex>streamOf(tx2.query().hasNot("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something_else"));
+		tx2.commit();
+		tx1.commit();
+	}	
 	
 	//////////////////////////////////////
 	
