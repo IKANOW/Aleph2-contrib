@@ -44,7 +44,6 @@ import com.thinkaurelius.titan.core.TitanTransaction;
 import com.thinkaurelius.titan.core.TitanVertex;
 import com.thinkaurelius.titan.core.TransactionBuilder;
 import com.thinkaurelius.titan.core.attribute.Contain;
-import com.thinkaurelius.titan.graphdb.query.TitanPredicate;
 
 /** Collection of utilities for building Titan graph elements from a batch of data objects
  * @author Alex
@@ -53,12 +52,7 @@ import com.thinkaurelius.titan.graphdb.query.TitanPredicate;
 public class TitanGraphBuildingUtils {
 	final static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 
-	/** TODO: need a property that says: ignore/overwrite/etc
-	 *  Hmm one alternative is that the decomposition basically returns "here are the objects to query"...
-	 *  ...then the query occurs
-	 *  ...then the merge passes in all edges and you can mess about with them as you so desire?
-	 *  What I _was_ going with was that you specify the graph that you want...
-	 *  ...then any conflicts get sorted out in the merge 
+	/** TODO: need to decompose this even further 
 	 * @param titan
 	 * @param vertices
 	 * @param maybe_merger
@@ -102,52 +96,11 @@ public class TitanGraphBuildingUtils {
 			.map(kv -> Tuples._4T(kv.getKey(), kv.getValue()._1(), kv.getValue()._2(), grouped_vertices.getOrDefault(kv.getKey(), Collections.emptyList())))
 			;
 		
-		
-		//https://github.com/tinkerpop/blueprints/wiki/GraphSON-Reader-and-Writer-Library
-		// graphson .. basically can use complex objects
-		// Vertex:
-		// MANDATORY: "_type": "vertex"
-		// MANDATORY: "_id": if string ... then converts across "aleph2 id" ie "name"/"type" .. or could have like "_id": [ "name", "type" ] (or even put this in the options)
-		// OPTIONAL: <property>: string/val/array or { "type": <name>, "value": <val>, "_meta": { "_b": set of bucket paths ACL, ... } }
-		// (standard defaults: name/type)
-		
-		// Edge:
-		// MANDATORY: "_type": "edge"
-		// MANDATORY: "_label"
-		// MANDATORY: "_inV" ... specify minimal set of attributes, eg { "name", "type": }
-		// MANDATORY: "_outV" ... ditto
-		// OPTIONAL: "weight"
-		// OPTIONAL: <property>: string/val/array 
-		
-		// (can't set) "_b": set of bucket paths
-		
-		// { "_type": "vertex", "_a2id": "Alex Blah/type", "robbery": "x", "say_what": [ "a", "b" ], "complex": { "property": "blah", "metadata": { "bucket": "/blah" } }
-		// { "_type": "edge", "_inV", "Alex Blah/type", "_outV": "ip-addr/IP", 
-		
-		// Get a list of all the vertices
-		//titan.query().
-		
 	}
 	
-	////////////////////////////////
-	
-	//TODO: need to figure out what meta properties look like ASAP 
-	
-	//TODO; ugh ok this was Tinkerpop2 ... Tinkerpop3 is a bit different:
-
-	// see that the edges are in and out of the vertices vs having the _type (and the properties are duplicated...)
-//	{"id":4216,"label":"test2","inE":{"test_v1_v2":[{"id":"1zm-39s-4r9-394","outV":4240,"properties":{"edge_prop":"edge_prop_val"}}]}}
-//	{"id":4240,"label":"test1","outE":{"test_v1_v2":[{"id":"1zm-39s-4r9-394","inV":4216,"properties":{"edge_prop":"edge_prop_val"}}]},"properties":{"protected":[{"id":"1le-39s-2dh","value":"by_me","properties":{"test_meta":"test_meta_value"}}],"unprotected":[{"id":"176-39s-1l1","value":"hai"}]}}
-
-	// Here's the vertex/edge versions:
-//	{"id":4216,"label":"test2"}
-//	{"id":"1zm-39s-4r9-394","label":"test_v1_v2","type":"edge","inVLabel":"test2","outVLabel":"test1","inV":4216,"outV":4240,"properties":{"edge_prop":"edge_prop_val"}}
-	
-//	{"id":4240,"label":"test1","properties":{"protected":[{"id":"1le-39s-2dh","value":"by_me","properties":{"test_meta":"test_meta_value"}}],"unprotected":[{"id":"176-39s-1l1","value":"hai"}]}}
-//	{"id":"1zm-39s-4r9-394","label":"test_v1_v2","type":"edge","inVLabel":"test2","outVLabel":"test1","inV":4216,"outV":4240,"properties":{"edge_prop":"edge_prop_val"}}
-	
-	//TODO: need to see what sorts of things are pulled in
-	
+	/** Another big function that needs to be massively decomposed/lots more args/etc
+	 * @param mergeable
+	 */
 	public static void handleMerge(
 				final List<Tuple4<JsonNode, List<JsonNode>, List<JsonNode>, List<Tuple2<TitanVertex, JsonNode>>>> mergeable
 			)
@@ -158,15 +111,41 @@ public class TitanGraphBuildingUtils {
 		// 1.1) If there's no matching vertices then create a new vertex and get the id (via a merge if finalize is set)
 		//      (overwrite the _id then map to a Vertex)
 		
-		// 1.2) If there are >0 matching vertices then we run a merge in which the user "has to do" the following:
+		// 1.2) If there are >0 matching vertices (and only one incoming vertex) then we run a merge in which the user "has to do" the following:
 		// 1.2.a) pick the winning vertex (or emit the current one to create a "duplicate node"?) TODO: have a policy setting as to whether to allow that, if not then discard
-		// TODO: have a policy setting as to whether to delete the others, if allowed....
+		// (Allow user to delete the others if he has permission, by the usual emit "id" only - but don't automatically do it because it gets complicated what to do with the other _bs)
 		// 1.2.b) copy any properties from the original objects into the winner and remove any so-desired properties
 		
 		// 2) By here we have a list of vertices and we've mutated the edges to fill in the _inV and _outV
+		// 2.1) Now get the potentially matching edges from each of the selected vertices:
+		// 2.1.1) If there's no matching edges (and only one incoming edge) then create a new edge (via a merge if finalize is set)
+		// 2.1.2) If there are >0 matching edges then run a merge against the edges, pick the current one
 		
+		//X) ok one thing I haven't considered here is the bucket situation:
+		// ... filter any buckets over which the user does not have read permission
+		// if the user attempts to modify a bucket over which he does not have write permission then ..? (TODO: silently fail? or create a new edge in that case)
+		// remove any properties of any vertex/edge over which the user does not have read permission .. and then re-combine later
+		// the user can manipulate the _bs, but can only _add_, never remove  
+		// And then also add the bucket path to _b everywhere
+		
+		//TODO: also if in test mode then don't allow any link merging, everything stays completely standalone
 	}
 	
+	
+	////////////////////////////////
+
+	// Some example TinkerPop3 objects
+	
+	// see that the edges are in and out of the vertices vs having the _type (and the properties are duplicated...)
+//	{"id":4216,"label":"test2","inE":{"test_v1_v2":[{"id":"1zm-39s-4r9-394","outV":4240,"properties":{"edge_prop":"edge_prop_val"}}]}}
+//	{"id":4240,"label":"test1","outE":{"test_v1_v2":[{"id":"1zm-39s-4r9-394","inV":4216,"properties":{"edge_prop":"edge_prop_val"}}]},"properties":{"protected":[{"id":"1le-39s-2dh","value":"by_me","properties":{"test_meta":"test_meta_value"}}],"unprotected":[{"id":"176-39s-1l1","value":"hai"}]}}
+
+	// Here's the vertex/edge versions:
+//	{"id":4216,"label":"test2"}
+//	{"id":"1zm-39s-4r9-394","label":"test_v1_v2","type":"edge","inVLabel":"test2","outVLabel":"test1","inV":4216,"outV":4240,"properties":{"edge_prop":"edge_prop_val"}}
+	
+//	{"id":4240,"label":"test1","properties":{"protected":[{"id":"1le-39s-2dh","value":"by_me","properties":{"test_meta":"test_meta_value"}}],"unprotected":[{"id":"176-39s-1l1","value":"hai"}]}}
+//	{"id":"1zm-39s-4r9-394","label":"test_v1_v2","type":"edge","inVLabel":"test2","outVLabel":"test1","inV":4216,"outV":4240,"properties":{"edge_prop":"edge_prop_val"}}
 	
 	////////////////////////////////
 	

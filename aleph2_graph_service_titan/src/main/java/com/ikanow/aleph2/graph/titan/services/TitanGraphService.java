@@ -220,7 +220,15 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 	public CompletableFuture<BasicMessageBean> handleBucketDeletionRequest(
 			DataBucketBean bucket, Optional<String> secondary_buffer,
 			boolean bucket_or_buffer_getting_deleted) {
-		// TODO Auto-generated method stub
+		
+		if (secondary_buffer.isPresent()) {
+			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "handleBucketDeletionRequest", ErrorUtils.BUFFERS_NOT_SUPPORTED, bucket.full_name()));			
+		}
+		
+		// TODO:		
+		// Traverse all nodes matching _b and remove self from _b
+		// If _b is empty then delete the node
+		
 		return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "handleBucketDeletionRequest", ErrorUtils.NOT_YET_IMPLEMENTED, "handleBucketDeletionRequest"));
 	}
 
