@@ -24,4 +24,6 @@ public class ErrorUtils extends com.ikanow.aleph2.data_model.utils.ErrorUtils {
 
 	public static String DECOMPOSITION_ENRICHMENT_NEEDED = "Currently need to specify a custom graph decomposition enrichment module ({0})";
 	public static String MERGE_ENRICHMENT_NEEDED = "Currently need to specify a custom graph decomposition merge module ({0})";
+	
+	public static String BUFFERS_NOT_SUPPORTED = "Secondary buffers not supported ({0})";
 }
