@@ -283,6 +283,12 @@ public class TestMiscTitanProperties {
 		v1.property("unprotected", "hai");
 		v1.property("protected", "by_me", "test_meta", "test_meta_value");
 		final TitanVertex v2 = tx.addVertex("test2");
+		
+		// Check ids are assigned immediately:
+		System.out.println("Assigned vertices with ids " + Arrays.asList(v1.id(), v2.id()));
+		assertTrue(Long.class.isAssignableFrom(v1.id().getClass()));
+		assertTrue(Long.class.isAssignableFrom(v2.id().getClass()));
+		
 		// how to multiple?
 		v2.property("type", "rabbit");
 		v2.property("set", Arrays.asList("val1", "val2").toArray());

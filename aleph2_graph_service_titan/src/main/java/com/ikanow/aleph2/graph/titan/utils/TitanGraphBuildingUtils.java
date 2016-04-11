@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.tinkerpop.gremlin.structure.Vertex;
 import org.apache.tinkerpop.gremlin.structure.VertexProperty;
@@ -33,7 +34,13 @@ import scala.Tuple4;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
+import com.ikanow.aleph2.data_model.objects.data_import.GraphAnnotationBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.GraphSchemaBean;
+import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -44,6 +51,8 @@ import com.thinkaurelius.titan.core.TitanTransaction;
 import com.thinkaurelius.titan.core.TitanVertex;
 import com.thinkaurelius.titan.core.TransactionBuilder;
 import com.thinkaurelius.titan.core.attribute.Contain;
+
+import fj.data.Validation;
 
 /** Collection of utilities for building Titan graph elements from a batch of data objects
  * @author Alex
@@ -99,35 +108,103 @@ public class TitanGraphBuildingUtils {
 	}
 	
 	/** Another big function that needs to be massively decomposed/lots more args/etc
-	 * @param mergeable
+	 * @param mergeable - first param is key, second is list of vertices, third is list of edges, forth is list of (existing vertices, (key again - ignore))
 	 */
 	public static void handleMerge(
-				final List<Tuple4<JsonNode, List<JsonNode>, List<JsonNode>, List<Tuple2<TitanVertex, JsonNode>>>> mergeable
+				final TitanTransaction tx,
+				final GraphSchemaBean config,
+				final ISecurityService security_service,
+				final IBucketLogger logger,
+				final Optional<GraphMergeEnrichmentContext> maybe_merger,
+				final Stream<Tuple4<JsonNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<TitanVertex, JsonNode>>>> mergeable
 			)
-	{
-		
-		// 1) First step is to sort out the _vertices_, here's the cases:
-		
-		// 1.1) If there's no matching vertices then create a new vertex and get the id (via a merge if finalize is set)
-		//      (overwrite the _id then map to a Vertex)
-		
-		// 1.2) If there are >0 matching vertices (and only one incoming vertex) then we run a merge in which the user "has to do" the following:
-		// 1.2.a) pick the winning vertex (or emit the current one to create a "duplicate node"?) TODO: have a policy setting as to whether to allow that, if not then discard
-		// (Allow user to delete the others if he has permission, by the usual emit "id" only - but don't automatically do it because it gets complicated what to do with the other _bs)
-		// 1.2.b) copy any properties from the original objects into the winner and remove any so-desired properties
-		
-		// 2) By here we have a list of vertices and we've mutated the edges to fill in the _inV and _outV
-		// 2.1) Now get the potentially matching edges from each of the selected vertices:
-		// 2.1.1) If there's no matching edges (and only one incoming edge) then create a new edge (via a merge if finalize is set)
-		// 2.1.2) If there are >0 matching edges then run a merge against the edges, pick the current one
-		
-		//X) ok one thing I haven't considered here is the bucket situation:
-		// ... filter any buckets over which the user does not have read permission
-		// if the user attempts to modify a bucket over which he does not have write permission then ..? (TODO: silently fail? or create a new edge in that case)
-		// remove any properties of any vertex/edge over which the user does not have read permission .. and then re-combine later
-		// the user can manipulate the _bs, but can only _add_, never remove  
-		// And then also add the bucket path to _b everywhere
-		
+	{		
+		mergeable.forEach(t4 -> { // TODO: convert this into a non-nested pipeline with a map/flatMap here
+
+			final JsonNode key = t4._1();
+			final List<ObjectNode> vertices = t4._2();
+			final List<ObjectNode> edges = t4._3();
+			final List<Tuple2<TitanVertex, JsonNode>> existing_vertices = t4._4();
+			
+			// 1) First step is to sort out the _vertices_, here's the cases:
+			
+			// 1.1) If there's no matching vertices then create a new vertex and get the id (via a merge if finalize is set)
+			//      (overwrite the _id then map to a Vertex)
+			// 1.2) If there are >0 matching vertices (and only one incoming vertex) then we run a merge in which the user "has to do" the following:
+			// 1.2.a) pick the winning vertex (or emit the current one to create a "duplicate node"?)
+			// 1.2.a.1) (Allow user to delete the others if he has permission, by the usual emit "id" only - but don't automatically do it because it gets complicated what to do with the other _bs)
+			// 1.2.b) copy any properties from the original objects into the winner and remove any so-desired properties
+
+			//TODO: map this to Vertex in this block
+			final Optional<Vertex> maybe_vertex_winner = Lambdas.get(() -> {
+				if (existing_vertices.isEmpty() && (1 == vertices.size()) && !config.custom_finalize_all_objects()) {
+					
+					return mutatePartialGraphSON(vertices.stream().findFirst().get())
+							.bind(vertex -> addGraphSON2Graph(vertex, tx))
+							.validation(
+									fail -> {
+										//TODO log error to DEBUG										
+										return Optional.empty();
+									},
+									success -> Optional.of(success)
+									)
+									;
+				}
+				else {					
+					return maybe_merger.map(merger -> {						
+						//TODO: build stream, call maybe_merger.map.onObjectBatch, tidy up results
+						//TODO: handle deletes
+						return null; //TODO
+					})
+					;
+				}
+			});
+			maybe_vertex_winner.ifPresent(vertex_winner -> {
+
+				// 1.3) Add winning vertex to the graph
+
+				//tx.add
+				
+				//TODO (add test to check when the vertex gets an "id")
+				
+				// 1.4) Tidy up (mutate) the edges				
+				
+				edges.stream().forEach(mutable_edge -> {
+					
+					final JsonNode in_key = mutable_edge.get(GraphAnnotationBean.inV);
+					final JsonNode out_key = mutable_edge.get(GraphAnnotationBean.outV);
+					
+					final JsonNode matching_key = (in_key == key) ? in_key : out_key; // (has to be one of the 2 by construction)
+					final JsonNode off_key = (in_key != key) ? in_key : (out_key != key ? out_key : null); // (a vertex can have an edge be to itself)
+					
+					mutable_edge.put( (matching_key == in_key) ? GraphAnnotationBean.inV : GraphAnnotationBean.outV , (Long) vertex_winner.id() );
+					
+					// 1.4.1) Once we've tidied up the edge, check if we're ready for that edge to move to stage 2):
+					
+					if ((null == off_key) || off_key.isLong()) {
+						
+						//TODO: this is a bit nested, change this to an optional pipeline...
+						
+						// 2) By here we have a list of vertices and we've mutated the edges to fill in the _inV and _outV
+						// 2.1) Now get the potentially matching edges from each of the selected vertices:
+						// 2.1.1) If there's no matching edges (and only one incoming edge) then create a new edge (via a merge if finalize is set)
+						// 2.1.2) If there are >0 matching edges then run a merge against the edges, pick the current one
+						
+						//X) ok one thing I haven't considered here is the bucket situation:
+						// ... filter any buckets over which the user does not have read permission
+						// if the user attempts to modify a bucket over which he does not have write permission then ..? (TODO: silently fail? or create a new edge in that case)
+						// remove any properties of any vertex/edge over which the user does not have read permission .. and then re-combine later
+						// the user can manipulate the _bs, but can only _add_, never remove  
+						// And then also add the bucket path to _b everywhere
+						
+					}
+					
+				});
+				
+				//TODO
+			});
+				
+		});
 		//TODO: also if in test mode then don't allow any link merging, everything stays completely standalone
 	}
 	
@@ -151,12 +228,28 @@ public class TitanGraphBuildingUtils {
 	
 	// UTILS
 	
+	/**
+	 * @param in
+	 * @return
+	 */
+	protected static Validation<BasicMessageBean, JsonNode> mutatePartialGraphSON(final JsonNode in) {
+		return null; //TODO
+	}
+	
+	/**
+	 * @param in
+	 * @return
+	 */
+	protected static Validation<BasicMessageBean, Vertex> addGraphSON2Graph(final JsonNode in, final TitanTransaction tx) {
+		return null; //TODO
+	}
+	
 	/** Creates a JSON object out of the designated vertex properties
 	 * @param v
 	 * @param fields
 	 * @return
 	 */
-	public static JsonNode getVertexProperties(final Vertex v, final Collection<String> fields) {
+	protected static JsonNode getVertexProperties(final Vertex v, final Collection<String> fields) {
 		return fields.stream()
 				.map(f -> Tuples._2T(f, v.property(f)))
 				.filter(t2 -> null != t2._2())
@@ -170,7 +263,7 @@ public class TitanGraphBuildingUtils {
 	 * @param o
 	 * @return
 	 */
-	private static ObjectNode insertIntoObjectNode(final String f, final VertexProperty<Object> vp, final ObjectNode o) {
+	protected static ObjectNode insertIntoObjectNode(final String f, final VertexProperty<Object> vp, final ObjectNode o) {
 		return Patterns.match(vp.value()).<ObjectNode>andReturn()
 			.when(String.class, s -> o.put(f, s))
 			.when(Double.class, d -> o.put(f, d))
