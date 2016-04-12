@@ -50,7 +50,7 @@ import fj.data.Validation;
  */
 public class GraphDecompEnrichmentContext implements IEnrichmentModuleContext {
 
-	private List<JsonNode> _mutable_vertices = new LinkedList<>();
+	private List<ObjectNode> _mutable_vertices = new LinkedList<>();
 	
 	////////////////////////////////////////////////////////////////////////////
 	
@@ -59,9 +59,9 @@ public class GraphDecompEnrichmentContext implements IEnrichmentModuleContext {
 	/** Returns all the emitted objects then resets the list ready for the next batch
 	 * @return
 	 */
-	public List<JsonNode> getAndResetVertexList() {
-		final List<JsonNode> ret_val = _mutable_vertices;
-		_mutable_vertices = new LinkedList<JsonNode>();
+	public List<ObjectNode> getAndResetVertexList() {
+		final List<ObjectNode> ret_val = _mutable_vertices;
+		_mutable_vertices = new LinkedList<ObjectNode>();
 		return ret_val;
 	}
 	
@@ -154,6 +154,9 @@ public class GraphDecompEnrichmentContext implements IEnrichmentModuleContext {
 	public Validation<BasicMessageBean, JsonNode> emitMutableObject(long id,
 			ObjectNode mutated_json, Optional<AnnotationBean> annotations,
 			Optional<JsonNode> grouping_key) {
+		
+		//TODO: add to output list
+		
 		return _delegate.emitMutableObject(id, mutated_json, annotations,
 				grouping_key);
 	}
@@ -170,6 +173,9 @@ public class GraphDecompEnrichmentContext implements IEnrichmentModuleContext {
 			JsonNode original_json, Optional<ObjectNode> mutations,
 			Optional<AnnotationBean> annotations,
 			Optional<JsonNode> grouping_key) {
+		
+		//TODO: add to output list
+		
 		return _delegate.emitImmutableObject(id, original_json, mutations,
 				annotations, grouping_key);
 	}

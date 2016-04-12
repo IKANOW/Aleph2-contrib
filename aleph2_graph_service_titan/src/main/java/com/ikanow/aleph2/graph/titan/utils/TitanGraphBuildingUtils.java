@@ -56,6 +56,7 @@ import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
+import com.ikanow.aleph2.graph.titan.services.GraphDecompEnrichmentContext;
 import com.ikanow.aleph2.graph.titan.services.GraphMergeEnrichmentContext;
 import com.thinkaurelius.titan.core.TitanGraph;
 import com.thinkaurelius.titan.core.TitanGraphQuery;
@@ -79,10 +80,27 @@ public class TitanGraphBuildingUtils {
 	
 	// UTILS - TOP LEVEL LOGIC
 	
-	public static void buildGraph_getUserGeneratedAssets(
+	/** Calls user code to extract vertices and edges
+	 * @param batch
+	 * @param batch_size
+	 * @param grouping_key
+	 * @param maybe_decomposer
+	 * @return
+	 */
+	public static List<ObjectNode> buildGraph_getUserGeneratedAssets(
+			final Stream<Tuple2<Long, IBatchRecord>> batch,
+			final Optional<Integer> batch_size, 
+			final Optional<JsonNode> grouping_key,
+			final Optional<Tuple2<IEnrichmentBatchModule, GraphDecompEnrichmentContext>> maybe_decomposer
 			)
 	{
-		//TODO call decomp
+		// First off build the edges and vertices
+		
+		maybe_decomposer.ifPresent(handler -> handler._1().onObjectBatch(batch, batch_size, grouping_key));
+		
+		final List<ObjectNode> vertices_and_edges = maybe_decomposer.map(context -> context._2().getAndResetVertexList()).orElse(Collections.emptyList());
+		
+		return vertices_and_edges;		
 	}
 	
 	/** TODO: need to decompose this even further 
@@ -96,11 +114,8 @@ public class TitanGraphBuildingUtils {
 			final GraphSchemaBean config,
 			final Tuple2<String, ISecurityService> security_service,
 			final IBucketLogger logger,
-			final List<ObjectNode> vertices_and_edges)
+			final Stream<ObjectNode> vertices_and_edges)
 	{
-		//TODO: move this up to the top:
-//		final TransactionBuilder tx_b = titan.buildTransaction();
-//		final TitanTransaction tx = tx_b.start();
 		
 		// Convert the list of vertexes into a mega query - will have a false positive rate to keep the query simple  
 		
