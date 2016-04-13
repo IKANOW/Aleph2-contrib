@@ -30,8 +30,8 @@ import java.util.stream.Stream;
 import org.apache.tinkerpop.gremlin.structure.Direction;
 import org.apache.tinkerpop.gremlin.structure.Edge;
 import org.apache.tinkerpop.gremlin.structure.Element;
+import org.apache.tinkerpop.gremlin.structure.Property;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
-import org.apache.tinkerpop.gremlin.structure.VertexProperty;
 import org.apache.tinkerpop.gremlin.structure.io.IoCore;
 
 import scala.Tuple2;
@@ -77,7 +77,7 @@ public class TitanGraphBuildingUtils {
 	
 	// UTILS - TOP LEVEL LOGIC
 	
-	/** Calls user code to extract vertices and edges
+	/** (1/3) Calls user code to extract vertices and edges
 	 * @param batch
 	 * @param batch_size
 	 * @param grouping_key
@@ -100,7 +100,7 @@ public class TitanGraphBuildingUtils {
 		return vertices_and_edges;		
 	}
 	
-	/** Creates a stream of user-generated assets together (grouped by vertex key) with associated data 
+	/** (2/3) Creates a stream of user-generated assets together (grouped by vertex key) with associated data 
 	 * @param tx
 	 * @param config
 	 * @param security_service
@@ -119,7 +119,7 @@ public class TitanGraphBuildingUtils {
 		
 		// Convert the list of vertexes into a mega query - will have a false positive rate to keep the query simple  
 		
-		final Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> nodes_to_get = groupEdgesAndVertices(config, vertices_and_edges);	
+		final Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> nodes_to_get = groupNewEdgesAndVertices(config, vertices_and_edges);	
 		
 		final Map<String, Set<Object>> dedup_query_builder = 		
 				nodes_to_get.keySet().stream().flatMap(j -> Optionals.streamOf(j.fields(), false))
@@ -140,7 +140,7 @@ public class TitanGraphBuildingUtils {
 		
 		final Map<JsonNode, List<Tuple2<Vertex, JsonNode>>> grouped_vertices = 
 				Optionals.streamOf(matching_nodes_query.vertices(), false)
-					.map(vertex -> Tuples._2T((Vertex) vertex, getVertexProperties(vertex, config.deduplication_fields())))
+					.map(vertex -> Tuples._2T((Vertex) vertex, getElementProperties(vertex, config.deduplication_fields())))
 					.filter(vertex_key -> nodes_to_get.keySet().contains(vertex_key._2())) // (remove false positives)
 					.collect(Collectors.groupingBy(t2 -> (JsonNode) t2._2())) // (group by key)
 					;
@@ -153,7 +153,7 @@ public class TitanGraphBuildingUtils {
 		
 	}
 	
-	/** Merges user generated edges/vertices with the 
+	/** (3/3) Merges user generated edges/vertices with the ones already in the system 
 	 * @param tx
 	 * @param config
 	 * @param security_service
@@ -175,6 +175,8 @@ public class TitanGraphBuildingUtils {
 				
 		mergeable.forEach(t4 -> { 
 
+			//TODO: handling properties
+			
 			//TODO: also if in test mode then don't allow any link merging, everything stays completely standalone
 			
 			//TODO X) ok one thing I haven't considered here is the bucket situation:
@@ -217,50 +219,11 @@ public class TitanGraphBuildingUtils {
 						.flatMap(__ -> __)
 						.forEach(e -> {
 							mutable_existing_edge_store.put(key, e);
-						});
-						
+						});						
 				
 				// 1.3.2) Handle incoming edges:
 				
-				final Map<ObjectNode, List<ObjectNode>> grouped_edges = edges.stream().filter(mutable_edge -> {
-					
-					final JsonNode in_key = mutable_edge.get(GraphAnnotationBean.inV);
-					final JsonNode out_key = mutable_edge.get(GraphAnnotationBean.outV);
-					
-					final JsonNode matching_key = (in_key == key) ? in_key : out_key; // (has to be one of the 2 by construction)
-					final JsonNode off_key = (in_key != key) ? in_key : (out_key != key ? out_key : null); // (a vertex can have an edge be to itself)
-					
-					if (null == off_key) {
-						mutable_edge.put(GraphAnnotationBean.inV, (Long) vertex_winner.id());
-						mutable_edge.put(GraphAnnotationBean.outV, (Long) vertex_winner.id());
-						mutable_edge.put(GraphAnnotationBean.inVLabel, key); // (internal, see below)
-						mutable_edge.put(GraphAnnotationBean.outVLabel, key); // (internal, see below)
-					}
-					else {
-						mutable_edge.put((matching_key == in_key) ? GraphAnnotationBean.inV : GraphAnnotationBean.outV, (Long) vertex_winner.id());
-						mutable_edge.put((matching_key == in_key) ? GraphAnnotationBean.inVLabel : GraphAnnotationBean.outVLabel, key); // (internal, see below)
-					}
-					
-					return ((null == off_key) || off_key.isLong());
-				})
-				.collect(Collectors.groupingBy(mutable_edge -> {
-					// 1.3.2) Once we've tidied up the edge, check if we're ready for that edge to move to stage 2):					
-					
-					final ObjectNode edge_key = 
-							Optional.of(_mapper.createObjectNode())
-														.map(o -> Optional.ofNullable(mutable_edge.remove(GraphAnnotationBean.inVLabel))
-																			.map(k -> (ObjectNode) o.put(GraphAnnotationBean.inV, k))
-																			.orElse(o)
-														)
-														.map(o -> Optional.ofNullable(mutable_edge.remove(GraphAnnotationBean.outVLabel))
-																			.map(k -> (ObjectNode) o.put(GraphAnnotationBean.outV, k))
-																			.orElse(o)
-														)
-														.get()
-														;
-					
-					return edge_key;
-				}));		
+				final Map<ObjectNode, List<ObjectNode>> grouped_edges = finalEdgeGrouping(key, vertex_winner, edges);
 				
 				// 2) By here we have a list of vertices and we've mutated the edges to fill in the _inV and _outV
 				// 2.1) Now get the potentially matching edges from each of the selected vertices:
@@ -285,7 +248,7 @@ public class TitanGraphBuildingUtils {
 									in_existing.values().stream().filter(e -> e.inVertex() == e.outVertex()) // (handle the case where an edge starts/ends at the same node)
 							)		
 							.flatMap(__ -> __)
-							.map(e -> Tuples._2T(e, (JsonNode) null)) //TODO: edge properties
+							.map(e -> Tuples._2T(e, getElementProperties(e, config.deduplication_fields())))
 							.collect(Collectors.toList())
 							;
 					
@@ -308,7 +271,7 @@ public class TitanGraphBuildingUtils {
 	 * @param vertices_and_edges
 	 * @return
 	 */
-	protected static Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> groupEdgesAndVertices(
+	protected static Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> groupNewEdgesAndVertices(
 			final GraphSchemaBean config,
 			final Stream<ObjectNode> vertices_and_edges)
 	{
@@ -341,6 +304,60 @@ public class TitanGraphBuildingUtils {
 							;
 
 		return nodes_to_get;
+	}
+	
+	/**
+	 * @param key
+	 * @param vertex_winner
+	 * @param edges
+	 * @return
+	 */
+	protected static Map<ObjectNode, List<ObjectNode>> finalEdgeGrouping(
+			final ObjectNode key,
+			final Vertex vertex_winner,
+			final List<ObjectNode> edges
+			)
+	{
+		final Map<ObjectNode, List<ObjectNode>> grouped_edges = edges.stream().filter(mutable_edge -> {
+			
+			final JsonNode in_key = mutable_edge.get(GraphAnnotationBean.inV);
+			final JsonNode out_key = mutable_edge.get(GraphAnnotationBean.outV);
+			
+			final JsonNode matching_key = (in_key == key) ? in_key : out_key; // (has to be one of the 2 by construction)
+			final JsonNode off_key = (in_key != key) ? in_key : (out_key != key ? out_key : null); // (a vertex can have an edge be to itself)
+			
+			if (null == off_key) {
+				mutable_edge.put(GraphAnnotationBean.inV, (Long) vertex_winner.id());
+				mutable_edge.put(GraphAnnotationBean.outV, (Long) vertex_winner.id());
+				mutable_edge.put(GraphAnnotationBean.inVLabel, key); // (internal, see below)
+				mutable_edge.put(GraphAnnotationBean.outVLabel, key); // (internal, see below)
+			}
+			else {
+				mutable_edge.put((matching_key == in_key) ? GraphAnnotationBean.inV : GraphAnnotationBean.outV, (Long) vertex_winner.id());
+				mutable_edge.put((matching_key == in_key) ? GraphAnnotationBean.inVLabel : GraphAnnotationBean.outVLabel, key); // (internal, see below)
+			}
+			
+			return ((null == off_key) || off_key.isLong());
+		})
+		.collect(Collectors.groupingBy(mutable_edge -> {
+			// 1.3.2) Once we've tidied up the edge, check if we're ready for that edge to move to stage 2):					
+			
+			final ObjectNode edge_key = 
+					Optional.of(_mapper.createObjectNode())
+												.map(o -> Optional.ofNullable(mutable_edge.remove(GraphAnnotationBean.inVLabel))
+																	.map(k -> (ObjectNode) o.put(GraphAnnotationBean.inV, k))
+																	.orElse(o)
+												)
+												.map(o -> Optional.ofNullable(mutable_edge.remove(GraphAnnotationBean.outVLabel))
+																	.map(k -> (ObjectNode) o.put(GraphAnnotationBean.outV, k))
+																	.orElse(o)
+												)
+												.get()
+												;
+			
+			return edge_key;
+		}));		
+		return grouped_edges;
 	}
 	
 	/** Calls user merge on the various possibly duplicate elements, and sorts out user responses
@@ -429,13 +446,13 @@ public class TitanGraphBuildingUtils {
 	}
 	
 	/** Creates a JSON object out of the designated vertex properties
-	 * @param v
+	 * @param el
 	 * @param fields
 	 * @return
 	 */
-	protected static JsonNode getVertexProperties(final Vertex v, final Collection<String> fields) {
+	protected static JsonNode getElementProperties(final Element el, final Collection<String> fields) {
 		return fields.stream()
-				.map(f -> Tuples._2T(f, v.property(f)))
+				.map(f -> Tuples._2T(f, el.property(f)))
 				.filter(t2 -> null != t2._2())
 				.reduce(_mapper.createObjectNode(), (o, t2) -> insertIntoObjectNode(t2._1(), t2._2(), o), (o1, o2) -> o2)
 				;
@@ -447,7 +464,7 @@ public class TitanGraphBuildingUtils {
 	 * @param o
 	 * @return
 	 */
-	protected static ObjectNode insertIntoObjectNode(final String f, final VertexProperty<Object> vp, final ObjectNode o) {
+	protected static ObjectNode insertIntoObjectNode(final String f, final Property<Object> vp, final ObjectNode o) {
 		return Patterns.match(vp.value()).<ObjectNode>andReturn()
 			.when(String.class, s -> o.put(f, s))
 			.when(Double.class, d -> o.put(f, d))

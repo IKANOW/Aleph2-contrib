@@ -155,10 +155,17 @@ public class GraphDecompEnrichmentContext implements IEnrichmentModuleContext {
 			ObjectNode mutated_json, Optional<AnnotationBean> annotations,
 			Optional<JsonNode> grouping_key) {
 		
-		//TODO: add to output list
+		//TODO: some basic validation, eg 
+		// - is "type" either edge or vertex
+		// - For vertices:
+		//   - id is set and is consistent with dedup fields
+		//   - "properties" are valid, and don't have illegal permissions
+		// - For edges
+		//   - "properties" are valid, and don't have illegal permissions
+		//   - "inV" and "outV" are set and are consistent with dedup fields
 		
-		return _delegate.emitMutableObject(id, mutated_json, annotations,
-				grouping_key);
+		_mutable_vertices.add(mutated_json);
+		return Validation.success(mutated_json);
 	}
 	/**
 	 * @param id
@@ -174,10 +181,10 @@ public class GraphDecompEnrichmentContext implements IEnrichmentModuleContext {
 			Optional<AnnotationBean> annotations,
 			Optional<JsonNode> grouping_key) {
 		
-		//TODO: add to output list
+		//TODO: some basic validation (see above)
 		
-		return _delegate.emitImmutableObject(id, original_json, mutations,
-				annotations, grouping_key);
+		_mutable_vertices.add((ObjectNode) original_json);
+		return Validation.success(original_json);
 	}
 	/**
 	 * @param id
