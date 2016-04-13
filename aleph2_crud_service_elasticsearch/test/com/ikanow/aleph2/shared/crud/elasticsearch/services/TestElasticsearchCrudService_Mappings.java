@@ -434,7 +434,7 @@ public class TestElasticsearchCrudService_Mappings {
 			test_long2.test_map.put("test_map", 2L);
 
 			batch_service.storeObjects(Arrays.asList(test_long1, test_long2), true);
-			try { Thread.sleep(2500L); } catch (Exception e) {}
+			try { Thread.sleep(4000L); } catch (Exception e) {}//(might be as much as 3s? 1s refresh/1s batch latency/1s refresh?)
 			
 			assertEquals(2L, service.countObjects().get().longValue());
 			
