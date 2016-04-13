@@ -616,8 +616,8 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		try {
 			final List<String> indexes = _state.es_context.indexContext().getReadableIndexList(Optional.empty());
 			final List<String> types = _state.es_context.typeContext().getReadableTypeList();
-			if ((indexes.size() != 1) || (indexes.size() > 1)) {
-				// Multi index request, so use a query (which may not always return the most recent value, depending on index refresh settings/timings)
+			if ((types.size() != 1) || (indexes.size() > 1)) {
+				// Multi index/type request, so use a query (which may not always return the most recent value, depending on index refresh settings/timings)
 				return getObjectBySpec(anyOf(_state.clazz).when(JsonUtils._ID, id.toString()), field_list, include);			
 			}
 			else {
@@ -627,8 +627,9 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 							_state.client.prepareGet()
 								.setIndex(indexes.get(0))
 								.setId(id.toString())
+								.setType(types.get(0)) // (exists by construction)
 							)
-						.map(s -> (1 == types.size()) ? s.setType(types.get(0)) : s)
+						//.map(s -> (1 == types.size()) ? s.setType(types.get(0)) : s) (not needed, see above)
 						.map(s -> field_list.isEmpty() 
 								? s 
 								: include
