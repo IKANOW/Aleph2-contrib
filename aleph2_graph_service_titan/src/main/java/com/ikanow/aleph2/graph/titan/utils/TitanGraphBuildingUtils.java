@@ -35,6 +35,7 @@ import org.apache.tinkerpop.gremlin.structure.VertexProperty;
 import org.apache.tinkerpop.gremlin.structure.io.IoCore;
 
 import scala.Tuple2;
+import scala.Tuple3;
 import scala.Tuple4;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -51,18 +52,14 @@ import com.ikanow.aleph2.data_model.objects.data_import.GraphAnnotationBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.GraphSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
-import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.graph.titan.services.GraphDecompEnrichmentContext;
 import com.ikanow.aleph2.graph.titan.services.GraphMergeEnrichmentContext;
-import com.thinkaurelius.titan.core.TitanGraph;
 import com.thinkaurelius.titan.core.TitanGraphQuery;
 import com.thinkaurelius.titan.core.TitanTransaction;
-import com.thinkaurelius.titan.core.TitanVertex;
-import com.thinkaurelius.titan.core.TransactionBuilder;
 import com.thinkaurelius.titan.core.attribute.Contain;
 
 import fj.data.Validation;
@@ -103,13 +100,16 @@ public class TitanGraphBuildingUtils {
 		return vertices_and_edges;		
 	}
 	
-	/** TODO: need to decompose this even further 
-	 * @param titan
-	 * @param vertices
-	 * @param maybe_merger
+	/** Creates a stream of user-generated assets together (grouped by vertex key) with associated data 
+	 * @param tx
+	 * @param config
+	 * @param security_service
+	 * @param logger
+	 * @param vertices_and_edges
+	 * @return
 	 */
 	@SuppressWarnings("unchecked")
-	public static Stream<Tuple4<JsonNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> buildGraph_collectUserGeneratedAssets(
+	public static Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> buildGraph_collectUserGeneratedAssets(
 			final TitanTransaction tx, 
 			final GraphSchemaBean config,
 			final Tuple2<String, ISecurityService> security_service,
@@ -119,12 +119,13 @@ public class TitanGraphBuildingUtils {
 		
 		// Convert the list of vertexes into a mega query - will have a false positive rate to keep the query simple  
 		
-		final Map<JsonNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> nodes_to_get = null; //TODO build this should be a map<JsonNode, collection<JsonNode>>
-		final Map<String, Set<Object>> dedup_query_builder = null; //TODO build
+		final Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> nodes_to_get = groupEdgesAndVertices(config, vertices_and_edges);	
 		
-		//TODO: hmm this needs to include destination vertices also? using hte outV in the vertices
-		// (i guess i shouldn't allow any outVs that don't have vertices ... or in fact in that case I should auto create the empty vertex?
-		//  that way if you don't have a strong opinion about the vertex properties then you can just go ahead and create the edges....) 
+		final Map<String, Set<Object>> dedup_query_builder = 		
+				nodes_to_get.keySet().stream().flatMap(j -> Optionals.streamOf(j.fields(), false))
+					.collect(Collectors.groupingBy(kv -> kv.getKey(), Collectors.mapping(kv -> jsonNodeToObject(kv.getValue()), Collectors.toSet())));
+					;
+		
 		
 		final TitanGraphQuery<?> matching_nodes_query = dedup_query_builder.entrySet().stream()
 			.reduce(tx.query()
@@ -141,7 +142,6 @@ public class TitanGraphBuildingUtils {
 				Optionals.streamOf(matching_nodes_query.vertices(), false)
 					.map(vertex -> Tuples._2T((Vertex) vertex, getVertexProperties(vertex, config.deduplication_fields())))
 					.filter(vertex_key -> nodes_to_get.keySet().contains(vertex_key._2())) // (remove false positives)
-					//TODO (handle property ACL?!)
 					.collect(Collectors.groupingBy(t2 -> (JsonNode) t2._2())) // (group by key)
 					;
 		
@@ -153,8 +153,13 @@ public class TitanGraphBuildingUtils {
 		
 	}
 	
-	/** Another big function that needs to be massively decomposed/lots more args/etc
-	 * @param mergeable - first param is key, second is list of vertices, third is list of edges, forth is list of (existing vertices, (key again - ignore))
+	/** Merges user generated edges/vertices with the 
+	 * @param tx
+	 * @param config
+	 * @param security_service
+	 * @param logger
+	 * @param maybe_merger
+	 * @param mergeable
 	 */
 	public static void buildGraph_handleMerge(
 				final TitanTransaction tx,
@@ -162,7 +167,7 @@ public class TitanGraphBuildingUtils {
 				final Tuple2<String, ISecurityService> security_service,
 				final IBucketLogger logger,
 				final Optional<Tuple2<IEnrichmentBatchModule, GraphMergeEnrichmentContext>> maybe_merger,
-				final Stream<Tuple4<JsonNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> mergeable
+				final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> mergeable
 			)
 	{	
 		final ObjectMapper titan_mapper = tx.io(IoCore.graphson()).mapper().create().createMapper();
@@ -179,7 +184,7 @@ public class TitanGraphBuildingUtils {
 			// the user can manipulate the _bs, but can only _add_, never remove  
 			// And then also add the bucket path to _b everywhere					
 			
-			final JsonNode key = t4._1();
+			final ObjectNode key = t4._1();
 			final List<ObjectNode> vertices = t4._2();
 			final List<ObjectNode> edges = t4._3();
 			final List<Tuple2<Vertex, JsonNode>> existing_vertices = t4._4();
@@ -284,9 +289,8 @@ public class TitanGraphBuildingUtils {
 							.collect(Collectors.toList())
 							;
 					
-					final List<Edge> finalized_edges =
-							invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Edge.class, kv.getKey(), kv.getValue(), existing_edges)
-							;
+					//final List<Edge> finalized_edges =
+					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Edge.class, kv.getKey(), kv.getValue(), existing_edges);
 				});
 			});
 				
@@ -299,6 +303,59 @@ public class TitanGraphBuildingUtils {
 	
 	// UTILS - HIGH LEVEL
 	
+	/** Separates out edges/vertices, groups by key
+	 * @param config
+	 * @param vertices_and_edges
+	 * @return
+	 */
+	protected static Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> groupEdgesAndVertices(
+			final GraphSchemaBean config,
+			final Stream<ObjectNode> vertices_and_edges)
+	{
+		final Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> nodes_to_get = 		
+				vertices_and_edges
+					.filter(o -> o.has(GraphAnnotationBean.type))
+					.<Tuple3<ObjectNode, ObjectNode, Boolean>>flatMap(o -> {
+						final JsonNode type = o.get(GraphAnnotationBean.type);
+						if ((null == type) || !type.isTextual()) return Stream.empty();
+						if ("edge".equals(type.asText())) {
+							// Grab both edges from both ends:
+							return Stream.concat(
+									Optional.ofNullable(type.get(GraphAnnotationBean.inV)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, false))).orElse(Stream.empty()), 
+									Optional.ofNullable(type.get(GraphAnnotationBean.outV)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, false))).orElse(Stream.empty()));
+						}
+						else if ("vertex".equals(type.asText())) {
+							return Optional.ofNullable(type.get(GraphAnnotationBean.id)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, true))).orElse(Stream.empty());
+						}
+						else return Stream.empty();
+					})
+					.collect(Collectors.groupingBy(t3 -> t3._1() // group by key
+							,
+							Collectors.collectingAndThen(
+									Collectors.<Tuple3<ObjectNode, ObjectNode, Boolean>>partitioningBy(t3 -> t3._3()) // group by edge/vertex
+										,
+										m -> Tuples._2T(m.get(true).stream().map(t3 -> t3._2()).collect(Collectors.toList()) // convert group edge/vertex to pair of lists
+														, 
+														m.get(false).stream().map(t3 -> t3._2()).collect(Collectors.toList()))
+							)))
+							;
+
+		return nodes_to_get;
+	}
+	
+	/** Calls user merge on the various possibly duplicate elements, and sorts out user responses
+	 * @param tx
+	 * @param config
+	 * @param security_service
+	 * @param logger
+	 * @param maybe_merger
+	 * @param titan_mapper
+	 * @param element_type
+	 * @param key
+	 * @param new_elements
+	 * @param existing_elements
+	 * @return
+	 */
 	protected static <O extends Element> List<O> invokeUserMergeCode(
 			final TitanTransaction tx,
 			final GraphSchemaBean config,
@@ -308,7 +365,7 @@ public class TitanGraphBuildingUtils {
 			final ObjectMapper titan_mapper
 			,
 			final Class<O> element_type,
-			final JsonNode key,
+			final ObjectNode key,
 			final Collection<ObjectNode> new_elements,
 			final Collection<Tuple2<O, JsonNode>> existing_elements
 			)
@@ -398,8 +455,34 @@ public class TitanGraphBuildingUtils {
 			.when(Long.class, i -> o.put(f, i))
 			.when(Boolean.class, b -> o.put(f, b))
 			.otherwise(__ -> o)
+			;	
+	}
+	
+	/** Inserts a single-valued vertex property into a JSON object
+	 * @param f
+	 * @param vp
+	 * @param o
+	 * @return
+	 */
+	protected static Object jsonNodeToObject(final JsonNode j) {
+		return Patterns.match().<Object>andReturn()
+			.when(() -> j.isTextual(), () -> j.asText())
+			.when(() -> j.isDouble(), () -> j.asDouble())
+			.when(() -> j.isLong(), () -> j.asLong())
+			.when(() -> j.isInt(), () -> j.asInt())
+			.when(() -> j.isBoolean(), () -> j.asBoolean())
+			.otherwise(__ -> null)
 			;
-		
+	}	
+	
+	/** Key can be a single value if there's only one value in the dedup context
+	 * @param j
+	 * @param config
+	 * @return
+	 */
+	private static ObjectNode convertToObject(final JsonNode j, final GraphSchemaBean config) {
+		if (j.isObject()) return (ObjectNode)j;
+		else return (ObjectNode) _mapper.createObjectNode().put(config.deduplication_fields().stream().findFirst().get(), j);
 	}
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
