@@ -245,9 +245,9 @@ public class TestElasticsearchCrudService_Mappings {
 		// 1) Check fails with mixed mapping
 		
 		{
-			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_multi1", TestBean.class,				
+			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_multi1_store", TestBean.class,				
 					new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
-							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi1".toLowerCase(), Optional.empty(), Either.left(true)),
+							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi1_store".toLowerCase(), Optional.empty(), Either.left(true)),
 							new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext("type1")));
 	
 			// Set up the mapping
@@ -413,9 +413,9 @@ public class TestElasticsearchCrudService_Mappings {
 		// 1) Check fails with mixed mapping
 		
 		{
-			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_multi1", TestBean.class,				
+			ElasticsearchCrudService<TestBean> service = getTestService("testMultipleMappingsPerIndex_multi1_batch", TestBean.class,				
 					new ElasticsearchContext.ReadWriteContext(_factory.getClient(), 
-							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi1".toLowerCase(), Optional.empty(), Either.left(true)),
+							new ElasticsearchContext.IndexContext.ReadWriteIndexContext.FixedRwIndexContext("testMultipleMappingsPerIndex_multi1_batch".toLowerCase(), Optional.empty(), Either.left(true)),
 							new ElasticsearchContext.TypeContext.ReadWriteTypeContext.FixedRwTypeContext("type1")));
 	
 			@SuppressWarnings("unchecked")
@@ -434,7 +434,7 @@ public class TestElasticsearchCrudService_Mappings {
 			test_long2.test_map.put("test_map", 2L);
 
 			batch_service.storeObjects(Arrays.asList(test_long1, test_long2), true);
-			try { Thread.sleep(2200L); } catch (Exception e) {}
+			try { Thread.sleep(2500L); } catch (Exception e) {}
 			
 			assertEquals(2L, service.countObjects().get().longValue());
 			

@@ -35,7 +35,8 @@ import com.ikanow.aleph2.shared.crud.elasticsearch.services.ElasticsearchCrudSer
  * @author Alex
  */
 public class MockElasticsearchCrudServiceFactory implements IElasticsearchCrudServiceFactory {
-
+	private static String CLUSTER_NAME = "aleph2_" + com.ikanow.aleph2.data_model.utils.UuidUtils.get().getRandomUuid();
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.shared.crud.elasticsearch.services.IElasticsearchCrudServiceFactory#getClient()
 	 */
@@ -43,11 +44,11 @@ public class MockElasticsearchCrudServiceFactory implements IElasticsearchCrudSe
 		synchronized (MockElasticsearchCrudServiceFactory.class) {
 			if (!_root_node.isSet()) {
 				//(Clean up existing dir)
-				try { FileUtils.deleteDirectory(new File("data/aleph2")); } catch (Exception e) {}
+				try { FileUtils.deleteDirectory(new File("data/" + CLUSTER_NAME)); } catch (Exception e) {}
 				
 				final ImmutableSettings.Builder test_settings = 
 						ImmutableSettings.settingsBuilder()
-					        .put("cluster.name", "aleph2")
+					        .put("cluster.name", CLUSTER_NAME)
 					        .put("node.gateway.type", "none")
 					        .put("index.store.type", "memory")
 					        .put("index.number_of_replicas", 0)
