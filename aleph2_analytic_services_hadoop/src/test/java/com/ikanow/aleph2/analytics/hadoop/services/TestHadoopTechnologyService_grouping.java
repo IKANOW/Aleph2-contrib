@@ -295,10 +295,12 @@ public class TestHadoopTechnologyService_grouping {
 		for (int ii = 0; ii < 120; ++ii) {
 			Thread.sleep(1000L);
 			if (test_service.isJobComplete(test_bucket)) {
+				logger.info("Job is complete after secs=" + ii);
 				break;
 			}
 		}
-		for (int ii = 0; ii < 40; ++ii) {
+		logger.info("Waiting for outputs to complete");
+		for (int ii = 0; ii < 120; ++ii) {
 			Thread.sleep(500L);
 			if ((test_service.getNumRecordsInSearchIndex(test_bucket) >= 4)
 					&&
@@ -476,10 +478,12 @@ public class TestHadoopTechnologyService_grouping {
 		for (int ii = 0; ii < 120; ++ii) {
 			Thread.sleep(1000L);
 			if (test_service.isJobComplete(test_bucket)) {
+				logger.info("Job is complete after secs=" + ii);
 				break;
 			}
 		}
-		for (int ii = 0; ii < 40; ++ii) {
+		logger.info("Waiting for outputs to complete");
+		for (int ii = 0; ii < 120; ++ii) {
 			Thread.sleep(500L);
 			if ((test_service.getNumRecordsInSearchIndex(test_bucket) >= 4)
 					&&
@@ -502,5 +506,5 @@ public class TestHadoopTechnologyService_grouping {
 	}
 	
 	
-	//TODO: now have an automated grouping stage (use the count test that is kicking around)
+	//TODO (ALEPH-12): now have an automated grouping stage (use the count test that is kicking around)
 }
