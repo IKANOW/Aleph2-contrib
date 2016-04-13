@@ -25,5 +25,9 @@ public class ErrorUtils extends com.ikanow.aleph2.data_model.utils.ErrorUtils {
 	public static String DECOMPOSITION_ENRICHMENT_NEEDED = "Currently need to specify a custom graph decomposition enrichment module ({0})";
 	public static String MERGE_ENRICHMENT_NEEDED = "Currently need to specify a custom graph decomposition merge module ({0})";
 	
+	public static String ONE_VERTEX_PER_MERGE = "Can only specify one vertex per merge stage";
+	public static String MISSING_VERTEX_FOR_EDGE = "Edges must have two vertices, didn't find one of {0} or {1}";
+	public static String MISSING_OR_BADLY_FORMED_FIELD = "For user emitted vertices/edges, bad field {0}: {1}";
+	
 	public static String BUFFERS_NOT_SUPPORTED = "Secondary buffers not supported ({0})";
 }

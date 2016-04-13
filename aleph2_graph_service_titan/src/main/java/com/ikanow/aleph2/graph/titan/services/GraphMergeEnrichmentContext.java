@@ -17,11 +17,16 @@
 package com.ikanow.aleph2.graph.titan.services;
 
 import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+
+import org.apache.tinkerpop.gremlin.structure.Element;
+import org.apache.tinkerpop.gremlin.structure.Vertex;
 
 import scala.Tuple2;
 
@@ -35,9 +40,12 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingServic
 import com.ikanow.aleph2.data_model.objects.data_import.AnnotationBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.GraphSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean.StateDirectoryType;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
+import com.ikanow.aleph2.graph.titan.utils.ErrorUtils;
+import com.ikanow.aleph2.graph.titan.utils.TitanGraphBuildingUtils;
 
 import fj.data.Either;
 import fj.data.Validation;
@@ -47,7 +55,90 @@ import fj.data.Validation;
  *
  */
 public class GraphMergeEnrichmentContext implements IEnrichmentModuleContext {
+	
+	///////////////////////////////////////////////////////////////
 
+	// State
+	
+	public GraphMergeEnrichmentContext(final IEnrichmentModuleContext delegate, final GraphSchemaBean config) {
+		_delegate = delegate;
+		_config = config;
+	}	
+	protected final IEnrichmentModuleContext _delegate;
+	protected final GraphSchemaBean _config;
+	private List<ObjectNode> _mutable_output_elements = new LinkedList<>();
+	private Class<? extends Element> _type;
+	
+	/** Initializes a merge for a particular key
+	 * @param type
+	 */
+	public void initializeMerge(Class<? extends Element> type) {
+		_type = type;
+	}
+	
+	/** Returns all the emitted objects then resets the list ready for the next batch
+	 * @return
+	 */
+	public List<ObjectNode> getAndResetElementList() {
+		final List<ObjectNode> ret_val = _mutable_output_elements;
+		_mutable_output_elements = new LinkedList<ObjectNode>();
+		return ret_val;
+	}
+	////////////////////////////////////////////////////////////////////////////
+	
+	// IEnrichmentModuleContext INTERFACE OVERRIDES
+	
+	/** Builds a graph element
+	 * @param id
+	 * @param mutated_json
+	 * @param annotations
+	 * @param grouping_key
+	 * @return
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitMutableObject(long, com.fasterxml.jackson.databind.node.ObjectNode, java.util.Optional, java.util.Optional)
+	 */
+	public Validation<BasicMessageBean, JsonNode> emitMutableObject(long id,
+			ObjectNode mutated_json, Optional<AnnotationBean> annotations,
+			Optional<JsonNode> grouping_key) {
+		
+		if (annotations.isPresent()) {
+			return Validation.fail(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "emitMutableObject", ErrorUtils.NOT_YET_IMPLEMENTED, "annotations"));
+		}
+		if (Vertex.class.isAssignableFrom(_type)) {
+			if (!_mutable_output_elements.isEmpty()) {
+				return Validation.fail(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "emitMutableObject", ErrorUtils.ONE_VERTEX_PER_MERGE));
+			}
+		}
+		return TitanGraphBuildingUtils.validateMergedElement(mutated_json, _config)
+				.bind(success -> {
+					_mutable_output_elements.add(mutated_json);
+					return Validation.success((JsonNode) mutated_json);
+				})
+				;
+	}
+	/** Builds a graph element
+	 * @param id
+	 * @param original_json
+	 * @param mutations
+	 * @param annotations
+	 * @param grouping_key
+	 * @return
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitImmutableObject(long, com.fasterxml.jackson.databind.JsonNode, java.util.Optional, java.util.Optional, java.util.Optional)
+	 */
+	public Validation<BasicMessageBean, JsonNode> emitImmutableObject(long id,
+			JsonNode original_json, Optional<ObjectNode> mutations,
+			Optional<AnnotationBean> annotations,
+			Optional<JsonNode> grouping_key) {
+		
+		if (mutations.isPresent()) {
+			return Validation.fail(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "emitImmutableObject", ErrorUtils.NOT_YET_IMPLEMENTED, "mutations"));
+		}
+		return emitMutableObject(id, (ObjectNode) original_json, annotations, grouping_key);
+	}
+	
+	///////////////////////////////////////////////////////////////
+	
+	// IEnrichmentModuleContext INTERFACE DELEGATES
+	
 	/**
 	 * @return
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#getUnderlyingArtefacts()
@@ -121,36 +212,6 @@ public class GraphMergeEnrichmentContext implements IEnrichmentModuleContext {
 	 */
 	public ObjectNode convertToMutable(JsonNode original) {
 		return _delegate.convertToMutable(original);
-	}
-	/**
-	 * @param id
-	 * @param mutated_json
-	 * @param annotations
-	 * @param grouping_key
-	 * @return
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitMutableObject(long, com.fasterxml.jackson.databind.node.ObjectNode, java.util.Optional, java.util.Optional)
-	 */
-	public Validation<BasicMessageBean, JsonNode> emitMutableObject(long id,
-			ObjectNode mutated_json, Optional<AnnotationBean> annotations,
-			Optional<JsonNode> grouping_key) {
-		return _delegate.emitMutableObject(id, mutated_json, annotations,
-				grouping_key);
-	}
-	/**
-	 * @param id
-	 * @param original_json
-	 * @param mutations
-	 * @param annotations
-	 * @param grouping_key
-	 * @return
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitImmutableObject(long, com.fasterxml.jackson.databind.JsonNode, java.util.Optional, java.util.Optional, java.util.Optional)
-	 */
-	public Validation<BasicMessageBean, JsonNode> emitImmutableObject(long id,
-			JsonNode original_json, Optional<ObjectNode> mutations,
-			Optional<AnnotationBean> annotations,
-			Optional<JsonNode> grouping_key) {
-		return _delegate.emitImmutableObject(id, original_json, mutations,
-				annotations, grouping_key);
 	}
 	/**
 	 * @param id
@@ -265,9 +326,5 @@ public class GraphMergeEnrichmentContext implements IEnrichmentModuleContext {
 	 */
 	public void initializeNewContext(String signature) {
 		_delegate.initializeNewContext(signature);
-	}
-	protected final IEnrichmentModuleContext _delegate;
-	public GraphMergeEnrichmentContext(IEnrichmentModuleContext delegate) {
-		_delegate = delegate;
 	}
 }

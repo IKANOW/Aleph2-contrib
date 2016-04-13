@@ -2,11 +2,11 @@ export M2_HOME=/opt/maven-3.0/
 
 # Full testless install of core
 cd Aleph2
-$M2_HOME/bin/mvn -T 4 -B package -DskipTests=true
+$M2_HOME/bin/mvn -T 4 -B install package -DskipTests=true || exit -1
 
 # Full testless install of core-technology
 cd ../Aleph2-contrib
-$M2_HOME/bin/mvn -T 4 -B package -DskipTests=true
+$M2_HOME/bin/mvn -T 4 -B install package -DskipTests=true || exit -1
 
 if [ "${bamboo.skip_unit_tests}" != "true" ]; then
     # Run all core tests

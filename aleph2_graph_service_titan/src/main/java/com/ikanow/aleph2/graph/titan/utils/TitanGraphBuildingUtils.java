@@ -19,6 +19,7 @@ package com.ikanow.aleph2.graph.titan.utils;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,6 +28,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.apache.logging.log4j.Level;
 import org.apache.tinkerpop.gremlin.structure.Direction;
 import org.apache.tinkerpop.gremlin.structure.Edge;
 import org.apache.tinkerpop.gremlin.structure.Element;
@@ -71,6 +73,88 @@ import fj.data.Validation;
 public class TitanGraphBuildingUtils {
 	final static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////
+	////////////////////////////////
+	
+	// UTILS - PUBLIC UTILS
+	
+	/** Quick/fast validation of user generated elements (vertices and edges)
+	 * @param o
+	 * @return
+	 */
+	public static Validation<BasicMessageBean, ObjectNode> validateUserElement(final ObjectNode o, GraphSchemaBean config) {
+		// Same as validation for merged elements, and in addition:
+		// - For vertices:
+		//   - id is set and is consistent with dedup fields
+		// - For edges
+		//   - "properties" are valid, and don't have illegal permissions
+
+		return validateMergedElement(o, config).bind(success -> {
+
+			
+			
+			//TODO: 
+			return null;
+		});
+	}
+	
+	/** Quick/fast validation of user chosen elements from the merge list
+	 * @param o
+	 * @return
+	 */
+	public static Validation<BasicMessageBean, ObjectNode> validateMergedElement(final ObjectNode o, GraphSchemaBean config) {
+		// Some basic validation: 
+		// - is "type" either edge or vertex
+		// - "label" is set
+		// - properties are valid (TODO: and don't have illegal permissions)
+		// - (for edges _don't_ to validate inV/outV because all that's already been chosen and can't be chosen at this point .. ditto vertices and ids)
+
+		// Type is set to one of edge/vertex
+		{
+			final JsonNode type = o.get(GraphAnnotationBean.type);
+			if (null == type) {
+				return Validation.fail(ErrorUtils.buildErrorMessage("GraphBuilderEnrichmentService", "system.onObjectBatch", ErrorUtils.MISSING_OR_BADLY_FORMED_FIELD, GraphAnnotationBean.type, "missing"));
+			}
+			else if (!type.isTextual()) {
+				return Validation.fail(ErrorUtils.buildErrorMessage("GraphBuilderEnrichmentService", "system.onObjectBatch", ErrorUtils.MISSING_OR_BADLY_FORMED_FIELD, GraphAnnotationBean.type, "not_text"));			
+			}
+			else if (!"edge".equals(type.asText()) && !"vertex".equals(type.asText())) {
+				return Validation.fail(ErrorUtils.buildErrorMessage("GraphBuilderEnrichmentService", "system.onObjectBatch", ErrorUtils.MISSING_OR_BADLY_FORMED_FIELD, GraphAnnotationBean.type, "not_edge_or_vertex"));						
+			}
+		}
+		// Label is set
+		{
+			final JsonNode label = o.get(GraphAnnotationBean.label);
+			if (null == label) {
+				return Validation.fail(ErrorUtils.buildErrorMessage("GraphBuilderEnrichmentService", "system.onObjectBatch", ErrorUtils.MISSING_OR_BADLY_FORMED_FIELD, GraphAnnotationBean.label, "missing"));
+			}
+			else if (!label.isTextual()) {
+				return Validation.fail(ErrorUtils.buildErrorMessage("GraphBuilderEnrichmentService", "system.onObjectBatch", ErrorUtils.MISSING_OR_BADLY_FORMED_FIELD, GraphAnnotationBean.label, "not_text"));			
+			}
+		}				
+		// Sort out properties
+		
+		final JsonNode properties = o.get(GraphAnnotationBean.properties);
+		if (null != properties) { // (properties is optional)
+			//TODO: sort out properties later
+			// - Check if is an object
+			// - Loop over fields:
+			//   - check each value is an array or an object (replace with a nested array if an object)
+			//     - (if it's atomic, convert into an object of the right sort?)
+			//   - for each value in the array, check it's an object (see above mutation step)
+			//   - check it's value is one of the supported types
+			//   - if it has a properties field, check it is an object of string/string (TODO: what about multiple buckets? ie can i make it an array, or do I just need to make them ,-sep or something)
+			//   - (Will just discard _b so can ignore): TODO: sort out setting it elsewhere
+			
+			if (!properties.isObject()) {
+				return Validation.fail(ErrorUtils.buildErrorMessage("GraphBuilderEnrichmentService", "system.onObjectBatch", ErrorUtils.MISSING_OR_BADLY_FORMED_FIELD, GraphAnnotationBean.properties, "not_object"));							
+			}
+		}
+		
+		return Validation.success(o);
+	}
+	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////
 	////////////////////////////////
@@ -165,14 +249,15 @@ public class TitanGraphBuildingUtils {
 				final TitanTransaction tx,
 				final GraphSchemaBean config,
 				final Tuple2<String, ISecurityService> security_service,
-				final IBucketLogger logger,
+				final Optional<IBucketLogger> logger,
 				final Optional<Tuple2<IEnrichmentBatchModule, GraphMergeEnrichmentContext>> maybe_merger,
 				final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> mergeable
 			)
 	{	
 		final ObjectMapper titan_mapper = tx.io(IoCore.graphson()).mapper().create().createMapper();
 		final Multimap<JsonNode, Edge> mutable_existing_edge_store = LinkedHashMultimap.create(); //(lazy simple way of handling 1.3/2)
-				
+		final Map<JsonNode, Vertex> mutable_existing_vertex_store = new HashMap<>();		
+		
 		mergeable.forEach(t4 -> { 
 
 			//TODO: handling properties
@@ -201,13 +286,14 @@ public class TitanGraphBuildingUtils {
 			// 1.2.b) copy any properties from the original objects into the winner and remove any so-desired properties
 
 			final Optional<Vertex> maybe_vertex_winner = 
-					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Vertex.class, key, vertices, existing_vertices)
+					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Vertex.class, key, vertices, existing_vertices, mutable_existing_vertex_store)
 						.stream()
 						.findFirst()
 						;
 			
 			maybe_vertex_winner.ifPresent(vertex_winner -> {
-
+				mutable_existing_vertex_store.put(key, vertex_winner); //(this gets used later to help build the edges)
+				
 				// 1.3) Tidy up (mutate) the edges				
 
 				// 1.3.1) Make a store of all the existing edges (won't worry about in/out, it will sort itself out)
@@ -253,7 +339,7 @@ public class TitanGraphBuildingUtils {
 							;
 					
 					//final List<Edge> finalized_edges =
-					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Edge.class, kv.getKey(), kv.getValue(), existing_edges);
+					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Edge.class, kv.getKey(), kv.getValue(), existing_edges, mutable_existing_vertex_store);
 				});
 			});
 				
@@ -306,7 +392,7 @@ public class TitanGraphBuildingUtils {
 		return nodes_to_get;
 	}
 	
-	/**
+	/** Previously our edges were double-grouped by in and out keys - now we can group them by the (in/out) pair
 	 * @param key
 	 * @param vertex_winner
 	 * @param edges
@@ -377,23 +463,37 @@ public class TitanGraphBuildingUtils {
 			final TitanTransaction tx,
 			final GraphSchemaBean config,
 			final Tuple2<String, ISecurityService> security_service,
-			final IBucketLogger logger,
+			final Optional<IBucketLogger> logger,
 			final Optional<Tuple2<IEnrichmentBatchModule, GraphMergeEnrichmentContext>> maybe_merger,
 			final ObjectMapper titan_mapper
 			,
 			final Class<O> element_type,
 			final ObjectNode key,
 			final Collection<ObjectNode> new_elements,
-			final Collection<Tuple2<O, JsonNode>> existing_elements
+			final Collection<Tuple2<O, JsonNode>> existing_elements,
+			final Map<JsonNode, Vertex> mutable_existing_vertex_store			
 			)
 	{
 		if (existing_elements.isEmpty() && (1 == new_elements.size()) && !config.custom_finalize_all_objects()) {
 			
-			return mutatePartialGraphSON(new_elements.stream().findFirst().get())
-					.bind(el -> addGraphSON2Graph(el, tx, element_type))
+			return validateUserElement(new_elements.stream().findFirst().get(), config)
+					.bind(el -> addGraphSON2Graph(key, el, mutable_existing_vertex_store, tx, element_type)) 
 					.validation(
 							fail -> {
-								//TODO log error to DEBUG										
+								logger.ifPresent(l -> l.inefficientLog(Level.DEBUG, 
+										BeanTemplateUtils.clone(fail)
+											.with(BasicMessageBean::source, "GraphBuilderEnrichmentService")
+											.with(BasicMessageBean::command, "system.onObjectBatch")
+										.done()));
+//(keep this here for c/p purposes .. if want to attach an expensive "details" object then could do that by copying the fields across one by one)								
+//								logger.ifPresent(l -> l.log(Level.DEBUG,								
+//										ErrorUtils.lazyBuildMessage(true, () -> "GraphBuilderEnrichmentService", 
+//												() -> "system.onObjectBatch", 
+//												() -> null, 
+//												() -> ErrorUtils.get("MESSAGE", params),
+//												() -> null)
+//												));						
+								
 								return Collections.emptyList();
 							},
 							success -> Arrays.<O>asList(success)
@@ -411,12 +511,26 @@ public class TitanGraphBuildingUtils {
 													.map(j -> Tuples._2T(0L, new BatchRecordUtils.InjectedJsonBatchRecord(j)))
 						);
 
+				merger._2().initializeMerge(element_type);
 				merger._1().onObjectBatch(in_stream, Optional.of(new_elements.size()), Optional.of(key));
-										
-				//TODO
-				// Get the one allowed object
-				// handle deletes looks like need to do a query
-				return null; //TODO
+						
+				return merger._2().getAndResetElementList()
+							.stream()
+							.map(o -> addGraphSON2Graph(key, o, mutable_existing_vertex_store, tx, element_type))
+							.<O>flatMap(v -> v.validation(
+													fail -> {
+														logger.ifPresent(l -> l.inefficientLog(Level.DEBUG, 
+																BeanTemplateUtils.clone(fail)
+																	.with(BasicMessageBean::source, "GraphBuilderEnrichmentService")
+																	.with(BasicMessageBean::command, "system.onObjectBatch")
+																.done()));
+														
+														return Stream.empty(); 
+													},
+													success -> Stream.of(success))
+									)
+							.collect(Collectors.toList())
+							;
 			})
 			.orElse(Collections.emptyList())
 			;
@@ -429,20 +543,41 @@ public class TitanGraphBuildingUtils {
 	
 	// UTILS - LOW LEVEL
 	
-	/**
+	/** Creates a Titan element (vertex/edge) from the (validated) graphSON and adds to the graph
 	 * @param in
 	 * @return
 	 */
-	protected static Validation<BasicMessageBean, JsonNode> mutatePartialGraphSON(final JsonNode in) {
-		return null; //TODO
-	}
-	
-	/**
-	 * @param in
-	 * @return
-	 */
-	protected static <O extends Element> Validation<BasicMessageBean, O> addGraphSON2Graph(final JsonNode in, final TitanTransaction tx, Class<O> element_type) {
-		return null; //TODO
+	@SuppressWarnings("unchecked")
+	protected static <O extends Element> Validation<BasicMessageBean, O> addGraphSON2Graph(
+			final JsonNode key,
+			final JsonNode in, 
+			final Map<JsonNode, Vertex> mutable_existing_vertex_store,
+			final TitanTransaction tx, 
+			Class<O> element_type)
+	{
+		//TODO: add bucket tagging to elements (add a test to misc to see how that cardinality thing works?)
+		//TODO: handle properties
+		
+		if (Vertex.class.isAssignableFrom(element_type))  {
+			final Vertex v = tx.addVertex(in.get(GraphAnnotationBean.label).asText());
+			
+			return Validation.success((O) v);
+		}
+		else { // Edge
+			final JsonNode inV = key.get(GraphAnnotationBean.inV);
+			final JsonNode outV = key.get(GraphAnnotationBean.outV);
+			Optional<Edge> maybe_edge = Optional.ofNullable(mutable_existing_vertex_store.get(outV))
+				.map(out_v -> Tuples._2T(out_v, mutable_existing_vertex_store.get(inV)))
+				.filter(t2 -> null != t2._2())
+				.<Edge>map(t2 -> t2._1().addEdge(in.get(GraphAnnotationBean.label).asText(), t2._2()))
+				;
+				
+			return maybe_edge.<Validation<BasicMessageBean, O>>map(edge -> {
+				return Validation.success((O) edge);
+			})
+			.orElseGet(() -> Validation.fail(ErrorUtils.buildErrorMessage(TitanGraphBuildingUtils.class.getSimpleName(), "addGraphSON2Graph", ErrorUtils.MISSING_VERTEX_FOR_EDGE, inV, outV)))
+			;
+		}
 	}
 	
 	/** Creates a JSON object out of the designated vertex properties

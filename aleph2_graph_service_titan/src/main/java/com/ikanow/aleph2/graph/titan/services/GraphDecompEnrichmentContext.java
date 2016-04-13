@@ -37,9 +37,12 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingServic
 import com.ikanow.aleph2.data_model.objects.data_import.AnnotationBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.GraphSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean.StateDirectoryType;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.graph.titan.utils.TitanGraphBuildingUtils;
 
 import fj.data.Either;
 import fj.data.Validation;
@@ -50,6 +53,12 @@ import fj.data.Validation;
  */
 public class GraphDecompEnrichmentContext implements IEnrichmentModuleContext {
 
+	public GraphDecompEnrichmentContext(final IEnrichmentModuleContext delegate, final GraphSchemaBean config) {
+		_delegate = delegate;
+		_config = config;
+	}	
+	protected final IEnrichmentModuleContext _delegate;
+	protected final GraphSchemaBean _config;
 	private List<ObjectNode> _mutable_vertices = new LinkedList<>();
 	
 	////////////////////////////////////////////////////////////////////////////
@@ -67,7 +76,53 @@ public class GraphDecompEnrichmentContext implements IEnrichmentModuleContext {
 	
 	////////////////////////////////////////////////////////////////////////////
 	
-	// IEnrichmentModuleContext INTERFACE
+	// IEnrichmentModuleContext INTERFACE OVERRIDES
+	
+	/** Builds a graph element
+	 * @param id
+	 * @param mutated_json
+	 * @param annotations
+	 * @param grouping_key
+	 * @return
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitMutableObject(long, com.fasterxml.jackson.databind.node.ObjectNode, java.util.Optional, java.util.Optional)
+	 */
+	public Validation<BasicMessageBean, JsonNode> emitMutableObject(long id,
+			ObjectNode mutated_json, Optional<AnnotationBean> annotations,
+			Optional<JsonNode> grouping_key) {
+		
+		if (annotations.isPresent()) {
+			return Validation.fail(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "emitMutableObject", ErrorUtils.NOT_YET_IMPLEMENTED, "annotations"));
+		}
+		return TitanGraphBuildingUtils.validateUserElement(mutated_json, _config)
+				.bind(success -> {
+					_mutable_vertices.add(mutated_json);
+					return Validation.success((JsonNode) mutated_json);
+				})
+				;
+	}
+	/** Builds a graph element
+	 * @param id
+	 * @param original_json
+	 * @param mutations
+	 * @param annotations
+	 * @param grouping_key
+	 * @return
+	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitImmutableObject(long, com.fasterxml.jackson.databind.JsonNode, java.util.Optional, java.util.Optional, java.util.Optional)
+	 */
+	public Validation<BasicMessageBean, JsonNode> emitImmutableObject(long id,
+			JsonNode original_json, Optional<ObjectNode> mutations,
+			Optional<AnnotationBean> annotations,
+			Optional<JsonNode> grouping_key) {
+		
+		if (mutations.isPresent()) {
+			return Validation.fail(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "emitImmutableObject", ErrorUtils.NOT_YET_IMPLEMENTED, "mutations"));
+		}
+		return emitMutableObject(id, (ObjectNode) original_json, annotations, grouping_key);
+	}
+	
+	////////////////////////////////////////////////////////////////////////////
+	
+	// IEnrichmentModuleContext INTERFACE DELEGATES
 	
 	/**
 	 * @return
@@ -142,49 +197,6 @@ public class GraphDecompEnrichmentContext implements IEnrichmentModuleContext {
 	 */
 	public ObjectNode convertToMutable(JsonNode original) {
 		return _delegate.convertToMutable(original);
-	}
-	/**
-	 * @param id
-	 * @param mutated_json
-	 * @param annotations
-	 * @param grouping_key
-	 * @return
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitMutableObject(long, com.fasterxml.jackson.databind.node.ObjectNode, java.util.Optional, java.util.Optional)
-	 */
-	public Validation<BasicMessageBean, JsonNode> emitMutableObject(long id,
-			ObjectNode mutated_json, Optional<AnnotationBean> annotations,
-			Optional<JsonNode> grouping_key) {
-		
-		//TODO: some basic validation, eg 
-		// - is "type" either edge or vertex
-		// - For vertices:
-		//   - id is set and is consistent with dedup fields
-		//   - "properties" are valid, and don't have illegal permissions
-		// - For edges
-		//   - "properties" are valid, and don't have illegal permissions
-		//   - "inV" and "outV" are set and are consistent with dedup fields
-		
-		_mutable_vertices.add(mutated_json);
-		return Validation.success(mutated_json);
-	}
-	/**
-	 * @param id
-	 * @param original_json
-	 * @param mutations
-	 * @param annotations
-	 * @param grouping_key
-	 * @return
-	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext#emitImmutableObject(long, com.fasterxml.jackson.databind.JsonNode, java.util.Optional, java.util.Optional, java.util.Optional)
-	 */
-	public Validation<BasicMessageBean, JsonNode> emitImmutableObject(long id,
-			JsonNode original_json, Optional<ObjectNode> mutations,
-			Optional<AnnotationBean> annotations,
-			Optional<JsonNode> grouping_key) {
-		
-		//TODO: some basic validation (see above)
-		
-		_mutable_vertices.add((ObjectNode) original_json);
-		return Validation.success(original_json);
 	}
 	/**
 	 * @param id
@@ -299,9 +311,5 @@ public class GraphDecompEnrichmentContext implements IEnrichmentModuleContext {
 	 */
 	public void initializeNewContext(String signature) {
 		_delegate.initializeNewContext(signature);
-	}
-	protected final IEnrichmentModuleContext _delegate;
-	public GraphDecompEnrichmentContext(IEnrichmentModuleContext delegate) {
-		_delegate = delegate;
 	}
 }
