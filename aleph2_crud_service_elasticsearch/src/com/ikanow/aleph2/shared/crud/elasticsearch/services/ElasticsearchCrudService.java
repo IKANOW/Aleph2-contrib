@@ -87,6 +87,7 @@ import com.ikanow.aleph2.data_model.objects.shared.ProjectBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
+import com.ikanow.aleph2.data_model.utils.CrudUtils.SingleQueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.FutureUtils;
 import com.ikanow.aleph2.data_model.utils.JsonUtils;
@@ -617,7 +618,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			final List<String> types = _state.es_context.typeContext().getReadableTypeList();
 			if ((indexes.size() != 1) || (indexes.size() > 1)) {
 				// Multi index request, so use a query (which may not always return the most recent value, depending on index refresh settings/timings)
-				return getObjectBySpec(CrudUtils.anyOf(_state.clazz).when(JsonUtils._ID, id.toString()), field_list, include);			
+				return getObjectBySpec(anyOf(_state.clazz).when(JsonUtils._ID, id.toString()), field_list, include);			
 			}
 			else {
 				
@@ -849,7 +850,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			
 			if ((types.size() != 1) || (indexes.size() > 1)) {
 				// Multi index/type request, so use a query (which may not always return the most recent value, depending on index refresh settings/timings)
-				return deleteObjectBySpec(CrudUtils.anyOf(_state.clazz).when(JsonUtils._ID, id.toString()));			
+				return deleteObjectBySpec(anyOf(_state.clazz).when(JsonUtils._ID, id.toString()));			
 			}
 			else {
 				
@@ -858,8 +859,9 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 							_state.client.prepareDelete()
 								.setIndex(indexes.get(0))
 								.setId(id.toString())
+								.setType(types.get(0)) // (exists by construction - see above if clause)
 							)
-						.map(s -> (1 == types.size()) ? s.setType(types.get(0)) : s)
+						//.map(s -> (1 == types.size()) ? s.setType(types.get(0)) : s) (see above)
 						.get();
 				
 				return ElasticsearchFutureUtils.wrap(srb.execute(), sr -> {
@@ -1432,4 +1434,16 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	public Optional<IDataWriteService.IBatchSubservice<O>> getBatchWriteSubservice() {
 		return (Optional<IDataWriteService.IBatchSubservice<O>>)(Optional<?>)getBatchCrudSubservice();
 	}
+
+	/** Handy util to switch between JSON/bean version of query
+	 * @param clazz
+	 * @return
+	 */
+	@SuppressWarnings("unchecked")
+	private static <T> SingleQueryComponent<T> anyOf(Class<T> clazz) {
+		return JsonNode.class.isAssignableFrom(clazz)
+				? (SingleQueryComponent<T>)CrudUtils.anyOf()
+				: CrudUtils.anyOf(clazz);
+	}
+	
 }
