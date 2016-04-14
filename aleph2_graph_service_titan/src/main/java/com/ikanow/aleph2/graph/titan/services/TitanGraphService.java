@@ -19,11 +19,17 @@ package com.ikanow.aleph2.graph.titan.services;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
+
+import org.apache.tinkerpop.gremlin.structure.Edge;
+import org.apache.tinkerpop.gremlin.structure.Vertex;
+import org.apache.tinkerpop.gremlin.structure.VertexProperty;
 
 import scala.Tuple2;
 
@@ -35,31 +41,45 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.IReadOnlyCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.GraphSchemaBean;
+import com.ikanow.aleph2.data_model.objects.data_import.GraphAnnotationBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.data_model.utils.UuidUtils;
 import com.ikanow.aleph2.graph.titan.utils.ErrorUtils;
+import com.thinkaurelius.titan.core.Cardinality;
+import com.thinkaurelius.titan.core.SchemaViolationException;
 import com.thinkaurelius.titan.core.TitanFactory;
 import com.thinkaurelius.titan.core.TitanGraph;
+import com.thinkaurelius.titan.core.TitanTransaction;
+import com.thinkaurelius.titan.core.schema.Mapping;
+import com.thinkaurelius.titan.core.schema.TitanManagement;
 
 /** Titan implementation of the graph service
  * @author Alex
  *
  */
 public class TitanGraphService implements IGraphService, IGenericDataService {
-
+	public static String GLOBAL_PATH_INDEX_V = "aleph2_path_query_v";
+	public static String GLOBAL_PATH_INDEX_E = "aleph2_path_query_e";
+	public static String GLOBAL_DEFAULT_INDEX = "aleph2_index_query";
+	public static String DEFAULT_TITAN_CONFIG = "aleph2-titan.properties";
+	public static String UUID = "/titan_test_" + UuidUtils.get().getRandomUuid();
 	protected final TitanGraph _titan;
 	
 	/** Guice injector
 =	 */
 	@Inject
 	public TitanGraphService() {
-		//TODO: instead of this line, set up properly from the properties file (or config bean overrides)
-		this(true);
+		final String path = ModuleUtils.getGlobalProperties().local_yarn_config_dir() + "/" + DEFAULT_TITAN_CONFIG;
 		
-		//TODO: Ensure that the _b indices are present (and also name/type?)
+		//TODO (ALEPH-15): or allow various overrides using the standard config bean syntax
+		
+		_titan = TitanFactory.open(path);				
 	}
 	
 	/** Mock titan c'tor to allow it to use the protected _titan property
@@ -68,7 +88,11 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 	protected TitanGraphService(boolean mock) {
 		_titan = TitanFactory.build()
 						.set("storage.backend", "inmemory")
-						// (inmemory storage back end does not support indices)
+						.set("index.search.backend", "elasticsearch")
+						.set("index.search.elasticsearch.local-mode", true)
+						.set("index.search.directory", System.getProperty("java.io.tmpdir") + UUID)
+						.set("index.search.elasticsearch.client-only", false)
+						.set("query.force-index", true)
 					.open();
 	}
 	
@@ -137,11 +161,59 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 			boolean suspended, Set<String> data_services,
 			Set<String> previous_data_services)
 	{
-		//TODO set up indices
-		
-		//TODO: if previously was graph and now isn't then call handleBucketDeletionRequest
-		
-		return CompletableFuture.completedFuture(Collections.emptyList()); 
+		try {
+			if (previous_data_services.contains(DataSchemaBean.GraphSchemaBean.name) && !data_services.contains(DataSchemaBean.GraphSchemaBean.name)) {
+				return handleBucketDeletionRequest(bucket, Optional.empty(), false).thenApply(b -> Arrays.asList(b));
+			}
+			else if (previous_data_services.contains(DataSchemaBean.GraphSchemaBean.name)) {
+	
+				final TitanManagement mgmt = _titan.openManagement();
+				
+				// First off, let's ensure that a2_p is indexed:
+				try {
+					mgmt.buildIndex(GLOBAL_PATH_INDEX_V, Vertex.class)
+						.addKey(mgmt.makePropertyKey(GraphAnnotationBean.a2_p).dataType(String.class).cardinality(Cardinality.SET).make(), Mapping.STRING.asParameter())
+						.buildMixedIndex("search");
+				}
+				catch (SchemaViolationException e) {} // (already indexed, this is fine/expected)
+
+				try {
+					mgmt.buildIndex(GLOBAL_PATH_INDEX_E, Edge.class)
+						.addKey(mgmt.makePropertyKey(GraphAnnotationBean.a2_p).dataType(String.class).make(), Mapping.STRING.asParameter())
+						.buildMixedIndex("search");
+				}
+				catch (SchemaViolationException e) {} // (already indexed, this is fine/expected)
+				
+				// Then check that the global default index is set
+				Optional<List<String>> maybe_dedup_fields = Optionals.of(() -> bucket.data_schema().graph_schema().deduplication_fields());
+				final Collection<BasicMessageBean> ret_val = maybe_dedup_fields.map(dedup_fields -> {
+					//TODO (ALEPH-15): manage the index pointed to by the bucket's signature					
+					return Arrays.asList(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "onPublishOrUpdate", ErrorUtils.NOT_YET_IMPLEMENTED, "custom:deduplication_fields"));			
+				})
+				.orElseGet(() -> {
+					try {
+						mgmt.buildIndex(GLOBAL_DEFAULT_INDEX, Vertex.class)
+							.addKey(mgmt.makePropertyKey(GraphAnnotationBean.name).dataType(String.class).make(), Mapping.TEXTSTRING.asParameter())
+							.addKey(mgmt.makePropertyKey(GraphAnnotationBean.type).dataType(String.class).make(), Mapping.STRING.asParameter())
+							.buildMixedIndex("search");
+					}
+					catch (SchemaViolationException e) {} // (already indexed, this is fine/expected)
+					return Collections.emptyList();
+				});
+				
+				//TODO (ALEPH-15): allow other indexes (etc) via the schema override				
+				mgmt.commit();
+				
+				//TODO (ALEPH-15): want to return once the indexing steps are done?
+				return CompletableFuture.completedFuture(ret_val); 
+			}
+			else {
+				return CompletableFuture.completedFuture(Collections.emptyList()); 			
+			}
+		}
+		catch (Throwable t) {
+			return CompletableFuture.completedFuture(Arrays.asList(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "onPublishOrUpdate", ErrorUtils.getLongForm("{0}", t))));
+		}		
 	}
 
 	/* (non-Javadoc)
@@ -209,7 +281,7 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 	@Override
 	public CompletableFuture<BasicMessageBean> handleAgeOutRequest(
 			DataBucketBean bucket) {
-		// TODO Auto-generated method stub
+		// TODO (ALEPH-15): implement various temporal handling features
 		return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "handleAgeOutRequest", ErrorUtils.NOT_YET_IMPLEMENTED, "handleAgeOutRequest"));
 	}
 
@@ -225,11 +297,49 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "handleBucketDeletionRequest", ErrorUtils.BUFFERS_NOT_SUPPORTED, bucket.full_name()));			
 		}
 		
-		// TODO:		
-		// Traverse all nodes matching _b and remove self from _b
-		// If _b is empty then delete the node
+		//TODO (ALEPH-15): At some point need to be able for services to (optionally) request batch enrichment jobs - eg would be much nicer to fire this off as a distributed job
 		
-		return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "handleBucketDeletionRequest", ErrorUtils.NOT_YET_IMPLEMENTED, "handleBucketDeletionRequest"));
+		return CompletableFuture.runAsync(() -> {
+			
+			try { Thread.sleep(1000L); } catch (Exception e) {} // just check the indexes have refreshed...
+			
+			final TitanTransaction tx = _titan.buildTransaction().start();
+			
+			@SuppressWarnings("unchecked")
+			final Stream<Vertex> vertices_to_check = Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_p, bucket.full_name()).vertices(), false);
+			vertices_to_check.forEach(v -> {
+				{
+					final Iterator<VertexProperty<String>> props = v.<String>properties(GraphAnnotationBean.a2_p);
+					while (props.hasNext()) {
+						final VertexProperty<String> prop = props.next();
+						if (bucket.full_name().equals(prop.value())) {
+							prop.remove();
+						}
+					}
+				}
+				{
+					final Iterator<VertexProperty<String>> props = v.<String>properties(GraphAnnotationBean.a2_p);
+					if (!props.hasNext()) { // can delete this bucket
+						v.remove();
+					}
+				}
+			});
+			@SuppressWarnings("unchecked")
+			final Stream<Edge> edges_to_check = Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_p, bucket.full_name()).edges(), false);
+			edges_to_check.forEach(e -> {
+				e.remove(); // (can only have one edge so delete it)
+			});
+			
+			tx.commit();
+		})
+		.thenApply(__ -> 
+			ErrorUtils.buildSuccessMessage(this.getClass().getSimpleName(), "handleBucketDeletionRequest", "Completed", "handleBucketDeletionRequest")
+					)
+		.exceptionally(t -> 
+			ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "handleBucketDeletionRequest", ErrorUtils.getLongForm("{0}", t), "handleBucketDeletionRequest")
+					)
+		;
+		
 	}
 
 }

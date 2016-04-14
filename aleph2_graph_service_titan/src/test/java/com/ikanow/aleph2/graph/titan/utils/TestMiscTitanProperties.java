@@ -50,9 +50,15 @@ import com.thinkaurelius.titan.core.TitanFactory;
 import com.thinkaurelius.titan.core.TitanGraph;
 import com.thinkaurelius.titan.core.TitanTransaction;
 import com.thinkaurelius.titan.core.TitanVertex;
+import com.thinkaurelius.titan.core.attribute.Cmp;
+import com.thinkaurelius.titan.core.attribute.Contain;
+import com.thinkaurelius.titan.core.attribute.Text;
+import com.thinkaurelius.titan.core.schema.Mapping;
 import com.thinkaurelius.titan.core.schema.SchemaAction;
 import com.thinkaurelius.titan.core.schema.SchemaStatus;
 import com.thinkaurelius.titan.core.schema.TitanManagement;
+
+import fj.Unit;
 
 /**
  * @author Alex
@@ -75,10 +81,10 @@ public class TestMiscTitanProperties {
 		}
 		return baos.toString();
 	}
-	
+
 	@SuppressWarnings("unchecked")
 	@Test
-	public void test_elementProperties() throws IOException, InterruptedException {
+	public void test_elementProperties_edge() throws IOException, InterruptedException {
 		
 		try {
 			FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + "/titan-test"));
@@ -99,7 +105,58 @@ public class TestMiscTitanProperties {
 			// Without ES:
 			//mgmt.makePropertyKey("paths").dataType(String.class).cardinality(Cardinality.SET).make();
 			//with ES as a search back-end, can do SET/LIST
-			mgmt.buildIndex("pathQuery", Vertex.class).addKey(mgmt.makePropertyKey("paths").dataType(String.class).cardinality(Cardinality.SET).make()).buildMixedIndex("search");
+			mgmt.buildIndex("pathQuery", Edge.class)
+				.addKey(mgmt.makePropertyKey("paths").dataType(String.class).make(), Mapping.STRING.asParameter())
+				.buildMixedIndex("search");
+			//mgmt.buildIndex("pathQuery_nonAnalyzed", Vertex.class).addKey(mgmt.makePropertyKey("paths").dataType(String.class).cardinality(Cardinality.SET).make()).buildMixedIndex("search");
+			//.addKey("_b", Mapping.STRING.asParameter()).buildMixedIndex("search")
+			mgmt.commit();
+		}
+		
+		Thread.sleep(1500L); // (mapping not generated in time?)
+		buildSmallGraph(titan);
+		Thread.sleep(3000L); // (mapping not generated in time?)
+		
+		final TitanTransaction tx = titan.buildTransaction().start();
+		
+		Optionals.<TitanEdge>streamOf(tx.query().has("edge_prop", "edge_prop_val").edges(), false).findFirst().map(e -> {			
+			System.out.println("FOUND EDGE");
+			return Unit.unit();
+		})
+		.orElseGet(() -> {
+			System.out.println("NOT FOUND");
+			return Unit.unit();
+		});
+		
+	}	
+	
+	@SuppressWarnings("unchecked")
+	@Test
+	public void test_elementProperties_vertex() throws IOException, InterruptedException {
+		
+		try {
+			FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + "/titan-test"));
+		}
+		catch (Exception e) {}
+		
+		TitanGraph titan = TitanFactory.build()
+				.set("storage.backend", "inmemory")
+				.set("index.search.backend", "elasticsearch")
+				.set("index.search.elasticsearch.local-mode", true)
+				.set("index.search.directory", System.getProperty("java.io.tmpdir") + "/titan-test")
+				.set("index.search.elasticsearch.client-only", false)
+				//.set("query.force-index", true) //(disabled for testing)
+			.open();
+		
+		{
+			TitanManagement mgmt = titan.openManagement();
+			// Without ES:
+			//mgmt.makePropertyKey("paths").dataType(String.class).cardinality(Cardinality.SET).make();
+			//with ES as a search back-end, can do SET/LIST
+			mgmt.buildIndex("pathQuery", Vertex.class)
+				.addKey(mgmt.makePropertyKey("paths").dataType(String.class).cardinality(Cardinality.SET).make(), Mapping.STRING.asParameter())
+				.buildMixedIndex("search");
+			//mgmt.buildIndex("pathQuery_nonAnalyzed", Vertex.class).addKey(mgmt.makePropertyKey("paths").dataType(String.class).cardinality(Cardinality.SET).make()).buildMixedIndex("search");
 			//.addKey("_b", Mapping.STRING.asParameter()).buildMixedIndex("search")
 			mgmt.commit();
 		}
@@ -112,6 +169,7 @@ public class TestMiscTitanProperties {
 		}
 		catch (SchemaViolationException e) {} // (can but throws this exception, which is fine)
 		
+		Thread.sleep(1500L); // (mapping not generated in time?)
 		buildSmallGraph(titan);
 		
 		final TitanTransaction tx = titan.buildTransaction().start();
@@ -143,18 +201,34 @@ public class TestMiscTitanProperties {
 		final TitanVertex v2 = Optionals.<TitanVertex>streamOf(titan.query().has("type", "rabbit").vertices(), false).findFirst().get();		
 		
 		// Use "properties" with a single key to get the list of buckets
-		System.out.println("paths = " + Optionals.streamOf(v2.properties("_b"), false).map(vp -> vp.value().toString()).collect(Collectors.joining(";")));
+		System.out.println("paths = " + Optionals.streamOf(v2.properties("paths"), false).map(vp -> vp.value().toString()).collect(Collectors.joining(";")));
 		
 		// Double check a query on _b works
-		assertEquals(1L, Optionals.streamOf(titan.query().has("paths", "cat").vertices(), false).count());
+		assertEquals(0L, Optionals.streamOf(titan.query().has("paths", "cat").vertices(), false).count());//all these queries 
+		System.out.println("ES queries in 3s...:");
 		Thread.sleep(3000L); // (wait for ES to complete)
-		//assertEquals(1L, Optionals.streamOf(titan.indexQuery("pathQuery", "v.paths:cat").vertices(), false).count());
+		assertEquals(1L, Optionals.streamOf(titan.indexQuery("pathQuery", "v.paths:cat").vertices(), false).count());
 		assertEquals(1L, Optionals.streamOf(titan.indexQuery("pathQuery", "v.paths:(rabbit cat)").vertices(), false).count());
+		assertEquals(1L, Optionals.streamOf(titan.query().has("paths", Text.CONTAINS, "cat").vertices(), false).count()); 		
+		final TitanTransaction tx2 = titan.buildTransaction().start();
+		//these all intermittently fail?! (well consistently either work or fail for some period, v unclear why)
+		// but starting from a transaction instead of titan as below seems to fix this, so something in titan must not be getting updated
+		assertEquals(1L, Optionals.streamOf(tx2.query().has("paths", "cat").vertices(), false).count());
+		assertEquals(1L, Optionals.streamOf(tx2.query().has("paths", Cmp.EQUAL, "cat").vertices(), false).count()); // note this doesn't use the ES query annoyingly
+		assertEquals(1L, Optionals.streamOf(tx2.query().has("paths", Contain.IN, Arrays.asList("cat")).vertices(), false).count()); 		
+		assertEquals(1L, Optionals.streamOf(tx2.query().has("paths", Contain.IN, Arrays.asList("rabbit", "cat")).vertices(), false).count()); 		
+		tx2.commit();
 		
-		//TODO: what about a joint property + bucket query?
-		//TODO: need to figure out how to handle analyzed vs non-analyzed, I think it's TEXT vs STRING?
+		// need to figure out how to handle analyzed vs non-analyzed, I think it's TEXT vs STRING?
 		// https://groups.google.com/forum/#!topic/aureliusgraphs/VGv-RJwt8zI
+		// actual docs: http://s3.thinkaurelius.com/docs/titan/1.0.0/index-parameters.html
 		// graph.makeKey("name").dataType(String.class).indexed("search", Element.class, new Parameter[]{Parameter.of(Mapping.MAPPING_PREFIX,Mapping.STRING)}) .single().make();
+		
+		// Can you do a simple query on a list type (ie single cardinality)? Nope only over the entire list
+		{
+			assertEquals(0L, Optionals.streamOf(titan.query().has("set", "val1").vertices(), false).count());			
+			assertEquals(1L, Optionals.streamOf(titan.query().has("set", Arrays.asList("val1", "val2").toArray()).vertices(), false).count());			
+		}
 	}
 	
 	

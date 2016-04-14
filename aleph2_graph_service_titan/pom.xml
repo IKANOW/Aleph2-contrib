@@ -123,11 +123,28 @@
 			<version>${aleph2.version}</version>
 			<scope>${aleph2.scope}</scope>
 		</dependency>
+		<dependency>
+			<groupId>com.ikanow.aleph2</groupId>
+			<artifactId>aleph2_crud_service_elasticsearch</artifactId>
+			<version>${aleph2.version}</version>
+			<scope>${aleph2.scope}</scope>
+		</dependency>
 		<!-- Other external dependencies here -->
 		<dependency>
 			<groupId>com.thinkaurelius.titan</groupId>
 			<artifactId>titan-core</artifactId>
 			<version>1.0.0</version>
+		</dependency>
+		<dependency>
+			<groupId>com.thinkaurelius.titan</groupId>
+			<artifactId>titan-es</artifactId>
+			<version>1.0.0</version>
+			<exclusions>
+				<exclusion>
+					<artifactId>elasticsearch</artifactId>
+					<groupId>org.elasticsearch</groupId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 	</dependencies>
 	<!-- Test dependencies -->
@@ -149,11 +166,6 @@
 					<artifactId>junit</artifactId>
 					<version>4.12</version>
 					<scope>test</scope>
-				</dependency>
-				<dependency>
-					<groupId>com.thinkaurelius.titan</groupId>
-					<artifactId>titan-es</artifactId>
-					<version>1.0.0</version>
 				</dependency>
 			</dependencies>
 		</profile>

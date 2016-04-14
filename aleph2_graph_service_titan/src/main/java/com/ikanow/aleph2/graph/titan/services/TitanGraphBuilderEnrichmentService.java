@@ -67,6 +67,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 	protected final SetOnce<IEnrichmentBatchModule> _custom_graph_merge_handler = new SetOnce<>();
 	protected final SetOnce<GraphMergeEnrichmentContext> _custom_graph_merge_context = new SetOnce<>();
 	protected final SetOnce<GraphSchemaBean> _config = new SetOnce<>();
+	protected final SetOnce<DataBucketBean> _bucket = new SetOnce<>();
 		
 	protected final SetOnce<IServiceContext> _service_context = new SetOnce<>();
 	protected final SetOnce<Tuple2<String, ISecurityService>> _security_context = new SetOnce<>();
@@ -96,6 +97,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 		_service_context.set(context.getServiceContext());
 		_logger.set(context.getLogger(Optional.of(bucket)));
 		_security_context.set(Tuples._2T(bucket.owner_id(), _service_context.get().getSecurityService()));
+		_bucket.set(bucket);
 		
 		_service_context.get()
 			.getService(IGraphService.class, Optional.ofNullable(graph_schema.service_name()))
@@ -190,8 +192,10 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				TitanGraphBuildingUtils.buildGraph_handleMerge(mutable_tx, _config.get(), _security_context.get(), _logger.optional(), 
 						_custom_graph_merge_handler.optional().map(handler -> Tuples._2T(handler, _custom_graph_merge_context.get()))
 						, 
+						_bucket.get(),
 						TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(mutable_tx, _config.get(), 
 								_security_context.get(), _logger.get(), 
+								_bucket.get(),
 								copy_vertices_and_edges
 						));
 				

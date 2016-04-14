@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,6 +35,7 @@ import org.apache.tinkerpop.gremlin.structure.Edge;
 import org.apache.tinkerpop.gremlin.structure.Element;
 import org.apache.tinkerpop.gremlin.structure.Property;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
+import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality;
 import org.apache.tinkerpop.gremlin.structure.io.IoCore;
 
 import scala.Tuple2;
@@ -50,10 +52,13 @@ import com.ikanow.aleph2.core.shared.utils.BatchRecordUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.GraphAnnotationBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.GraphSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
@@ -62,6 +67,7 @@ import com.ikanow.aleph2.graph.titan.services.GraphDecompEnrichmentContext;
 import com.ikanow.aleph2.graph.titan.services.GraphMergeEnrichmentContext;
 import com.thinkaurelius.titan.core.TitanGraphQuery;
 import com.thinkaurelius.titan.core.TitanTransaction;
+import com.thinkaurelius.titan.core.TitanVertex;
 import com.thinkaurelius.titan.core.attribute.Contain;
 
 import fj.data.Validation;
@@ -92,10 +98,33 @@ public class TitanGraphBuildingUtils {
 
 		return validateMergedElement(o, config).bind(success -> {
 
+			final JsonNode type = o.get(GraphAnnotationBean.type); // (exists and is valid by construction of validateMergedElement)
 			
+			final Stream<String> keys_to_check = Patterns.match(type.asText()).<Stream<String>>andReturn()
+					.when(t -> GraphAnnotationBean.ElementType.edge.toString().equals(t), __ -> Stream.of(GraphAnnotationBean.inV, GraphAnnotationBean.outV))
+					.otherwise(__ -> Stream.of(GraphAnnotationBean.id))
+					;
 			
-			//TODO: 
-			return null;
+			final Optional<BasicMessageBean> first_error = keys_to_check.<BasicMessageBean>map(k -> {
+				final JsonNode key = o.get(k);
+				
+				if (null == key) {
+					return ErrorUtils.buildErrorMessage("GraphBuilderEnrichmentService", "system.onObjectBatch", ErrorUtils.MISSING_OR_BADLY_FORMED_FIELD, k, "missing");					
+				}
+				if (!key.isLong() && key.isObject()) {
+					return ErrorUtils.buildErrorMessage("GraphBuilderEnrichmentService", "system.onObjectBatch", ErrorUtils.MISSING_OR_BADLY_FORMED_FIELD, k, "not_long_or_object");					
+				}
+				if (key.isObject()) { // user specified id, check its format is valid					
+					if (!config.deduplication_fields().stream().allMatch(f -> key.has(f))) {
+						return ErrorUtils.buildErrorMessage("GraphBuilderEnrichmentService", "system.onObjectBatch", ErrorUtils.MISSING_OR_BADLY_FORMED_FIELD, k, "missing_key_subfield");
+					}
+				}
+				return null;
+			})
+			.filter(b -> null != b)
+			.findFirst();
+			
+			return first_error.<Validation<BasicMessageBean, ObjectNode>>map(b -> Validation.fail(b)).orElseGet(() -> Validation.success(o));
 		});
 	}
 	
@@ -107,7 +136,7 @@ public class TitanGraphBuildingUtils {
 		// Some basic validation: 
 		// - is "type" either edge or vertex
 		// - "label" is set
-		// - properties are valid (TODO: and don't have illegal permissions)
+		// - properties are valid 
 		// - (for edges _don't_ to validate inV/outV because all that's already been chosen and can't be chosen at this point .. ditto vertices and ids)
 
 		// Type is set to one of edge/vertex
@@ -119,7 +148,7 @@ public class TitanGraphBuildingUtils {
 			else if (!type.isTextual()) {
 				return Validation.fail(ErrorUtils.buildErrorMessage("GraphBuilderEnrichmentService", "system.onObjectBatch", ErrorUtils.MISSING_OR_BADLY_FORMED_FIELD, GraphAnnotationBean.type, "not_text"));			
 			}
-			else if (!"edge".equals(type.asText()) && !"vertex".equals(type.asText())) {
+			else if (!GraphAnnotationBean.ElementType.edge.toString().equals(type.asText()) && !GraphAnnotationBean.ElementType.vertex.toString().equals(type.asText())) {
 				return Validation.fail(ErrorUtils.buildErrorMessage("GraphBuilderEnrichmentService", "system.onObjectBatch", ErrorUtils.MISSING_OR_BADLY_FORMED_FIELD, GraphAnnotationBean.type, "not_edge_or_vertex"));						
 			}
 		}
@@ -137,14 +166,14 @@ public class TitanGraphBuildingUtils {
 		
 		final JsonNode properties = o.get(GraphAnnotationBean.properties);
 		if (null != properties) { // (properties is optional)
-			//TODO: sort out properties later
+			//TODO (ALEPH-15): sort out properties later (TODO including permissions, or does that happen elsewhere?)
 			// - Check if is an object
 			// - Loop over fields:
 			//   - check each value is an array or an object (replace with a nested array if an object)
 			//     - (if it's atomic, convert into an object of the right sort?)
 			//   - for each value in the array, check it's an object (see above mutation step)
 			//   - check it's value is one of the supported types
-			//   - if it has a properties field, check it is an object of string/string (TODO: what about multiple buckets? ie can i make it an array, or do I just need to make them ,-sep or something)
+			//   - if it has a properties field, check it is an object of string/string
 			//   - (Will just discard _b so can ignore): TODO: sort out setting it elsewhere
 			
 			if (!properties.isObject()) {
@@ -198,6 +227,7 @@ public class TitanGraphBuildingUtils {
 			final GraphSchemaBean config,
 			final Tuple2<String, ISecurityService> security_service,
 			final IBucketLogger logger,
+			final DataBucketBean bucket,
 			final Stream<ObjectNode> vertices_and_edges)
 	{
 		
@@ -205,27 +235,34 @@ public class TitanGraphBuildingUtils {
 		
 		final Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> nodes_to_get = groupNewEdgesAndVertices(config, vertices_and_edges);	
 		
-		final Map<String, Set<Object>> dedup_query_builder = 		
-				nodes_to_get.keySet().stream().flatMap(j -> Optionals.streamOf(j.fields(), false))
-					.collect(Collectors.groupingBy(kv -> kv.getKey(), Collectors.mapping(kv -> jsonNodeToObject(kv.getValue()), Collectors.toSet())));
-					;
+		final Stream<TitanVertex> dups = Lambdas.get(() -> {
+			if (BucketUtils.isTestBucket(bucket)) {
+				return Stream.<TitanVertex>empty();
+			}
+			else {
+				final Map<String, Set<Object>> dedup_query_builder = 		
+						nodes_to_get.keySet().stream().flatMap(j -> Optionals.streamOf(j.fields(), false))
+							.collect(Collectors.groupingBy(kv -> kv.getKey(), Collectors.mapping(kv -> jsonNodeToObject(kv.getValue()), Collectors.toSet())));
+							;		
+				
+				final TitanGraphQuery<?> matching_nodes_query = dedup_query_builder.entrySet().stream()
+					.reduce(tx.query()
+							,
+							(query, kv) -> query.has(kv.getKey(), Contain.IN, kv.getValue())
+							,
+							(query1, query2) -> query1 // (can't occur
+							);		
+				
+				return Optionals.streamOf(matching_nodes_query.vertices(), false);
+			}
+		});
 		
-		
-		final TitanGraphQuery<?> matching_nodes_query = dedup_query_builder.entrySet().stream()
-			.reduce(tx.query()
-					,
-					(query, kv) -> query.has(kv.getKey(), Contain.IN, kv.getValue())
-					,
-					(query1, query2) -> query1 // (can't occur
-					);		
-		
-		// Remove false positives and group by key
-		
-		
-		final Map<JsonNode, List<Tuple2<Vertex, JsonNode>>> grouped_vertices = 
-				Optionals.streamOf(matching_nodes_query.vertices(), false)
+		// Remove false positives, un-authorized nodes, and group by key
+				
+		final Map<JsonNode, List<Tuple2<Vertex, JsonNode>>> grouped_vertices = dups 
 					.map(vertex -> Tuples._2T((Vertex) vertex, getElementProperties(vertex, config.deduplication_fields())))
 					.filter(vertex_key -> nodes_to_get.keySet().contains(vertex_key._2())) // (remove false positives)
+					.filter(vertex_key -> isAllowed(security_service, vertex_key._1())) // (remove un-authorized nodes)
 					.collect(Collectors.groupingBy(t2 -> (JsonNode) t2._2())) // (group by key)
 					;
 		
@@ -251,6 +288,7 @@ public class TitanGraphBuildingUtils {
 				final Tuple2<String, ISecurityService> security_service,
 				final Optional<IBucketLogger> logger,
 				final Optional<Tuple2<IEnrichmentBatchModule, GraphMergeEnrichmentContext>> maybe_merger,
+				final DataBucketBean bucket,
 				final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> mergeable
 			)
 	{	
@@ -260,16 +298,8 @@ public class TitanGraphBuildingUtils {
 		
 		mergeable.forEach(t4 -> { 
 
-			//TODO: handling properties
-			
-			//TODO: also if in test mode then don't allow any link merging, everything stays completely standalone
-			
-			//TODO X) ok one thing I haven't considered here is the bucket situation:
-			// ... filter any buckets over which the user does not have read permission
-			// if the user attempts to modify a bucket over which he does not have write permission then ..? (TODO: silently fail? or create a new edge in that case)
+			//TODO (ALEPH-15): handling properties: add new properties and:
 			// remove any properties of any vertex/edge over which the user does not have read permission .. and then re-combine later
-			// the user can manipulate the _bs, but can only _add_, never remove  
-			// And then also add the bucket path to _b everywhere					
 			
 			final ObjectNode key = t4._1();
 			final List<ObjectNode> vertices = t4._2();
@@ -286,7 +316,7 @@ public class TitanGraphBuildingUtils {
 			// 1.2.b) copy any properties from the original objects into the winner and remove any so-desired properties
 
 			final Optional<Vertex> maybe_vertex_winner = 
-					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Vertex.class, key, vertices, existing_vertices, mutable_existing_vertex_store)
+					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Vertex.class, bucket.full_name(), key, vertices, existing_vertices, mutable_existing_vertex_store)
 						.stream()
 						.findFirst()
 						;
@@ -323,23 +353,25 @@ public class TitanGraphBuildingUtils {
 					final Function<String, Map<Object, Edge>> getEdges = in_or_out -> 
 						Optionals.ofNullable(mutable_existing_edge_store.get(kv.getKey().get(in_or_out)))
 							.stream()
+							.filter(e -> isAllowed(security_service, e)) // (check authorized)
 							.collect(Collectors.toMap(e -> e.id(), e -> e))
 							;
 					final Map<Object, Edge> in_existing = getEdges.apply(GraphAnnotationBean.inV);
 					final Map<Object, Edge> out_existing = getEdges.apply(GraphAnnotationBean.outV);
 					
-					final List<Tuple2<Edge, JsonNode>> existing_edges = 
-							Stream.of(
-									Maps.difference(in_existing, out_existing).entriesInCommon().values().stream(),
-									in_existing.values().stream().filter(e -> e.inVertex() == e.outVertex()) // (handle the case where an edge starts/ends at the same node)
-							)		
-							.flatMap(__ -> __)
-							.map(e -> Tuples._2T(e, getElementProperties(e, config.deduplication_fields())))
-							.collect(Collectors.toList())
-							;
+					final List<Tuple2<Edge, JsonNode>> existing_edges = BucketUtils.isTestBucket(bucket)
+							? Collections.emptyList()
+							: Stream.of(
+										Maps.difference(in_existing, out_existing).entriesInCommon().values().stream(),
+										in_existing.values().stream().filter(e -> e.inVertex() == e.outVertex()) // (handle the case where an edge starts/ends at the same node)
+								)		
+								.flatMap(__ -> __)
+								.map(e -> Tuples._2T(e, getElementProperties(e, config.deduplication_fields())))
+								.collect(Collectors.toList())
+								;
 					
 					//final List<Edge> finalized_edges =
-					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Edge.class, kv.getKey(), kv.getValue(), existing_edges, mutable_existing_vertex_store);
+					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Edge.class, bucket.full_name(), kv.getKey(), kv.getValue(), existing_edges, mutable_existing_vertex_store);
 				});
 			});
 				
@@ -367,13 +399,13 @@ public class TitanGraphBuildingUtils {
 					.<Tuple3<ObjectNode, ObjectNode, Boolean>>flatMap(o -> {
 						final JsonNode type = o.get(GraphAnnotationBean.type);
 						if ((null == type) || !type.isTextual()) return Stream.empty();
-						if ("edge".equals(type.asText())) {
+						if (GraphAnnotationBean.ElementType.edge.toString().equals(type.asText())) {
 							// Grab both edges from both ends:
 							return Stream.concat(
 									Optional.ofNullable(type.get(GraphAnnotationBean.inV)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, false))).orElse(Stream.empty()), 
 									Optional.ofNullable(type.get(GraphAnnotationBean.outV)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, false))).orElse(Stream.empty()));
 						}
-						else if ("vertex".equals(type.asText())) {
+						else if (GraphAnnotationBean.ElementType.vertex.toString().equals(type.asText())) {
 							return Optional.ofNullable(type.get(GraphAnnotationBean.id)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, true))).orElse(Stream.empty());
 						}
 						else return Stream.empty();
@@ -468,6 +500,7 @@ public class TitanGraphBuildingUtils {
 			final ObjectMapper titan_mapper
 			,
 			final Class<O> element_type,
+			final String bucket_path,
 			final ObjectNode key,
 			final Collection<ObjectNode> new_elements,
 			final Collection<Tuple2<O, JsonNode>> existing_elements,
@@ -477,7 +510,7 @@ public class TitanGraphBuildingUtils {
 		if (existing_elements.isEmpty() && (1 == new_elements.size()) && !config.custom_finalize_all_objects()) {
 			
 			return validateUserElement(new_elements.stream().findFirst().get(), config)
-					.bind(el -> addGraphSON2Graph(key, el, mutable_existing_vertex_store, tx, element_type)) 
+					.bind(el -> addGraphSON2Graph(bucket_path, key, el, mutable_existing_vertex_store, tx, element_type)) 
 					.validation(
 							fail -> {
 								logger.ifPresent(l -> l.inefficientLog(Level.DEBUG, 
@@ -516,7 +549,7 @@ public class TitanGraphBuildingUtils {
 						
 				return merger._2().getAndResetElementList()
 							.stream()
-							.map(o -> addGraphSON2Graph(key, o, mutable_existing_vertex_store, tx, element_type))
+							.map(o -> addGraphSON2Graph(bucket_path, key, o, mutable_existing_vertex_store, tx, element_type))
 							.<O>flatMap(v -> v.validation(
 													fail -> {
 														logger.ifPresent(l -> l.inefficientLog(Level.DEBUG, 
@@ -549,17 +582,17 @@ public class TitanGraphBuildingUtils {
 	 */
 	@SuppressWarnings("unchecked")
 	protected static <O extends Element> Validation<BasicMessageBean, O> addGraphSON2Graph(
+			final String bucket_path,
 			final JsonNode key,
 			final JsonNode in, 
 			final Map<JsonNode, Vertex> mutable_existing_vertex_store,
 			final TitanTransaction tx, 
 			Class<O> element_type)
 	{
-		//TODO: add bucket tagging to elements (add a test to misc to see how that cardinality thing works?)
-		//TODO: handle properties
-		
 		if (Vertex.class.isAssignableFrom(element_type))  {
 			final Vertex v = tx.addVertex(in.get(GraphAnnotationBean.label).asText());
+			
+			v.property(Cardinality.set, GraphAnnotationBean.a2_p, bucket_path);
 			
 			return Validation.success((O) v);
 		}
@@ -571,8 +604,17 @@ public class TitanGraphBuildingUtils {
 				.filter(t2 -> null != t2._2())
 				.<Edge>map(t2 -> t2._1().addEdge(in.get(GraphAnnotationBean.label).asText(), t2._2()))
 				;
-				
+
 			return maybe_edge.<Validation<BasicMessageBean, O>>map(edge -> {
+				
+				// OK edge permissions are a bit less pleasant because it only supports a cardinality of 1 .. the user has to either
+				// "piggy back" off an existing edge (but in that case it can be deleted if that bucket is deleted, edge queries might not locate it), 
+				// or create their own (but can't just tag an existing one)
+				// TODO (ALEPH-15): maybe later on can support space-separated lists up to a certain size together with Lucene indexing? (Or add a different property name?)
+				final Iterator<Property<String>> bucket_prop = edge.<String>properties(GraphAnnotationBean.a2_p);
+				if (!bucket_prop.hasNext()) {
+					edge.property(GraphAnnotationBean.a2_p, bucket_path);
+				}				
 				return Validation.success((O) edge);
 			})
 			.orElseGet(() -> Validation.fail(ErrorUtils.buildErrorMessage(TitanGraphBuildingUtils.class.getSimpleName(), "addGraphSON2Graph", ErrorUtils.MISSING_VERTEX_FOR_EDGE, inV, outV)))
@@ -636,6 +678,27 @@ public class TitanGraphBuildingUtils {
 		if (j.isObject()) return (ObjectNode)j;
 		else return (ObjectNode) _mapper.createObjectNode().put(config.deduplication_fields().stream().findFirst().get(), j);
 	}
+	
+	/** Checks is a user is allowed to connect to this node
+	 * @param security_service
+	 * @param element
+	 * @return
+	 */
+	protected static boolean isAllowed(final Tuple2<String, ISecurityService> security_service, final Element element) {
+		
+		return Optionals.streamOf(element.<String>properties(GraphAnnotationBean.a2_p), false)
+					.anyMatch(p -> security_service._2().isUserPermitted(security_service._1(), buildPermission(p.value())));
+	}
+	
+	/** See https://github.com/IKANOW/Aleph2/wiki/(Detailed-Design)-Aleph2-security-roles-and-permissions#built-in-permissions---core
+	 * @return
+	 */
+	protected static String buildPermission(String bucket_path) {
+		return ROLE_PREFIX + bucket_path.replace("/", ":"); 
+				
+	}
+	
+	private static String ROLE_PREFIX = DataBucketBean.class.getSimpleName() + ":" + ISecurityService.ACTION_READ_WRITE;
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////
