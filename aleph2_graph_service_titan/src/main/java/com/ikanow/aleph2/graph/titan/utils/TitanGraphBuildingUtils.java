@@ -111,9 +111,10 @@ public class TitanGraphBuildingUtils {
 				if (null == key) {
 					return ErrorUtils.buildErrorMessage("GraphBuilderEnrichmentService", "system.onObjectBatch", ErrorUtils.MISSING_OR_BADLY_FORMED_FIELD, k, "missing");					
 				}
-				if (!key.isLong() && key.isObject()) {
+				else if (!key.isIntegralNumber() && !key.isObject()) {
 					return ErrorUtils.buildErrorMessage("GraphBuilderEnrichmentService", "system.onObjectBatch", ErrorUtils.MISSING_OR_BADLY_FORMED_FIELD, k, "not_long_or_object");					
 				}
+				
 				if (key.isObject()) { // user specified id, check its format is valid					
 					if (!config.deduplication_fields().stream().allMatch(f -> key.has(f))) {
 						return ErrorUtils.buildErrorMessage("GraphBuilderEnrichmentService", "system.onObjectBatch", ErrorUtils.MISSING_OR_BADLY_FORMED_FIELD, k, "missing_key_subfield");
@@ -245,12 +246,17 @@ public class TitanGraphBuildingUtils {
 							.collect(Collectors.groupingBy(kv -> kv.getKey(), Collectors.mapping(kv -> jsonNodeToObject(kv.getValue()), Collectors.toSet())));
 							;		
 				
+				//TODO (ALEPH-15): would be nice to support custom "fuzzier" queries, since we're doing a dedup stage to pick the actual winning vertices anyway
+				// that way you could say query on tokenized-version of name and get anyone with the same first or last name (say) and then pick the most likely
+				// one based on the graph ... of course you'd probably want the full graph for that, so it might end up being better served as a "self-analytic" to do is part
+				// of post processing?
+							
 				final TitanGraphQuery<?> matching_nodes_query = dedup_query_builder.entrySet().stream()
 					.reduce(tx.query()
 							,
 							(query, kv) -> query.has(kv.getKey(), Contain.IN, kv.getValue())
 							,
-							(query1, query2) -> query1 // (can't occur
+							(query1, query2) -> query1 // (can't occur since reduce not parallel)
 							);		
 				
 				return Optionals.streamOf(matching_nodes_query.vertices(), false);
@@ -353,6 +359,7 @@ public class TitanGraphBuildingUtils {
 					final Function<String, Map<Object, Edge>> getEdges = in_or_out -> 
 						Optionals.ofNullable(mutable_existing_edge_store.get(kv.getKey().get(in_or_out)))
 							.stream()
+							.filter(e -> labelMatches(kv.getKey(), e)) //TODO (ALEPH-15): as for vertices, might be nice to support some sort of fuzziness
 							.filter(e -> isAllowed(security_service, e)) // (check authorized)
 							.collect(Collectors.toMap(e -> e.id(), e -> e))
 							;
@@ -455,7 +462,7 @@ public class TitanGraphBuildingUtils {
 				mutable_edge.put((matching_key == in_key) ? GraphAnnotationBean.inVLabel : GraphAnnotationBean.outVLabel, key); // (internal, see below)
 			}
 			
-			return ((null == off_key) || off_key.isLong());
+			return ((null == off_key) || off_key.isIntegralNumber());
 		})
 		.collect(Collectors.groupingBy(mutable_edge -> {
 			// 1.3.2) Once we've tidied up the edge, check if we're ready for that edge to move to stage 2):					
@@ -570,12 +577,6 @@ public class TitanGraphBuildingUtils {
 		}
 	}
 	
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////
-	////////////////////////////////
-	
-	// UTILS - LOW LEVEL
-	
 	/** Creates a Titan element (vertex/edge) from the (validated) graphSON and adds to the graph
 	 * @param in
 	 * @return
@@ -620,7 +621,13 @@ public class TitanGraphBuildingUtils {
 			.orElseGet(() -> Validation.fail(ErrorUtils.buildErrorMessage(TitanGraphBuildingUtils.class.getSimpleName(), "addGraphSON2Graph", ErrorUtils.MISSING_VERTEX_FOR_EDGE, inV, outV)))
 			;
 		}
-	}
+	}	
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////
+	////////////////////////////////
+	
+	// UTILS - LOW LEVEL
 	
 	/** Creates a JSON object out of the designated vertex properties
 	 * @param el
@@ -662,8 +669,7 @@ public class TitanGraphBuildingUtils {
 		return Patterns.match().<Object>andReturn()
 			.when(() -> j.isTextual(), () -> j.asText())
 			.when(() -> j.isDouble(), () -> j.asDouble())
-			.when(() -> j.isLong(), () -> j.asLong())
-			.when(() -> j.isInt(), () -> j.asInt())
+			.when(() -> j.isIntegralNumber(), () -> j.asLong())
 			.when(() -> j.isBoolean(), () -> j.asBoolean())
 			.otherwise(__ -> null)
 			;
@@ -674,9 +680,24 @@ public class TitanGraphBuildingUtils {
 	 * @param config
 	 * @return
 	 */
-	private static ObjectNode convertToObject(final JsonNode j, final GraphSchemaBean config) {
-		if (j.isObject()) return (ObjectNode)j;
-		else return (ObjectNode) _mapper.createObjectNode().put(config.deduplication_fields().stream().findFirst().get(), j);
+	protected static ObjectNode convertToObject(final JsonNode j, final GraphSchemaBean config) {
+		if (j.isObject()) {
+			return (ObjectNode)j;
+		}
+		else {
+			final ObjectNode o = _mapper.createObjectNode();
+			o.set(config.deduplication_fields().stream().findFirst().get(), j);			
+			return (ObjectNode) o;
+		}
+	}
+	
+	/** Checks a Gremlin vertex or edge label against a GraphSON one
+	 * @param user
+	 * @param candidate
+	 * @return
+	 */
+	protected static boolean labelMatches(final ObjectNode user, final Element candidate) {
+		return candidate.label().equals(user.get(GraphAnnotationBean.label).asText()); // (exists by construction)
 	}
 	
 	/** Checks is a user is allowed to connect to this node
@@ -686,8 +707,9 @@ public class TitanGraphBuildingUtils {
 	 */
 	protected static boolean isAllowed(final Tuple2<String, ISecurityService> security_service, final Element element) {
 		
-		return Optionals.streamOf(element.<String>properties(GraphAnnotationBean.a2_p), false)
-					.anyMatch(p -> security_service._2().isUserPermitted(security_service._1(), buildPermission(p.value())));
+		// (odd expression because allMatch/anyMatch have the wrong behavior when the stream is empty, ie want it to allow in those cases, no security applied)
+		return !Optionals.streamOf(element.<String>properties(GraphAnnotationBean.a2_p), false)
+					.filter(p -> !security_service._2().isUserPermitted(security_service._1(), buildPermission(p.value()))).findFirst().isPresent();
 	}
 	
 	/** See https://github.com/IKANOW/Aleph2/wiki/(Detailed-Design)-Aleph2-security-roles-and-permissions#built-in-permissions---core

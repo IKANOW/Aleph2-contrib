@@ -23,18 +23,22 @@ import java.util.stream.Stream;
 import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
+import com.ikanow.aleph2.data_model.objects.data_import.GraphAnnotationBean;
+import com.ikanow.aleph2.data_model.utils.SetOnce;
 
-/**
+/** Very simple code that "merges" matching vertices and edges (just picks the first one it sees)
  * @author Alex
- *
  */
 public class SimpleGraphMergeService implements IEnrichmentBatchModule {
 
+	protected SetOnce<IEnrichmentModuleContext> _context = new SetOnce<>(); 
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule#onStageInitialize(com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean, scala.Tuple2, java.util.Optional)
 	 */
@@ -43,8 +47,7 @@ public class SimpleGraphMergeService implements IEnrichmentBatchModule {
 			DataBucketBean bucket, EnrichmentControlMetadataBean control,
 			Tuple2<ProcessingStage, ProcessingStage> previous_next,
 			Optional<List<String>> next_grouping_fields) {
-		// TODO Auto-generated method stub
-		
+		_context.set(context);
 	}
 
 	/* (non-Javadoc)
@@ -53,7 +56,26 @@ public class SimpleGraphMergeService implements IEnrichmentBatchModule {
 	@Override
 	public void onObjectBatch(Stream<Tuple2<Long, IBatchRecord>> batch,
 			Optional<Integer> batch_size, Optional<JsonNode> grouping_key) {
-		// TODO Auto-generated method stub
+		batch
+			.filter(t2 -> t2._2().injected()) // (ignore user edges and vertices)
+			.filter(t2 -> {
+				final ObjectNode o = (ObjectNode) t2._2().getJson();
+				return Optional.ofNullable(o.get(GraphAnnotationBean.type)).filter(j -> (null != j) && j.isTextual()).map(j -> j.asText()).map(type -> {
+					if (GraphAnnotationBean.ElementType.edge.toString().equals(type)) {
+						// Return the first matching edge:
+						return true;
+					}
+					else if (GraphAnnotationBean.ElementType.vertex.toString().equals(type)) {
+						// Return the first matching vertex:
+						return true;
+					}
+					else return false;
+				})
+				.orElse(false);
+			})
+			.findFirst()
+			.ifPresent(element -> _context.get().emitImmutableObject(_context.get().getNextUnusedId(), element._2().getJson(), Optional.empty(), Optional.empty(), Optional.empty()));
+			;
 		
 	}
 
@@ -62,8 +84,7 @@ public class SimpleGraphMergeService implements IEnrichmentBatchModule {
 	 */
 	@Override
 	public void onStageComplete(boolean is_original) {
-		// TODO Auto-generated method stub
-		
+		// (Currently nothing to do)
 	}
 
 }
