@@ -150,6 +150,11 @@
 					<version>4.12</version>
 					<scope>test</scope>
 				</dependency>
+				<dependency>
+					<groupId>com.thinkaurelius.titan</groupId>
+					<artifactId>titan-es</artifactId>
+					<version>1.0.0</version>
+				</dependency>
 			</dependencies>
 		</profile>
 	</profiles>

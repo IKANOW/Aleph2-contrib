@@ -20,13 +20,21 @@ import static org.junit.Assert.*;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.tinkerpop.gremlin.structure.Direction;
+import org.apache.tinkerpop.gremlin.structure.Edge;
+import org.apache.tinkerpop.gremlin.structure.Element;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
+
+import com.thinkaurelius.titan.core.Cardinality;
+
 import org.apache.tinkerpop.gremlin.structure.io.IoCore;
 import org.junit.Test;
 
@@ -35,6 +43,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.thinkaurelius.titan.core.PropertyKey;
+import com.thinkaurelius.titan.core.SchemaViolationException;
 import com.thinkaurelius.titan.core.TitanEdge;
 import com.thinkaurelius.titan.core.TitanException;
 import com.thinkaurelius.titan.core.TitanFactory;
@@ -51,9 +60,107 @@ import com.thinkaurelius.titan.core.schema.TitanManagement;
  */
 public class TestMiscTitanProperties {
 
+	protected static String showGraph(final TitanGraph titan) throws IOException {
+		final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		titan.io(IoCore.graphson()).writer().create().writeGraph(baos, titan);		
+		return baos.toString();		
+	}
+	protected static String showElement(final TitanGraph titan, final Element element) throws IOException {
+		final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		if (Vertex.class.isAssignableFrom(element.getClass())) {
+			titan.io(IoCore.graphson()).writer().create().writeVertex(baos, (Vertex) element);
+		}
+		else {
+			titan.io(IoCore.graphson()).writer().create().writeEdge(baos, (Edge) element);			
+		}
+		return baos.toString();
+	}
+	
 	@SuppressWarnings("unchecked")
 	@Test
-	public void test_someBasicGraphProperties() throws IOException {
+	public void test_elementProperties() throws IOException, InterruptedException {
+		
+		try {
+			FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + "/titan-test"));
+		}
+		catch (Exception e) {}
+		
+		TitanGraph titan = TitanFactory.build()
+				.set("storage.backend", "inmemory")
+				.set("index.search.backend", "elasticsearch")
+				.set("index.search.elasticsearch.local-mode", true)
+				.set("index.search.directory", System.getProperty("java.io.tmpdir") + "/titan-test")
+				.set("index.search.elasticsearch.client-only", false)
+				//.set("query.force-index", true) //(disabled for testing)
+			.open();
+		
+		{
+			TitanManagement mgmt = titan.openManagement();
+			// Without ES:
+			//mgmt.makePropertyKey("paths").dataType(String.class).cardinality(Cardinality.SET).make();
+			//with ES as a search back-end, can do SET/LIST
+			mgmt.buildIndex("pathQuery", Vertex.class).addKey(mgmt.makePropertyKey("paths").dataType(String.class).cardinality(Cardinality.SET).make()).buildMixedIndex("search");
+			//.addKey("_b", Mapping.STRING.asParameter()).buildMixedIndex("search")
+			mgmt.commit();
+		}
+		
+		// Just check I can do this multiple times:
+		try {
+			TitanManagement mgmt = titan.openManagement();
+			mgmt.makePropertyKey("paths").dataType(String.class).cardinality(Cardinality.SET).make();
+			mgmt.commit();		
+		}
+		catch (SchemaViolationException e) {} // (can but throws this exception, which is fine)
+		
+		buildSmallGraph(titan);
+		
+		final TitanTransaction tx = titan.buildTransaction().start();
+		
+		final TitanVertex v = Optionals.<TitanVertex>streamOf(tx.query().has("type", "rabbit").vertices(), false).findFirst().get();
+		
+		// These will fail because the property has not been declared
+//		v.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, "animal", "mouse");
+//		v.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, "animal", "cat");
+//		v.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, "animal", "mouse");
+		// This all works as expected
+		v.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, "paths", "mouse");
+		v.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, "paths", "cat");
+		v.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, "paths", "mouse");
+		// These will overwrite
+//		v.property("_b", "mouse");
+//		v.property("_b", "cat");
+//		v.property("_b", "mouse");
+		
+		// This does not work, so properties will be protected with a single bucket access 
+		v.property("type", "rabbit", "paths", Arrays.asList("a", "b")); //"[a, b]" (ie a string of a list)
+		//v.property("type", "rabbit", "_b", Stream.of("a", "b").toArray()); // [L;Object]
+		
+		System.out.println(showElement(titan, v));
+		tx.commit();
+
+		// OK let's double check how we retrieve a list of properties
+		
+		final TitanVertex v2 = Optionals.<TitanVertex>streamOf(titan.query().has("type", "rabbit").vertices(), false).findFirst().get();		
+		
+		// Use "properties" with a single key to get the list of buckets
+		System.out.println("paths = " + Optionals.streamOf(v2.properties("_b"), false).map(vp -> vp.value().toString()).collect(Collectors.joining(";")));
+		
+		// Double check a query on _b works
+		assertEquals(1L, Optionals.streamOf(titan.query().has("paths", "cat").vertices(), false).count());
+		Thread.sleep(3000L); // (wait for ES to complete)
+		//assertEquals(1L, Optionals.streamOf(titan.indexQuery("pathQuery", "v.paths:cat").vertices(), false).count());
+		assertEquals(1L, Optionals.streamOf(titan.indexQuery("pathQuery", "v.paths:(rabbit cat)").vertices(), false).count());
+		
+		//TODO: what about a joint property + bucket query?
+		//TODO: need to figure out how to handle analyzed vs non-analyzed, I think it's TEXT vs STRING?
+		// https://groups.google.com/forum/#!topic/aureliusgraphs/VGv-RJwt8zI
+		// graph.makeKey("name").dataType(String.class).indexed("search", Element.class, new Parameter[]{Parameter.of(Mapping.MAPPING_PREFIX,Mapping.STRING)}) .single().make();
+	}
+	
+	
+	@SuppressWarnings("unchecked")
+	@Test
+	public void test_someBasicGraphBehavior() throws IOException {
 	
 		// Test some basic properties and transferring to/from GraphSON
 		

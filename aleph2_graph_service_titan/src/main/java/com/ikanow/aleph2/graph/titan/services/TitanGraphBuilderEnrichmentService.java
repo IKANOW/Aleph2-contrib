@@ -128,7 +128,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 			entry_point.ifPresent(Lambdas.wrap_consumer_u(ep -> 
 			_custom_graph_decomp_handler.set((IEnrichmentBatchModule) Class.forName(ep, true, Thread.currentThread().getContextClassLoader()).newInstance())));
 
-			_custom_graph_decomp_context.set(new GraphDecompEnrichmentContext(context));
+			_custom_graph_decomp_context.set(new GraphDecompEnrichmentContext(context, _config.get()));
 			
 			_custom_graph_decomp_handler.optional().ifPresent(base_module -> base_module.onStageInitialize(_custom_graph_decomp_context.get(), bucket, cfg, previous_next, next_grouping_fields));
 		});
@@ -158,7 +158,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 			entry_point.ifPresent(Lambdas.wrap_consumer_u(ep -> 
 			_custom_graph_merge_handler.set((IEnrichmentBatchModule) Class.forName(ep, true, Thread.currentThread().getContextClassLoader()).newInstance())));
 
-			_custom_graph_merge_context.set(new GraphMergeEnrichmentContext(context));
+			_custom_graph_merge_context.set(new GraphMergeEnrichmentContext(context, _config.get()));
 			
 			_custom_graph_merge_handler.optional().ifPresent(base_module -> base_module.onStageInitialize(_custom_graph_merge_context.get(), bucket, cfg, previous_next, next_grouping_fields));
 		});
@@ -187,7 +187,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				
 				// Fill in transaction
 				
-				TitanGraphBuildingUtils.buildGraph_handleMerge(mutable_tx, _config.get(), _security_context.get(), _logger.get(), 
+				TitanGraphBuildingUtils.buildGraph_handleMerge(mutable_tx, _config.get(), _security_context.get(), _logger.optional(), 
 						_custom_graph_merge_handler.optional().map(handler -> Tuples._2T(handler, _custom_graph_merge_context.get()))
 						, 
 						TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(mutable_tx, _config.get(), 
