@@ -472,7 +472,8 @@ public class TestMiscTitanProperties {
 		
 		// how to multiple?
 		v2.property("type", "rabbit");
-		v2.property("set", Arrays.asList("val1", "val2").toArray());
+		final Object[] arr = Arrays.asList("val1", "val2").toArray(); // (note this has the underlying type of [String, which is important - [Object won't work)
+		v2.property("set", arr);
 		final TitanEdge e1 = v1.addEdge("test_v1_v2", v2);
 		e1.property("edge_prop", "edge_prop_val");
 		

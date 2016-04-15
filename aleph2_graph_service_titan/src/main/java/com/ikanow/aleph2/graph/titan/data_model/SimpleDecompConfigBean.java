@@ -24,16 +24,16 @@ import java.util.List;
 public class SimpleDecompConfigBean {
 	public static class SimpleDecompElementBean {
 		public String edge_name() { return edge_name; }
-		public String from_field() { return from_field; }
+		public List<String> from_fields() { return from_fields; }
 		public String from_type() { return from_type; }
-		public String to_field() { return to_field; }
+		public List<String> to_fields() { return to_fields; }
 		public String to_type() { return to_type; }
 		public Boolean bidirectional() { return bidirectional; }
 		
 		private String edge_name;
-		private String from_field;
+		private List<String> from_fields;
 		private String from_type;
-		private String to_field;
+		private List<String> to_fields;
 		private String to_type;
 		private Boolean bidirectional;
 	}

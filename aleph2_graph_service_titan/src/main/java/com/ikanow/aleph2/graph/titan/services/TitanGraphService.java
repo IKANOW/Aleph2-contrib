@@ -64,12 +64,16 @@ import com.thinkaurelius.titan.core.schema.TitanManagement;
  *
  */
 public class TitanGraphService implements IGraphService, IGenericDataService {
+	public static String GLOBAL_CREATED_V = "aleph2_created_v";
+	public static String GLOBAL_MODIFIED_V = "aleph2_modified_v";
 	public static String GLOBAL_PATH_INDEX_V = "aleph2_path_query_v";
 	public static String GLOBAL_PATH_INDEX_E = "aleph2_path_query_e";
 	public static String GLOBAL_DEFAULT_INDEX = "aleph2_index_query";
 	public static String DEFAULT_TITAN_CONFIG = "aleph2-titan.properties";
 	public static String UUID = "/titan_test_" + UuidUtils.get().getRandomUuid();
 	protected final TitanGraph _titan;
+	
+	protected boolean _USE_ES_FOR_DEDUP_INDEXES = false;
 	
 	/** Guice injector
 =	 */
@@ -78,6 +82,9 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 		final String path = ModuleUtils.getGlobalProperties().local_yarn_config_dir() + "/" + DEFAULT_TITAN_CONFIG;
 		
 		//TODO (ALEPH-15): or allow various overrides using the standard config bean syntax
+		
+		//TODO: (ALEPH-15): would be interesting to allow separate table/indexes for certain buckets ("contexts" like in dedup ... eg
+		// generate a unique signature for a list of dedup contexts - would need to handle incremental changes, yikes - and then name the backend/ES store based on that) 
 		
 		_titan = TitanFactory.open(path);				
 	}
@@ -184,6 +191,20 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 				}
 				catch (SchemaViolationException e) {} // (already indexed, this is fine/expected)
 				
+				// Created/modified
+				try {
+					mgmt.buildIndex(GLOBAL_CREATED_V, Vertex.class)
+						.addKey(mgmt.makePropertyKey(GraphAnnotationBean.a2_tc).dataType(Long.class).make())
+						.buildMixedIndex("search");					
+				}
+				catch (SchemaViolationException e) {} // (already indexed, this is fine/expected)
+				try {
+					mgmt.buildIndex(GLOBAL_MODIFIED_V, Vertex.class)
+						.addKey(mgmt.makePropertyKey(GraphAnnotationBean.a2_tm).dataType(Long.class).make())
+						.buildMixedIndex("search");					
+				}
+				catch (SchemaViolationException e) {} // (already indexed, this is fine/expected)
+				
 				// Then check that the global default index is set
 				Optional<List<String>> maybe_dedup_fields = Optionals.of(() -> bucket.data_schema().graph_schema().deduplication_fields());
 				final Collection<BasicMessageBean> ret_val = maybe_dedup_fields.map(dedup_fields -> {
@@ -192,10 +213,37 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 				})
 				.orElseGet(() -> {
 					try {
-						mgmt.buildIndex(GLOBAL_DEFAULT_INDEX, Vertex.class)
-							.addKey(mgmt.makePropertyKey(GraphAnnotationBean.name).dataType(String.class).make(), Mapping.TEXTSTRING.asParameter())
-							.addKey(mgmt.makePropertyKey(GraphAnnotationBean.type).dataType(String.class).make(), Mapping.STRING.asParameter())
-							.buildMixedIndex("search");
+						//TODO (ALEPH-15): There's a slightly tricky decision here...
+						// using ES makes dedup actions "very" no longer transactional because of the index refresh
+						// (in theory using Cassandra or HBase makes things transactional, though I haven't tested that)
+						// Conversely not using ES puts more of the load on the smaller Cassandra/HBase clusters						
+						// Need to make configurable, but default to using the transactional layer
+						// Of course, if I move to eg unipop later on then I'll have to fix this
+						// It's not really any different to deduplication _except_ it can happen across buckets (unlike dedup) so it's much harder to stop
+						// A few possibilities:
+						// 1) Have a job that runs on new-ish data (ofc that might not be easy to detect) that merges things (ofc very unclear how to do that)
+						// 2) Centralize all insert actions
+						// Ah here's some more interest - looks like Hbase and Cassandra's eventual consistency can cause duplicates:
+						// http://s3.thinkaurelius.com/docs/titan/1.0.0/eventual-consistency.html ... tldr: basically need to have regular "clean up jobs" and live with transient issues
+						// (or use a consistent data store - would also require a decent amount of code here because our dedup strategy is not perfect)
+						
+						if (_USE_ES_FOR_DEDUP_INDEXES) {
+							mgmt.buildIndex(GLOBAL_DEFAULT_INDEX, Vertex.class)
+								.addKey(mgmt.makePropertyKey(GraphAnnotationBean.name).dataType(String.class).make(), Mapping.TEXTSTRING.asParameter())
+								.addKey(mgmt.makePropertyKey(GraphAnnotationBean.type).dataType(String.class).make(), Mapping.STRING.asParameter())
+								.buildMixedIndex("search");
+						}
+						else { // use the storage backend which should have better consistency properties
+							mgmt.buildIndex(GLOBAL_DEFAULT_INDEX, Vertex.class)
+								.addKey(mgmt.makePropertyKey(GraphAnnotationBean.name).dataType(String.class).make())	
+								.addKey(mgmt.makePropertyKey(GraphAnnotationBean.type).dataType(String.class).make())	
+								.buildCompositeIndex();
+							
+							//(in this case, also index "name" as an ES field to make it easier to search over)
+							mgmt.buildIndex(GLOBAL_DEFAULT_INDEX + "_TEXT", Vertex.class) 
+							.addKey(mgmt.makePropertyKey(GraphAnnotationBean.name).dataType(String.class).make(), Mapping.TEXT.asParameter())
+							.buildMixedIndex("search");													
+						}
 					}
 					catch (SchemaViolationException e) {} // (already indexed, this is fine/expected)
 					return Collections.emptyList();
@@ -204,7 +252,7 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 				//TODO (ALEPH-15): allow other indexes (etc) via the schema override				
 				mgmt.commit();
 				
-				//TODO (ALEPH-15): want to return once the indexing steps are done?
+				//TODO (ALEPH-15): want to complete the future only once the indexing steps are done?
 				return CompletableFuture.completedFuture(ret_val); 
 			}
 			else {

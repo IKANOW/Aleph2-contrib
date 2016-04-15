@@ -32,6 +32,7 @@ import org.apache.tinkerpop.gremlin.structure.Edge;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
 import org.apache.tinkerpop.gremlin.structure.io.IoCore;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import scala.Tuple2;
 import scala.Tuple4;
@@ -41,15 +42,21 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import com.ikanow.aleph2.core.shared.utils.BatchRecordUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
+import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.GraphSchemaBean;
+import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 import com.ikanow.aleph2.data_model.objects.data_import.GraphAnnotationBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.graph.titan.data_model.SimpleDecompConfigBean;
+import com.ikanow.aleph2.graph.titan.data_model.SimpleDecompConfigBean.SimpleDecompElementBean;
 import com.ikanow.aleph2.graph.titan.services.GraphDecompEnrichmentContext;
 import com.ikanow.aleph2.graph.titan.services.GraphMergeEnrichmentContext;
 import com.ikanow.aleph2.graph.titan.services.SimpleGraphDecompService;
@@ -354,6 +361,16 @@ public class TestTitanGraphBuildingUtils {
 		assertEquals("DataBucketBean:read,write:alex:test", TitanGraphBuildingUtils.buildPermission("/alex/test"));
 	}
 	
+	@Test
+	public void test_insertProperties() {
+		//(tested by test_invokeUserMergeCode, see below)
+		//TODO (ALEPH-15): test the Long[], Double[], Boolean[] properties also
+	}
+	@Test
+	public void test_denestProperties() {
+		//(tested by test_invokeUserMergeCode, see below)		
+	}
+	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////
 	////////////////////////////////
@@ -481,9 +498,10 @@ public class TestTitanGraphBuildingUtils {
 			final Map<ObjectNode, List<ObjectNode>> ret_val_pass = TitanGraphBuildingUtils.finalEdgeGrouping(key1, v1, mutable_edges);
 			
 			// First pass through, snags the edge that points to itself
+			final ObjectNode full_group = self_link.deepCopy(); // (at one point had label in here, but that's been removed now to keep the internal data model simpler)
 			assertEquals(1, ret_val_pass.size());
-			assertEquals(1, ret_val_pass.getOrDefault(self_link, Collections.emptyList()).size());
-			final ObjectNode val = ret_val_pass.get(self_link).get(0);
+			assertEquals(1, ret_val_pass.getOrDefault(full_group, Collections.emptyList()).size());
+			final ObjectNode val = ret_val_pass.get(full_group).get(0);
 			assertEquals("self-connect", val.get(GraphAnnotationBean.label).asText());
 			assertEquals(v1.id(), val.get(GraphAnnotationBean.inV).asLong());
 			assertEquals(v1.id(), val.get(GraphAnnotationBean.outV).asLong());
@@ -493,9 +511,10 @@ public class TestTitanGraphBuildingUtils {
 			final Map<ObjectNode, List<ObjectNode>> ret_val_pass = TitanGraphBuildingUtils.finalEdgeGrouping(key2, v2, mutable_edges);
 			
 			// First pass through, snags the edge that points to itself
+			final ObjectNode full_group = normal_link.deepCopy(); // (at one point had label in here, but that's been removed now to keep the internal data model simpler)
 			assertEquals(2, ret_val_pass.size());
-			assertEquals("Should hav enormal key: " + ret_val_pass.keySet() + " vs " + normal_link, 1, ret_val_pass.getOrDefault(normal_link, Collections.emptyList()).size());
-			final ObjectNode val = ret_val_pass.get(normal_link).get(0);
+			assertEquals("Should hav enormal key: " + ret_val_pass.keySet() + " vs " + normal_link, 1, ret_val_pass.getOrDefault(full_group, Collections.emptyList()).size());
+			final ObjectNode val = ret_val_pass.get(full_group).get(0);
 			assertEquals("dns-connection", val.get(GraphAnnotationBean.label).asText());
 			assertEquals(v2.id(), val.get(GraphAnnotationBean.inV).asLong());
 			assertEquals(v1.id(), val.get(GraphAnnotationBean.outV).asLong());
@@ -510,24 +529,43 @@ public class TestTitanGraphBuildingUtils {
 		tx.commit();
 	}
 	
+	@SuppressWarnings("unchecked")
 	@Test
 	public void test_invokeUserMergeCode() {
+		// (Also tests addGraphSON2Graph)
+		// (Also tests insertProperties)
+		// (Also tests denestProperties)
+		
 		// This has a massive set of params, here we go:
 		final TitanGraph titan = getSimpleTitanGraph();
+		TitanManagement mgmt = titan.openManagement();		
+		mgmt.makePropertyKey(GraphAnnotationBean.a2_p).dataType(String.class).cardinality(Cardinality.SET).make();
+		mgmt.commit();
 		final TitanTransaction tx = titan.buildTransaction().start();
+		final Vertex v1 = tx.addVertex("existing_1");
+		v1.property("existing", true);
+		final Vertex v2 = tx.addVertex("existing_2");
+		v2.property("existing", true);
+		final Edge e1 = v1.addEdge("existing_1_2", v2);
+		e1.property("existing", true);
+		final Edge e2 = v2.addEdge("existing_2_1", v1);
+		e2.property("existing", true);
 		// Graph schema
 		final GraphSchemaBean graph_schema = BeanTemplateUtils.build(GraphSchemaBean.class)
 					.with(GraphSchemaBean::deduplication_fields, Arrays.asList(GraphAnnotationBean.name, GraphAnnotationBean.type))
+					.with(GraphSchemaBean::custom_finalize_all_objects, false)
 				.done().get();
 		// Security service
 		final MockSecurityService mock_security = new MockSecurityService();
 		final String user = "nobody";
-		//TODO: add param to make this work
+		mock_security.setGlobalMockRole("nobody:DataBucketBean:read,write:test:security*", true);
 		// Simple merger
+		final IEnrichmentModuleContext delegate_context = Mockito.mock(IEnrichmentModuleContext.class);
+		Mockito.when(delegate_context.getNextUnusedId()).thenReturn(0L);
 		final Optional<Tuple2<IEnrichmentBatchModule, GraphMergeEnrichmentContext>> maybe_merger = 
 				Optional.of(
 						Tuples._2T((IEnrichmentBatchModule) new SimpleGraphMergeService(),
-									new GraphMergeEnrichmentContext(null, graph_schema)
+									new GraphMergeEnrichmentContext(delegate_context, graph_schema)
 						));
 		maybe_merger.ifPresent(t2 -> t2._1().onStageInitialize(t2._2(), null, null, null, null));
 		// special titan mapper
@@ -535,75 +573,300 @@ public class TestTitanGraphBuildingUtils {
 		// Bucket
 		final String bucket_path = "/test/security";
 		// Key
-		final ObjectNode key = _mapper.createObjectNode().put(GraphAnnotationBean.name, "alex").put(GraphAnnotationBean.type, "person"); 
-		// New elements
-		//TODO
-		final List<ObjectNode> new_vertices = Arrays.asList();
-		final List<ObjectNode> new_edges = Arrays.asList();
+		final ObjectNode vertex_key_1 = _mapper.createObjectNode().put(GraphAnnotationBean.name, "alex").put(GraphAnnotationBean.type, "person"); 
+		final ObjectNode vertex_key_2 = _mapper.createObjectNode().put(GraphAnnotationBean.name, "caleb").put(GraphAnnotationBean.type, "person");
+		final ObjectNode edge_key = (ObjectNode) ((ObjectNode) _mapper.createObjectNode().set(GraphAnnotationBean.inV, vertex_key_1)).set(GraphAnnotationBean.outV, vertex_key_2);
+		// New elements (note can mess about with different keys because they are checked higher up in the stack, here things are just "pre-grouped" lists)
+		final List<ObjectNode> new_vertices = Arrays.asList(
+				(ObjectNode) ((ObjectNode) _mapper.createObjectNode().put(GraphAnnotationBean.type, "vertex").put(GraphAnnotationBean.label, "test_v_1")
+													.set(GraphAnnotationBean.id, vertex_key_1))
+													// (set some properties)
+													.set(GraphAnnotationBean.properties, ((ObjectNode) _mapper.createObjectNode()
+															.put("props_str", "str")
+															.set("props_array", _mapper.convertValue(Arrays.asList("a", "r", "r"), JsonNode.class)))
+															.set("props_obj", _mapper.createObjectNode().put(GraphAnnotationBean.value, "obj_str"))
+															)
+				,
+				(ObjectNode) ((ObjectNode) _mapper.createObjectNode().put(GraphAnnotationBean.type, "vertex").put(GraphAnnotationBean.label, "test_v_2")
+													.set(GraphAnnotationBean.id, vertex_key_2))
+				);
+		final List<ObjectNode> new_edges = Arrays.asList(
+				(ObjectNode) ((ObjectNode) ((ObjectNode) _mapper.createObjectNode().put(GraphAnnotationBean.type, "edge").put(GraphAnnotationBean.label, "test_e_1")
+						.set(GraphAnnotationBean.inV, vertex_key_1)).set(GraphAnnotationBean.outV, vertex_key_2))
+						// (set some properties)
+						.set(GraphAnnotationBean.properties, (ObjectNode) _mapper.createObjectNode()
+								.put("props_long", 5L)
+								.set("props_obj", _mapper.createObjectNode().set(
+										GraphAnnotationBean.value, _mapper.convertValue(Arrays.asList("a", "r", "r"), JsonNode.class)))
+								)
+				,
+				(ObjectNode) ((ObjectNode) _mapper.createObjectNode().put(GraphAnnotationBean.type, "edge").put(GraphAnnotationBean.label, "test_e_2")
+						.set(GraphAnnotationBean.inV, vertex_key_1)).set(GraphAnnotationBean.outV, vertex_key_2)								
+				);
 		// Existing elements
-		//TODO
-		final List<Tuple2<Vertex, JsonNode>> existing_vertices = Arrays.asList();
-		final List<Tuple2<Edge, JsonNode>> existing_edges = Arrays.asList();
+		final List<Tuple2<Vertex, JsonNode>> existing_vertices = Arrays.asList(Tuples._2T(v1, _mapper.createObjectNode()), Tuples._2T(v2, _mapper.createObjectNode()));
+		final List<Tuple2<Edge, JsonNode>> existing_edges = Arrays.asList(Tuples._2T(e1, _mapper.createObjectNode()), Tuples._2T(e2, _mapper.createObjectNode()));
 		// State
-		//TODO
 		final Map<JsonNode, Vertex> mutable_existing_vertex_store = new HashMap<>();
+		mutable_existing_vertex_store.put(vertex_key_1, v1);
+		mutable_existing_vertex_store.put(vertex_key_2, v2);
 		
-		// This is a huge one...
-		// Vertices
+		// Vertices, no existing elements
 		{
-			@SuppressWarnings("unused")
-			List<Vertex> v = 
+			List<Vertex> ret_val = 
 					TitanGraphBuildingUtils.invokeUserMergeCode(
 							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
-							maybe_merger, titan_mapper, Vertex.class, bucket_path, key, new_vertices, existing_vertices, mutable_existing_vertex_store);
+							maybe_merger, titan_mapper, Vertex.class, bucket_path, vertex_key_1, Arrays.asList(new_vertices.get(0)), Collections.emptyList(), Collections.emptyMap());
 			
-			//TODO: test results
+			assertEquals(1, ret_val.size());
+			assertEquals(
+					Optionals.streamOf(tx.query().hasNot("existing").vertices(), false).map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList()),
+					ret_val.stream().map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList())
+					);
+			
+			ret_val.stream().forEach(v -> 
+					assertEquals(Arrays.asList(bucket_path),
+							Optionals.streamOf(v.properties(GraphAnnotationBean.a2_p), false).map(p -> p.value().toString()).collect(Collectors.toList())
+					)
+					);
+			
+			// Check the properties situation:
+			assertEquals(1, Optionals.streamOf(tx.query().has("props_str", "str").vertices(), false).count());
+			assertEquals(1, Optionals.streamOf(tx.query().has("props_array", Arrays.asList("a", "r", "r").toArray()).vertices(), false).count());
+			assertEquals(1, Optionals.streamOf(tx.query().has("props_obj", "obj_str").vertices(), false).count());
+			
+			// Check that we did actually add another vertex:
+			assertEquals(3, Optionals.streamOf(tx.query().vertices(), false).count());
+			// Time
+			assertEquals(1, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tc).vertices(), false).count()); // (added/updated time)
+			assertEquals(1, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tm).vertices(), false).count()); // (added/updated time)
+			
+			// (clear the graph ready for the next test)
+			tx.query().hasNot("existing").vertices().forEach(v -> ((Vertex) v).remove());
 		}
-		// Edges
+		// Vertices, existing elements, multiple new elements
 		{
-			@SuppressWarnings("unused")
-			List<Edge> e = 
+			List<Vertex> ret_val = 
 					TitanGraphBuildingUtils.invokeUserMergeCode(
 							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
-							maybe_merger, titan_mapper, Edge.class, bucket_path, key, new_edges, existing_edges, mutable_existing_vertex_store);			
+							maybe_merger, titan_mapper, Vertex.class, bucket_path, vertex_key_1, new_vertices, existing_vertices, Collections.emptyMap());
 			
-			//TODO: test results
+			assertEquals(1, ret_val.size());
+			assertEquals(0, Optionals.streamOf(tx.query().hasNot("existing").vertices(), false).count()); // (since i've overwritten an existing one...)
+			assertEquals(
+					Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_p).vertices(), false).map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList()),
+					ret_val.stream().map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList())
+					);
+			
+			ret_val.stream().forEach(v -> 
+					assertEquals(Arrays.asList(bucket_path),
+							Optionals.streamOf(v.properties(GraphAnnotationBean.a2_p), false).map(p -> p.value().toString()).collect(Collectors.toList())
+					)
+					);
+
+			// Check that we didn't actually add another vertex:
+			assertEquals(2, Optionals.streamOf(tx.query().vertices(), false).count());
+			// Time
+			assertEquals(1, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tc).vertices(), false).count()); // (added/updated time)
+			assertEquals(1, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tm).vertices(), false).count()); // (added/updated time)
+			
+			// (clear the graph ready for the next test)
+			tx.query().hasNot("existing").vertices().forEach(v -> ((Vertex) v).remove());
+			tx.query().has(GraphAnnotationBean.a2_p).vertices().forEach(v -> ((Vertex) v).properties(GraphAnnotationBean.a2_p).forEachRemaining(p -> p.remove()));
+			tx.query().has(GraphAnnotationBean.a2_tc).vertices().forEach(v -> ((Vertex) v).properties(GraphAnnotationBean.a2_tc).forEachRemaining(p -> p.remove()));
+			tx.query().has(GraphAnnotationBean.a2_tm).vertices().forEach(v -> ((Vertex) v).properties(GraphAnnotationBean.a2_tm).forEachRemaining(p -> p.remove()));
 		}
-		//TODO any edge cases to test?
-	}
-	
-	@Test
-	public void test_addGraphSON2Graph() {		
-		final String bucket_path = "/test/tagged";
-		// Titan
-		final TitanGraph titan = getSimpleTitanGraph();
-		final TitanTransaction tx = titan.buildTransaction().start();
-		TitanManagement mgmt = titan.openManagement();		
-		mgmt.makePropertyKey(GraphAnnotationBean.a2_p).dataType(String.class).cardinality(Cardinality.SET).make();
-		mgmt.commit();
-		// Key
-		final ObjectNode key = _mapper.createObjectNode().put(GraphAnnotationBean.name, "alex").put(GraphAnnotationBean.type, "person"); 
-		// State
-		//TODO
-		final Map<JsonNode, Vertex> mutable_existing_vertex_store = new HashMap<>();
-		// GraphSON to add:
-		final ObjectNode vertex_to_add = _mapper.createObjectNode().put(GraphAnnotationBean.label, "test_vertex");
-		final ObjectNode edge_to_add = _mapper.createObjectNode().put(GraphAnnotationBean.label, "test_edge");
-		
+		// Vertices, existing elements, single element
 		{
-			@SuppressWarnings("unused")
-			Validation<BasicMessageBean, Vertex> ret_val = 
-					TitanGraphBuildingUtils.addGraphSON2Graph(bucket_path, key, vertex_to_add, mutable_existing_vertex_store, tx, Vertex.class);
+			List<Vertex> ret_val = 
+					TitanGraphBuildingUtils.invokeUserMergeCode(
+							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
+							maybe_merger, titan_mapper, Vertex.class, bucket_path, vertex_key_1, new_vertices, existing_vertices, Collections.emptyMap());
+			
+			assertEquals(1, ret_val.size());
+			assertEquals(0, Optionals.streamOf(tx.query().hasNot("existing").vertices(), false).count()); // (since i've overwritten an existing one...)
+			assertEquals(
+					Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_p).vertices(), false).map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList()),
+					ret_val.stream().map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList())
+					);
+			
+			ret_val.stream().forEach(v -> 
+					assertEquals(Arrays.asList(bucket_path),
+							Optionals.streamOf(v.properties(GraphAnnotationBean.a2_p), false).map(p -> p.value().toString()).collect(Collectors.toList())
+					)
+					);
+
+			// Check that we didn't actually add another vertex:
+			assertEquals(2, Optionals.streamOf(tx.query().vertices(), false).count());
+			// Time
+			assertEquals(1, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tc).vertices(), false).count()); // (added/updated time)
+			assertEquals(1, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tm).vertices(), false).count()); // (added/updated time)
+			
+			// (clear the graph ready for the next test)
+			tx.query().hasNot("existing").vertices().forEach(v -> ((Vertex) v).remove());
+			tx.query().has(GraphAnnotationBean.a2_p).vertices().forEach(v -> ((Vertex) v).properties(GraphAnnotationBean.a2_p).forEachRemaining(p -> p.remove()));
 		}
+		// Edges, no existing elements, single new element
 		{
-			@SuppressWarnings("unused")
-			Validation<BasicMessageBean, Edge> ret_val = 
-					TitanGraphBuildingUtils.addGraphSON2Graph(bucket_path, key, edge_to_add, mutable_existing_vertex_store, tx, Edge.class);
+			List<Edge> ret_val = 
+					TitanGraphBuildingUtils.invokeUserMergeCode(
+							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
+							maybe_merger, titan_mapper, Edge.class, bucket_path, edge_key, Arrays.asList(new_edges.get(0)), Collections.emptyList(), mutable_existing_vertex_store);			
+			
+			
+			assertEquals(1, ret_val.size());
+			assertEquals(
+					Optionals.streamOf(tx.query().hasNot("existing").edges(), false).map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList()),
+					ret_val.stream().map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList())
+					);
+			
+			ret_val.stream().forEach(v -> 
+					assertEquals(Arrays.asList(bucket_path),
+							Optionals.streamOf(v.properties(GraphAnnotationBean.a2_p), false).map(p -> p.value().toString()).collect(Collectors.toList())
+					)
+					);
+
+			// Check the properties situation:
+			assertEquals(1, Optionals.streamOf(tx.query().has("props_long", 5L).edges(), false).count());
+			assertEquals(1, Optionals.streamOf(tx.query().has("props_obj", Arrays.asList("a", "r", "r").toArray()).edges(), false).count());			
+			
+			// Check that we did actually add another edge:
+			assertEquals(3, Optionals.streamOf(tx.query().edges(), false).count());			
+			// Time
+			assertEquals(1, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tc).edges(), false).count()); // (added/updated time)
+			assertEquals(1, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tm).edges(), false).count()); // (added/updated time)
+			
+			// (clear the graph ready for the next test)
+			tx.query().hasNot("existing").edges().forEach(v -> ((Edge) v).remove());
+		}
+		// Edges, no existing elements, multiple new elements
+		{
+			List<Edge> ret_val = 
+					TitanGraphBuildingUtils.invokeUserMergeCode(
+							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
+							maybe_merger, titan_mapper, Edge.class, bucket_path, edge_key, new_edges, Collections.emptyList(), mutable_existing_vertex_store);			
+			
+			assertEquals(1, ret_val.size());
+			assertEquals(
+					Optionals.streamOf(tx.query().hasNot("existing").edges(), false).map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList()),
+					ret_val.stream().map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList())
+					);
+			
+			ret_val.stream().forEach(v -> 
+					assertEquals(Arrays.asList(bucket_path),
+							Optionals.streamOf(v.properties(GraphAnnotationBean.a2_p), false).map(p -> p.value().toString()).collect(Collectors.toList())
+					)
+					);
+
+			// Check that we did actually add another edge:
+			assertEquals(3, Optionals.streamOf(tx.query().edges(), false).count());			
+			// Time
+			assertEquals(1, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tc).edges(), false).count()); // (added/updated time)
+			assertEquals(1, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tm).edges(), false).count()); // (added/updated time)
+			
+			// (clear the graph ready for the next test)
+			tx.query().hasNot("existing").edges().forEach(v -> ((Edge) v).remove());
+		}
+		// Edges, existing elements, multiple elements (unlike single one)
+		{
+			List<Edge> ret_val = 
+					TitanGraphBuildingUtils.invokeUserMergeCode(
+							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
+							maybe_merger, titan_mapper, Edge.class, bucket_path, edge_key, new_edges, existing_edges, mutable_existing_vertex_store);			
+						
+			assertEquals(1, ret_val.size());
+			assertEquals(0, Optionals.streamOf(tx.query().hasNot("existing").edges(), false).count()); // (since i've overwritten an existing one...)
+			assertEquals(
+					Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_p).edges(), false).map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList()),
+					ret_val.stream().map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList())
+					);
+			
+			ret_val.stream().forEach(v -> 
+					assertEquals(Arrays.asList(bucket_path),
+							Optionals.streamOf(v.properties(GraphAnnotationBean.a2_p), false).map(p -> p.value().toString()).collect(Collectors.toList())
+					)
+					);
+
+			// Check that we didn't actually add another edge:
+			assertEquals(2, Optionals.streamOf(tx.query().edges(), false).count());			
+			// Time
+			assertEquals(1, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tc).edges(), false).count()); // (added/updated time)
+			assertEquals(1, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tm).edges(), false).count()); // (added/updated time)
+			
+			// (clear the graph ready for the next test)
+			tx.query().hasNot("existing").edges().forEach(v -> ((Edge) v).remove());
+			tx.query().has(GraphAnnotationBean.a2_p).edges().forEach(v -> ((Edge) v).properties(GraphAnnotationBean.a2_p).forEachRemaining(p -> p.remove()));
+			tx.query().has(GraphAnnotationBean.a2_tc).edges().forEach(v -> ((Edge) v).properties(GraphAnnotationBean.a2_tc).forEachRemaining(p -> p.remove()));
+			tx.query().has(GraphAnnotationBean.a2_tm).edges().forEach(v -> ((Edge) v).properties(GraphAnnotationBean.a2_tm).forEachRemaining(p -> p.remove()));
+		}
+		// Some error cases:
+		// 1) Demonstrate a failure, just remove the label
+		{
+			new_vertices.get(0).remove(GraphAnnotationBean.label);
+			
+			List<Vertex> ret_val = 
+					TitanGraphBuildingUtils.invokeUserMergeCode(
+							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
+							maybe_merger, titan_mapper, Vertex.class, bucket_path, vertex_key_1, Arrays.asList(new_vertices.get(0)), Collections.emptyList(), Collections.emptyMap());
+
+			// Time
+			assertEquals(0, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tc).edges(), false).count()); // (added/updated time)
+			assertEquals(0, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tm).edges(), false).count()); // (added/updated time)
+			
+			assertEquals(0, ret_val.size());
+		}
+		// 2) Shouldn't happen, but just check the case where no vertex can be found
+		{
+			List<Edge> ret_val = 
+					TitanGraphBuildingUtils.invokeUserMergeCode(
+							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
+							maybe_merger, titan_mapper, Edge.class, bucket_path, edge_key, new_edges, Collections.emptyList(), Collections.emptyMap());			
+						
+			// Time
+			assertEquals(0, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tc).edges(), false).count()); // (added/updated time)
+			assertEquals(0, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tm).edges(), false).count()); // (added/updated time)
+			
+			assertEquals(0, ret_val.size());
 		}
 		
 		tx.commit();
 		
-		//TODO validate graph
+		//Quick test coverage of the simple merger, should avoid me having to do any unit testing for that module elsewhere...
+		maybe_merger.ifPresent(t2 -> t2._1().onStageComplete(true));
+	}
+	
+	@Test
+	public void test_addGraphSON2Graph() {
+		
+		// No need to do any testing in here, addGraphSON2Graph is adequately tested by the code above
+		
+//		final String bucket_path = "/test/tagged";
+//		// Titan
+//		final TitanGraph titan = getSimpleTitanGraph();
+//		final TitanTransaction tx = titan.buildTransaction().start();
+//		TitanManagement mgmt = titan.openManagement();		
+//		mgmt.makePropertyKey(GraphAnnotationBean.a2_p).dataType(String.class).cardinality(Cardinality.SET).make();
+//		mgmt.commit();
+//		// Key
+//		final ObjectNode key = _mapper.createObjectNode().put(GraphAnnotationBean.name, "alex").put(GraphAnnotationBean.type, "person"); 
+//		// State
+//		final Map<JsonNode, Vertex> mutable_existing_vertex_store = new HashMap<>();
+//		// GraphSON to add:
+//		final ObjectNode vertex_to_add = _mapper.createObjectNode().put(GraphAnnotationBean.label, "test_vertex");
+//		final ObjectNode edge_to_add = _mapper.createObjectNode().put(GraphAnnotationBean.label, "test_edge");
+//		
+//		{
+//			@SuppressWarnings("unused")
+//			Validation<BasicMessageBean, Vertex> ret_val = 
+//					TitanGraphBuildingUtils.addGraphSON2Graph(bucket_path, key, vertex_to_add, mutable_existing_vertex_store, tx, Vertex.class);
+//		}
+//		{
+//			@SuppressWarnings("unused")
+//			Validation<BasicMessageBean, Edge> ret_val = 
+//					TitanGraphBuildingUtils.addGraphSON2Graph(bucket_path, key, edge_to_add, mutable_existing_vertex_store, tx, Edge.class);
+//		}
+//		
+//		tx.commit();
 	}
 
 	//TODO: make sure the test case not connecting anything is handled
@@ -623,22 +886,61 @@ public class TestTitanGraphBuildingUtils {
 					.with(GraphSchemaBean::deduplication_fields, Arrays.asList(GraphAnnotationBean.name, GraphAnnotationBean.type))
 				.done().get();
 		
-		final Stream<Tuple2<Long, IBatchRecord>> batch = Stream.empty();
-		
+		final IEnrichmentModuleContext delegate_context = Mockito.mock(IEnrichmentModuleContext.class);
+		Mockito.when(delegate_context.getNextUnusedId()).thenReturn(0L);
 		final Optional<Tuple2<IEnrichmentBatchModule, GraphDecompEnrichmentContext>> maybe_decomposer = 
 				Optional.of(
 						Tuples._2T((IEnrichmentBatchModule) new SimpleGraphDecompService(),
-									new GraphDecompEnrichmentContext(null, graph_schema)
+									new GraphDecompEnrichmentContext(delegate_context, graph_schema)
 						));
-		//TODO
-		//maybe_decomposer.ifPresent(t2 -> t2._1().onStageInitialize(t2._2(), null, null, null, null));
+
+		final EnrichmentControlMetadataBean control = BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
+					.with(EnrichmentControlMetadataBean::config,
+							BeanTemplateUtils.toMap(
+							BeanTemplateUtils.build(SimpleDecompConfigBean.class)
+								.with(SimpleDecompConfigBean::elements, Arrays.asList(
+										BeanTemplateUtils.build(SimpleDecompElementBean.class)
+											.with(SimpleDecompElementBean::edge_name, "test_edge_1")
+											.with(SimpleDecompElementBean::from_fields, Arrays.asList("int_ip1", "int_ip2"))
+											.with(SimpleDecompElementBean::from_type, "ip")
+											.with(SimpleDecompElementBean::to_fields, Arrays.asList("host1", "host2"))
+											.with(SimpleDecompElementBean::to_type, "host")
+										.done().get()
+										,
+										BeanTemplateUtils.build(SimpleDecompElementBean.class)
+											.with(SimpleDecompElementBean::edge_name, "test_edge_2")
+											.with(SimpleDecompElementBean::from_fields, Arrays.asList("missing"))
+											.with(SimpleDecompElementBean::from_type, "ip")
+											.with(SimpleDecompElementBean::to_fields, Arrays.asList("host1", "host2"))
+											.with(SimpleDecompElementBean::to_type, "host")
+										.done().get()
+										)
+								)
+							.done().get())
+					)
+				.done().get();
 		
-		@SuppressWarnings("unused")
+		final Stream<Tuple2<Long, IBatchRecord>> batch = 
+				Stream.<ObjectNode>of(
+					_mapper.createObjectNode().put("int_ip1", "ipA").put("int_ip2", "ipB").put("host1", "dX").put("host2", "dY")
+					,
+					_mapper.createObjectNode().put("int_ip1", "ipA").put("host1", "dZ").put("host2", "dY")
+				)
+				.map(o -> Tuples._2T(0L, new BatchRecordUtils.JsonBatchRecord(o)))
+				;		
+		
+		maybe_decomposer.ifPresent(t2 -> t2._1().onStageInitialize(t2._2(), null, control, null, null));
+		
 		final List<ObjectNode> ret_val = TitanGraphBuildingUtils.buildGraph_getUserGeneratedAssets(
 				batch, Optional.empty(), Optional.empty(), maybe_decomposer
 				);
 		
-		//TODO
+		assertEquals(11, ret_val.size()); // (get more vertices because they are generated multiple times...)
+		assertEquals(5, ret_val.stream().filter(v -> GraphAnnotationBean.ElementType.vertex.toString().equals(v.get(GraphAnnotationBean.type).asText())).count());
+		assertEquals(6, ret_val.stream().filter(v -> GraphAnnotationBean.ElementType.edge.toString().equals(v.get(GraphAnnotationBean.type).asText())).count());
+		
+		//coverage!
+		maybe_decomposer.ifPresent(t2 -> t2._1().onStageComplete(true));
 	}
 	
 	@Test

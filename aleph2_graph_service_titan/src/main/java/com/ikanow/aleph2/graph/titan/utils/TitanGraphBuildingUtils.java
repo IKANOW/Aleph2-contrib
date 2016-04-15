@@ -19,8 +19,8 @@ package com.ikanow.aleph2.graph.titan.utils;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -70,6 +70,7 @@ import com.thinkaurelius.titan.core.TitanTransaction;
 import com.thinkaurelius.titan.core.TitanVertex;
 import com.thinkaurelius.titan.core.attribute.Contain;
 
+import fj.data.Either;
 import fj.data.Validation;
 
 /** Collection of utilities for building Titan graph elements from a batch of data objects
@@ -299,8 +300,8 @@ public class TitanGraphBuildingUtils {
 			)
 	{	
 		final ObjectMapper titan_mapper = tx.io(IoCore.graphson()).mapper().create().createMapper();
-		final Multimap<JsonNode, Edge> mutable_existing_edge_store = LinkedHashMultimap.create(); //(lazy simple way of handling 1.3/2)
-		final Map<JsonNode, Vertex> mutable_existing_vertex_store = new HashMap<>();		
+		final Multimap<JsonNode, Edge> mutable_existing_edge_endpoint_store = LinkedHashMultimap.create(); //(lazy simple way of handling 1.3/2)
+		final Map<JsonNode, Vertex> mutable_existing_vertex_store = new HashMap<>(); // a list of all the "winning" vertices from the user merge 
 		
 		mergeable.forEach(t4 -> { 
 
@@ -322,7 +323,7 @@ public class TitanGraphBuildingUtils {
 			// 1.2.b) copy any properties from the original objects into the winner and remove any so-desired properties
 
 			final Optional<Vertex> maybe_vertex_winner = 
-					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Vertex.class, bucket.full_name(), key, vertices, existing_vertices, mutable_existing_vertex_store)
+					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Vertex.class, bucket.full_name(), key, vertices, existing_vertices, Collections.emptyMap())
 						.stream()
 						.findFirst()
 						;
@@ -340,7 +341,7 @@ public class TitanGraphBuildingUtils {
 						Optionals.streamOf(vertex_winner.edges(Direction.BOTH), false))
 						.flatMap(__ -> __)
 						.forEach(e -> {
-							mutable_existing_edge_store.put(key, e);
+							mutable_existing_edge_endpoint_store.put(key, e);
 						});						
 				
 				// 1.3.2) Handle incoming edges:
@@ -357,7 +358,7 @@ public class TitanGraphBuildingUtils {
 				grouped_edges.entrySet().stream().forEach(kv -> {
 					
 					final Function<String, Map<Object, Edge>> getEdges = in_or_out -> 
-						Optionals.ofNullable(mutable_existing_edge_store.get(kv.getKey().get(in_or_out)))
+						Optionals.ofNullable(mutable_existing_edge_endpoint_store.get(kv.getKey().get(in_or_out)))
 							.stream()
 							.filter(e -> labelMatches(kv.getKey(), e)) //TODO (ALEPH-15): as for vertices, might be nice to support some sort of fuzziness
 							.filter(e -> isAllowed(security_service, e)) // (check authorized)
@@ -376,7 +377,7 @@ public class TitanGraphBuildingUtils {
 								.map(e -> Tuples._2T(e, getElementProperties(e, config.deduplication_fields())))
 								.collect(Collectors.toList())
 								;
-					
+
 					//final List<Edge> finalized_edges =
 					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Edge.class, bucket.full_name(), kv.getKey(), kv.getValue(), existing_edges, mutable_existing_vertex_store);
 				});
@@ -469,11 +470,9 @@ public class TitanGraphBuildingUtils {
 			
 			return ((null == off_key) || off_key.isIntegralNumber());
 		})
-		.collect(Collectors.groupingBy(mutable_edge -> {
-			// 1.3.2) Once we've tidied up the edge, check if we're ready for that edge to move to stage 2):					
-			
+		.collect(Collectors.groupingBy((ObjectNode mutable_edge) -> { // These edges are "promoted" - can call the user merge on them
 			final ObjectNode edge_key = 
-					Optional.of(_mapper.createObjectNode())
+					Optional.of(_mapper.createObjectNode()) //(don't group by label - we filter out label on later on, this keeps the key object simpler)
 												.map(o -> Optional.ofNullable(mutable_edge.remove(GraphAnnotationBean.inVLabel))
 																	.map(k -> (ObjectNode) o.put(GraphAnnotationBean.inV, k))
 																	.orElse(o)
@@ -522,7 +521,7 @@ public class TitanGraphBuildingUtils {
 		if (existing_elements.isEmpty() && (1 == new_elements.size()) && !config.custom_finalize_all_objects()) {
 			
 			return validateUserElement(new_elements.stream().findFirst().get(), config)
-					.bind(el -> addGraphSON2Graph(bucket_path, key, el, mutable_existing_vertex_store, tx, element_type)) 
+					.bind(el -> addGraphSON2Graph(bucket_path, key, el, mutable_existing_vertex_store, Collections.emptyMap(), tx, element_type)) 
 					.validation(
 							fail -> {
 								logger.ifPresent(l -> l.inefficientLog(Level.DEBUG, 
@@ -545,7 +544,12 @@ public class TitanGraphBuildingUtils {
 							)
 							;
 		}
-		else {					
+		else {	
+			// (just gives me the elements indexed by their ids so we can get them back again later)
+			// (we'll convert to string as a slightly inefficient way of ensuring the same code can handle both edge andv vertex cases)
+			final Map<String, Optional<O>> mutable_existing_element_vs_id_store = 
+					existing_elements.stream().map(t2 -> t2._1()).collect(Collectors.toMap(e -> e.id().toString(), e -> Optional.of(e)));								
+			
 			return maybe_merger.<List<O>>map(merger -> {				
 				
 				final Stream<Tuple2<Long, IBatchRecord>> in_stream = 
@@ -561,7 +565,7 @@ public class TitanGraphBuildingUtils {
 						
 				return merger._2().getAndResetElementList()
 							.stream()
-							.map(o -> addGraphSON2Graph(bucket_path, key, o, mutable_existing_vertex_store, tx, element_type))
+							.map(o -> addGraphSON2Graph(bucket_path, key, o, mutable_existing_vertex_store, mutable_existing_element_vs_id_store, tx, element_type))
 							.<O>flatMap(v -> v.validation(
 													fail -> {
 														logger.ifPresent(l -> l.inefficientLog(Level.DEBUG, 
@@ -592,24 +596,41 @@ public class TitanGraphBuildingUtils {
 			final JsonNode key,
 			final JsonNode graphson_to_add, 
 			final Map<JsonNode, Vertex> mutable_existing_vertex_store,
+			final Map<String, Optional<O>> mutable_existing_element_vs_id_store,
 			final TitanTransaction tx, 
 			Class<O> element_type)
 	{
+		final long now = new Date().getTime();
 		if (Vertex.class.isAssignableFrom(element_type))  {
-			final Vertex v = tx.addVertex(graphson_to_add.get(GraphAnnotationBean.label).asText());
 			
+			// If it's an existing vertex obv don't want to create a new one...	
+			final String vid = Optional.ofNullable(graphson_to_add.get(GraphAnnotationBean.id)).filter(id -> id.isIntegralNumber()).map(id -> id.asLong()).map(id -> id.toString()).orElse(null);
+			final Vertex v = (Vertex) Optional.ofNullable(mutable_existing_element_vs_id_store.get(vid))
+												.map(Optional::get)
+												.orElseGet(() -> (O) tx.addVertex(graphson_to_add.get(GraphAnnotationBean.label).asText()));
+			
+			insertProperties(v, Optional.ofNullable((ObjectNode) graphson_to_add.get(GraphAnnotationBean.properties))); // (is object by construction, see previous validation) 
 			v.property(Cardinality.set, GraphAnnotationBean.a2_p, bucket_path);
+			
+			// Create/update timestamps:
+			v.property(GraphAnnotationBean.a2_tm, now);
+			v.property(GraphAnnotationBean.a2_tc).orElseGet(() -> v.property(GraphAnnotationBean.a2_tc, now));
 			
 			return Validation.success((O) v);
 		}
 		else { // Edge
 			final JsonNode inV = key.get(GraphAnnotationBean.inV);
 			final JsonNode outV = key.get(GraphAnnotationBean.outV);
-			Optional<Edge> maybe_edge = Optional.ofNullable(mutable_existing_vertex_store.get(outV))
-				.map(out_v -> Tuples._2T(out_v, mutable_existing_vertex_store.get(inV)))
-				.filter(t2 -> null != t2._2())
-				.<Edge>map(t2 -> t2._1().addEdge(graphson_to_add.get(GraphAnnotationBean.label).asText(), t2._2()))
-				;
+			
+			// If it's an existing edge obv don't want to create a new one...			
+			final String eid = Optional.ofNullable(graphson_to_add.get(GraphAnnotationBean.id)).map(id -> jsonNodeToObject(id)).map(id -> id.toString()).orElse(null);
+			Optional<O> maybe_edge = 
+					Optional.ofNullable(mutable_existing_element_vs_id_store.get(eid))
+							.orElseGet(() -> Optional.ofNullable(mutable_existing_vertex_store.get(outV))
+												.map(out_v -> Tuples._2T(out_v, mutable_existing_vertex_store.get(inV)))
+												.filter(t2 -> null != t2._2())
+												.map(t2 -> (O) t2._1().addEdge(graphson_to_add.get(GraphAnnotationBean.label).asText(), t2._2())))
+					;
 
 			return maybe_edge.<Validation<BasicMessageBean, O>>map(edge -> {
 				
@@ -617,10 +638,13 @@ public class TitanGraphBuildingUtils {
 				// "piggy back" off an existing edge (but in that case it can be deleted if that bucket is deleted, edge queries might not locate it), 
 				// or create their own (but can't just tag an existing one)
 				// TODO (ALEPH-15): maybe later on can support space-separated lists up to a certain size together with Lucene indexing? (Or add a different property name?)
-				final Iterator<Property<String>> bucket_prop = edge.<String>properties(GraphAnnotationBean.a2_p);
-				if (!bucket_prop.hasNext()) {
-					edge.property(GraphAnnotationBean.a2_p, bucket_path);
-				}				
+				insertProperties(edge, Optional.ofNullable((ObjectNode) graphson_to_add.get(GraphAnnotationBean.properties)));
+				edge.property(GraphAnnotationBean.a2_p).orElseGet(() -> edge.property(GraphAnnotationBean.a2_p, bucket_path));
+				
+				// Create/update timestamps: (still create these, though they aren't indexed)
+				edge.property(GraphAnnotationBean.a2_tm, now);
+				edge.property(GraphAnnotationBean.a2_tc).orElseGet(() -> edge.property(GraphAnnotationBean.a2_tc, now));
+				
 				return Validation.success((O) edge);
 			})
 			.orElseGet(() -> Validation.fail(ErrorUtils.buildErrorMessage(TitanGraphBuildingUtils.class.getSimpleName(), "addGraphSON2Graph", ErrorUtils.MISSING_VERTEX_FOR_EDGE, inV, outV)))
@@ -645,6 +669,55 @@ public class TitanGraphBuildingUtils {
 				.filter(t2 -> null != t2._2())
 				.reduce(_mapper.createObjectNode(), (o, t2) -> insertIntoObjectNode(t2._1(), t2._2(), o), (o1, o2) -> o2)
 				;
+	}
+	
+	/** Inserts one of a few different of property into an edge or vertex
+	 *  TODO (ALEPH-15): Doesn't currently handle a few things: a) multi cardinality 
+	 * @param mutable_element
+	 * @param maybe_props
+	 */
+	protected static void insertProperties(final Element mutable_element, final Optional<ObjectNode> maybe_props) {
+		maybe_props.ifPresent(props -> {
+			Optionals.streamOf(props.fields(), false).forEach(prop -> { 
+				Optional.ofNullable(denestProperties(prop.getValue())).ifPresent(val -> 
+					val.either(
+							o -> {
+								return mutable_element.property(prop.getKey(), o); 
+							},
+							oo -> {
+								if (oo.length > 0) {
+									Patterns.match(oo[0]).andAct() // (see jsonNodeToObject - these are the only possibilities)
+										.when(String.class, __ -> mutable_element.property(prop.getKey(), Arrays.stream(oo).toArray(String[]::new)))
+										.when(Long.class, __ -> mutable_element.property(prop.getKey(), Arrays.stream(oo).toArray(Long[]::new)))
+										.when(Double.class, __ -> mutable_element.property(prop.getKey(), Arrays.stream(oo).toArray(Double[]::new)))
+										.when(Boolean.class, __ -> mutable_element.property(prop.getKey(), Arrays.stream(oo).toArray(Boolean[]::new)))
+										;
+								}
+								return null;
+							}));
+			});
+		});
+	}
+	
+	/** Recursive function to pull out potentially nested properties
+	 * @param property
+	 * @return
+	 */
+	protected static Either<Object, Object[]> denestProperties(final JsonNode property) {
+		if (property.isArray()) { // (Arrays of objects (except length 1) are currently discarded here, no support for cardinality, see above)
+			if (1 == property.size()) { // (this is what all the existing properties look like after conversion to graphson)
+				return denestProperties(property.get(0));
+			}
+			else {
+				return Either.right(Optionals.streamOf(property.iterator(), false).map(j -> jsonNodeToObject(j)).filter(j -> null != j).toArray());
+			}
+		}
+		else if (property.isObject()) {
+			return denestProperties(property.get(GraphAnnotationBean.value));
+		}
+		else {
+			return Either.left(jsonNodeToObject(property));
+		}
 	}
 	
 	/** Inserts a single-valued vertex property into a JSON object
@@ -672,6 +745,7 @@ public class TitanGraphBuildingUtils {
 	 */
 	protected static Object jsonNodeToObject(final JsonNode j) {
 		return Patterns.match().<Object>andReturn()
+			.when(() -> null == j, () -> j)
 			.when(() -> j.isTextual(), () -> j.asText())
 			.when(() -> j.isDouble(), () -> j.asDouble())
 			.when(() -> j.isIntegralNumber(), () -> j.asLong())

@@ -17,7 +17,6 @@
 package com.ikanow.aleph2.graph.titan.services;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -35,6 +34,7 @@ public class MockTitanGraphService extends TitanGraphService {
 	@Inject
 	public MockTitanGraphService() {
 		super(true);
+		_USE_ES_FOR_DEDUP_INDEXES = true; //(since the in memory
 	}
 	
 	//////////////////////////////////////////////////////////
@@ -50,10 +50,7 @@ public class MockTitanGraphService extends TitanGraphService {
 			boolean suspended, Set<String> data_services,
 			Set<String> previous_data_services)
 	{
-		// (Mock Titan doesn't support indices - so nothing to do here)
-		
-		//TODO: if previously was graph and now isn't then call handleBucketDeletionRequest
-		
-		return CompletableFuture.completedFuture(Collections.emptyList()); 
+		// (just calls parent code, only difference is _USE_ES_FOR_DEDUP_INDEXES)
+		return super.onPublishOrUpdate(bucket, old_bucket, suspended, data_services, previous_data_services);
 	}
 }
