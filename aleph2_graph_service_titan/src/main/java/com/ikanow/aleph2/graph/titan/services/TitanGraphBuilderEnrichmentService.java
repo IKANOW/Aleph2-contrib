@@ -194,7 +194,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 						, 
 						_bucket.get(),
 						TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(mutable_tx, _config.get(), 
-								_security_context.get(), _logger.get(), 
+								_security_context.get(), _logger.optional(), 
 								_bucket.get(),
 								copy_vertices_and_edges
 						));

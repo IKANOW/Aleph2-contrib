@@ -20,25 +20,45 @@ import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import org.apache.tinkerpop.gremlin.structure.Edge;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
+import org.apache.tinkerpop.gremlin.structure.io.IoCore;
 import org.junit.Test;
+
+import scala.Tuple2;
+import scala.Tuple4;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
+import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.MockSecurityService;
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.GraphSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.GraphAnnotationBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.graph.titan.services.GraphDecompEnrichmentContext;
+import com.ikanow.aleph2.graph.titan.services.GraphMergeEnrichmentContext;
+import com.ikanow.aleph2.graph.titan.services.SimpleGraphDecompService;
+import com.ikanow.aleph2.graph.titan.services.SimpleGraphMergeService;
+import com.thinkaurelius.titan.core.Cardinality;
 import com.thinkaurelius.titan.core.TitanFactory;
 import com.thinkaurelius.titan.core.TitanGraph;
 import com.thinkaurelius.titan.core.TitanTransaction;
+import com.thinkaurelius.titan.core.schema.TitanManagement;
 
 import fj.data.Validation;
 
@@ -338,13 +358,361 @@ public class TestTitanGraphBuildingUtils {
 	////////////////////////////////
 	////////////////////////////////
 	
+	// UTILS - HIGH LEVEL
+
+	@Test
+	public void test_groupNewEdgesAndVertices() {
+		
+		// Graph schema
+		final GraphSchemaBean graph_schema = BeanTemplateUtils.build(GraphSchemaBean.class)
+					.with(GraphSchemaBean::deduplication_fields, Arrays.asList(GraphAnnotationBean.name, GraphAnnotationBean.type))
+				.done().get();
+
+		final ObjectNode key1 = _mapper.createObjectNode()
+									.put(GraphAnnotationBean.name, "1.1.1.1")
+									.put(GraphAnnotationBean.type, "ip-addr");
+
+		final ObjectNode key2 = _mapper.createObjectNode()
+									.put(GraphAnnotationBean.name, "host.com")
+									.put(GraphAnnotationBean.type, "domain-name");
+		
+		
+		final List<ObjectNode> test_vertices_and_edges = Arrays.asList(
+				(ObjectNode) _mapper.createObjectNode()
+					.put(GraphAnnotationBean.type, GraphAnnotationBean.ElementType.vertex.toString())
+					.put(GraphAnnotationBean.label, "1.1.1.1")
+					.set(GraphAnnotationBean.id, key1
+							)
+				,
+				(ObjectNode) _mapper.createObjectNode() //(invalid node, no type)
+					.put(GraphAnnotationBean.label, "1.1.1.2")
+					.set(GraphAnnotationBean.id, _mapper.createObjectNode()
+													.put(GraphAnnotationBean.name, "1.1.1.2")
+													.put(GraphAnnotationBean.type, "ip-addr")
+							)
+				,
+				(ObjectNode) _mapper.createObjectNode()
+					.put(GraphAnnotationBean.label, "host.com")
+					.put(GraphAnnotationBean.type, GraphAnnotationBean.ElementType.vertex.toString())
+					.set(GraphAnnotationBean.id, key2
+						)
+				,
+				(ObjectNode) ((ObjectNode) _mapper.createObjectNode()
+					.put(GraphAnnotationBean.type, GraphAnnotationBean.ElementType.edge.toString())
+					.put(GraphAnnotationBean.label, "dns-connection")
+					.set(GraphAnnotationBean.inV, _mapper.createObjectNode()
+													.put(GraphAnnotationBean.name, "host.com")
+													.put(GraphAnnotationBean.type, "domain-name")
+							))
+					.set(GraphAnnotationBean.outV, _mapper.createObjectNode()
+													.put(GraphAnnotationBean.name, "1.1.1.1")
+													.put(GraphAnnotationBean.type, "ip-addr")
+							)
+				);
+				
+		final Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> ret_val =
+				TitanGraphBuildingUtils.groupNewEdgesAndVertices(graph_schema, test_vertices_and_edges.stream());
+		
+		
+		assertEquals(2, ret_val.keySet().size());
+		
+		final Tuple2<List<ObjectNode>, List<ObjectNode>> ret_val_1 = ret_val.getOrDefault(key1, Tuples._2T(Collections.emptyList(), Collections.emptyList()));		
+		final Tuple2<List<ObjectNode>, List<ObjectNode>> ret_val_2 = ret_val.getOrDefault(key2, Tuples._2T(Collections.emptyList(), Collections.emptyList()));
+		
+		assertEquals(1, ret_val_1._1().size());
+		assertEquals("1.1.1.1", ret_val_1._1().get(0).get(GraphAnnotationBean.label).asText());
+		assertEquals(1, ret_val_1._2().size());
+		assertEquals("dns-connection", ret_val_1._2().get(0).get(GraphAnnotationBean.label).asText());
+		assertEquals(1, ret_val_2._1().size());
+		assertEquals("host.com", ret_val_2._1().get(0).get(GraphAnnotationBean.label).asText());
+		assertEquals(1, ret_val_2._2().size());
+		assertEquals("dns-connection", ret_val_2._2().get(0).get(GraphAnnotationBean.label).asText());
+	}
+	
+	@Test
+	public void test_finalEdgeGrouping() {
+		final TitanGraph titan = getSimpleTitanGraph();
+		final TitanTransaction tx = titan.buildTransaction().start();
+		
+		final Vertex v1 = tx.addVertex("1.1.1.1");
+		final Vertex v2 = tx.addVertex("host.com");
+		
+		final ObjectNode key1 = _mapper.createObjectNode()
+				.put(GraphAnnotationBean.name, "1.1.1.1")
+				.put(GraphAnnotationBean.type, "ip-addr");
+
+		final ObjectNode key2 = _mapper.createObjectNode()
+				.put(GraphAnnotationBean.name, "host.com")
+				.put(GraphAnnotationBean.type, "domain-name");
+
+		final List<ObjectNode> mutable_edges = Arrays.asList(
+				(ObjectNode) ((ObjectNode) _mapper.createObjectNode()
+						.put(GraphAnnotationBean.type, GraphAnnotationBean.ElementType.edge.toString())
+						.put(GraphAnnotationBean.label, "dns-connection")
+						.set(GraphAnnotationBean.inV, _mapper.createObjectNode()
+														.put(GraphAnnotationBean.name, "host.com")
+														.put(GraphAnnotationBean.type, "domain-name")
+								))
+						.set(GraphAnnotationBean.outV, _mapper.createObjectNode()
+														.put(GraphAnnotationBean.name, "1.1.1.1")
+														.put(GraphAnnotationBean.type, "ip-addr")
+								)
+								,
+				(ObjectNode) ((ObjectNode) _mapper.createObjectNode()
+						.put(GraphAnnotationBean.type, GraphAnnotationBean.ElementType.edge.toString())
+						.put(GraphAnnotationBean.label, "self-connect")
+						.set(GraphAnnotationBean.inV, _mapper.createObjectNode()
+														.put(GraphAnnotationBean.name, "1.1.1.1")
+														.put(GraphAnnotationBean.type, "ip-addr")
+								))
+						.set(GraphAnnotationBean.outV, _mapper.createObjectNode()
+														.put(GraphAnnotationBean.name, "1.1.1.1")
+														.put(GraphAnnotationBean.type, "ip-addr")
+								)
+				);
+
+		// Some other handy objects
+		final List<ObjectNode> dup_mutable_edges = mutable_edges.stream().map(o -> o.deepCopy()).collect(Collectors.toList());
+		final ObjectNode self_link = (ObjectNode) ((ObjectNode) _mapper.createObjectNode().set(GraphAnnotationBean.inV, key1)).set(GraphAnnotationBean.outV, key1);
+		final ObjectNode normal_link = (ObjectNode) ((ObjectNode) _mapper.createObjectNode().set(GraphAnnotationBean.inV, key2)).set(GraphAnnotationBean.outV, key1);		
+		
+		// First pass, should grab the self-connector
+		{
+			final Map<ObjectNode, List<ObjectNode>> ret_val_pass = TitanGraphBuildingUtils.finalEdgeGrouping(key1, v1, mutable_edges);
+			
+			// First pass through, snags the edge that points to itself
+			assertEquals(1, ret_val_pass.size());
+			assertEquals(1, ret_val_pass.getOrDefault(self_link, Collections.emptyList()).size());
+			final ObjectNode val = ret_val_pass.get(self_link).get(0);
+			assertEquals("self-connect", val.get(GraphAnnotationBean.label).asText());
+			assertEquals(v1.id(), val.get(GraphAnnotationBean.inV).asLong());
+			assertEquals(v1.id(), val.get(GraphAnnotationBean.outV).asLong());
+		}
+		// Second pass, connects the other edge up
+		{
+			final Map<ObjectNode, List<ObjectNode>> ret_val_pass = TitanGraphBuildingUtils.finalEdgeGrouping(key2, v2, mutable_edges);
+			
+			// First pass through, snags the edge that points to itself
+			assertEquals(2, ret_val_pass.size());
+			assertEquals("Should hav enormal key: " + ret_val_pass.keySet() + " vs " + normal_link, 1, ret_val_pass.getOrDefault(normal_link, Collections.emptyList()).size());
+			final ObjectNode val = ret_val_pass.get(normal_link).get(0);
+			assertEquals("dns-connection", val.get(GraphAnnotationBean.label).asText());
+			assertEquals(v2.id(), val.get(GraphAnnotationBean.inV).asLong());
+			assertEquals(v1.id(), val.get(GraphAnnotationBean.outV).asLong());
+		}
+		
+		// Another first pass, but with the other key so nothing emits
+		{
+			final Map<ObjectNode, List<ObjectNode>> ret_val_pass = TitanGraphBuildingUtils.finalEdgeGrouping(key2, v2, dup_mutable_edges);
+			assertEquals(0, ret_val_pass.size());
+		}
+		
+		tx.commit();
+	}
+	
+	@Test
+	public void test_invokeUserMergeCode() {
+		// This has a massive set of params, here we go:
+		final TitanGraph titan = getSimpleTitanGraph();
+		final TitanTransaction tx = titan.buildTransaction().start();
+		// Graph schema
+		final GraphSchemaBean graph_schema = BeanTemplateUtils.build(GraphSchemaBean.class)
+					.with(GraphSchemaBean::deduplication_fields, Arrays.asList(GraphAnnotationBean.name, GraphAnnotationBean.type))
+				.done().get();
+		// Security service
+		final MockSecurityService mock_security = new MockSecurityService();
+		final String user = "nobody";
+		//TODO: add param to make this work
+		// Simple merger
+		final Optional<Tuple2<IEnrichmentBatchModule, GraphMergeEnrichmentContext>> maybe_merger = 
+				Optional.of(
+						Tuples._2T((IEnrichmentBatchModule) new SimpleGraphMergeService(),
+									new GraphMergeEnrichmentContext(null, graph_schema)
+						));
+		maybe_merger.ifPresent(t2 -> t2._1().onStageInitialize(t2._2(), null, null, null, null));
+		// special titan mapper
+		final ObjectMapper titan_mapper = titan.io(IoCore.graphson()).mapper().create().createMapper();
+		// Bucket
+		final String bucket_path = "/test/security";
+		// Key
+		final ObjectNode key = _mapper.createObjectNode().put(GraphAnnotationBean.name, "alex").put(GraphAnnotationBean.type, "person"); 
+		// New elements
+		//TODO
+		final List<ObjectNode> new_vertices = Arrays.asList();
+		final List<ObjectNode> new_edges = Arrays.asList();
+		// Existing elements
+		//TODO
+		final List<Tuple2<Vertex, JsonNode>> existing_vertices = Arrays.asList();
+		final List<Tuple2<Edge, JsonNode>> existing_edges = Arrays.asList();
+		// State
+		//TODO
+		final Map<JsonNode, Vertex> mutable_existing_vertex_store = new HashMap<>();
+		
+		// This is a huge one...
+		// Vertices
+		{
+			@SuppressWarnings("unused")
+			List<Vertex> v = 
+					TitanGraphBuildingUtils.invokeUserMergeCode(
+							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
+							maybe_merger, titan_mapper, Vertex.class, bucket_path, key, new_vertices, existing_vertices, mutable_existing_vertex_store);
+			
+			//TODO: test results
+		}
+		// Edges
+		{
+			@SuppressWarnings("unused")
+			List<Edge> e = 
+					TitanGraphBuildingUtils.invokeUserMergeCode(
+							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
+							maybe_merger, titan_mapper, Edge.class, bucket_path, key, new_edges, existing_edges, mutable_existing_vertex_store);			
+			
+			//TODO: test results
+		}
+		//TODO any edge cases to test?
+	}
+	
+	@Test
+	public void test_addGraphSON2Graph() {		
+		final String bucket_path = "/test/tagged";
+		// Titan
+		final TitanGraph titan = getSimpleTitanGraph();
+		final TitanTransaction tx = titan.buildTransaction().start();
+		TitanManagement mgmt = titan.openManagement();		
+		mgmt.makePropertyKey(GraphAnnotationBean.a2_p).dataType(String.class).cardinality(Cardinality.SET).make();
+		mgmt.commit();
+		// Key
+		final ObjectNode key = _mapper.createObjectNode().put(GraphAnnotationBean.name, "alex").put(GraphAnnotationBean.type, "person"); 
+		// State
+		//TODO
+		final Map<JsonNode, Vertex> mutable_existing_vertex_store = new HashMap<>();
+		// GraphSON to add:
+		final ObjectNode vertex_to_add = _mapper.createObjectNode().put(GraphAnnotationBean.label, "test_vertex");
+		final ObjectNode edge_to_add = _mapper.createObjectNode().put(GraphAnnotationBean.label, "test_edge");
+		
+		{
+			@SuppressWarnings("unused")
+			Validation<BasicMessageBean, Vertex> ret_val = 
+					TitanGraphBuildingUtils.addGraphSON2Graph(bucket_path, key, vertex_to_add, mutable_existing_vertex_store, tx, Vertex.class);
+		}
+		{
+			@SuppressWarnings("unused")
+			Validation<BasicMessageBean, Edge> ret_val = 
+					TitanGraphBuildingUtils.addGraphSON2Graph(bucket_path, key, edge_to_add, mutable_existing_vertex_store, tx, Edge.class);
+		}
+		
+		tx.commit();
+		
+		//TODO validate graph
+	}
+
+	//TODO: make sure the test case not connecting anything is handled
+	
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////
+	////////////////////////////////
+	
+	// UTILS - TOP LEVEL LOGIC
+
+	@Test
+	public void test_buildGraph_getUserGeneratedAssets() {
+		
+		// (this is a pretty simple method so will use to test the decomposing service also)
+		
+		final GraphSchemaBean graph_schema = BeanTemplateUtils.build(GraphSchemaBean.class)
+					.with(GraphSchemaBean::deduplication_fields, Arrays.asList(GraphAnnotationBean.name, GraphAnnotationBean.type))
+				.done().get();
+		
+		final Stream<Tuple2<Long, IBatchRecord>> batch = Stream.empty();
+		
+		final Optional<Tuple2<IEnrichmentBatchModule, GraphDecompEnrichmentContext>> maybe_decomposer = 
+				Optional.of(
+						Tuples._2T((IEnrichmentBatchModule) new SimpleGraphDecompService(),
+									new GraphDecompEnrichmentContext(null, graph_schema)
+						));
+		//TODO
+		//maybe_decomposer.ifPresent(t2 -> t2._1().onStageInitialize(t2._2(), null, null, null, null));
+		
+		@SuppressWarnings("unused")
+		final List<ObjectNode> ret_val = TitanGraphBuildingUtils.buildGraph_getUserGeneratedAssets(
+				batch, Optional.empty(), Optional.empty(), maybe_decomposer
+				);
+		
+		//TODO
+	}
+	
+	@Test
+	public void test_buildGraph_collectUserGeneratedAssets() {
+		// Titan
+		final TitanGraph titan = getSimpleTitanGraph();
+		final TitanTransaction tx = titan.buildTransaction().start();
+		// Graph schema
+		final GraphSchemaBean graph_schema = BeanTemplateUtils.build(GraphSchemaBean.class)
+				.with(GraphSchemaBean::deduplication_fields, Arrays.asList(GraphAnnotationBean.name, GraphAnnotationBean.type))
+			.done().get();
+		// Security service
+		final MockSecurityService mock_security = new MockSecurityService();
+		final String user = "nobody";
+		//TODO: set permission
+		// Bucket
+		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class)
+				.with(DataBucketBean::full_name, "/test/security")
+				//TODO: probably need something else as well?
+				.done().get();
+		// Stream of objects (TODO: eg get from test_buildGraph_getUserGeneratedAssets)
+		final Stream<ObjectNode> vertices_and_edges = Stream.empty();
+		
+		@SuppressWarnings("unused")
+		final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val = 
+				TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges)
+				;
+		//TODO		
+		
+		tx.commit();
+	}
+	
+	@Test
+	public void test_buildGraph_handleMerge() {
+		// Titan
+		final TitanGraph titan = getSimpleTitanGraph();
+		final TitanTransaction tx = titan.buildTransaction().start();
+		// Graph schema
+		final GraphSchemaBean graph_schema = BeanTemplateUtils.build(GraphSchemaBean.class)
+				.with(GraphSchemaBean::deduplication_fields, Arrays.asList(GraphAnnotationBean.name, GraphAnnotationBean.type))
+			.done().get();
+		// Security service
+		final MockSecurityService mock_security = new MockSecurityService();
+		final String user = "nobody";
+		//TODO: set permission
+		// Bucket
+		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class)
+				.with(DataBucketBean::full_name, "/test/security")
+				//TODO: probably need something else as well?
+				.done().get();
+		// Simple merger
+		final Optional<Tuple2<IEnrichmentBatchModule, GraphMergeEnrichmentContext>> maybe_merger = 
+				Optional.of(
+						Tuples._2T((IEnrichmentBatchModule) new SimpleGraphMergeService(),
+									new GraphMergeEnrichmentContext(null, graph_schema)
+						));
+		maybe_merger.ifPresent(t2 -> t2._1().onStageInitialize(t2._2(), null, null, null, null));
+		// Input TODO
+		final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> mergeable = Stream.empty();
+		
+		{
+			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), maybe_merger, bucket, mergeable);
+			//TODO		
+		}
+	}
+	
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////
+	////////////////////////////////
+	
 	// (Test utilities)
 	
 	protected TitanGraph getSimpleTitanGraph() {
 		final TitanGraph titan = TitanFactory.build().set("storage.backend", "inmemory").open();
 		return titan;		
 	}
-	
-	
-	
 }

@@ -227,7 +227,7 @@ public class TitanGraphBuildingUtils {
 			final TitanTransaction tx, 
 			final GraphSchemaBean config,
 			final Tuple2<String, ISecurityService> security_service,
-			final IBucketLogger logger,
+			final Optional<IBucketLogger> logger,
 			final DataBucketBean bucket,
 			final Stream<ObjectNode> vertices_and_edges)
 	{
@@ -405,15 +405,16 @@ public class TitanGraphBuildingUtils {
 					.filter(o -> o.has(GraphAnnotationBean.type))
 					.<Tuple3<ObjectNode, ObjectNode, Boolean>>flatMap(o -> {
 						final JsonNode type = o.get(GraphAnnotationBean.type);
+						
 						if ((null == type) || !type.isTextual()) return Stream.empty();
 						if (GraphAnnotationBean.ElementType.edge.toString().equals(type.asText())) {
 							// Grab both edges from both ends:
 							return Stream.concat(
-									Optional.ofNullable(type.get(GraphAnnotationBean.inV)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, false))).orElse(Stream.empty()), 
-									Optional.ofNullable(type.get(GraphAnnotationBean.outV)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, false))).orElse(Stream.empty()));
+									Optional.ofNullable(o.get(GraphAnnotationBean.inV)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, false))).orElse(Stream.empty()), 
+									Optional.ofNullable(o.get(GraphAnnotationBean.outV)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, false))).orElse(Stream.empty()));
 						}
 						else if (GraphAnnotationBean.ElementType.vertex.toString().equals(type.asText())) {
-							return Optional.ofNullable(type.get(GraphAnnotationBean.id)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, true))).orElse(Stream.empty());
+							return Optional.ofNullable(o.get(GraphAnnotationBean.id)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, true))).orElse(Stream.empty());
 						}
 						else return Stream.empty();
 					})
@@ -434,22 +435,26 @@ public class TitanGraphBuildingUtils {
 	/** Previously our edges were double-grouped by in and out keys - now we can group them by the (in/out) pair
 	 * @param key
 	 * @param vertex_winner
-	 * @param edges
+	 * @param mutable_edges
 	 * @return
 	 */
 	protected static Map<ObjectNode, List<ObjectNode>> finalEdgeGrouping(
 			final ObjectNode key,
 			final Vertex vertex_winner,
-			final List<ObjectNode> edges
+			final List<ObjectNode> mutable_edges
 			)
 	{
-		final Map<ObjectNode, List<ObjectNode>> grouped_edges = edges.stream().filter(mutable_edge -> {
+		final Map<ObjectNode, List<ObjectNode>> grouped_edges = mutable_edges.stream().filter(mutable_edge -> {
 			
 			final JsonNode in_key = mutable_edge.get(GraphAnnotationBean.inV);
 			final JsonNode out_key = mutable_edge.get(GraphAnnotationBean.outV);
 			
-			final JsonNode matching_key = (in_key == key) ? in_key : out_key; // (has to be one of the 2 by construction)
-			final JsonNode off_key = (in_key != key) ? in_key : (out_key != key ? out_key : null); // (a vertex can have an edge be to itself)
+			final JsonNode matching_key = in_key.equals(key) // (has to be one of the 2 by construction)
+											? in_key 
+											: out_key; 
+			final JsonNode off_key = !in_key.equals(key) // (doesn't match this key)
+										? in_key 
+										: (!out_key.equals(key) ? out_key : null); // (a vertex can have an edge be to itself)
 			
 			if (null == off_key) {
 				mutable_edge.put(GraphAnnotationBean.inV, (Long) vertex_winner.id());
@@ -578,20 +583,20 @@ public class TitanGraphBuildingUtils {
 	}
 	
 	/** Creates a Titan element (vertex/edge) from the (validated) graphSON and adds to the graph
-	 * @param in
+	 * @param graphson_to_add
 	 * @return
 	 */
 	@SuppressWarnings("unchecked")
 	protected static <O extends Element> Validation<BasicMessageBean, O> addGraphSON2Graph(
 			final String bucket_path,
 			final JsonNode key,
-			final JsonNode in, 
+			final JsonNode graphson_to_add, 
 			final Map<JsonNode, Vertex> mutable_existing_vertex_store,
 			final TitanTransaction tx, 
 			Class<O> element_type)
 	{
 		if (Vertex.class.isAssignableFrom(element_type))  {
-			final Vertex v = tx.addVertex(in.get(GraphAnnotationBean.label).asText());
+			final Vertex v = tx.addVertex(graphson_to_add.get(GraphAnnotationBean.label).asText());
 			
 			v.property(Cardinality.set, GraphAnnotationBean.a2_p, bucket_path);
 			
@@ -603,7 +608,7 @@ public class TitanGraphBuildingUtils {
 			Optional<Edge> maybe_edge = Optional.ofNullable(mutable_existing_vertex_store.get(outV))
 				.map(out_v -> Tuples._2T(out_v, mutable_existing_vertex_store.get(inV)))
 				.filter(t2 -> null != t2._2())
-				.<Edge>map(t2 -> t2._1().addEdge(in.get(GraphAnnotationBean.label).asText(), t2._2()))
+				.<Edge>map(t2 -> t2._1().addEdge(graphson_to_add.get(GraphAnnotationBean.label).asText(), t2._2()))
 				;
 
 			return maybe_edge.<Validation<BasicMessageBean, O>>map(edge -> {
