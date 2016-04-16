@@ -80,6 +80,53 @@ import fj.data.Validation;
 public class TitanGraphBuildingUtils {
 	final static ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 
+	/** Handy utility class for keep track of stats for logging purposes
+	 * @author Alex
+	 */
+	public static class MutableStatsBean {
+		public long vertices_emitted = 0L;
+		public long edges_emitted = 0L;
+		public long vertices_created = 0L;
+		public long edges_created = 0L;
+		public long vertices_updated = 0L;
+		public long edges_updated = 0L;
+		public long vertex_errors = 0L;
+		public long edge_errors = 0L;
+		public long vertex_matches_found = 0L;
+		public long edge_matches_found = 0L;
+		
+		/** Mutable reset
+=		 */
+		public void reset() {
+			vertices_emitted = 0L;
+			edges_emitted = 0L;
+			vertices_created = 0L;
+			edges_created = 0L;
+			vertices_updated = 0L;
+			edges_updated = 0L;
+			vertex_errors = 0L;
+			edge_errors = 0L;
+			vertex_matches_found = 0L;
+			edge_matches_found = 0L;			
+		}
+		
+		/** Mutable update method
+		 * @param per_batch
+		 */
+		public void combine(final MutableStatsBean per_batch) {
+			vertices_emitted += per_batch.vertices_emitted;
+			edges_emitted += per_batch.edges_emitted;
+			vertices_created += per_batch.vertices_created;
+			edges_created += per_batch.edges_created;
+			vertices_updated += per_batch.vertices_updated;
+			edges_updated += per_batch.edges_updated;
+			vertex_errors += per_batch.vertex_errors;
+			edge_errors += per_batch.edge_errors;
+			vertex_matches_found += per_batch.vertex_matches_found;
+			edge_matches_found += per_batch.edge_matches_found;
+		}
+	}
+	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////
 	////////////////////////////////
@@ -294,6 +341,7 @@ public class TitanGraphBuildingUtils {
 				final GraphSchemaBean config,
 				final Tuple2<String, ISecurityService> security_service,
 				final Optional<IBucketLogger> logger,
+				final MutableStatsBean mutable_stats,
 				final Optional<Tuple2<IEnrichmentBatchModule, GraphMergeEnrichmentContext>> maybe_merger,
 				final DataBucketBean bucket,
 				final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> mergeable
@@ -313,6 +361,10 @@ public class TitanGraphBuildingUtils {
 			final List<ObjectNode> edges = t4._3();
 			final List<Tuple2<Vertex, JsonNode>> existing_vertices = t4._4();
 			
+			mutable_stats.vertices_emitted += vertices.size();
+			mutable_stats.edges_emitted += edges.size();
+			mutable_stats.vertex_matches_found += existing_vertices.size();
+			
 			// 1) First step is to sort out the _vertices_, here's the cases:
 			
 			// 1.1) If there's no matching vertices then create a new vertex and get the id (via a merge if finalize is set)
@@ -323,7 +375,7 @@ public class TitanGraphBuildingUtils {
 			// 1.2.b) copy any properties from the original objects into the winner and remove any so-desired properties
 
 			final Optional<Vertex> maybe_vertex_winner = 
-					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Vertex.class, bucket.full_name(), key, vertices, existing_vertices, Collections.emptyMap())
+					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, mutable_stats, Vertex.class, bucket.full_name(), key, vertices, existing_vertices, Collections.emptyMap())
 						.stream()
 						.findFirst()
 						;
@@ -378,8 +430,10 @@ public class TitanGraphBuildingUtils {
 								.collect(Collectors.toList())
 								;
 
+					mutable_stats.edge_matches_found += existing_edges.size();
+							
 					//final List<Edge> finalized_edges =
-					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, Edge.class, bucket.full_name(), kv.getKey(), kv.getValue(), existing_edges, mutable_existing_vertex_store);
+					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, mutable_stats, Edge.class, bucket.full_name(), kv.getKey(), kv.getValue(), existing_edges, mutable_existing_vertex_store);
 				});
 			});
 				
@@ -508,7 +562,8 @@ public class TitanGraphBuildingUtils {
 			final Tuple2<String, ISecurityService> security_service,
 			final Optional<IBucketLogger> logger,
 			final Optional<Tuple2<IEnrichmentBatchModule, GraphMergeEnrichmentContext>> maybe_merger,
-			final ObjectMapper titan_mapper
+			final ObjectMapper titan_mapper,
+			final MutableStatsBean mutable_stats
 			,
 			final Class<O> element_type,
 			final String bucket_path,
@@ -521,9 +576,12 @@ public class TitanGraphBuildingUtils {
 		if (existing_elements.isEmpty() && (1 == new_elements.size()) && !config.custom_finalize_all_objects()) {
 			
 			return validateUserElement(new_elements.stream().findFirst().get(), config)
-					.bind(el -> addGraphSON2Graph(bucket_path, key, el, mutable_existing_vertex_store, Collections.emptyMap(), tx, element_type)) 
+					.bind(el -> addGraphSON2Graph(bucket_path, key, el, mutable_existing_vertex_store, Collections.emptyMap(), tx, element_type, mutable_stats)) 
 					.validation(
 							fail -> {
+								if (Vertex.class.isAssignableFrom(element_type)) mutable_stats.vertex_errors++; 
+								else if (Edge.class.isAssignableFrom(element_type)) mutable_stats.edge_errors++;
+								
 								logger.ifPresent(l -> l.inefficientLog(Level.DEBUG, 
 										BeanTemplateUtils.clone(fail)
 											.with(BasicMessageBean::source, "GraphBuilderEnrichmentService")
@@ -565,9 +623,12 @@ public class TitanGraphBuildingUtils {
 						
 				return merger._2().getAndResetElementList()
 							.stream()
-							.map(o -> addGraphSON2Graph(bucket_path, key, o, mutable_existing_vertex_store, mutable_existing_element_vs_id_store, tx, element_type))
+							.map(o -> addGraphSON2Graph(bucket_path, key, o, mutable_existing_vertex_store, mutable_existing_element_vs_id_store, tx, element_type, mutable_stats))
 							.<O>flatMap(v -> v.validation(
 													fail -> {
+														if (Vertex.class.isAssignableFrom(element_type)) mutable_stats.vertex_errors++; 
+														else if (Edge.class.isAssignableFrom(element_type)) mutable_stats.edge_errors++;
+														
 														logger.ifPresent(l -> l.inefficientLog(Level.DEBUG, 
 																BeanTemplateUtils.clone(fail)
 																	.with(BasicMessageBean::source, "GraphBuilderEnrichmentService")
@@ -598,7 +659,7 @@ public class TitanGraphBuildingUtils {
 			final Map<JsonNode, Vertex> mutable_existing_vertex_store,
 			final Map<String, Optional<O>> mutable_existing_element_vs_id_store,
 			final TitanTransaction tx, 
-			Class<O> element_type)
+			Class<O> element_type, final MutableStatsBean mutable_stats)
 	{
 		final long now = new Date().getTime();
 		if (Vertex.class.isAssignableFrom(element_type))  {
@@ -606,8 +667,15 @@ public class TitanGraphBuildingUtils {
 			// If it's an existing vertex obv don't want to create a new one...	
 			final String vid = Optional.ofNullable(graphson_to_add.get(GraphAnnotationBean.id)).filter(id -> id.isIntegralNumber()).map(id -> id.asLong()).map(id -> id.toString()).orElse(null);
 			final Vertex v = (Vertex) Optional.ofNullable(mutable_existing_element_vs_id_store.get(vid))
+												.map(vv -> { // (update stats)
+													mutable_stats.vertices_updated++;
+													return vv;
+												})
 												.map(Optional::get)
-												.orElseGet(() -> (O) tx.addVertex(graphson_to_add.get(GraphAnnotationBean.label).asText()));
+												.orElseGet(() -> {
+													mutable_stats.vertices_created++;
+													return (O) tx.addVertex(graphson_to_add.get(GraphAnnotationBean.label).asText());
+												});
 			
 			insertProperties(v, Optional.ofNullable((ObjectNode) graphson_to_add.get(GraphAnnotationBean.properties))); // (is object by construction, see previous validation) 
 			v.property(Cardinality.set, GraphAnnotationBean.a2_p, bucket_path);
@@ -626,10 +694,19 @@ public class TitanGraphBuildingUtils {
 			final String eid = Optional.ofNullable(graphson_to_add.get(GraphAnnotationBean.id)).map(id -> jsonNodeToObject(id)).map(id -> id.toString()).orElse(null);
 			Optional<O> maybe_edge = 
 					Optional.ofNullable(mutable_existing_element_vs_id_store.get(eid))
-							.orElseGet(() -> Optional.ofNullable(mutable_existing_vertex_store.get(outV))
-												.map(out_v -> Tuples._2T(out_v, mutable_existing_vertex_store.get(inV)))
-												.filter(t2 -> null != t2._2())
-												.map(t2 -> (O) t2._1().addEdge(graphson_to_add.get(GraphAnnotationBean.label).asText(), t2._2())))
+							.map(ee -> {
+								mutable_stats.edges_updated++;
+								return ee;								
+							})
+							.orElseGet(() -> {
+								return Optional.ofNullable(mutable_existing_vertex_store.get(outV))
+									.map(out_v -> Tuples._2T(out_v, mutable_existing_vertex_store.get(inV)))
+									.filter(t2 -> null != t2._2())
+									.map(t2 -> {
+										mutable_stats.edges_created++;
+										return (O) t2._1().addEdge(graphson_to_add.get(GraphAnnotationBean.label).asText(), t2._2());
+									});
+							})
 					;
 
 			return maybe_edge.<Validation<BasicMessageBean, O>>map(edge -> {
@@ -647,7 +724,10 @@ public class TitanGraphBuildingUtils {
 				
 				return Validation.success((O) edge);
 			})
-			.orElseGet(() -> Validation.fail(ErrorUtils.buildErrorMessage(TitanGraphBuildingUtils.class.getSimpleName(), "addGraphSON2Graph", ErrorUtils.MISSING_VERTEX_FOR_EDGE, inV, outV)))
+			.orElseGet(() -> {
+				//(error stats updated in parent function)
+				return Validation.fail(ErrorUtils.buildErrorMessage(TitanGraphBuildingUtils.class.getSimpleName(), "addGraphSON2Graph", ErrorUtils.MISSING_VERTEX_FOR_EDGE, inV, outV));
+			})
 			;
 		}
 	}	

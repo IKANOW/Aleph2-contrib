@@ -61,6 +61,7 @@ import com.ikanow.aleph2.graph.titan.services.GraphDecompEnrichmentContext;
 import com.ikanow.aleph2.graph.titan.services.GraphMergeEnrichmentContext;
 import com.ikanow.aleph2.graph.titan.services.SimpleGraphDecompService;
 import com.ikanow.aleph2.graph.titan.services.SimpleGraphMergeService;
+import com.ikanow.aleph2.graph.titan.utils.TitanGraphBuildingUtils.MutableStatsBean;
 import com.thinkaurelius.titan.core.Cardinality;
 import com.thinkaurelius.titan.core.TitanFactory;
 import com.thinkaurelius.titan.core.TitanGraph;
@@ -610,13 +611,16 @@ public class TestTitanGraphBuildingUtils {
 		final Map<JsonNode, Vertex> mutable_existing_vertex_store = new HashMap<>();
 		mutable_existing_vertex_store.put(vertex_key_1, v1);
 		mutable_existing_vertex_store.put(vertex_key_2, v2);
+		final MutableStatsBean mutable_stats = new MutableStatsBean();
 		
 		// Vertices, no existing elements
 		{
+			mutable_stats.reset();
+			
 			List<Vertex> ret_val = 
 					TitanGraphBuildingUtils.invokeUserMergeCode(
 							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
-							maybe_merger, titan_mapper, Vertex.class, bucket_path, vertex_key_1, Arrays.asList(new_vertices.get(0)), Collections.emptyList(), Collections.emptyMap());
+							maybe_merger, titan_mapper, mutable_stats, Vertex.class, bucket_path, vertex_key_1, Arrays.asList(new_vertices.get(0)), Collections.emptyList(), Collections.emptyMap());
 			
 			assertEquals(1, ret_val.size());
 			assertEquals(
@@ -629,6 +633,18 @@ public class TestTitanGraphBuildingUtils {
 							Optionals.streamOf(v.properties(GraphAnnotationBean.a2_p), false).map(p -> p.value().toString()).collect(Collectors.toList())
 					)
 					);
+			
+			// Stats
+			assertEquals(0L, mutable_stats.edge_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.edges_created);
+			assertEquals(0L, mutable_stats.edges_emitted);
+			assertEquals(0L, mutable_stats.edges_updated);
+			assertEquals(0L, mutable_stats.vertex_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(1L, mutable_stats.vertices_created);
+			assertEquals(0L, mutable_stats.vertices_emitted);
+			assertEquals(0L, mutable_stats.vertices_updated);
 			
 			// Check the properties situation:
 			assertEquals(1, Optionals.streamOf(tx.query().has("props_str", "str").vertices(), false).count());
@@ -646,10 +662,12 @@ public class TestTitanGraphBuildingUtils {
 		}
 		// Vertices, existing elements, multiple new elements
 		{
+			mutable_stats.reset();
+			
 			List<Vertex> ret_val = 
 					TitanGraphBuildingUtils.invokeUserMergeCode(
 							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
-							maybe_merger, titan_mapper, Vertex.class, bucket_path, vertex_key_1, new_vertices, existing_vertices, Collections.emptyMap());
+							maybe_merger, titan_mapper, mutable_stats, Vertex.class, bucket_path, vertex_key_1, new_vertices, existing_vertices, Collections.emptyMap());
 			
 			assertEquals(1, ret_val.size());
 			assertEquals(0, Optionals.streamOf(tx.query().hasNot("existing").vertices(), false).count()); // (since i've overwritten an existing one...)
@@ -664,6 +682,18 @@ public class TestTitanGraphBuildingUtils {
 					)
 					);
 
+			// Stats
+			assertEquals(0L, mutable_stats.edge_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.edges_created);
+			assertEquals(0L, mutable_stats.edges_emitted);
+			assertEquals(0L, mutable_stats.edges_updated);
+			assertEquals(0L, mutable_stats.vertex_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.vertices_created);
+			assertEquals(0L, mutable_stats.vertices_emitted);
+			assertEquals(1L, mutable_stats.vertices_updated);
+			
 			// Check that we didn't actually add another vertex:
 			assertEquals(2, Optionals.streamOf(tx.query().vertices(), false).count());
 			// Time
@@ -678,10 +708,12 @@ public class TestTitanGraphBuildingUtils {
 		}
 		// Vertices, existing elements, single element
 		{
+			mutable_stats.reset();
+			
 			List<Vertex> ret_val = 
 					TitanGraphBuildingUtils.invokeUserMergeCode(
 							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
-							maybe_merger, titan_mapper, Vertex.class, bucket_path, vertex_key_1, new_vertices, existing_vertices, Collections.emptyMap());
+							maybe_merger, titan_mapper, mutable_stats, Vertex.class, bucket_path, vertex_key_1, new_vertices, existing_vertices, Collections.emptyMap());
 			
 			assertEquals(1, ret_val.size());
 			assertEquals(0, Optionals.streamOf(tx.query().hasNot("existing").vertices(), false).count()); // (since i've overwritten an existing one...)
@@ -696,6 +728,18 @@ public class TestTitanGraphBuildingUtils {
 					)
 					);
 
+			// Stats
+			assertEquals(0L, mutable_stats.edge_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.edges_created);
+			assertEquals(0L, mutable_stats.edges_emitted);
+			assertEquals(0L, mutable_stats.edges_updated);
+			assertEquals(0L, mutable_stats.vertex_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.vertices_created);
+			assertEquals(0L, mutable_stats.vertices_emitted);
+			assertEquals(1L, mutable_stats.vertices_updated);
+			
 			// Check that we didn't actually add another vertex:
 			assertEquals(2, Optionals.streamOf(tx.query().vertices(), false).count());
 			// Time
@@ -708,10 +752,12 @@ public class TestTitanGraphBuildingUtils {
 		}
 		// Edges, no existing elements, single new element
 		{
+			mutable_stats.reset();
+			
 			List<Edge> ret_val = 
 					TitanGraphBuildingUtils.invokeUserMergeCode(
 							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
-							maybe_merger, titan_mapper, Edge.class, bucket_path, edge_key, Arrays.asList(new_edges.get(0)), Collections.emptyList(), mutable_existing_vertex_store);			
+							maybe_merger, titan_mapper, mutable_stats, Edge.class, bucket_path, edge_key, Arrays.asList(new_edges.get(0)), Collections.emptyList(), mutable_existing_vertex_store);			
 			
 			
 			assertEquals(1, ret_val.size());
@@ -726,6 +772,18 @@ public class TestTitanGraphBuildingUtils {
 					)
 					);
 
+			// Stats
+			assertEquals(0L, mutable_stats.edge_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(1L, mutable_stats.edges_created);
+			assertEquals(0L, mutable_stats.edges_emitted);
+			assertEquals(0L, mutable_stats.edges_updated);
+			assertEquals(0L, mutable_stats.vertex_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.vertices_created);
+			assertEquals(0L, mutable_stats.vertices_emitted);
+			assertEquals(0L, mutable_stats.vertices_updated);
+			
 			// Check the properties situation:
 			assertEquals(1, Optionals.streamOf(tx.query().has("props_long", 5L).edges(), false).count());
 			assertEquals(1, Optionals.streamOf(tx.query().has("props_obj", Arrays.asList("a", "r", "r").toArray()).edges(), false).count());			
@@ -741,10 +799,12 @@ public class TestTitanGraphBuildingUtils {
 		}
 		// Edges, no existing elements, multiple new elements
 		{
+			mutable_stats.reset();
+			
 			List<Edge> ret_val = 
 					TitanGraphBuildingUtils.invokeUserMergeCode(
 							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
-							maybe_merger, titan_mapper, Edge.class, bucket_path, edge_key, new_edges, Collections.emptyList(), mutable_existing_vertex_store);			
+							maybe_merger, titan_mapper, mutable_stats, Edge.class, bucket_path, edge_key, new_edges, Collections.emptyList(), mutable_existing_vertex_store);			
 			
 			assertEquals(1, ret_val.size());
 			assertEquals(
@@ -758,6 +818,18 @@ public class TestTitanGraphBuildingUtils {
 					)
 					);
 
+			// Stats
+			assertEquals(0L, mutable_stats.edge_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(1L, mutable_stats.edges_created);
+			assertEquals(0L, mutable_stats.edges_emitted);
+			assertEquals(0L, mutable_stats.edges_updated);
+			assertEquals(0L, mutable_stats.vertex_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.vertices_created);
+			assertEquals(0L, mutable_stats.vertices_emitted);
+			assertEquals(0L, mutable_stats.vertices_updated);
+			
 			// Check that we did actually add another edge:
 			assertEquals(3, Optionals.streamOf(tx.query().edges(), false).count());			
 			// Time
@@ -769,10 +841,12 @@ public class TestTitanGraphBuildingUtils {
 		}
 		// Edges, existing elements, multiple elements (unlike single one)
 		{
+			mutable_stats.reset();
+			
 			List<Edge> ret_val = 
 					TitanGraphBuildingUtils.invokeUserMergeCode(
 							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
-							maybe_merger, titan_mapper, Edge.class, bucket_path, edge_key, new_edges, existing_edges, mutable_existing_vertex_store);			
+							maybe_merger, titan_mapper, mutable_stats, Edge.class, bucket_path, edge_key, new_edges, existing_edges, mutable_existing_vertex_store);			
 						
 			assertEquals(1, ret_val.size());
 			assertEquals(0, Optionals.streamOf(tx.query().hasNot("existing").edges(), false).count()); // (since i've overwritten an existing one...)
@@ -787,6 +861,18 @@ public class TestTitanGraphBuildingUtils {
 					)
 					);
 
+			// Stats
+			assertEquals(0L, mutable_stats.edge_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.edges_created);
+			assertEquals(0L, mutable_stats.edges_emitted);
+			assertEquals(1L, mutable_stats.edges_updated);
+			assertEquals(0L, mutable_stats.vertex_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.vertices_created);
+			assertEquals(0L, mutable_stats.vertices_emitted);
+			assertEquals(0L, mutable_stats.vertices_updated);
+			
 			// Check that we didn't actually add another edge:
 			assertEquals(2, Optionals.streamOf(tx.query().edges(), false).count());			
 			// Time
@@ -802,13 +888,27 @@ public class TestTitanGraphBuildingUtils {
 		// Some error cases:
 		// 1) Demonstrate a failure, just remove the label
 		{
+			mutable_stats.reset();
+			
 			new_vertices.get(0).remove(GraphAnnotationBean.label);
 			
 			List<Vertex> ret_val = 
 					TitanGraphBuildingUtils.invokeUserMergeCode(
 							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
-							maybe_merger, titan_mapper, Vertex.class, bucket_path, vertex_key_1, Arrays.asList(new_vertices.get(0)), Collections.emptyList(), Collections.emptyMap());
+							maybe_merger, titan_mapper, mutable_stats, Vertex.class, bucket_path, vertex_key_1, Arrays.asList(new_vertices.get(0)), Collections.emptyList(), Collections.emptyMap());
 
+			// Stats
+			assertEquals(0L, mutable_stats.edge_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.edges_created);
+			assertEquals(0L, mutable_stats.edges_emitted);
+			assertEquals(0L, mutable_stats.edges_updated);
+			assertEquals(1L, mutable_stats.vertex_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.vertices_created);
+			assertEquals(0L, mutable_stats.vertices_emitted);
+			assertEquals(0L, mutable_stats.vertices_updated);
+			
 			// Time
 			assertEquals(0, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tc).edges(), false).count()); // (added/updated time)
 			assertEquals(0, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tm).edges(), false).count()); // (added/updated time)
@@ -817,11 +917,25 @@ public class TestTitanGraphBuildingUtils {
 		}
 		// 2) Shouldn't happen, but just check the case where no vertex can be found
 		{
+			mutable_stats.reset();
+			
 			List<Edge> ret_val = 
 					TitanGraphBuildingUtils.invokeUserMergeCode(
 							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
-							maybe_merger, titan_mapper, Edge.class, bucket_path, edge_key, new_edges, Collections.emptyList(), Collections.emptyMap());			
+							maybe_merger, titan_mapper, mutable_stats, Edge.class, bucket_path, edge_key, new_edges, Collections.emptyList(), Collections.emptyMap());			
 						
+			// Stats
+			assertEquals(1L, mutable_stats.edge_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.edges_created);
+			assertEquals(0L, mutable_stats.edges_emitted);
+			assertEquals(0L, mutable_stats.edges_updated);
+			assertEquals(0L, mutable_stats.vertex_errors);
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.vertices_created);
+			assertEquals(0L, mutable_stats.vertices_emitted);
+			assertEquals(0L, mutable_stats.vertices_updated);
+			
 			// Time
 			assertEquals(0, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tc).edges(), false).count()); // (added/updated time)
 			assertEquals(0, Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_tm).edges(), false).count()); // (added/updated time)
@@ -1001,8 +1115,10 @@ public class TestTitanGraphBuildingUtils {
 		// Input TODO
 		final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> mergeable = Stream.empty();
 		
+		final MutableStatsBean mutable_stats = new MutableStatsBean();		
+		
 		{
-			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), maybe_merger, bucket, mergeable);
+			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, mergeable);
 			//TODO		
 		}
 	}
