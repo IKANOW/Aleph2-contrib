@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -53,6 +54,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadat
 import com.ikanow.aleph2.data_model.objects.data_import.GraphAnnotationBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.graph.titan.data_model.SimpleDecompConfigBean;
@@ -559,7 +561,7 @@ public class TestTitanGraphBuildingUtils {
 		// Security service
 		final MockSecurityService mock_security = new MockSecurityService();
 		final String user = "nobody";
-		mock_security.setGlobalMockRole("nobody:DataBucketBean:read,write:test:security*", true);
+		mock_security.setGlobalMockRole("nobody:DataBucketBean:read,write:test:security:*", true);
 		// Simple merger
 		final IEnrichmentModuleContext delegate_context = Mockito.mock(IEnrichmentModuleContext.class);
 		Mockito.when(delegate_context.getNextUnusedId()).thenReturn(0L);
@@ -983,7 +985,7 @@ public class TestTitanGraphBuildingUtils {
 //		tx.commit();
 	}
 
-	//TODO: make sure the test case not connecting anything is handled
+	//TODO: have a check for if security not set .. vertices: done, NEED EDGES TEST THOUGH 
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////
@@ -993,6 +995,9 @@ public class TestTitanGraphBuildingUtils {
 
 	@Test
 	public void test_buildGraph_getUserGeneratedAssets() {
+		test_buildGraph_getUserGeneratedAssets_run();
+	};
+	public List<ObjectNode> test_buildGraph_getUserGeneratedAssets_run() {
 		
 		// (this is a pretty simple method so will use to test the decomposing service also)
 		
@@ -1049,12 +1054,24 @@ public class TestTitanGraphBuildingUtils {
 				batch, Optional.empty(), Optional.empty(), maybe_decomposer
 				);
 		
+		// test_buildGraph_collectUserGeneratedAssets needs
+		// Nodes
+		// IPA, IPB, DX, DY, DZ
+		// Links
+		// IPA: IPA->DX, IPA->DY, IPA->DZ
+		// IPB: IPB->DX, IPB->DY
+		// DX: IPA, IPB
+		// DY: IPA, IPB
+		// DZ: IPA
+		
 		assertEquals(11, ret_val.size()); // (get more vertices because they are generated multiple times...)
 		assertEquals(5, ret_val.stream().filter(v -> GraphAnnotationBean.ElementType.vertex.toString().equals(v.get(GraphAnnotationBean.type).asText())).count());
 		assertEquals(6, ret_val.stream().filter(v -> GraphAnnotationBean.ElementType.edge.toString().equals(v.get(GraphAnnotationBean.type).asText())).count());
 		
 		//coverage!
 		maybe_decomposer.ifPresent(t2 -> t2._1().onStageComplete(true));
+		
+		return ret_val;
 	}
 	
 	@Test
@@ -1062,6 +1079,8 @@ public class TestTitanGraphBuildingUtils {
 		// Titan
 		final TitanGraph titan = getSimpleTitanGraph();
 		final TitanTransaction tx = titan.buildTransaction().start();
+		// (add vertices and edges later)
+		
 		// Graph schema
 		final GraphSchemaBean graph_schema = BeanTemplateUtils.build(GraphSchemaBean.class)
 				.with(GraphSchemaBean::deduplication_fields, Arrays.asList(GraphAnnotationBean.name, GraphAnnotationBean.type))
@@ -1069,20 +1088,153 @@ public class TestTitanGraphBuildingUtils {
 		// Security service
 		final MockSecurityService mock_security = new MockSecurityService();
 		final String user = "nobody";
-		//TODO: set permission
+		mock_security.setGlobalMockRole("nobody:DataBucketBean:read,write:test:security:*", true);
 		// Bucket
 		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class)
 				.with(DataBucketBean::full_name, "/test/security")
-				//TODO: probably need something else as well?
 				.done().get();
-		// Stream of objects (TODO: eg get from test_buildGraph_getUserGeneratedAssets)
-		final Stream<ObjectNode> vertices_and_edges = Stream.empty();
 		
-		@SuppressWarnings("unused")
-		final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val = 
-				TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges)
-				;
-		//TODO		
+		// Stream of objects		
+		final List<ObjectNode> vertices_and_edges = test_buildGraph_getUserGeneratedAssets_run();
+				
+		// Empty graph, collect information
+		{
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
+					;
+			
+			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val = ret_val_s.collect(Collectors.toList());
+			
+			// (5 different vertex keys)
+			assertEquals(5, ret_val.size()); 
+			// (no existing elements)
+			assertTrue(ret_val.stream().allMatch(t4 -> t4._4().isEmpty()));
+			
+			// Nodes
+			// IPA, IPB, DX, DY, DZ
+			// Links
+			// IPA: IPA->DX, IPA->DY, IPA->DZ
+			// IPB: IPB->DX, IPB->DY
+			// DX: IPA, IPB
+			// DY: IPA, IPB
+			// DZ: IPA
+			
+			// (note there can be dups in here, so do the distinct)
+			final Function<String, Long> getDistinctCount = key -> {
+				return ret_val.stream().filter(t4 -> t4._1().get(GraphAnnotationBean.name).asText().equals(key)).map(t4 -> t4._3().stream().distinct().count()).reduce((a, b) -> a+b).orElse(0L);
+			};
+			assertEquals(3, getDistinctCount.apply("ipA").intValue());
+			assertEquals(2, getDistinctCount.apply("ipB").intValue());
+			assertEquals(2, getDistinctCount.apply("dX").intValue());
+			assertEquals(2, getDistinctCount.apply("dY").intValue());
+			assertEquals(1, getDistinctCount.apply("dZ").intValue());
+		}
+		// Add some nodes and rerun
+		{
+			Vertex v1 = tx.addVertex("existing_ipA");
+			v1.property(GraphAnnotationBean.name, "ipA");
+			v1.property(GraphAnnotationBean.type, "ip");
+			v1.property(GraphAnnotationBean.a2_p, "/test/security");
+			Vertex v2 = tx.addVertex("existing_dY");
+			v2.property(GraphAnnotationBean.name, "dY");
+			v2.property(GraphAnnotationBean.type, "host");
+			v2.property(GraphAnnotationBean.a2_p, "/test/security");
+			
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
+					;
+			
+			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val = ret_val_s.collect(Collectors.toList());
+			
+			// (5 different vertex keys)
+			assertEquals(5, ret_val.size()); 
+			
+			// (note there can be dups in here, so do the distinct)
+			final Function<String, Long> getDistinctCount = key -> {
+				return ret_val.stream().filter(t4 -> t4._1().get(GraphAnnotationBean.name).asText().equals(key)).map(t4 -> t4._3().stream().distinct().count()).reduce((a, b) -> a+b).orElse(0L);
+			};
+			assertEquals(3, getDistinctCount.apply("ipA").intValue());
+			assertEquals(2, getDistinctCount.apply("ipB").intValue());
+			assertEquals(2, getDistinctCount.apply("dX").intValue());
+			assertEquals(2, getDistinctCount.apply("dY").intValue());
+			assertEquals(1, getDistinctCount.apply("dZ").intValue());
+			final Function<String, Long> getDistinctExistingCount = key -> {
+				return ret_val.stream().filter(t4 -> t4._1().get(GraphAnnotationBean.name).asText().equals(key)).map(t4 -> t4._4().stream().distinct().count()).reduce((a, b) -> a+b).orElse(0L);
+			};
+			assertEquals(1, getDistinctExistingCount.apply("ipA").intValue());
+			assertEquals(0, getDistinctExistingCount.apply("ipB").intValue());
+			assertEquals(0, getDistinctExistingCount.apply("dX").intValue());
+			assertEquals(1, getDistinctExistingCount.apply("dY").intValue());
+			assertEquals(0, getDistinctExistingCount.apply("dZ").intValue());
+		}
+		// Test bucket - check that treats like empty
+		{
+			final DataBucketBean test_bucket = BucketUtils.convertDataBucketBeanToTest(bucket, "nobody");
+			
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), test_bucket, vertices_and_edges.stream())
+					;
+			
+			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val = ret_val_s.collect(Collectors.toList());
+			
+			// (5 different vertex keys)
+			assertEquals(5, ret_val.size()); 
+			// (no existing elements)
+			assertTrue(ret_val.stream().allMatch(t4 -> t4._4().isEmpty()));
+			
+			// Nodes
+			// IPA, IPB, DX, DY, DZ
+			// Links
+			// IPA: IPA->DX, IPA->DY, IPA->DZ
+			// IPB: IPB->DX, IPB->DY
+			// DX: IPA, IPB
+			// DY: IPA, IPB
+			// DZ: IPA
+			
+			// (note there can be dups in here, so do the distinct)
+			final Function<String, Long> getDistinctCount = key -> {
+				return ret_val.stream().filter(t4 -> t4._1().get(GraphAnnotationBean.name).asText().equals(key)).map(t4 -> t4._3().stream().distinct().count()).reduce((a, b) -> a+b).orElse(0L);
+			};
+			assertEquals(3, getDistinctCount.apply("ipA").intValue());
+			assertEquals(2, getDistinctCount.apply("ipB").intValue());
+			assertEquals(2, getDistinctCount.apply("dX").intValue());
+			assertEquals(2, getDistinctCount.apply("dY").intValue());
+			assertEquals(1, getDistinctCount.apply("dZ").intValue());
+		}
+		// Remove security - check that treats like empty
+		{
+			mock_security.setGlobalMockRole("nobody:DataBucketBean:read,write:test:security:*", false);
+			
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
+					;
+			
+			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val = ret_val_s.collect(Collectors.toList());
+			
+			// (5 different vertex keys)
+			assertEquals(5, ret_val.size()); 
+			// (no existing elements)
+			assertTrue(ret_val.stream().allMatch(t4 -> t4._4().isEmpty()));
+			
+			// Nodes
+			// IPA, IPB, DX, DY, DZ
+			// Links
+			// IPA: IPA->DX, IPA->DY, IPA->DZ
+			// IPB: IPB->DX, IPB->DY
+			// DX: IPA, IPB
+			// DY: IPA, IPB
+			// DZ: IPA
+			
+			// (note there can be dups in here, so do the distinct)
+			final Function<String, Long> getDistinctCount = key -> {
+				return ret_val.stream().filter(t4 -> t4._1().get(GraphAnnotationBean.name).asText().equals(key)).map(t4 -> t4._3().stream().distinct().count()).reduce((a, b) -> a+b).orElse(0L);
+			};
+			assertEquals(3, getDistinctCount.apply("ipA").intValue());
+			assertEquals(2, getDistinctCount.apply("ipB").intValue());
+			assertEquals(2, getDistinctCount.apply("dX").intValue());
+			assertEquals(2, getDistinctCount.apply("dY").intValue());
+			assertEquals(1, getDistinctCount.apply("dZ").intValue());
+		}
 		
 		tx.commit();
 	}
