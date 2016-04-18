@@ -19,6 +19,7 @@ env:
  - TEST_DIR=aleph2_analytic_services_storm
  - TEST_DIR=aleph2_analytic_services_hadoop
  - TEST_DIR=aleph2_document_service_v1
+ - TEST_DIR=aleph2_graph_service_titan
 
 script: cd $TEST_DIR && mvn -B install -DskipTests=true && mvn clean test jacoco:report coveralls:report
 
