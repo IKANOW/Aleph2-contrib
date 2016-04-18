@@ -38,6 +38,7 @@ import org.mockito.Mockito;
 import scala.Tuple2;
 import scala.Tuple4;
 
+import com.codepoetics.protonpack.StreamUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -338,23 +339,37 @@ public class TestTitanGraphBuildingUtils {
 		// No permissions
 		{
 			final Vertex test_vertex = tx.addVertex("test_vertex");		
-			assertTrue(TitanGraphBuildingUtils.isAllowed(Tuples._2T("nobody", mock_security_service), test_vertex));
+			assertTrue(TitanGraphBuildingUtils.isAllowed("/misc", Tuples._2T("nobody", mock_security_service), test_vertex));
 		}
 		// Fails/succeeds based on permission
 		{
 			final Vertex test_vertex = tx.addVertex("test_vertex");		
 			test_vertex.property(GraphAnnotationBean.a2_p, "/test");
-			assertFalse(TitanGraphBuildingUtils.isAllowed(Tuples._2T("nobody", mock_security_service), test_vertex));			
+			assertFalse(TitanGraphBuildingUtils.isAllowed("/misc", Tuples._2T("nobody", mock_security_service), test_vertex));			
 
 			mock_security_service.setGlobalMockRole("nobody:DataBucketBean:read,write:test:*", true);
-			assertTrue(TitanGraphBuildingUtils.isAllowed(Tuples._2T("nobody", mock_security_service), test_vertex));			
+			assertTrue(TitanGraphBuildingUtils.isAllowed("/misc", Tuples._2T("nobody", mock_security_service), test_vertex));			
+		}
+		// Check fails on test buckets...
+		{
+			final Vertex test_vertex = tx.addVertex("test_vertex");		
+			test_vertex.property(GraphAnnotationBean.a2_p, "/aleph2_testing/blah");
+			mock_security_service.setGlobalMockRole("nobody:DataBucketBean:read,write:aleph2_testing:blah:*", true);
+			assertFalse(TitanGraphBuildingUtils.isAllowed("/misc", Tuples._2T("nobody", mock_security_service), test_vertex));			
+		}
+		// ... unless the bucket name matches
+		{
+			final Vertex test_vertex = tx.addVertex("test_vertex");		
+			test_vertex.property(GraphAnnotationBean.a2_p, "/aleph2_testing/blah");
+			mock_security_service.setGlobalMockRole("nobody:DataBucketBean:read,write:aleph2_testing:blah:*", true);
+			assertTrue(TitanGraphBuildingUtils.isAllowed("/aleph2_testing/blah", Tuples._2T("nobody", mock_security_service), test_vertex));			
 		}
 		// Just double check with edge...
 		{
 			final Vertex test_edge = tx.addVertex("test_vertex");		
 			test_edge.property(GraphAnnotationBean.a2_p, "/test");
-			assertTrue(TitanGraphBuildingUtils.isAllowed(Tuples._2T("nobody", mock_security_service), test_edge));			
-			
+			assertTrue(TitanGraphBuildingUtils.isAllowed("/misc", Tuples._2T("nobody", mock_security_service), test_edge));			
+		
 		}
 		tx.commit();		
 	}
@@ -469,6 +484,7 @@ public class TestTitanGraphBuildingUtils {
 				(ObjectNode) ((ObjectNode) _mapper.createObjectNode()
 						.put(GraphAnnotationBean.type, GraphAnnotationBean.ElementType.edge.toString())
 						.put(GraphAnnotationBean.label, "dns-connection")
+						.put(GraphAnnotationBean.inVLabel, "host.com") // (this gets removed the first call - these props are not otherwise used)
 						.set(GraphAnnotationBean.inV, _mapper.createObjectNode()
 														.put(GraphAnnotationBean.name, "host.com")
 														.put(GraphAnnotationBean.type, "domain-name")
@@ -481,6 +497,7 @@ public class TestTitanGraphBuildingUtils {
 				(ObjectNode) ((ObjectNode) _mapper.createObjectNode()
 						.put(GraphAnnotationBean.type, GraphAnnotationBean.ElementType.edge.toString())
 						.put(GraphAnnotationBean.label, "self-connect")
+						.put(GraphAnnotationBean.outVLabel, "1.1.1.1") // (this gets removed the first call - these props are not otherwise used)
 						.set(GraphAnnotationBean.inV, _mapper.createObjectNode()
 														.put(GraphAnnotationBean.name, "1.1.1.1")
 														.put(GraphAnnotationBean.type, "ip-addr")
@@ -501,7 +518,7 @@ public class TestTitanGraphBuildingUtils {
 			final Map<ObjectNode, List<ObjectNode>> ret_val_pass = TitanGraphBuildingUtils.finalEdgeGrouping(key1, v1, mutable_edges);
 			
 			// First pass through, snags the edge that points to itself
-			final ObjectNode full_group = self_link.deepCopy(); // (at one point had label in here, but that's been removed now to keep the internal data model simpler)
+			final ObjectNode full_group = self_link.deepCopy().put(GraphAnnotationBean.label, "self-connect");
 			assertEquals(1, ret_val_pass.size());
 			assertEquals(1, ret_val_pass.getOrDefault(full_group, Collections.emptyList()).size());
 			final ObjectNode val = ret_val_pass.get(full_group).get(0);
@@ -514,7 +531,7 @@ public class TestTitanGraphBuildingUtils {
 			final Map<ObjectNode, List<ObjectNode>> ret_val_pass = TitanGraphBuildingUtils.finalEdgeGrouping(key2, v2, mutable_edges);
 			
 			// First pass through, snags the edge that points to itself
-			final ObjectNode full_group = normal_link.deepCopy(); // (at one point had label in here, but that's been removed now to keep the internal data model simpler)
+			final ObjectNode full_group = normal_link.deepCopy().put(GraphAnnotationBean.label, "dns-connection");
 			assertEquals(2, ret_val_pass.size());
 			assertEquals("Should hav enormal key: " + ret_val_pass.keySet() + " vs " + normal_link, 1, ret_val_pass.getOrDefault(full_group, Collections.emptyList()).size());
 			final ObjectNode val = ret_val_pass.get(full_group).get(0);
@@ -578,7 +595,7 @@ public class TestTitanGraphBuildingUtils {
 		// Key
 		final ObjectNode vertex_key_1 = _mapper.createObjectNode().put(GraphAnnotationBean.name, "alex").put(GraphAnnotationBean.type, "person"); 
 		final ObjectNode vertex_key_2 = _mapper.createObjectNode().put(GraphAnnotationBean.name, "caleb").put(GraphAnnotationBean.type, "person");
-		final ObjectNode edge_key = (ObjectNode) ((ObjectNode) _mapper.createObjectNode().set(GraphAnnotationBean.inV, vertex_key_1)).set(GraphAnnotationBean.outV, vertex_key_2);
+		final ObjectNode edge_key = (ObjectNode) ((ObjectNode) _mapper.createObjectNode().put(GraphAnnotationBean.label, "test_label").set(GraphAnnotationBean.inV, vertex_key_1)).set(GraphAnnotationBean.outV, vertex_key_2);
 		// New elements (note can mess about with different keys because they are checked higher up in the stack, here things are just "pre-grouped" lists)
 		final List<ObjectNode> new_vertices = Arrays.asList(
 				(ObjectNode) ((ObjectNode) _mapper.createObjectNode().put(GraphAnnotationBean.type, "vertex").put(GraphAnnotationBean.label, "test_v_1")
@@ -985,8 +1002,6 @@ public class TestTitanGraphBuildingUtils {
 //		tx.commit();
 	}
 
-	//TODO: have a check for if security not set .. vertices: done, NEED EDGES TEST THOUGH 
-	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////
 	////////////////////////////////
@@ -1131,14 +1146,7 @@ public class TestTitanGraphBuildingUtils {
 		}
 		// Add some nodes and rerun
 		{
-			Vertex v1 = tx.addVertex("existing_ipA");
-			v1.property(GraphAnnotationBean.name, "ipA");
-			v1.property(GraphAnnotationBean.type, "ip");
-			v1.property(GraphAnnotationBean.a2_p, "/test/security");
-			Vertex v2 = tx.addVertex("existing_dY");
-			v2.property(GraphAnnotationBean.name, "dY");
-			v2.property(GraphAnnotationBean.type, "host");
-			v2.property(GraphAnnotationBean.a2_p, "/test/security");
+			rebuildSimpleGraph(tx, bucket.full_name());
 			
 			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
 					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
@@ -1239,39 +1247,242 @@ public class TestTitanGraphBuildingUtils {
 		tx.commit();
 	}
 	
+	@SuppressWarnings("unchecked")
 	@Test
 	public void test_buildGraph_handleMerge() {
 		// Titan
 		final TitanGraph titan = getSimpleTitanGraph();
-		final TitanTransaction tx = titan.buildTransaction().start();
+		final ObjectMapper titan_mapper = titan.io(IoCore.graphson()).mapper().create().createMapper();
+		TitanManagement mgmt = titan.openManagement();		
+		mgmt.makePropertyKey(GraphAnnotationBean.a2_p).dataType(String.class).cardinality(Cardinality.SET).make();
+		mgmt.commit();
 		// Graph schema
 		final GraphSchemaBean graph_schema = BeanTemplateUtils.build(GraphSchemaBean.class)
 				.with(GraphSchemaBean::deduplication_fields, Arrays.asList(GraphAnnotationBean.name, GraphAnnotationBean.type))
+				.with(GraphSchemaBean::custom_finalize_all_objects, false)
 			.done().get();
 		// Security service
 		final MockSecurityService mock_security = new MockSecurityService();
 		final String user = "nobody";
-		//TODO: set permission
+		mock_security.setGlobalMockRole("nobody:DataBucketBean:read,write:test:security:*", true);
+		mock_security.setGlobalMockRole("nobody:DataBucketBean:read,write:aleph2_testing:other_user:test:security:*", true); // (equivalent for test bucket)
 		// Bucket
 		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class)
 				.with(DataBucketBean::full_name, "/test/security")
-				//TODO: probably need something else as well?
 				.done().get();
 		// Simple merger
+		final IEnrichmentModuleContext delegate_context = Mockito.mock(IEnrichmentModuleContext.class);
+		Mockito.when(delegate_context.getNextUnusedId()).thenReturn(0L);
 		final Optional<Tuple2<IEnrichmentBatchModule, GraphMergeEnrichmentContext>> maybe_merger = 
 				Optional.of(
 						Tuples._2T((IEnrichmentBatchModule) new SimpleGraphMergeService(),
-									new GraphMergeEnrichmentContext(null, graph_schema)
+									new GraphMergeEnrichmentContext(delegate_context, graph_schema)
 						));
 		maybe_merger.ifPresent(t2 -> t2._1().onStageInitialize(t2._2(), null, null, null, null));
-		// Input TODO
-		final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> mergeable = Stream.empty();
+		// Stream of incoming objects
 		
 		final MutableStatsBean mutable_stats = new MutableStatsBean();		
-		
+
+		// Call merge with empty graph
 		{
-			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, mergeable);
-			//TODO		
+			final List<ObjectNode> vertices_and_edges = test_buildGraph_getUserGeneratedAssets_run();
+			
+			final TitanTransaction tx = titan.buildTransaction().start();
+			
+			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
+					;
+			
+			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
+			
+			// Check graph
+			assertEquals(2, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "ip").vertices()).count());
+			assertEquals(3, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "host").vertices()).count());
+			assertEquals(5, StreamUtils.stream(tx.query().edges()).count());
+
+			// Check stats
+			assertEquals(5L, mutable_stats.vertices_created);
+			assertEquals(0L, mutable_stats.vertices_updated);
+			assertEquals(5L, mutable_stats.vertices_emitted);
+			assertEquals(0L, mutable_stats.vertex_matches_found);
+			assertEquals(0L, mutable_stats.vertex_errors);
+			assertEquals(5L, mutable_stats.edges_created);
+			assertEquals(0L, mutable_stats.edges_updated);
+			assertTrue(mutable_stats.edges_emitted >= 10L); // *2 + any existing edges for later keys that are created by earlier ones
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.edge_errors);
+			
+			//(delete everything read for next test)
+			mutable_stats.reset();
+			tx.vertices().forEachRemaining(v -> v.remove());
+			tx.edges().forEachRemaining(v -> v.remove());
+			tx.commit();
+		}
+		// With some existing edges and vertices
+		{
+			final List<ObjectNode> vertices_and_edges = test_buildGraph_getUserGeneratedAssets_run();
+			
+			final TitanTransaction tx = titan.buildTransaction().start();
+			rebuildSimpleGraph(tx, bucket.full_name());
+			
+			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
+					;
+			
+			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
+			
+			// Check graph
+			assertEquals(2, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "ip").vertices()).count());
+			assertEquals(3, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "host").vertices()).count());
+			assertEquals("Should have the right number of edges: " +
+					StreamUtils.stream(tx.query().edges()).map(e -> titan_mapper.convertValue(e, JsonNode.class).toString()).collect(Collectors.joining("\n")),
+						6, StreamUtils.stream(tx.query().edges()).count()); //(+1 for the extra "wrong type" one i added)
+
+			// Check stats
+			assertEquals(3L, mutable_stats.vertices_created);
+			assertEquals(2L, mutable_stats.vertices_updated);
+			assertEquals(5L, mutable_stats.vertices_emitted);
+			assertEquals(2L, mutable_stats.vertex_matches_found);
+			assertEquals(0L, mutable_stats.vertex_errors);
+			assertEquals(4L, mutable_stats.edges_created);
+			assertEquals(1L, mutable_stats.edges_updated);
+			assertTrue(mutable_stats.edges_emitted >= 10L); // *2 + any existing edges for later keys that are created by earlier ones
+			assertEquals(1L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.edge_errors);
+			
+			//(delete everything read for next test)
+			mutable_stats.reset();
+			tx.vertices().forEachRemaining(v -> v.remove());
+			tx.edges().forEachRemaining(v -> v.remove());
+			tx.commit();			
+		}
+		// Existing elements, but will be ignored because in test mode
+		{
+			final DataBucketBean test_bucket = BucketUtils.convertDataBucketBeanToTest(bucket, "nobody");
+			
+			final List<ObjectNode> vertices_and_edges = test_buildGraph_getUserGeneratedAssets_run();
+			
+			final TitanTransaction tx = titan.buildTransaction().start();
+			rebuildSimpleGraph(tx, bucket.full_name());
+			
+			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), test_bucket, vertices_and_edges.stream())
+					;
+			
+			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
+			
+			// Check graph
+			assertEquals(3, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "ip").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)
+			assertEquals(4, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "host").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)
+			assertEquals("Should have the right number of edges: " +
+					StreamUtils.stream(tx.query().edges()).map(e -> titan_mapper.convertValue(e, JsonNode.class).toString()).collect(Collectors.joining("\n")),
+						7, StreamUtils.stream(tx.query().edges()).count()); //(+1 for the extra "wrong type" one i added, +1 for the existing edge that _doesn't_ get merged because of the test mode)
+
+			// Check stats
+			assertEquals(5L, mutable_stats.vertices_created);
+			assertEquals(0L, mutable_stats.vertices_updated);
+			assertEquals(5L, mutable_stats.vertices_emitted);
+			assertEquals(0L, mutable_stats.vertex_matches_found);
+			assertEquals(0L, mutable_stats.vertex_errors);
+			assertEquals(5L, mutable_stats.edges_created);
+			assertEquals(0L, mutable_stats.edges_updated);
+			assertTrue(mutable_stats.edges_emitted >= 10L); // *2 + any existing edges for later keys that are created by earlier ones
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.edge_errors);
+			
+			//(delete everything read for next test)
+			mutable_stats.reset();
+			tx.vertices().forEachRemaining(v -> v.remove());
+			tx.edges().forEachRemaining(v -> v.remove());
+			tx.commit();			
+		}
+		// Existing elents, but will be ignored because _they_ are from a test mode... 
+		{
+			
+			final List<ObjectNode> vertices_and_edges = test_buildGraph_getUserGeneratedAssets_run();
+			
+			final TitanTransaction tx = titan.buildTransaction().start();
+			{
+				//(just make sure i don't accidentally run with test_bucket)
+				final DataBucketBean test_bucket = BucketUtils.convertDataBucketBeanToTest(bucket, "other_user");
+				rebuildSimpleGraph(tx, test_bucket.full_name());
+			}
+			
+			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
+					;
+			
+			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
+			
+			// Check graph
+			assertEquals(3, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "ip").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)
+			assertEquals(4, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "host").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)
+			assertEquals("Should have the right number of edges: " +
+					StreamUtils.stream(tx.query().edges()).map(e -> titan_mapper.convertValue(e, JsonNode.class).toString()).collect(Collectors.joining("\n")),
+						7, StreamUtils.stream(tx.query().edges()).count()); //(+1 for the extra "wrong type" one i added, +1 for the existing edge that _doesn't_ get merged because of the test mode)
+
+			// Check stats
+			assertEquals(5L, mutable_stats.vertices_created);
+			assertEquals(0L, mutable_stats.vertices_updated);
+			assertEquals(5L, mutable_stats.vertices_emitted);
+			assertEquals(0L, mutable_stats.vertex_matches_found);
+			assertEquals(0L, mutable_stats.vertex_errors);
+			assertEquals(5L, mutable_stats.edges_created);
+			assertEquals(0L, mutable_stats.edges_updated);
+			assertTrue(mutable_stats.edges_emitted >= 10L); // *2 + any existing edges for later keys that are created by earlier ones
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.edge_errors);
+			
+			//(delete everything read for next test)
+			mutable_stats.reset();
+			tx.vertices().forEachRemaining(v -> v.remove());
+			tx.edges().forEachRemaining(v -> v.remove());
+			tx.commit();						
+		}
+		// Existing elements, but will be ignored because security is turned off
+		{
+			mock_security.setGlobalMockRole("nobody:DataBucketBean:read,write:test:security:*", false);
+			
+			final List<ObjectNode> vertices_and_edges = test_buildGraph_getUserGeneratedAssets_run();
+			
+			final TitanTransaction tx = titan.buildTransaction().start();
+			rebuildSimpleGraph(tx, bucket.full_name());
+			
+			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
+					;
+			
+			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
+			
+			// Check graph
+			assertEquals(3, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "ip").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)
+			assertEquals(4, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "host").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)
+			assertEquals("Should have the right number of edges: " +
+					StreamUtils.stream(tx.query().edges()).map(e -> titan_mapper.convertValue(e, JsonNode.class).toString()).collect(Collectors.joining("\n")),
+						7, StreamUtils.stream(tx.query().edges()).count()); //(+1 for the extra "wrong type" one i added, +1 for the existing edge that _doesn't_ get merged because of the test mode)
+
+			// Check stats
+			assertEquals(5L, mutable_stats.vertices_created);
+			assertEquals(0L, mutable_stats.vertices_updated);
+			assertEquals(5L, mutable_stats.vertices_emitted);
+			assertEquals(0L, mutable_stats.vertex_matches_found);
+			assertEquals(0L, mutable_stats.vertex_errors);
+			assertEquals(5L, mutable_stats.edges_created);
+			assertEquals(0L, mutable_stats.edges_updated);
+			assertTrue(mutable_stats.edges_emitted >= 10L); // *2 + any existing edges for later keys that are created by earlier ones
+			assertEquals(0L, mutable_stats.edge_matches_found);
+			assertEquals(0L, mutable_stats.edge_errors);
+			
+			//(delete everything read for next test)
+			mutable_stats.reset();
+			tx.vertices().forEachRemaining(v -> v.remove());
+			tx.edges().forEachRemaining(v -> v.remove());
+			tx.commit();
 		}
 	}
 	
@@ -1285,4 +1496,25 @@ public class TestTitanGraphBuildingUtils {
 		final TitanGraph titan = TitanFactory.build().set("storage.backend", "inmemory").open();
 		return titan;		
 	}
+
+	private void rebuildSimpleGraph(final TitanTransaction tx, final String bucket_name) {
+		final Vertex v1 = tx.addVertex("existing_ipA");
+		v1.property(GraphAnnotationBean.name, "ipA");
+		v1.property(GraphAnnotationBean.type, "ip");
+		v1.property(GraphAnnotationBean.a2_p, bucket_name);
+		v1.property("existing", true);
+		final Vertex v2 = tx.addVertex("existing_dY");
+		v2.property(GraphAnnotationBean.name, "dY");
+		v2.property(GraphAnnotationBean.type, "host");
+		v2.property(GraphAnnotationBean.a2_p, bucket_name);
+		v2.property("existing", true);
+		final Edge e1 = v1.addEdge("test_edge_1", v2);
+		e1.property(GraphAnnotationBean.a2_p, bucket_name);
+		e1.property("existing", true);
+		final Edge e2 = v1.addEdge("wrong_edge_type", v2);
+		e2.property(GraphAnnotationBean.a2_p, bucket_name);
+		e2.property("existing", true);
+		// (add a fake edge to filter out)					
+	}
+	
 }

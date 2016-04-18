@@ -316,7 +316,7 @@ public class TitanGraphBuildingUtils {
 		final Map<JsonNode, List<Tuple2<Vertex, JsonNode>>> grouped_vertices = dups 
 					.map(vertex -> Tuples._2T((Vertex) vertex, getElementProperties(vertex, config.deduplication_fields())))
 					.filter(vertex_key -> nodes_to_get.keySet().contains(vertex_key._2())) // (remove false positives)
-					.filter(vertex_key -> isAllowed(security_service, vertex_key._1())) // (remove un-authorized nodes)
+					.filter(vertex_key -> isAllowed(bucket.full_name(), security_service, vertex_key._1())) // (remove un-authorized nodes)
 					.collect(Collectors.groupingBy(t2 -> (JsonNode) t2._2())) // (group by key)
 					;
 		
@@ -413,7 +413,7 @@ public class TitanGraphBuildingUtils {
 						Optionals.ofNullable(mutable_existing_edge_endpoint_store.get(kv.getKey().get(in_or_out)))
 							.stream()
 							.filter(e -> labelMatches(kv.getKey(), e)) //TODO (ALEPH-15): as for vertices, might be nice to support some sort of fuzziness
-							.filter(e -> isAllowed(security_service, e)) // (check authorized)
+							.filter(e -> isAllowed(bucket.full_name(), security_service, e)) // (check authorized)
 							.collect(Collectors.toMap(e -> e.id(), e -> e))
 							;
 					final Map<Object, Edge> in_existing = getEdges.apply(GraphAnnotationBean.inV);
@@ -432,7 +432,6 @@ public class TitanGraphBuildingUtils {
 
 					mutable_stats.edge_matches_found += existing_edges.size();
 							
-					//final List<Edge> finalized_edges =
 					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, mutable_stats, Edge.class, bucket.full_name(), kv.getKey(), kv.getValue(), existing_edges, mutable_existing_vertex_store);
 				});
 			});
@@ -526,13 +525,14 @@ public class TitanGraphBuildingUtils {
 		})
 		.collect(Collectors.groupingBy((ObjectNode mutable_edge) -> { // These edges are "promoted" - can call the user merge on them
 			final ObjectNode edge_key = 
-					Optional.of(_mapper.createObjectNode()) //(don't group by label - we filter out label on later on, this keeps the key object simpler)
+					Optional.of(_mapper.createObjectNode())
+												.map(o -> (ObjectNode) o.set(GraphAnnotationBean.label, mutable_edge.get(GraphAnnotationBean.label)))
 												.map(o -> Optional.ofNullable(mutable_edge.remove(GraphAnnotationBean.inVLabel))
-																	.map(k -> (ObjectNode) o.put(GraphAnnotationBean.inV, k))
+																	.map(k -> (ObjectNode) o.set(GraphAnnotationBean.inV, k))
 																	.orElse(o)
 												)
 												.map(o -> Optional.ofNullable(mutable_edge.remove(GraphAnnotationBean.outVLabel))
-																	.map(k -> (ObjectNode) o.put(GraphAnnotationBean.outV, k))
+																	.map(k -> (ObjectNode) o.set(GraphAnnotationBean.outV, k))
 																	.orElse(o)
 												)
 												.get()
@@ -746,7 +746,7 @@ public class TitanGraphBuildingUtils {
 	protected static JsonNode getElementProperties(final Element el, final Collection<String> fields) {
 		return fields.stream()
 				.map(f -> Tuples._2T(f, el.property(f)))
-				.filter(t2 -> null != t2._2())
+				.filter(t2 -> (null != t2._2()) && t2._2().isPresent())
 				.reduce(_mapper.createObjectNode(), (o, t2) -> insertIntoObjectNode(t2._1(), t2._2(), o), (o1, o2) -> o2)
 				;
 	}
@@ -851,24 +851,37 @@ public class TitanGraphBuildingUtils {
 	}
 	
 	/** Checks a Gremlin vertex or edge label against a GraphSON one
-	 * @param user
+	 * @param user_key
 	 * @param candidate
 	 * @return
 	 */
-	protected static boolean labelMatches(final ObjectNode user, final Element candidate) {
-		return candidate.label().equals(user.get(GraphAnnotationBean.label).asText()); // (exists by construction)
+	protected static boolean labelMatches(final ObjectNode user_key, final Element candidate) {
+		return candidate.label().equals(user_key.get(GraphAnnotationBean.label).asText()); // (exists by construction)
 	}
 	
 	/** Checks is a user is allowed to connect to this node
+	 *  (also prevents any bucket from connecting to any other _test bucket_ ... apart from itself obv)
+	 * @param this_bucket
 	 * @param security_service
 	 * @param element
 	 * @return
 	 */
-	protected static boolean isAllowed(final Tuple2<String, ISecurityService> security_service, final Element element) {
+	protected static boolean isAllowed(final String this_bucket, final Tuple2<String, ISecurityService> security_service, final Element element) {
 		
 		// (odd expression because allMatch/anyMatch have the wrong behavior when the stream is empty, ie want it to allow in those cases, no security applied)
 		return !Optionals.streamOf(element.<String>properties(GraphAnnotationBean.a2_p), false)
-					.filter(p -> !security_service._2().isUserPermitted(security_service._1(), buildPermission(p.value()))).findFirst().isPresent();
+					.filter(p -> { //(note p.value() will always exist since using "properties" ie will return empty iterable if not)
+						// Cases: (1) always allow bucket of the same name
+						//        (2) if not then can't start with "/aleph2_testing/"
+						//        (3) security match 
+						return	(this_bucket.equals(p.value())  // (1,2)
+									? false // (always "pass"(==false) in these cases) 
+									: p.value().startsWith(BucketUtils.TEST_BUCKET_PREFIX) // (else "pass"(==false) if doesn't start with /aleph_testing
+								)
+								||
+									!security_service._2().isUserPermitted(security_service._1(), buildPermission(p.value())); //(3)
+					})
+					.findFirst().isPresent();
 	}
 	
 	/** See https://github.com/IKANOW/Aleph2/wiki/(Detailed-Design)-Aleph2-security-roles-and-permissions#built-in-permissions---core
