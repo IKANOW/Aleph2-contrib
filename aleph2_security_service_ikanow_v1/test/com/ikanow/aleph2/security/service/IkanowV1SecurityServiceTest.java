@@ -136,6 +136,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 
 	@Test
 	public void testRunAs(){
+		@SuppressWarnings("unused")
 		ISubject subject = loginAsTestUser();
 		// system community
 		String runAsPrincipal = "54f86d8de4b03d27d1ea0d7b"; // casey
@@ -201,6 +202,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 
 	@Test
 	public void testInvalidateAuthenticationCache(){
+		@SuppressWarnings("unused")
 		ISubject subject = loginAsTestUser();
 		
         //test a typed permission (not instance-level)
@@ -238,6 +240,7 @@ public class IkanowV1SecurityServiceTest extends MockDbBasedTest {
 
 	@Test
 	public void testRunAsDemoted(){
+		@SuppressWarnings("unused")
 		ISubject subject = loginAsAdmin();
 		// system community
 		String runAsPrincipal = regularUserId; 

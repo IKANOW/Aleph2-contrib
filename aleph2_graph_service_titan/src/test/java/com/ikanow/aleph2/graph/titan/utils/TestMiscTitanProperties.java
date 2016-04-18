@@ -213,6 +213,7 @@ public class TestMiscTitanProperties {
 		final TitanTransaction tx2 = titan.buildTransaction().start();
 		//these all intermittently fail?! (well consistently either work or fail for some period, v unclear why)
 		// but starting from a transaction instead of titan as below seems to fix this, so something in titan must not be getting updated
+		assertEquals(1L, Optionals.streamOf(tx2.query().has("paths").vertices(), false).count()); // (Ah interestingly this doesn't seem to accept a scan?!)
 		assertEquals(1L, Optionals.streamOf(tx2.query().has("paths", "cat").vertices(), false).count());
 		assertEquals(1L, Optionals.streamOf(tx2.query().has("paths", Cmp.EQUAL, "cat").vertices(), false).count()); // note this doesn't use the ES query annoyingly
 		assertEquals(1L, Optionals.streamOf(tx2.query().has("paths", Contain.IN, Arrays.asList("cat")).vertices(), false).count()); 		

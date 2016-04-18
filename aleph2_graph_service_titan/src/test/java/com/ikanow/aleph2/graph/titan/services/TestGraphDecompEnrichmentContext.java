@@ -22,4 +22,5 @@ package com.ikanow.aleph2.graph.titan.services;
  */
 public class TestGraphDecompEnrichmentContext {
 
+	//TODO (ALEPH-15): coverage testing
 }

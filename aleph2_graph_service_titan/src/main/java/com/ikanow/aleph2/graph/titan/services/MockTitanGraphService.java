@@ -34,7 +34,7 @@ public class MockTitanGraphService extends TitanGraphService {
 	@Inject
 	public MockTitanGraphService() {
 		super(true);
-		_USE_ES_FOR_DEDUP_INDEXES = true; //(since the in memory
+		_USE_ES_FOR_DEDUP_INDEXES = true; //(since the in memory backing store doesn't support indexes at all)
 	}
 	
 	//////////////////////////////////////////////////////////

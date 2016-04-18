@@ -20,7 +20,7 @@ package com.ikanow.aleph2.graph.titan.services;
  * @author Alex
  *
  */
-public class TestGraphMergeEnrichmentContext {
+public class TestTitanGraphBuilderEnrichmentService {
 
-	//TODO (ALEPH-15): coverage testing
+	//TODO (ALEPH-15)
 }
