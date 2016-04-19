@@ -36,12 +36,12 @@ import org.apache.tinkerpop.gremlin.structure.Vertex;
 import com.thinkaurelius.titan.core.Cardinality;
 
 import org.apache.tinkerpop.gremlin.structure.io.IoCore;
-import org.junit.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.UuidUtils;
 import com.thinkaurelius.titan.core.PropertyKey;
 import com.thinkaurelius.titan.core.SchemaViolationException;
 import com.thinkaurelius.titan.core.TitanEdge;
@@ -60,7 +60,8 @@ import com.thinkaurelius.titan.core.schema.TitanManagement;
 
 import fj.Unit;
 
-/**
+/** Some utilities to check out how Titan works
+ *  All @Tests removed since not actually test code, that was just for convenience
  * @author Alex
  *
  */
@@ -83,11 +84,12 @@ public class TestMiscTitanProperties {
 	}
 
 	@SuppressWarnings("unchecked")
-	@Test
+	//@Test
 	public void test_elementProperties_edge() throws IOException, InterruptedException {
 		
+		final String tmpdir = System.getProperty("java.io.tmpdir") + "/titan-test-" + UuidUtils.get().getRandomUuid();
 		try {
-			FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + "/titan-test"));
+			FileUtils.deleteDirectory(new File(tmpdir));
 		}
 		catch (Exception e) {}
 		
@@ -95,7 +97,9 @@ public class TestMiscTitanProperties {
 				.set("storage.backend", "inmemory")
 				.set("index.search.backend", "elasticsearch")
 				.set("index.search.elasticsearch.local-mode", true)
-				.set("index.search.directory", System.getProperty("java.io.tmpdir") + "/titan-test")
+				.set("index.search.directory", tmpdir)
+				.set("index.search.cluster-name", UuidUtils.get().getRandomUuid())
+				.set("index.search.ignore-cluster-name", false)
 				.set("index.search.elasticsearch.client-only", false)
 				//.set("query.force-index", true) //(disabled for testing)
 			.open();
@@ -131,11 +135,12 @@ public class TestMiscTitanProperties {
 	}	
 	
 	@SuppressWarnings("unchecked")
-	@Test
+	//@Test
 	public void test_elementProperties_vertex() throws IOException, InterruptedException {
 		
+		final String tmpdir = System.getProperty("java.io.tmpdir") + "/titan-test-" + UuidUtils.get().getRandomUuid();
 		try {
-			FileUtils.deleteDirectory(new File(System.getProperty("java.io.tmpdir") + "/titan-test"));
+			FileUtils.deleteDirectory(new File(tmpdir));
 		}
 		catch (Exception e) {}
 		
@@ -143,7 +148,9 @@ public class TestMiscTitanProperties {
 				.set("storage.backend", "inmemory")
 				.set("index.search.backend", "elasticsearch")
 				.set("index.search.elasticsearch.local-mode", true)
-				.set("index.search.directory", System.getProperty("java.io.tmpdir") + "/titan-test")
+				.set("index.search.directory", tmpdir)
+				.set("index.search.cluster-name", UuidUtils.get().getRandomUuid())
+				.set("index.search.ignore-cluster-name", false)
 				.set("index.search.elasticsearch.client-only", false)
 				//.set("query.force-index", true) //(disabled for testing)
 			.open();
@@ -234,7 +241,7 @@ public class TestMiscTitanProperties {
 	
 	
 	@SuppressWarnings("unchecked")
-	@Test
+	//@Test
 	public void test_someBasicGraphBehavior() throws IOException {
 	
 		// Test some basic properties and transferring to/from GraphSON
@@ -307,7 +314,7 @@ public class TestMiscTitanProperties {
 			.ifPresent(j -> System.out.println("?? " + j.toString()));
 	}
 	
-	@Test
+	//@Test
 	public void test_someGraphErrors() throws IOException {
 	
 		// Test some graph errors
@@ -373,7 +380,7 @@ public class TestMiscTitanProperties {
 	}
 	
 	@SuppressWarnings("unchecked")
-	@Test
+	//@Test
 	public void test_concurrentChanges_conflicting() throws IOException {
 		
 		// Test some graph errors
@@ -408,7 +415,7 @@ public class TestMiscTitanProperties {
 	}	
 	
 	@SuppressWarnings("unchecked")
-	@Test
+	//@Test
 	public void test_concurrentChanges_nonConflicting() throws IOException {
 		
 		// Test some graph errors

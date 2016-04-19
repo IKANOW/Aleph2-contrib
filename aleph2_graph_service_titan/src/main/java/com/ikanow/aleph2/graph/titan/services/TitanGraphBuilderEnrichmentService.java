@@ -18,6 +18,7 @@ package com.ikanow.aleph2.graph.titan.services;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -81,6 +82,9 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 	protected final SetOnce<MutableStatsBean> _mutable_stats = new SetOnce<>();
 	protected final SetOnce<TitanGraph> _titan = new SetOnce<>();
 	
+	// Special test mode
+	protected LinkedList<TitanException> _MUTABLE_TEST_ERRORS = new LinkedList<>();
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule#onStageInitialize(com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean, scala.Tuple2, java.util.Optional)
 	 */
@@ -105,6 +109,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 		_logger.set(context.getLogger(Optional.of(bucket)));
 		_security_context.set(Tuples._2T(bucket.owner_id(), _service_context.get().getSecurityService()));
 		_bucket.set(bucket);
+		_mutable_stats.set(new MutableStatsBean());
 		
 		_service_context.get()
 			.getService(IGraphService.class, Optional.ofNullable(graph_schema.service_name()))
@@ -177,9 +182,8 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule#onObjectBatch(java.util.stream.Stream, java.util.Optional, java.util.Optional)
 	 */
 	@Override
-	public void onObjectBatch(Stream<Tuple2<Long, IBatchRecord>> batch,
-			Optional<Integer> batch_size, Optional<JsonNode> grouping_key) {
-		
+	public void onObjectBatch(Stream<Tuple2<Long, IBatchRecord>> batch, Optional<Integer> batch_size, Optional<JsonNode> grouping_key)
+	{		
 		// Get user assets:
 		
 		final List<ObjectNode> vertices_and_edges = 
@@ -200,18 +204,28 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				
 				mutable_stats.reset();
 				
-				TitanGraphBuildingUtils.buildGraph_handleMerge(mutable_tx, _config.get(), _security_context.get(), _logger.optional(), mutable_stats,
-						_custom_graph_merge_handler.optional().map(handler -> Tuples._2T(handler, _custom_graph_merge_context.get()))
-						, 
-						_bucket.get(),
-						TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(mutable_tx, _config.get(), 
-								_security_context.get(), _logger.optional(), 
-								_bucket.get(),
-								copy_vertices_and_edges
-						));
+				try {
+					TitanGraphBuildingUtils.buildGraph_handleMerge(mutable_tx, _config.get(), _security_context.get(), _logger.optional(), mutable_stats,
+							_custom_graph_merge_handler.optional().map(handler -> Tuples._2T(handler, _custom_graph_merge_context.get()))
+							, 
+							_bucket.get(),
+							TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(mutable_tx, _config.get(), 
+									_security_context.get(), _logger.optional(), 
+									_bucket.get(), mutable_stats,
+									copy_vertices_and_edges
+							));					
+	
+					//(test mode for errors)
+					if (!_MUTABLE_TEST_ERRORS.isEmpty()) {
+						throw _MUTABLE_TEST_ERRORS.pop();
+					}
+				}
+				catch (Exception e) { //(close the transaction without saving)
+					mutable_tx.rollback();
+					throw e;
+				}
 				
 				// Attempt to commit
-				
 				mutable_tx.commit();
 				
 				_logger.optional().ifPresent(logger -> {
@@ -231,15 +245,9 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				return true; // (ie ends the loop)
 			}
 			catch (TitanException e) {
-				if (null != e.getCause()) {
-					if (PermanentLockingException.class.isAssignableFrom(e.getCause().getClass())) // versioning error, repeat transaction					
-					{}
-					else if ((null != e.getCause().getCause()) &&
-							PermanentLockingException.class.isAssignableFrom(e.getCause().getClass().getClass())) //versioning error, repeat transaction
-					{}
-					else throw e;
+				if (!isRecoverableError(e)) {
+					throw e;
 				}
-				else throw e; //(other failures: throw)
 
 				// If we're here, we're going to retry the transaction
 				
@@ -261,6 +269,25 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 		;		
 	}
 
+	/** Utility to check for recoverable errors
+	 * @param e
+	 * @return
+	 */
+	protected static boolean isRecoverableError(TitanException e) {
+		if (null != e.getCause()) {
+			if (PermanentLockingException.class.isAssignableFrom(e.getCause().getClass())) // versioning error, repeat transaction					
+			{
+				return true;				
+			}
+			else if ((null != e.getCause().getCause()) &&
+					PermanentLockingException.class.isAssignableFrom(e.getCause().getClass().getClass())) //versioning error, repeat transaction
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule#onStageComplete(boolean)
 	 */

@@ -18,7 +18,6 @@ package com.ikanow.aleph2.graph.titan.services;
 
 import static org.junit.Assert.*;
 
-import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -52,7 +51,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadat
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
-import com.thinkaurelius.titan.core.TitanGraph;
+import com.thinkaurelius.titan.core.TitanEdge;
 import com.thinkaurelius.titan.core.TitanTransaction;
 import com.thinkaurelius.titan.core.TitanVertex;
 import com.thinkaurelius.titan.core.schema.TitanGraphIndex;
@@ -62,22 +61,19 @@ import com.thinkaurelius.titan.core.schema.TitanManagement;
  * @author Alex
  *
  */
-public class TestTitanGraphService {
+public class TestTitanGraphService extends TestTitanCommon {
 
-	TitanGraph _titan = null;
-	MockTitanGraphService _mock_graph_db_service = null;
-	
+	@SuppressWarnings("unchecked")
 	@Before
-	public void setup() {
+	public void setup() throws InterruptedException {
 		
-		//(delete old ES files)
-		try {
-			new File(TitanGraphService.UUID).delete();
-		}
-		catch (Exception e) {}
-		
-		_mock_graph_db_service = new MockTitanGraphService();
-		_titan = _mock_graph_db_service.getUnderlyingPlatformDriver(TitanGraph.class, Optional.empty()).get();
+		// Wipe anything existing in the graph
+		final TitanTransaction tx = _titan.buildTransaction().start();
+		Optionals.<TitanVertex>streamOf(tx.query().hasNot(GraphAnnotationBean.a2_p, "get_everything").vertices(), false).forEach(v -> v.remove());
+		Optionals.<TitanEdge>streamOf(tx.query().hasNot(GraphAnnotationBean.a2_p, "get_everything").edges(), false).forEach(v -> v.remove());
+		tx.commit();
+		System.out.println("Sleeping while waiting to cleanse ES");
+		Thread.sleep(2000L);
 	}
 	
 	@Test

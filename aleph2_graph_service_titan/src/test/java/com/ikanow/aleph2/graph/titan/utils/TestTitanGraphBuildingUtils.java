@@ -403,6 +403,8 @@ public class TestTitanGraphBuildingUtils {
 					.with(GraphSchemaBean::deduplication_fields, Arrays.asList(GraphAnnotationBean.name, GraphAnnotationBean.type))
 				.done().get();
 
+		final MutableStatsBean mutable_stats_bean = new MutableStatsBean();
+		
 		final ObjectNode key1 = _mapper.createObjectNode()
 									.put(GraphAnnotationBean.name, "1.1.1.1")
 									.put(GraphAnnotationBean.type, "ip-addr");
@@ -446,7 +448,7 @@ public class TestTitanGraphBuildingUtils {
 				);
 				
 		final Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> ret_val =
-				TitanGraphBuildingUtils.groupNewEdgesAndVertices(graph_schema, test_vertices_and_edges.stream());
+				TitanGraphBuildingUtils.groupNewEdgesAndVertices(graph_schema, mutable_stats_bean, test_vertices_and_edges.stream());
 		
 		
 		assertEquals(2, ret_val.keySet().size());
@@ -1108,6 +1110,7 @@ public class TestTitanGraphBuildingUtils {
 		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class)
 				.with(DataBucketBean::full_name, "/test/security")
 				.done().get();
+		final MutableStatsBean mutable_stats = new MutableStatsBean();
 		
 		// Stream of objects		
 		final List<ObjectNode> vertices_and_edges = test_buildGraph_getUserGeneratedAssets_run();
@@ -1115,7 +1118,7 @@ public class TestTitanGraphBuildingUtils {
 		// Empty graph, collect information
 		{
 			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
-					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
 			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val = ret_val_s.collect(Collectors.toList());
@@ -1149,7 +1152,7 @@ public class TestTitanGraphBuildingUtils {
 			rebuildSimpleGraph(tx, bucket.full_name());
 			
 			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
-					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
 			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val = ret_val_s.collect(Collectors.toList());
@@ -1180,7 +1183,7 @@ public class TestTitanGraphBuildingUtils {
 			final DataBucketBean test_bucket = BucketUtils.convertDataBucketBeanToTest(bucket, "nobody");
 			
 			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
-					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), test_bucket, vertices_and_edges.stream())
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), test_bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
 			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val = ret_val_s.collect(Collectors.toList());
@@ -1214,7 +1217,7 @@ public class TestTitanGraphBuildingUtils {
 			mock_security.setGlobalMockRole("nobody:DataBucketBean:read,write:test:security:*", false);
 			
 			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
-					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
 			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val = ret_val_s.collect(Collectors.toList());
@@ -1291,7 +1294,7 @@ public class TestTitanGraphBuildingUtils {
 			
 			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
 			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
-					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
 			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
@@ -1309,7 +1312,7 @@ public class TestTitanGraphBuildingUtils {
 			assertEquals(0L, mutable_stats.vertex_errors);
 			assertEquals(5L, mutable_stats.edges_created);
 			assertEquals(0L, mutable_stats.edges_updated);
-			assertTrue(mutable_stats.edges_emitted >= 10L); // *2 + any existing edges for later keys that are created by earlier ones
+			assertEquals(6L, mutable_stats.edges_emitted);
 			assertEquals(0L, mutable_stats.edge_matches_found);
 			assertEquals(0L, mutable_stats.edge_errors);
 			
@@ -1328,7 +1331,7 @@ public class TestTitanGraphBuildingUtils {
 			
 			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
 			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
-					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
 			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
@@ -1348,7 +1351,7 @@ public class TestTitanGraphBuildingUtils {
 			assertEquals(0L, mutable_stats.vertex_errors);
 			assertEquals(4L, mutable_stats.edges_created);
 			assertEquals(1L, mutable_stats.edges_updated);
-			assertTrue(mutable_stats.edges_emitted >= 10L); // *2 + any existing edges for later keys that are created by earlier ones
+			assertEquals(6L, mutable_stats.edges_emitted);
 			assertEquals(1L, mutable_stats.edge_matches_found);
 			assertEquals(0L, mutable_stats.edge_errors);
 			
@@ -1369,7 +1372,7 @@ public class TestTitanGraphBuildingUtils {
 			
 			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
 			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
-					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), test_bucket, vertices_and_edges.stream())
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), test_bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
 			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
@@ -1389,7 +1392,7 @@ public class TestTitanGraphBuildingUtils {
 			assertEquals(0L, mutable_stats.vertex_errors);
 			assertEquals(5L, mutable_stats.edges_created);
 			assertEquals(0L, mutable_stats.edges_updated);
-			assertTrue(mutable_stats.edges_emitted >= 10L); // *2 + any existing edges for later keys that are created by earlier ones
+			assertEquals(6L, mutable_stats.edges_emitted);
 			assertEquals(0L, mutable_stats.edge_matches_found);
 			assertEquals(0L, mutable_stats.edge_errors);
 			
@@ -1413,7 +1416,7 @@ public class TestTitanGraphBuildingUtils {
 			
 			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
 			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
-					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
 			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
@@ -1433,7 +1436,7 @@ public class TestTitanGraphBuildingUtils {
 			assertEquals(0L, mutable_stats.vertex_errors);
 			assertEquals(5L, mutable_stats.edges_created);
 			assertEquals(0L, mutable_stats.edges_updated);
-			assertTrue(mutable_stats.edges_emitted >= 10L); // *2 + any existing edges for later keys that are created by earlier ones
+			assertEquals(6L, mutable_stats.edges_emitted);
 			assertEquals(0L, mutable_stats.edge_matches_found);
 			assertEquals(0L, mutable_stats.edge_errors);
 			
@@ -1454,7 +1457,7 @@ public class TestTitanGraphBuildingUtils {
 			
 			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
 			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
-					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, vertices_and_edges.stream())
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
 			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
@@ -1474,7 +1477,7 @@ public class TestTitanGraphBuildingUtils {
 			assertEquals(0L, mutable_stats.vertex_errors);
 			assertEquals(5L, mutable_stats.edges_created);
 			assertEquals(0L, mutable_stats.edges_updated);
-			assertTrue(mutable_stats.edges_emitted >= 10L); // *2 + any existing edges for later keys that are created by earlier ones
+			assertEquals(6L, mutable_stats.edges_emitted);
 			assertEquals(0L, mutable_stats.edge_matches_found);
 			assertEquals(0L, mutable_stats.edge_errors);
 			

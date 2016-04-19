@@ -277,12 +277,13 @@ public class TitanGraphBuildingUtils {
 			final Tuple2<String, ISecurityService> security_service,
 			final Optional<IBucketLogger> logger,
 			final DataBucketBean bucket,
+			final MutableStatsBean mutable_stats,
 			final Stream<ObjectNode> vertices_and_edges)
 	{
 		
 		// Convert the list of vertexes into a mega query - will have a false positive rate to keep the query simple  
 		
-		final Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> nodes_to_get = groupNewEdgesAndVertices(config, vertices_and_edges);	
+		final Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> nodes_to_get = groupNewEdgesAndVertices(config, mutable_stats, vertices_and_edges);	
 		
 		final Stream<TitanVertex> dups = Lambdas.get(() -> {
 			if (BucketUtils.isTestBucket(bucket)) {
@@ -361,8 +362,6 @@ public class TitanGraphBuildingUtils {
 			final List<ObjectNode> edges = t4._3();
 			final List<Tuple2<Vertex, JsonNode>> existing_vertices = t4._4();
 			
-			mutable_stats.vertices_emitted += vertices.size();
-			mutable_stats.edges_emitted += edges.size();
 			mutable_stats.vertex_matches_found += existing_vertices.size();
 			
 			// 1) First step is to sort out the _vertices_, here's the cases:
@@ -452,6 +451,7 @@ public class TitanGraphBuildingUtils {
 	 */
 	protected static Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> groupNewEdgesAndVertices(
 			final GraphSchemaBean config,
+			final MutableStatsBean stats,
 			final Stream<ObjectNode> vertices_and_edges)
 	{
 		final Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> nodes_to_get = 		
@@ -462,12 +462,14 @@ public class TitanGraphBuildingUtils {
 						
 						if ((null == type) || !type.isTextual()) return Stream.empty();
 						if (GraphAnnotationBean.ElementType.edge.toString().equals(type.asText())) {
+							stats.edges_emitted++;
 							// Grab both edges from both ends:
 							return Stream.concat(
 									Optional.ofNullable(o.get(GraphAnnotationBean.inV)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, false))).orElse(Stream.empty()), 
 									Optional.ofNullable(o.get(GraphAnnotationBean.outV)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, false))).orElse(Stream.empty()));
 						}
 						else if (GraphAnnotationBean.ElementType.vertex.toString().equals(type.asText())) {
+							stats.vertices_emitted++;
 							return Optional.ofNullable(o.get(GraphAnnotationBean.id)).map(k -> Stream.of(Tuples._3T(convertToObject(k, config), o, true))).orElse(Stream.empty());
 						}
 						else return Stream.empty();

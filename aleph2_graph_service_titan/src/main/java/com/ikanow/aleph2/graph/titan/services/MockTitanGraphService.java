@@ -24,6 +24,7 @@ import java.util.concurrent.CompletableFuture;
 import com.google.inject.Inject;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+import com.ikanow.aleph2.data_model.utils.UuidUtils;
 
 /** Titan implementation of the graph service
  * @author Alex
@@ -31,6 +32,12 @@ import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
  */
 public class MockTitanGraphService extends TitanGraphService {
 
+	/** Test function, call between tests 
+	 */
+	protected static void TEST_CHANGE_UUID() {
+		UUID = System.getProperty("java.io.tmpdir") + "/titan_test_" + UuidUtils.get().getRandomUuid();
+	}
+	
 	@Inject
 	public MockTitanGraphService() {
 		super(true);

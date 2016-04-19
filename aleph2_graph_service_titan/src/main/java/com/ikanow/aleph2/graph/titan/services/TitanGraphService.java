@@ -114,6 +114,8 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 						.set("index.search.backend", "elasticsearch")
 						.set("index.search.elasticsearch.local-mode", true)
 						.set("index.search.directory", UUID)
+						.set("index.search.cluster-name", UUID)
+						.set("index.search.ignore-cluster-name", false)
 						.set("index.search.elasticsearch.client-only", false)
 						.set("query.force-index", true)
 					.open();
