@@ -57,9 +57,11 @@ import com.ikanow.aleph2.graph.titan.utils.ErrorUtils;
 import com.thinkaurelius.titan.core.Cardinality;
 import com.thinkaurelius.titan.core.PropertyKey;
 import com.thinkaurelius.titan.core.SchemaViolationException;
+import com.thinkaurelius.titan.core.TitanEdge;
 import com.thinkaurelius.titan.core.TitanFactory;
 import com.thinkaurelius.titan.core.TitanGraph;
 import com.thinkaurelius.titan.core.TitanTransaction;
+import com.thinkaurelius.titan.core.TitanVertex;
 import com.thinkaurelius.titan.core.schema.Mapping;
 import com.thinkaurelius.titan.core.schema.TitanManagement;
 
@@ -386,7 +388,7 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 			//final com.fasterxml.jackson.databind.ObjectMapper titan_mapper = _titan.io(org.apache.tinkerpop.gremlin.structure.io.IoCore.graphson()).mapper().create().createMapper();
 			
 			@SuppressWarnings("unchecked")
-			final Stream<Vertex> vertices_to_check = Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_p, bucket.full_name()).vertices(), false);
+			final Stream<TitanVertex> vertices_to_check = Optionals.<TitanVertex>streamOf(tx.query().has(GraphAnnotationBean.a2_p, bucket.full_name()).vertices(), false);
 			vertices_to_check.forEach(v -> {
 				{
 					final Iterator<VertexProperty<String>> props = v.<String>properties(GraphAnnotationBean.a2_p);
@@ -405,7 +407,7 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 				}
 			});
 			@SuppressWarnings("unchecked")
-			final Stream<Edge> edges_to_check = Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_p, bucket.full_name()).edges(), false);
+			final Stream<TitanEdge> edges_to_check = Optionals.<TitanEdge>streamOf(tx.query().has(GraphAnnotationBean.a2_p, bucket.full_name()).edges(), false);
 			edges_to_check.forEach(e -> {
 				e.remove(); // (can only have one edge so delete it)
 			});

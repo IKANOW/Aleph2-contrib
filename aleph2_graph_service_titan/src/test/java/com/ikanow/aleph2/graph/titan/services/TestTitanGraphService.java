@@ -54,6 +54,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.thinkaurelius.titan.core.TitanGraph;
 import com.thinkaurelius.titan.core.TitanTransaction;
+import com.thinkaurelius.titan.core.TitanVertex;
 import com.thinkaurelius.titan.core.schema.TitanGraphIndex;
 import com.thinkaurelius.titan.core.schema.TitanManagement;
 
@@ -284,7 +285,7 @@ public class TestTitanGraphService {
 			assertEquals("Edges", N_OBJECTS/2, StreamUtils.stream(tx.query().hasNot(GraphAnnotationBean.a2_p, "/test/bucket/delete").edges()).count());
 			
 			// (Check that all the vertex references to the bucket have gone) 
-			StreamUtils.<Vertex>stream(tx.query().hasNot(GraphAnnotationBean.a2_p, "get_everything").vertices()).forEach((Vertex v) -> {
+			StreamUtils.<TitanVertex>stream(tx.query().hasNot(GraphAnnotationBean.a2_p, "get_everything").vertices()).forEach((Vertex v) -> {
 				if (Optionals.streamOf(v.properties(GraphAnnotationBean.a2_p), false).anyMatch(p -> p.value().equals("/test/bucket/delete"))) {
 					fail("All refs to /test/bucket/delete should be gone: " + titan_mapper.convertValue(v, JsonNode.class));
 				}

@@ -387,13 +387,13 @@ public class TestMiscTitanProperties {
 		
 		final Supplier<TitanTransaction> build_trans = () -> {
 			final TitanTransaction tx = titan.buildTransaction().start();		
-			Optionals.<Vertex>streamOf(tx.query().has("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something"));
+			Optionals.<TitanVertex>streamOf(tx.query().has("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something"));
 			return tx;
 		};
 		final TitanTransaction tx1 = build_trans.get();
 		
 		final TitanTransaction tx2 = titan.buildTransaction().start();
-		Optionals.<Vertex>streamOf(tx2.query().has("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something_else"));
+		Optionals.<TitanVertex>streamOf(tx2.query().has("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something_else"));
 		tx2.commit();
 		
 		try {
@@ -422,13 +422,13 @@ public class TestMiscTitanProperties {
 		
 		final Supplier<TitanTransaction> build_trans = () -> {
 			final TitanTransaction tx = titan.buildTransaction().start();		
-			Optionals.<Vertex>streamOf(tx.query().has("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something"));
+			Optionals.<TitanVertex>streamOf(tx.query().has("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something"));
 			return tx;
 		};
 		final TitanTransaction tx1 = build_trans.get();
 		
 		final TitanTransaction tx2 = titan.buildTransaction().start();
-		Optionals.<Vertex>streamOf(tx2.query().hasNot("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something_else"));
+		Optionals.<TitanVertex>streamOf(tx2.query().hasNot("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something_else"));
 
 		{
 			System.out.println("---- entire graph ... tx1 ------");

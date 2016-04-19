@@ -577,7 +577,7 @@ public class TitanGraphBuildingUtils {
 			
 			return validateUserElement(new_elements.stream().findFirst().get(), config)
 					.bind(el -> addGraphSON2Graph(bucket_path, key, el, mutable_existing_vertex_store, Collections.emptyMap(), tx, element_type, mutable_stats)) 
-					.validation(
+					.<List<O>>validation(
 							fail -> {
 								if (Vertex.class.isAssignableFrom(element_type)) mutable_stats.vertex_errors++; 
 								else if (Edge.class.isAssignableFrom(element_type)) mutable_stats.edge_errors++;

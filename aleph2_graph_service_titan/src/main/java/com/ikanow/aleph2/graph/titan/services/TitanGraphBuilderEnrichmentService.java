@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import org.apache.logging.log4j.Level;
@@ -57,6 +58,7 @@ import com.thinkaurelius.titan.core.TitanException;
 import com.thinkaurelius.titan.core.TitanGraph;
 import com.thinkaurelius.titan.core.TitanTransaction;
 import com.thinkaurelius.titan.core.TransactionBuilder;
+import com.thinkaurelius.titan.diskstorage.locking.PermanentLockingException;
 
 /** Service for building the edges and vertices from the incoming records and updating any existing entries in the database
  *  NOTE: there should be a non-tech-specific GraphBuilderEnrichmentService in the analytics context library that wraps this one
@@ -186,7 +188,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 
 		final MutableStatsBean mutable_stats = new MutableStatsBean();
 		
-		for (int i = 0; i < 5; ++i) { //(at most 5 attempts)
+		IntStream.range(0, 5).boxed().filter(i -> { //(at most 5 attempts)
 			try {
 				// Create transaction
 				
@@ -226,16 +228,37 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				});
 				
 				_mutable_stats.get().combine(mutable_stats);
-				break;
+				return true; // (ie ends the loop)
 			}
 			catch (TitanException e) {
-				//TODO log
+				if (null != e.getCause()) {
+					if (PermanentLockingException.class.isAssignableFrom(e.getCause().getClass())) // versioning error, repeat transaction					
+					{}
+					else if ((null != e.getCause().getCause()) &&
+							PermanentLockingException.class.isAssignableFrom(e.getCause().getClass().getClass())) //versioning error, repeat transaction
+					{}
+					else throw e;
+				}
+				else throw e; //(other failures: throw)
+
+				// If we're here, we're going to retry the transaction
 				
-				// Handle different transaction failures
+				_logger.optional().ifPresent(logger -> {
+					logger.log(Level.DEBUG,
+							ErrorUtils.lazyBuildMessage(false, 
+									() -> "GraphBuilderEnrichmentService",
+									() -> "system.onStageComplete",
+									() -> null, 
+									() -> ErrorUtils.get("Failed to commit transaction due to local conflicts, attempt_num={0}", i),
+									() -> null));
+				});
+				return false;
 				
 				// (If it's a versioning conflict then try again)
 			}
-		}			
+		})
+		.findFirst() // ie stop as soon as we have successfully transacted
+		;		
 	}
 
 	/* (non-Javadoc)
