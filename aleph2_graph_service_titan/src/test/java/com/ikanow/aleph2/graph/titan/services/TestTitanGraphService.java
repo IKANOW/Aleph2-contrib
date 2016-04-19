@@ -66,6 +66,7 @@ public class TestTitanGraphService extends TestTitanCommon {
 	@SuppressWarnings("unchecked")
 	@Before
 	public void setup() throws InterruptedException {
+		super.setup();
 		
 		// Wipe anything existing in the graph
 		final TitanTransaction tx = _titan.buildTransaction().start();
