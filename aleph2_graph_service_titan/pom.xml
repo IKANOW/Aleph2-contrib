@@ -144,6 +144,10 @@
 					<artifactId>elasticsearch</artifactId>
 					<groupId>org.elasticsearch</groupId>
 				</exclusion>
+				<exclusion>
+					<artifactId>antlr-runtime</artifactId>
+					<groupId>org.antlr</groupId>
+				</exclusion>
 			</exclusions>
 		</dependency>
 	</dependencies>
