@@ -348,7 +348,7 @@ public class TitanGraphBuildingUtils {
 				final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> mergeable
 			)
 	{	
-		final ObjectMapper titan_mapper = tx.io(IoCore.graphson()).mapper().create().createMapper();
+		final org.apache.tinkerpop.shaded.jackson.databind.ObjectMapper titan_mapper = tx.io(IoCore.graphson()).mapper().create().createMapper();
 		final Multimap<JsonNode, Edge> mutable_existing_edge_endpoint_store = LinkedHashMultimap.create(); //(lazy simple way of handling 1.3/2)
 		final Map<JsonNode, Vertex> mutable_existing_vertex_store = new HashMap<>(); // a list of all the "winning" vertices from the user merge 
 		
@@ -564,7 +564,7 @@ public class TitanGraphBuildingUtils {
 			final Tuple2<String, ISecurityService> security_service,
 			final Optional<IBucketLogger> logger,
 			final Optional<Tuple2<IEnrichmentBatchModule, GraphMergeEnrichmentContext>> maybe_merger,
-			final ObjectMapper titan_mapper,
+			final org.apache.tinkerpop.shaded.jackson.databind.ObjectMapper titan_mapper,
 			final MutableStatsBean mutable_stats
 			,
 			final Class<O> element_type,
@@ -616,7 +616,7 @@ public class TitanGraphBuildingUtils {
 						Stream.concat(
 								new_elements.stream().map(j -> Tuples._2T(0L, new BatchRecordUtils.JsonBatchRecord(j))), 
 								existing_elements.stream()
-													.map(v -> titan_mapper.convertValue(v._1(), JsonNode.class))
+													.map(v -> _mapper.convertValue(titan_mapper.convertValue(v._1(), Map.class), JsonNode.class))
 													.map(j -> Tuples._2T(0L, new BatchRecordUtils.InjectedJsonBatchRecord(j)))
 						);
 

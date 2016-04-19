@@ -591,7 +591,7 @@ public class TestTitanGraphBuildingUtils {
 						));
 		maybe_merger.ifPresent(t2 -> t2._1().onStageInitialize(t2._2(), null, null, null, null));
 		// special titan mapper
-		final ObjectMapper titan_mapper = titan.io(IoCore.graphson()).mapper().create().createMapper();
+		final org.apache.tinkerpop.shaded.jackson.databind.ObjectMapper titan_mapper = titan.io(IoCore.graphson()).mapper().create().createMapper();
 		// Bucket
 		final String bucket_path = "/test/security";
 		// Key
@@ -645,8 +645,8 @@ public class TestTitanGraphBuildingUtils {
 			
 			assertEquals(1, ret_val.size());
 			assertEquals(
-					Optionals.streamOf(tx.query().hasNot("existing").vertices(), false).map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList()),
-					ret_val.stream().map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList())
+					Optionals.streamOf(tx.query().hasNot("existing").vertices(), false).map(v -> titan_mapper.convertValue(v, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.toList()),
+					ret_val.stream().map(v -> titan_mapper.convertValue(v, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.toList())
 					);
 			
 			ret_val.stream().forEach(v -> 
@@ -693,8 +693,8 @@ public class TestTitanGraphBuildingUtils {
 			assertEquals(1, ret_val.size());
 			assertEquals(0, Optionals.streamOf(tx.query().hasNot("existing").vertices(), false).count()); // (since i've overwritten an existing one...)
 			assertEquals(
-					Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_p).vertices(), false).map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList()),
-					ret_val.stream().map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList())
+					Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_p).vertices(), false).map(v -> titan_mapper.convertValue(v, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.toList()),
+					ret_val.stream().map(v -> titan_mapper.convertValue(v, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.toList())
 					);
 			
 			ret_val.stream().forEach(v -> 
@@ -739,8 +739,8 @@ public class TestTitanGraphBuildingUtils {
 			assertEquals(1, ret_val.size());
 			assertEquals(0, Optionals.streamOf(tx.query().hasNot("existing").vertices(), false).count()); // (since i've overwritten an existing one...)
 			assertEquals(
-					Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_p).vertices(), false).map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList()),
-					ret_val.stream().map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList())
+					Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_p).vertices(), false).map(v -> titan_mapper.convertValue(v, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.toList()),
+					ret_val.stream().map(v -> titan_mapper.convertValue(v, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.toList())
 					);
 			
 			ret_val.stream().forEach(v -> 
@@ -783,8 +783,8 @@ public class TestTitanGraphBuildingUtils {
 			
 			assertEquals(1, ret_val.size());
 			assertEquals(
-					Optionals.streamOf(tx.query().hasNot("existing").edges(), false).map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList()),
-					ret_val.stream().map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList())
+					Optionals.streamOf(tx.query().hasNot("existing").edges(), false).map(v -> titan_mapper.convertValue(v, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.toList()),
+					ret_val.stream().map(v -> titan_mapper.convertValue(v, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.toList())
 					);
 			
 			ret_val.stream().forEach(v -> 
@@ -829,8 +829,8 @@ public class TestTitanGraphBuildingUtils {
 			
 			assertEquals(1, ret_val.size());
 			assertEquals(
-					Optionals.streamOf(tx.query().hasNot("existing").edges(), false).map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList()),
-					ret_val.stream().map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList())
+					Optionals.streamOf(tx.query().hasNot("existing").edges(), false).map(v -> titan_mapper.convertValue(v, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.toList()),
+					ret_val.stream().map(v -> titan_mapper.convertValue(v, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.toList())
 					);
 			
 			ret_val.stream().forEach(v -> 
@@ -872,8 +872,8 @@ public class TestTitanGraphBuildingUtils {
 			assertEquals(1, ret_val.size());
 			assertEquals(0, Optionals.streamOf(tx.query().hasNot("existing").edges(), false).count()); // (since i've overwritten an existing one...)
 			assertEquals(
-					Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_p).edges(), false).map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList()),
-					ret_val.stream().map(v -> titan_mapper.convertValue(v, JsonNode.class).toString()).collect(Collectors.toList())
+					Optionals.streamOf(tx.query().has(GraphAnnotationBean.a2_p).edges(), false).map(v -> titan_mapper.convertValue(v, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.toList()),
+					ret_val.stream().map(v -> titan_mapper.convertValue(v, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.toList())
 					);
 			
 			ret_val.stream().forEach(v -> 
@@ -1255,7 +1255,7 @@ public class TestTitanGraphBuildingUtils {
 	public void test_buildGraph_handleMerge() {
 		// Titan
 		final TitanGraph titan = getSimpleTitanGraph();
-		final ObjectMapper titan_mapper = titan.io(IoCore.graphson()).mapper().create().createMapper();
+		final org.apache.tinkerpop.shaded.jackson.databind.ObjectMapper titan_mapper = titan.io(IoCore.graphson()).mapper().create().createMapper();
 		TitanManagement mgmt = titan.openManagement();		
 		mgmt.makePropertyKey(GraphAnnotationBean.a2_p).dataType(String.class).cardinality(Cardinality.SET).make();
 		mgmt.commit();
@@ -1340,7 +1340,7 @@ public class TestTitanGraphBuildingUtils {
 			assertEquals(2, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "ip").vertices()).count());
 			assertEquals(3, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "host").vertices()).count());
 			assertEquals("Should have the right number of edges: " +
-					StreamUtils.stream(tx.query().edges()).map(e -> titan_mapper.convertValue(e, JsonNode.class).toString()).collect(Collectors.joining("\n")),
+					StreamUtils.stream(tx.query().edges()).map(e -> titan_mapper.convertValue(e, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.joining("\n")),
 						6, StreamUtils.stream(tx.query().edges()).count()); //(+1 for the extra "wrong type" one i added)
 
 			// Check stats
@@ -1381,7 +1381,7 @@ public class TestTitanGraphBuildingUtils {
 			assertEquals(3, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "ip").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)
 			assertEquals(4, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "host").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)
 			assertEquals("Should have the right number of edges: " +
-					StreamUtils.stream(tx.query().edges()).map(e -> titan_mapper.convertValue(e, JsonNode.class).toString()).collect(Collectors.joining("\n")),
+					StreamUtils.stream(tx.query().edges()).map(e -> titan_mapper.convertValue(e, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.joining("\n")),
 						7, StreamUtils.stream(tx.query().edges()).count()); //(+1 for the extra "wrong type" one i added, +1 for the existing edge that _doesn't_ get merged because of the test mode)
 
 			// Check stats
@@ -1425,7 +1425,7 @@ public class TestTitanGraphBuildingUtils {
 			assertEquals(3, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "ip").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)
 			assertEquals(4, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "host").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)
 			assertEquals("Should have the right number of edges: " +
-					StreamUtils.stream(tx.query().edges()).map(e -> titan_mapper.convertValue(e, JsonNode.class).toString()).collect(Collectors.joining("\n")),
+					StreamUtils.stream(tx.query().edges()).map(e -> titan_mapper.convertValue(e, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.joining("\n")),
 						7, StreamUtils.stream(tx.query().edges()).count()); //(+1 for the extra "wrong type" one i added, +1 for the existing edge that _doesn't_ get merged because of the test mode)
 
 			// Check stats
@@ -1466,7 +1466,7 @@ public class TestTitanGraphBuildingUtils {
 			assertEquals(3, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "ip").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)
 			assertEquals(4, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "host").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)
 			assertEquals("Should have the right number of edges: " +
-					StreamUtils.stream(tx.query().edges()).map(e -> titan_mapper.convertValue(e, JsonNode.class).toString()).collect(Collectors.joining("\n")),
+					StreamUtils.stream(tx.query().edges()).map(e -> titan_mapper.convertValue(e, org.apache.tinkerpop.shaded.jackson.databind.JsonNode.class).toString()).collect(Collectors.joining("\n")),
 						7, StreamUtils.stream(tx.query().edges()).count()); //(+1 for the extra "wrong type" one i added, +1 for the existing edge that _doesn't_ get merged because of the test mode)
 
 			// Check stats

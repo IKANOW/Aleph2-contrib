@@ -10,6 +10,7 @@
 		<!-- Overridden in test_depdendencies profile that is activated if skip 
 			tests is true -->
 		<maven.test.skip>true</maven.test.skip>
+		<aleph2.titan>1.1.0-SNAPSHOT</aleph2.titan>
 	</properties>
 	<build>
 		<plugins>
@@ -102,6 +103,14 @@
 			</plugins>
 		</pluginManagement>
 	</build>
+	<repositories>
+		<!-- Looks like titan-1.1.0 may not be released any time soon, for now we'll just build a local repo here -->
+	    <repository>
+	      <id>local_repo</id>
+	      <name>local_repo</name>
+	      <url>file://${basedir}/local_maven_repo</url>
+	    </repository>
+  	</repositories>
 	<dependencies>
 		<dependency>
 			<groupId>jdk.tools</groupId>
@@ -133,12 +142,17 @@
 		<dependency>
 			<groupId>com.thinkaurelius.titan</groupId>
 			<artifactId>titan-core</artifactId>
-			<version>1.0.0</version>
+			<version>${aleph2.titan}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.thinkaurelius.titan</groupId>
+			<artifactId>titan-hbase</artifactId>
+			<version>${aleph2.titan}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.thinkaurelius.titan</groupId>
 			<artifactId>titan-es</artifactId>
-			<version>1.0.0</version>
+			<version>${aleph2.titan}</version>
 			<exclusions>
 				<exclusion>
 					<artifactId>elasticsearch</artifactId>

@@ -40,7 +40,6 @@ import scala.Tuple2;
 
 import com.codepoetics.protonpack.StreamUtils;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
@@ -195,7 +194,7 @@ public class TestTitanGraphService extends TestTitanCommon {
 	@SuppressWarnings("unchecked")
 	@Test
 	public void test_handleBucketDeletionRequest() throws InterruptedException {
-		final ObjectMapper titan_mapper = _titan.io(IoCore.graphson()).mapper().create().createMapper();
+		final org.apache.tinkerpop.shaded.jackson.databind.ObjectMapper titan_mapper = _titan.io(IoCore.graphson()).mapper().create().createMapper();
 		
 		// Ensure indexes exist
 		

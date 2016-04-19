@@ -21,7 +21,11 @@
                 <Logger name="com.ikanow.aleph2.logging.service.LoggingService" level="ALL" additivity="false">
 			<AppenderRef ref="fileWriter_ALEPH2"/>
 		</Logger>
+				<!-- Some loggers that are too chatty at INFO: -->
                 <logger name="com.joestelmach.natty.Parser" level="WARN"/>        
+                <logger name="org.apache.zookeeper" level="WARN"/>
+                <logger name="org.apache.hadoop.hbase.zookeeper" level="WARN"/>
+                <logger name="org.apache.hadoop.hbase.client" level="WARN"/>
                 <Root level="info">
                         <AppenderRef ref="fileWriter" />
                 </Root>

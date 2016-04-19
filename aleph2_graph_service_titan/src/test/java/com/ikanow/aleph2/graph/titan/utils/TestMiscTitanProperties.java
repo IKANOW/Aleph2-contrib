@@ -38,7 +38,6 @@ import com.thinkaurelius.titan.core.Cardinality;
 import org.apache.tinkerpop.gremlin.structure.io.IoCore;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
@@ -290,7 +289,7 @@ public class TestMiscTitanProperties {
 
 		// Looking at how to import vertices ..  
 		final String s1 = "{\"id\":4200,\"label\":\"test2\",\"type\":\"vertex\",\"properties\":{\"set\":[{\"id\":\"1l9-38o-5j9\",\"value\":[\"val1\",\"val2\"]}],\"type\":[{\"id\":\"171-38o-4qt\",\"value\":\"rabbit\"}]}}";
-		final ObjectMapper m = titan.io(IoCore.graphson()).mapper().create().createMapper();
+		final org.apache.tinkerpop.shaded.jackson.databind.ObjectMapper m = titan.io(IoCore.graphson()).mapper().create().createMapper();
 		// confirmation that can't go JsonNode -> vertex directly
 		//final CacheVertex v1 = m.convertValue(s1, CacheVertex.class);
 		//final StandardVertex v1 = m.convertValue(m.readTree(s1), StandardVertex.class);		
