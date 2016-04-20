@@ -16,19 +16,20 @@
 
 package com.ikanow.aleph2.graph.titan.data_model;
 
-import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.GraphSchemaBean;
+import java.util.Map;
+import java.util.Optional;
 
-/** Optional config bean for graph
- *  NOTE: duplicated in each of the graph db services in order to avoid unnecessary dependencies (ick - sort this out later)
+/**
  * @author Alex
  *
  */
-public class GraphConfigBean {
+public class TitanGraphConfigBean {
+	final public static String PROPERTIES_ROOT = "TitanGraphService";
+	public static String DEFAULT_TITAN_CONFIG = "aleph2-titan.properties";
 
-	/** Allows users to override the doc schema in order to use the dedup service as a standalone job
-	 * @return
-	 */
-	public GraphSchemaBean graph_schema_override() { return graph_schema_override; }
-	
-	private GraphSchemaBean graph_schema_override;
+	public String config_path_name() { return Optional.ofNullable(config_path_name).orElse(DEFAULT_TITAN_CONFIG); }
+	public Map<String, Object> config_override() { return config_override; }
+		
+	private Map<String, Object> config_override;
+	private String config_path_name;
 }

@@ -52,7 +52,7 @@ import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
-import com.ikanow.aleph2.graph.titan.data_model.GraphConfigBean;
+import com.ikanow.aleph2.graph.titan.data_model.GraphBuilderConfigBean;
 import com.ikanow.aleph2.graph.titan.utils.TitanGraphBuildingUtils;
 import com.ikanow.aleph2.graph.titan.utils.TitanGraphBuildingUtils.MutableStatsBean;
 import com.thinkaurelius.titan.core.TitanException;
@@ -94,7 +94,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 			Tuple2<ProcessingStage, ProcessingStage> previous_next,
 			Optional<List<String>> next_grouping_fields) {
 	
-		final GraphConfigBean dedup_config = BeanTemplateUtils.from(Optional.ofNullable(control.config()).orElse(Collections.emptyMap()), GraphConfigBean.class).get();
+		final GraphBuilderConfigBean dedup_config = BeanTemplateUtils.from(Optional.ofNullable(control.config()).orElse(Collections.emptyMap()), GraphBuilderConfigBean.class).get();
 		
 		final GraphSchemaBean graph_schema = Optional.ofNullable(dedup_config.graph_schema_override()).orElse(bucket.data_schema().graph_schema()); //(exists by construction)
 		_config.set(BeanTemplateUtils.clone(graph_schema)

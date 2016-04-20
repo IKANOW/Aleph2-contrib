@@ -40,6 +40,7 @@ import scala.Tuple2;
 
 import com.codepoetics.protonpack.StreamUtils;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.collect.ImmutableMap;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
@@ -50,11 +51,14 @@ import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadat
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.graph.titan.data_model.TitanGraphConfigBean;
 import com.thinkaurelius.titan.core.TitanEdge;
+import com.thinkaurelius.titan.core.TitanGraph;
 import com.thinkaurelius.titan.core.TitanTransaction;
 import com.thinkaurelius.titan.core.TitanVertex;
 import com.thinkaurelius.titan.core.schema.TitanGraphIndex;
 import com.thinkaurelius.titan.core.schema.TitanManagement;
+import com.typesafe.config.Config;
 
 /**
  * @author Alex
@@ -341,6 +345,37 @@ public class TestTitanGraphService extends TestTitanCommon {
 		final DataBucketBean bucket = BeanTemplateUtils.build(DataBucketBean.class).with(DataBucketBean::full_name, "/test").done().get();
 		assertFalse(data_service.get().switchCrudServiceToPrimaryBuffer(bucket, null, null, null).join().success());
 		assertTrue(data_service.get().handleAgeOutRequest(null).join().success());
+	}
+
+	@Test
+	public void test_createRemoteConfig() {
+		
+		final Config cfg = _mock_graph_db_service.createRemoteConfig(null);
+		
+		System.out.println(cfg.root().toString());
+		
+		assertEquals("inmemory", cfg.getString("storage.backend"));
+		assertEquals("elasticsearch", cfg.getString("index.search.backend"));		
+	}
+	
+	@Test
+	public void test_setup() {
+		
+		//TODO (ALEPH-15): test file location
+		
+		final TitanGraphConfigBean config = 
+				BeanTemplateUtils.build(TitanGraphConfigBean.class)
+					.with(TitanGraphConfigBean::config_override, 
+							ImmutableMap.<String, Object>of(
+									"storage.backend", "inmemory",
+									"query.force-index", true
+									))
+				.done().get();
+		
+		final TitanGraph g = _mock_graph_db_service.setup(config);
+		
+		assertEquals("inmemory", g.configuration().getString("storage.backend"));
+		assertEquals(true, g.configuration().getBoolean("query.force-index"));
 	}
 	
 }

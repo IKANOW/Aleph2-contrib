@@ -16,6 +16,7 @@
 
 package com.ikanow.aleph2.graph.titan.services;
 
+import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -27,6 +28,8 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
+import org.apache.commons.configuration.ConfigurationMap;
+import org.apache.commons.configuration.MapConfiguration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.tinkerpop.gremlin.structure.Edge;
@@ -36,12 +39,14 @@ import org.apache.tinkerpop.gremlin.structure.VertexProperty;
 import scala.Tuple2;
 
 import com.google.inject.Inject;
+import com.google.inject.Module;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
 import com.ikanow.aleph2.data_model.interfaces.data_services.IGraphService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataWriteService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService.IReadOnlyCrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IDataServiceProvider.IGenericDataService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.GraphSchemaBean;
@@ -53,6 +58,8 @@ import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
+import com.ikanow.aleph2.graph.titan.data_model.TitanGraphConfigBean;
+import com.ikanow.aleph2.graph.titan.module.TitanGraphModule;
 import com.ikanow.aleph2.graph.titan.utils.ErrorUtils;
 import com.thinkaurelius.titan.core.Cardinality;
 import com.thinkaurelius.titan.core.PropertyKey;
@@ -64,12 +71,14 @@ import com.thinkaurelius.titan.core.TitanTransaction;
 import com.thinkaurelius.titan.core.TitanVertex;
 import com.thinkaurelius.titan.core.schema.Mapping;
 import com.thinkaurelius.titan.core.schema.TitanManagement;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 /** Titan implementation of the graph service
  * @author Alex
  *
  */
-public class TitanGraphService implements IGraphService, IGenericDataService {
+public class TitanGraphService implements IGraphService, IGenericDataService, IExtraDependencyLoader {
 	protected static Logger _logger = LogManager.getLogger();
 	
 	public static String GLOBAL_CREATED_GV = "aleph2_created_gv"; // (_G for graph as opposed to the secondary edge indices, "_ge" for graph-edge)
@@ -77,7 +86,6 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 	public static String GLOBAL_PATH_INDEX_GV = "aleph2_path_query_gv";
 	public static String GLOBAL_PATH_INDEX_GE = "aleph2_path_query_ge";
 	public static String GLOBAL_DEFAULT_INDEX_GV = "aleph2_index_query_gv";
-	public static String DEFAULT_TITAN_CONFIG = "aleph2-titan.properties";
 	protected static String UUID = System.getProperty("java.io.tmpdir") + "/titan_test_" + UuidUtils.get().getRandomUuid();
 	protected final TitanGraph _titan;
 	
@@ -86,17 +94,16 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 	/** Guice injector
 =	 */
 	@Inject
-	public TitanGraphService() {
+	public TitanGraphService(TitanGraphConfigBean config) {
 		_titan = Lambdas.get(() -> {
 			try {
-				final String path = ModuleUtils.getGlobalProperties().local_yarn_config_dir() + "/" + DEFAULT_TITAN_CONFIG;
 				
 				//TODO (ALEPH-15): or allow various overrides using the standard config bean syntax
 				
 				//TODO: (ALEPH-15): would be interesting to allow separate table/indexes for certain buckets ("contexts" like in dedup ... eg
 				// generate a unique signature for a list of dedup contexts - would need to handle incremental changes, yikes - and then name the backend/ES store based on that) 
 				
-				return TitanFactory.open(path);
+				return setup(config);
 			}
 			catch (Throwable t) {
 				_logger.error(ErrorUtils.getLongForm("Unable to open Titan graph DB: {0}", t));
@@ -426,4 +433,54 @@ public class TitanGraphService implements IGraphService, IGenericDataService {
 		
 	}
 
+	//////////////////////////////////////////////////////
+	
+	// Configuration utils
+		
+	/** This service needs to load some additional classes via Guice. Here's the module that defines the bindings
+	 * @return
+	 */
+	public static List<Module> getExtraDependencyModules() {
+		return Arrays.asList((Module)new TitanGraphModule());
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader#youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules()
+	 */
+	@Override
+	public void youNeedToImplementTheStaticFunctionCalled_getExtraDependencyModules() {
+		// (done see above)		
+	}
+	
+	/* (non-Javadoc)
+	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService#createRemoteConfig(com.typesafe.config.Config)
+	 */
+	@SuppressWarnings("unchecked")
+	@Override
+	public Config createRemoteConfig(Config local_config) {
+		
+		return ConfigFactory.parseMap(
+				(AbstractMap<String, ?>)(AbstractMap<?, ?>)new ConfigurationMap(_titan.configuration())
+				);
+	}
+
+	/** Builds a Titan graph from the config bean
+	 * @param config
+	 * @return
+	 */
+	protected TitanGraph setup(TitanGraphConfigBean config) {
+		if (null != config.config_override()) {
+			return TitanFactory.open(new MapConfiguration(config.config_override()));
+		}
+		else {
+			final String path = Optional.of(config.config_path_name())
+					.map(p -> (p.startsWith(".") || p.startsWith("/"))
+								? p
+								: ModuleUtils.getGlobalProperties().local_yarn_config_dir() + "/" + p
+					)
+					.get()
+					;					
+			return TitanFactory.open(path);
+		}		
+	}
 }

@@ -16,15 +16,19 @@
 
 package com.ikanow.aleph2.graph.titan.services;
 
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import com.google.inject.Inject;
+import com.google.inject.Module;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
+import com.ikanow.aleph2.graph.titan.module.TitanGraphModule;
 
 /** Titan implementation of the graph service
  * @author Alex
@@ -42,6 +46,13 @@ public class MockTitanGraphService extends TitanGraphService {
 	public MockTitanGraphService() {
 		super(true);
 		_USE_ES_FOR_DEDUP_INDEXES = true; //(since the in memory backing store doesn't support indexes at all)
+	}
+	
+	/** This service needs to load some additional classes via Guice. Here's the module that defines the bindings
+	 * @return
+	 */
+	public static List<Module> getExtraDependencyModules() {
+		return Arrays.asList((Module)new TitanGraphModule());
 	}
 	
 	//////////////////////////////////////////////////////////
