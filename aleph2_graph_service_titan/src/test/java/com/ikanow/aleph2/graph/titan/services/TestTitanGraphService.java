@@ -350,7 +350,7 @@ public class TestTitanGraphService extends TestTitanCommon {
 	@Test
 	public void test_createRemoteConfig() {
 		
-		final Config cfg = _mock_graph_db_service.createRemoteConfig(null);
+		final Config cfg = _mock_graph_db_service.createRemoteConfig(Optional.empty(), null);
 		
 		System.out.println(cfg.root().toString());
 		
