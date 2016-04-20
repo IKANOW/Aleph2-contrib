@@ -458,6 +458,7 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 	@SuppressWarnings("unchecked")
 	@Override
 	public Config createRemoteConfig(Optional<DataBucketBean> maybe_bucket, Config local_config) {
+		if (null == _titan) return local_config; // (titan is disabled, just pass through)
 		
 		return ConfigFactory.parseMap(
 				(AbstractMap<String, ?>)(AbstractMap<?, ?>)new ConfigurationMap(_titan.configuration())
