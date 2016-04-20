@@ -68,7 +68,8 @@ import com.thinkaurelius.titan.diskstorage.locking.PermanentLockingException;
  *
  */
 public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModule {
-
+	//TODO (ALEPH-15): should persist all the found (/created) existing vertices across batches (and then remove from query entry?)
+	
 	protected final SetOnce<IEnrichmentBatchModule> _custom_graph_decomp_handler = new SetOnce<>();
 	protected final SetOnce<GraphDecompEnrichmentContext> _custom_graph_decomp_context = new SetOnce<>();
 	protected final SetOnce<IEnrichmentBatchModule> _custom_graph_merge_handler = new SetOnce<>();
@@ -192,7 +193,8 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 
 		final MutableStatsBean mutable_stats = new MutableStatsBean();
 		
-		IntStream.range(0, 5).boxed().filter(i -> { //(at most 5 attempts)
+		final int MAX_ATTEMPT_NUM = 4;
+		IntStream.range(0, 1 + MAX_ATTEMPT_NUM).boxed().filter(i -> { //(at most 5 attempts)
 			try {
 				// Create transaction
 				
@@ -245,7 +247,16 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				return true; // (ie ends the loop)
 			}
 			catch (TitanException e) {
-				if (!isRecoverableError(e)) {
+				if ((MAX_ATTEMPT_NUM == i) || (!isRecoverableError(e))) {
+					_logger.optional().ifPresent(logger -> {
+						logger.log(Level.ERROR,
+								ErrorUtils.lazyBuildMessage(false, 
+										() -> "GraphBuilderEnrichmentService",
+										() -> "system.onStageComplete",
+										() -> null, 
+										() -> ErrorUtils.getLongForm("Failed to commit transaction due to local conflicts, attempt_num={1} error={0}", e, i),
+										() -> null));
+					});					
 					throw e;
 				}
 
@@ -280,7 +291,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				return true;				
 			}
 			else if ((null != e.getCause().getCause()) &&
-					PermanentLockingException.class.isAssignableFrom(e.getCause().getClass().getClass())) //versioning error, repeat transaction
+					PermanentLockingException.class.isAssignableFrom(e.getCause().getCause().getClass())) //versioning error, repeat transaction
 			{
 				return true;
 			}

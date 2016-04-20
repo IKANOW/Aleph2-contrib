@@ -78,9 +78,11 @@
 										<exclude>org/apache/hadoop/mapred/**</exclude>
 										<exclude>org/apache/hadoop/metrics2/**</exclude>
 										<exclude>org/apache/hadoop/metrics/**</exclude>
+										<exclude>org/apache/hadoop/net/**</exclude>
 										<exclude>org/apache/hadoop/ipc/**</exclude>
 										<exclude>org/apache/hadoop/io/**</exclude>
 										<exclude>org/apache/hadoop/ha/**</exclude>
+										<exclude>org/apache/hadoop/filecache/**</exclude>
 										<exclude>org/apache/hadoop/fs/**</exclude>
 										<exclude>org/apache/hadoop/log/**</exclude>
 										<exclude>org/apache/hadoop/jmx/**</exclude>
@@ -92,6 +94,14 @@
 										<exclude>javax/activation/**</exclude>
 										<exclude>javax/xml/**</exclude>
 										<exclude>org/apache/commons/**</exclude>
+										<!--  eg: https://community.cloudera.com/t5/Cloudera-Manager-Installation/FileSystem-provider-not-found-s3-Kosmos/td-p/30171 -->
+										<exclude>META-INF/**</exclude>
+										<exclude>webapps/**</exclude>
+										<exclude>tables/**</exclude>
+										<exclude>core-default.xml</exclude>
+										<exclude>yarn-default.xml</exclude>
+										<exclude>mapred-default.xml</exclude>
+										<exclude>*.properties</exclude>
 									</excludes>
 								</filter>
 							</filters>

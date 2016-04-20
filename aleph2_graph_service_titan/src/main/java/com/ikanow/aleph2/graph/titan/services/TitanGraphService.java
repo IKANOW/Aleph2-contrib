@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.commons.configuration.ConfigurationMap;
@@ -52,6 +54,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.GraphSchemaBean;
 import com.ikanow.aleph2.data_model.objects.data_import.GraphAnnotationBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
+import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
@@ -63,7 +66,6 @@ import com.ikanow.aleph2.graph.titan.module.TitanGraphModule;
 import com.ikanow.aleph2.graph.titan.utils.ErrorUtils;
 import com.thinkaurelius.titan.core.Cardinality;
 import com.thinkaurelius.titan.core.PropertyKey;
-import com.thinkaurelius.titan.core.SchemaViolationException;
 import com.thinkaurelius.titan.core.TitanEdge;
 import com.thinkaurelius.titan.core.TitanFactory;
 import com.thinkaurelius.titan.core.TitanGraph;
@@ -201,10 +203,7 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 			Set<String> previous_data_services)
 	{
 		try {
-			if (previous_data_services.contains(DataSchemaBean.GraphSchemaBean.name) && !data_services.contains(DataSchemaBean.GraphSchemaBean.name)) {
-				return handleBucketDeletionRequest(bucket, Optional.empty(), false).thenApply(b -> Arrays.asList(b));
-			}
-			else if (data_services.contains(DataSchemaBean.GraphSchemaBean.name)) {
+			if (data_services.contains(DataSchemaBean.GraphSchemaBean.name)) {
 	
 				final TitanManagement mgmt = _titan.openManagement();
 				
@@ -216,18 +215,23 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 							.addKey(bucket_index, Mapping.STRING.asParameter())
 							.buildMixedIndex("search");
 					}
-					catch (SchemaViolationException e) {} // (already indexed, this is fine/expected)				
+					catch (IllegalArgumentException e) {
+						//DEBUG
+						//_logger.error(ErrorUtils.getLongForm("{0}", e));
+						//e.printStackTrace();
+					} // (already indexed, this is fine/expected)				
 					try {
 						mgmt.buildIndex(GLOBAL_PATH_INDEX_GE, Edge.class)
 							.addKey(bucket_index, Mapping.STRING.asParameter())
 							.buildMixedIndex("search");
 					}
-					catch (SchemaViolationException e) {
+					catch (IllegalArgumentException e) {
 						//DEBUG
+						//_logger.error(ErrorUtils.getLongForm("{0}", e));
 						//e.printStackTrace();
 					} // (already indexed, this is fine/expected)
 				}
-				catch (SchemaViolationException e) {
+				catch (IllegalArgumentException e) {
 					//DEBUG
 					//e.printStackTrace();
 				} // (already indexed, this is fine/expected)
@@ -238,13 +242,23 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 						.addKey(mgmt.makePropertyKey(GraphAnnotationBean.a2_tc).dataType(Long.class).make())
 						.buildMixedIndex("search");					
 				}
-				catch (SchemaViolationException e) {} // (already indexed, this is fine/expected)				
+				catch (IllegalArgumentException e) {
+					//DEBUG
+					//_logger.error(ErrorUtils.getLongForm("{0}", e));
+					//e.printStackTrace();
+					
+				} // (already indexed, this is fine/expected)				
 				try {
 					mgmt.buildIndex(GLOBAL_MODIFIED_GV, Vertex.class)
 						.addKey(mgmt.makePropertyKey(GraphAnnotationBean.a2_tm).dataType(Long.class).make())
 						.buildMixedIndex("search");					
 				}
-				catch (SchemaViolationException e) {} // (already indexed, this is fine/expected)
+				catch (IllegalArgumentException e) {
+					//DEBUG
+					//_logger.error(ErrorUtils.getLongForm("{0}", e));
+					//e.printStackTrace();
+					
+				} // (already indexed, this is fine/expected)
 				
 				// Then check that the global default index is set
 				Optional<List<String>> maybe_dedup_fields = Optionals.of(() -> bucket.data_schema().graph_schema().deduplication_fields());
@@ -268,25 +282,35 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 						// http://s3.thinkaurelius.com/docs/titan/1.0.0/eventual-consistency.html ... tldr: basically need to have regular "clean up jobs" and live with transient issues
 						// (or use a consistent data store - would also require a decent amount of code here because our dedup strategy is not perfect)
 						
+						final Function<String, PropertyKey> getOrCreateProperty = field -> Optional.ofNullable(mgmt.getPropertyKey(field)).orElseGet(() -> mgmt.makePropertyKey(field).dataType(String.class).make());						
+						
+						final PropertyKey name_index = getOrCreateProperty.apply(GraphAnnotationBean.name);
+						final PropertyKey type_index = getOrCreateProperty.apply(GraphAnnotationBean.type);
+						
 						if (_USE_ES_FOR_DEDUP_INDEXES) {
 							mgmt.buildIndex(GLOBAL_DEFAULT_INDEX_GV, Vertex.class)
-								.addKey(mgmt.makePropertyKey(GraphAnnotationBean.name).dataType(String.class).make(), Mapping.TEXTSTRING.asParameter())
-								.addKey(mgmt.makePropertyKey(GraphAnnotationBean.type).dataType(String.class).make(), Mapping.STRING.asParameter())
+								.addKey(name_index, Mapping.TEXTSTRING.asParameter())
+								.addKey(type_index, Mapping.STRING.asParameter())
 								.buildMixedIndex("search");
 						}
 						else { // use the storage backend which should have better consistency properties
 							mgmt.buildIndex(GLOBAL_DEFAULT_INDEX_GV, Vertex.class)
-								.addKey(mgmt.makePropertyKey(GraphAnnotationBean.name).dataType(String.class).make())	
-								.addKey(mgmt.makePropertyKey(GraphAnnotationBean.type).dataType(String.class).make())	
+								.addKey(name_index)	
+								.addKey(type_index)	
 								.buildCompositeIndex();
 							
 							//(in this case, also index "name" as an ES field to make it easier to search over)
 							mgmt.buildIndex(GLOBAL_DEFAULT_INDEX_GV + "_TEXT", Vertex.class) 
-							.addKey(mgmt.makePropertyKey(GraphAnnotationBean.name).dataType(String.class).make(), Mapping.TEXT.asParameter())
+							.addKey(name_index, Mapping.TEXT.asParameter())
 							.buildMixedIndex("search");													
 						}
 					}
-					catch (SchemaViolationException e) {} // (already indexed, this is fine/expected)
+					catch (IllegalArgumentException e) {
+						//DEBUG
+						//_logger.error(ErrorUtils.getLongForm("{0}", e));
+						//e.printStackTrace();
+						
+					} // (already indexed, this is fine/expected)
 					return Collections.emptyList();
 				});
 				
@@ -464,7 +488,9 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 		final Config distributed_config = 
 				ConfigFactory.parseMap((AbstractMap<String, ?>)(AbstractMap<?, ?>)new ConfigurationMap(_titan.configuration()));
 		
-		return local_config.withValue(TitanGraphConfigBean.PROPERTIES_ROOT, distributed_config.root());
+		return local_config.withValue(TitanGraphConfigBean.PROPERTIES_ROOT
+				+ "." + BeanTemplateUtils.from(TitanGraphConfigBean.class).field(TitanGraphConfigBean::config_override)
+				, distributed_config.root());
 	}
 
 	/** Builds a Titan graph from the config bean
@@ -473,7 +499,10 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 	 */
 	protected TitanGraph setup(TitanGraphConfigBean config) {
 		if (null != config.config_override()) {
-			return TitanFactory.open(new MapConfiguration(config.config_override()));
+			// First denest:
+			final Config denested = ConfigFactory.parseMap(config.config_override());
+			// Then build
+			return TitanFactory.open(new MapConfiguration(denested.entrySet().stream().collect(Collectors.toMap(kv -> kv.getKey(), kv -> kv.getValue().unwrapped()))));
 		}
 		else {
 			final String path = Optional.of(config.config_path_name())

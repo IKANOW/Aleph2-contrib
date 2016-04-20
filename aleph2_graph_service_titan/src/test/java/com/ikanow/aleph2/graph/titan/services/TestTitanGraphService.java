@@ -56,6 +56,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
 import com.ikanow.aleph2.graph.titan.data_model.TitanGraphConfigBean;
+import com.ikanow.aleph2.graph.titan.module.TitanGraphModule;
 import com.thinkaurelius.titan.core.TitanEdge;
 import com.thinkaurelius.titan.core.TitanGraph;
 import com.thinkaurelius.titan.core.TitanTransaction;
@@ -150,7 +151,7 @@ public class TestTitanGraphService extends TestTitanCommon {
 			CompletableFuture<Collection<BasicMessageBean>> ret_val =
 					_mock_graph_db_service.onPublishOrUpdate(bucket, Optional.empty(), false, ImmutableSet.of(GraphSchemaBean.name), Collections.emptySet());
 			
-			assertEquals(Collections.emptyList(), ret_val.join());
+			assertEquals("" + ret_val.join().stream().map(b->b.message()).collect(Collectors.joining(" // ")), Collections.emptyList(), ret_val.join());
 			
 			// But also now check the Titan indexes have all been created:
 			
@@ -268,18 +269,26 @@ public class TestTitanGraphService extends TestTitanCommon {
 			tx.commit();
 		}
 		
-		// First phase of deletes (do this via onPublishOrUpdate for coverage)
+		// First phase of deletes 
 		{
 			final TitanTransaction tx = _titan.buildTransaction().start();
 			
-			CompletableFuture<Collection<BasicMessageBean>> ret_val =
-					_mock_graph_db_service.onPublishOrUpdate(bucket, Optional.empty(), false, Collections.emptySet(), ImmutableSet.of(GraphSchemaBean.name));
+			{
+				CompletableFuture<BasicMessageBean> ret_val =
+						_mock_graph_db_service.handleBucketDeletionRequest(bucket, Optional.of("alex"), true);			
+				
+				// Got a "fail" reply
+				assertEquals(false, ret_val.join().success());
+			}
+			//(try again without the secondary buffer)
+			{
+				CompletableFuture<BasicMessageBean> ret_val =
+						_mock_graph_db_service.handleBucketDeletionRequest(bucket, Optional.empty(), true);
+				
+				// Got a "success" reply
+				assertEquals(true, ret_val.join().success());
+			}
 			
-			
-			// Got a "success" reply
-			assertEquals(1, ret_val.join().size());
-			assertEquals(1, ret_val.join().stream().filter(b -> b.success()).count());
-
 			System.out.println("Waiting 2s for ES to refresh... " + new Date().getTime());
 			Thread.sleep(2000L);
 			
@@ -374,8 +383,7 @@ public class TestTitanGraphService extends TestTitanCommon {
 	@Test
 	public void test_setup() throws IOException {
 		
-		//TODO (ALEPH-15): test file location
-		// Config by properties
+		// Config by properties file
 		{
 			final String filename = System.getProperty("java.io.tmpdir") + "/" + UuidUtils.get().getRandomUuid();
 			final String config_str = 
@@ -408,6 +416,22 @@ public class TestTitanGraphService extends TestTitanCommon {
 					.done().get();
 			
 			final TitanGraph g = _mock_graph_db_service.setup(config);
+			
+			assertEquals("inmemory", g.configuration().getString("storage.backend"));
+			assertEquals(true, g.configuration().getBoolean("query.force-index"));
+			
+			g.close();			
+		}
+		// Config from bean
+		{
+			final Config global_config = ConfigFactory.parseMap(
+					ImmutableMap.of("TitanGraphService.config_override.storage.backend", "inmemory", "TitanGraphService.config_override.query.force-index", true)
+					)
+					;
+			
+			final TitanGraphConfigBean config_bean = TitanGraphModule.getTitanConfig(global_config);
+			
+			final TitanGraph g = _mock_graph_db_service.setup(config_bean);
 			
 			assertEquals("inmemory", g.configuration().getString("storage.backend"));
 			assertEquals(true, g.configuration().getBoolean("query.force-index"));

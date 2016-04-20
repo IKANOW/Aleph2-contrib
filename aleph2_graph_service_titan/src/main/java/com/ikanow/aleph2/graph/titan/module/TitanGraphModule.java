@@ -35,16 +35,23 @@ public class TitanGraphModule extends AbstractModule {
 	@Override
 	protected void configure() {
 		final Config config = ModuleUtils.getStaticConfig();
+		this.bind(TitanGraphConfigBean.class).toInstance(getTitanConfig((config))); // (for crud service)
+	}
+
+	/** Grabs the titan config bean from the global config
+	 * @param config
+	 * @return
+	 */
+	public static TitanGraphConfigBean getTitanConfig(final Config config) {
 		try {
-			TitanGraphConfigBean config_bean = BeanTemplateUtils.from(PropertiesUtils.getSubConfig(config, TitanGraphConfigBean.PROPERTIES_ROOT).orElse(null), TitanGraphConfigBean.class);			
-			this.bind(TitanGraphConfigBean.class).toInstance(config_bean); // (for crud service)
+			TitanGraphConfigBean config_bean = BeanTemplateUtils.from(PropertiesUtils.getSubConfig(config, TitanGraphConfigBean.PROPERTIES_ROOT).orElse(null), TitanGraphConfigBean.class);
+			return config_bean;
 		} 
 		catch (Exception e) {
 			throw new RuntimeException(ErrorUtils.get(ErrorUtils.INVALID_CONFIG_ERROR,
 					TitanGraphConfigBean.class.toString(),
 					config.getConfig(TitanGraphConfigBean.PROPERTIES_ROOT)
 					), e);
-		}
+		}		
 	}
-
 }
