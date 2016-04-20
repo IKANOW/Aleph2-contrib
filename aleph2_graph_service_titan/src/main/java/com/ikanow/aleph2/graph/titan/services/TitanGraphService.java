@@ -134,6 +134,7 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 	 */
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
+		//TODO (ALEPH-15): also need ES if ES is enabled (/hbase if hbase is enabled, though going to make the hbase compat embedded for now)
 		return Arrays.asList(this);
 	}
 
