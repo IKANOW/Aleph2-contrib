@@ -461,9 +461,10 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 	public Config createRemoteConfig(Optional<DataBucketBean> maybe_bucket, Config local_config) {
 		if (null == _titan) return local_config; // (titan is disabled, just pass through)
 		
-		return ConfigFactory.parseMap(
-				(AbstractMap<String, ?>)(AbstractMap<?, ?>)new ConfigurationMap(_titan.configuration())
-				);
+		final Config distributed_config = 
+				ConfigFactory.parseMap((AbstractMap<String, ?>)(AbstractMap<?, ?>)new ConfigurationMap(_titan.configuration()));
+		
+		return local_config.withValue(TitanGraphConfigBean.PROPERTIES_ROOT, distributed_config.root());
 	}
 
 	/** Builds a Titan graph from the config bean
@@ -476,7 +477,7 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 		}
 		else {
 			final String path = Optional.of(config.config_path_name())
-					.map(p -> (p.startsWith(".") || p.startsWith("/"))
+					.map(p -> (p.matches("^[a-zA-Z]:.*") || p.startsWith(".") || p.startsWith("/"))
 								? p
 								: ModuleUtils.getGlobalProperties().local_yarn_config_dir() + "/" + p
 					)
