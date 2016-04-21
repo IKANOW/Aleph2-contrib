@@ -104,6 +104,7 @@ public class GraphMergeEnrichmentContext implements IEnrichmentModuleContext {
 			return Validation.fail(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "emitMutableObject", ErrorUtils.NOT_YET_IMPLEMENTED, "annotations"));
 		}
 		if (Vertex.class.isAssignableFrom(_type)) {
+			// One element only
 			if (!_mutable_output_elements.isEmpty()) {
 				return Validation.fail(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "emitMutableObject", ErrorUtils.ONE_VERTEX_PER_MERGE));
 			}

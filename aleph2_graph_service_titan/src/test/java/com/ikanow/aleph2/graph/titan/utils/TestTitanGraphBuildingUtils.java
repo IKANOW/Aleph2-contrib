@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -626,10 +627,10 @@ public class TestTitanGraphBuildingUtils {
 						.set(GraphAnnotationBean.inV, vertex_key_1)).set(GraphAnnotationBean.outV, vertex_key_2)								
 				);
 		// Existing elements
-		final List<Tuple2<Vertex, JsonNode>> existing_vertices = Arrays.asList(Tuples._2T(v1, _mapper.createObjectNode()), Tuples._2T(v2, _mapper.createObjectNode()));
-		final List<Tuple2<Edge, JsonNode>> existing_edges = Arrays.asList(Tuples._2T(e1, _mapper.createObjectNode()), Tuples._2T(e2, _mapper.createObjectNode()));
+		final List<Vertex> existing_vertices = Arrays.asList(v1);
+		final List<Edge> existing_edges = Arrays.asList(e1);
 		// State
-		final Map<JsonNode, Vertex> mutable_existing_vertex_store = new HashMap<>();
+		final Map<ObjectNode, Vertex> mutable_existing_vertex_store = new HashMap<>();
 		mutable_existing_vertex_store.put(vertex_key_1, v1);
 		mutable_existing_vertex_store.put(vertex_key_2, v2);
 		final MutableStatsBean mutable_stats = new MutableStatsBean();
@@ -774,8 +775,7 @@ public class TestTitanGraphBuildingUtils {
 		// Edges, no existing elements, single new element
 		{
 			mutable_stats.reset();
-			
-			List<Edge> ret_val = 
+			final List<Edge> ret_val = 
 					TitanGraphBuildingUtils.invokeUserMergeCode(
 							tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), 
 							maybe_merger, titan_mapper, mutable_stats, Edge.class, bucket_path, edge_key, Arrays.asList(new_edges.get(0)), Collections.emptyList(), mutable_existing_vertex_store);			
@@ -1117,11 +1117,11 @@ public class TestTitanGraphBuildingUtils {
 				
 		// Empty graph, collect information
 		{
-			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> ret_val_s = 
 					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
-			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val = ret_val_s.collect(Collectors.toList());
+			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> ret_val = ret_val_s.collect(Collectors.toList());
 			
 			// (5 different vertex keys)
 			assertEquals(5, ret_val.size()); 
@@ -1151,11 +1151,11 @@ public class TestTitanGraphBuildingUtils {
 		{
 			rebuildSimpleGraph(tx, bucket.full_name());
 			
-			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> ret_val_s = 
 					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
-			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val = ret_val_s.collect(Collectors.toList());
+			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> ret_val = ret_val_s.collect(Collectors.toList());
 			
 			// (5 different vertex keys)
 			assertEquals(5, ret_val.size()); 
@@ -1178,15 +1178,15 @@ public class TestTitanGraphBuildingUtils {
 			assertEquals(1, getDistinctExistingCount.apply("dY").intValue());
 			assertEquals(0, getDistinctExistingCount.apply("dZ").intValue());
 		}
-		// Test bucket - check that treats like empty
+		// Test bucket 
 		{
 			final DataBucketBean test_bucket = BucketUtils.convertDataBucketBeanToTest(bucket, "nobody");
 			
-			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> ret_val_s = 
 					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), test_bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
-			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val = ret_val_s.collect(Collectors.toList());
+			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> ret_val = ret_val_s.collect(Collectors.toList());
 			
 			// (5 different vertex keys)
 			assertEquals(5, ret_val.size()); 
@@ -1216,11 +1216,11 @@ public class TestTitanGraphBuildingUtils {
 		{
 			mock_security.setGlobalMockRole("nobody:DataBucketBean:read,write:test:security:*", false);
 			
-			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> ret_val_s = 
 					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
-			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val = ret_val_s.collect(Collectors.toList());
+			final List<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> ret_val = ret_val_s.collect(Collectors.toList());
 			
 			// (5 different vertex keys)
 			assertEquals(5, ret_val.size()); 
@@ -1284,6 +1284,8 @@ public class TestTitanGraphBuildingUtils {
 		maybe_merger.ifPresent(t2 -> t2._1().onStageInitialize(t2._2(), null, null, null, null));
 		// Stream of incoming objects
 		
+		// State:
+		final LinkedList<ObjectNode> mutable_new_element_keys = new LinkedList<>();
 		final MutableStatsBean mutable_stats = new MutableStatsBean();		
 
 		// Call merge with empty graph
@@ -1293,11 +1295,11 @@ public class TestTitanGraphBuildingUtils {
 			final TitanTransaction tx = titan.buildTransaction().start();
 			
 			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
-			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> ret_val_s = 
 					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
-			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
+			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, mutable_new_element_keys, maybe_merger, bucket, ret_val_s);
 			
 			// Check graph
 			assertEquals(2, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "ip").vertices()).count());
@@ -1330,11 +1332,11 @@ public class TestTitanGraphBuildingUtils {
 			rebuildSimpleGraph(tx, bucket.full_name());
 			
 			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
-			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> ret_val_s = 
 					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
-			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
+			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, mutable_new_element_keys, maybe_merger, bucket, ret_val_s);
 			
 			// Check graph
 			assertEquals(2, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "ip").vertices()).count());
@@ -1363,7 +1365,9 @@ public class TestTitanGraphBuildingUtils {
 		}
 		// Existing elements, but will be ignored because in test mode
 		{
-			final DataBucketBean test_bucket = BucketUtils.convertDataBucketBeanToTest(bucket, "nobody");
+			final DataBucketBean test_bucket = BucketUtils.convertDataBucketBeanToTest(
+					BeanTemplateUtils.clone(bucket).with(DataBucketBean::full_name,  "/something/else").done(), // (needs different name) 
+					"nobody");
 			
 			final List<ObjectNode> vertices_and_edges = test_buildGraph_getUserGeneratedAssets_run();
 			
@@ -1371,11 +1375,11 @@ public class TestTitanGraphBuildingUtils {
 			rebuildSimpleGraph(tx, bucket.full_name());
 			
 			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
-			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> ret_val_s = 
 					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), test_bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
-			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
+			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, mutable_new_element_keys, maybe_merger, bucket, ret_val_s);
 			
 			// Check graph
 			assertEquals(3, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "ip").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)
@@ -1415,11 +1419,11 @@ public class TestTitanGraphBuildingUtils {
 			}
 			
 			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
-			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> ret_val_s = 
 					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
-			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
+			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, mutable_new_element_keys, maybe_merger, bucket, ret_val_s);
 			
 			// Check graph
 			assertEquals(3, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "ip").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)
@@ -1456,11 +1460,11 @@ public class TestTitanGraphBuildingUtils {
 			rebuildSimpleGraph(tx, bucket.full_name());
 			
 			// (tested in test_buildGraph_collectUserGeneratedAssets, assumed to work here)
-			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Tuple2<Vertex, JsonNode>>>> ret_val_s = 
+			final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> ret_val_s = 
 					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), bucket, mutable_stats, vertices_and_edges.stream())
 					;
 			
-			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, maybe_merger, bucket, ret_val_s);
+			TitanGraphBuildingUtils.buildGraph_handleMerge(tx, graph_schema, Tuples._2T(user, mock_security), Optional.empty(), mutable_stats, mutable_new_element_keys, maybe_merger, bucket, ret_val_s);
 			
 			// Check graph
 			assertEquals(3, StreamUtils.stream(tx.query().has(GraphAnnotationBean.type, "ip").vertices()).count()); //(+1 for the existing node that _doesn't_ get merged because of the test mode)

@@ -83,6 +83,7 @@ import com.typesafe.config.ConfigFactory;
 public class TitanGraphService implements IGraphService, IGenericDataService, IExtraDependencyLoader {
 	protected static Logger _logger = LogManager.getLogger();
 	
+	public static String SEARCH_INDEX_NAME = "search";
 	public static String GLOBAL_CREATED_GV = "aleph2_created_gv"; // (_G for graph as opposed to the secondary edge indices, "_ge" for graph-edge)
 	public static String GLOBAL_MODIFIED_GV = "aleph2_modified_gv";
 	public static String GLOBAL_PATH_INDEX_GV = "aleph2_path_query_gv";
@@ -96,7 +97,7 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 	/** Guice injector
 =	 */
 	@Inject
-	public TitanGraphService(TitanGraphConfigBean config) {
+	public TitanGraphService(final TitanGraphConfigBean config) {
 		_titan = Lambdas.get(() -> {
 			try {
 				
@@ -117,7 +118,7 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 	/** Mock titan c'tor to allow it to use the protected _titan property
 	 * @param mock
 	 */
-	protected TitanGraphService(boolean mock) {
+	protected TitanGraphService(final boolean mock) {
 		_titan = TitanFactory.build()
 						.set("storage.backend", "inmemory")
 						.set("index.search.backend", "elasticsearch")
@@ -136,7 +137,7 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 	 */
 	@Override
 	public Collection<Object> getUnderlyingArtefacts() {
-		//TODO (ALEPH-15): also need ES if ES is enabled (/hbase if hbase is enabled, though going to make the hbase compat embedded for now)
+		//TODO (ALEPH-15): also need ES if ES is enabled (+hbase if hbase is enabled, though going to make the hbase JARs embedded for now), etc (eg Cassandra support)
 		return Arrays.asList(this);
 	}
 
@@ -145,8 +146,7 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 	 */
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T> Optional<T> getUnderlyingPlatformDriver(Class<T> driver_class,
-			Optional<String> maybe_driver_options) {
+	public <T> Optional<T> getUnderlyingPlatformDriver(final Class<T> driver_class, final Optional<String> maybe_driver_options) {
 		
 		return Patterns.match(driver_class).<Optional<T>>andReturn()
 			.when(clazz -> IEnrichmentBatchModule.class.isAssignableFrom(clazz) && 
@@ -161,8 +161,7 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_services.IGraphService#validateSchema(com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean.GraphSchemaBean, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean)
 	 */
 	@Override
-	public Tuple2<String, List<BasicMessageBean>> validateSchema(
-			GraphSchemaBean schema, DataBucketBean bucket) {
+	public Tuple2<String, List<BasicMessageBean>> validateSchema(final GraphSchemaBean schema, final DataBucketBean bucket) {
 		
 		final LinkedList<BasicMessageBean> errors = new LinkedList<>();
 		
@@ -203,122 +202,8 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 			Set<String> previous_data_services)
 	{
 		try {
-			if (data_services.contains(DataSchemaBean.GraphSchemaBean.name)) {
-	
-				final TitanManagement mgmt = _titan.openManagement();
-				
-				// First off, let's ensure that a2_p is indexed: (note these apply to both vertixes and edges)
-				try {
-					final PropertyKey bucket_index = mgmt.makePropertyKey(GraphAnnotationBean.a2_p).dataType(String.class).cardinality(Cardinality.SET).make();
-					try {
-						mgmt.buildIndex(GLOBAL_PATH_INDEX_GV, Vertex.class)
-							.addKey(bucket_index, Mapping.STRING.asParameter())
-							.buildMixedIndex("search");
-					}
-					catch (IllegalArgumentException e) {
-						//DEBUG
-						//_logger.error(ErrorUtils.getLongForm("{0}", e));
-						//e.printStackTrace();
-					} // (already indexed, this is fine/expected)				
-					try {
-						mgmt.buildIndex(GLOBAL_PATH_INDEX_GE, Edge.class)
-							.addKey(bucket_index, Mapping.STRING.asParameter())
-							.buildMixedIndex("search");
-					}
-					catch (IllegalArgumentException e) {
-						//DEBUG
-						//_logger.error(ErrorUtils.getLongForm("{0}", e));
-						//e.printStackTrace();
-					} // (already indexed, this is fine/expected)
-				}
-				catch (IllegalArgumentException e) {
-					//DEBUG
-					//e.printStackTrace();
-				} // (already indexed, this is fine/expected)
-
-				// Created/modified
-				try {
-					mgmt.buildIndex(GLOBAL_CREATED_GV, Vertex.class)
-						.addKey(mgmt.makePropertyKey(GraphAnnotationBean.a2_tc).dataType(Long.class).make())
-						.buildMixedIndex("search");					
-				}
-				catch (IllegalArgumentException e) {
-					//DEBUG
-					//_logger.error(ErrorUtils.getLongForm("{0}", e));
-					//e.printStackTrace();
-					
-				} // (already indexed, this is fine/expected)				
-				try {
-					mgmt.buildIndex(GLOBAL_MODIFIED_GV, Vertex.class)
-						.addKey(mgmt.makePropertyKey(GraphAnnotationBean.a2_tm).dataType(Long.class).make())
-						.buildMixedIndex("search");					
-				}
-				catch (IllegalArgumentException e) {
-					//DEBUG
-					//_logger.error(ErrorUtils.getLongForm("{0}", e));
-					//e.printStackTrace();
-					
-				} // (already indexed, this is fine/expected)
-				
-				// Then check that the global default index is set
-				Optional<List<String>> maybe_dedup_fields = Optionals.of(() -> bucket.data_schema().graph_schema().deduplication_fields());
-				final Collection<BasicMessageBean> ret_val = maybe_dedup_fields.map(dedup_fields -> {
-					//TODO (ALEPH-15): manage the index pointed to by the bucket's signature					
-					return Arrays.asList(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "onPublishOrUpdate", ErrorUtils.NOT_YET_IMPLEMENTED, "custom:deduplication_fields"));			
-				})
-				.orElseGet(() -> {
-					try {
-						//TODO (ALEPH-15): There's a slightly tricky decision here...
-						// using ES makes dedup actions "very" no longer transactional because of the index refresh
-						// (in theory using Cassandra or HBase makes things transactional, though I haven't tested that)
-						// Conversely not using ES puts more of the load on the smaller Cassandra/HBase clusters						
-						// Need to make configurable, but default to using the transactional layer
-						// Of course, if I move to eg unipop later on then I'll have to fix this
-						// It's not really any different to deduplication _except_ it can happen across buckets (unlike dedup) so it's much harder to stop
-						// A few possibilities:
-						// 1) Have a job that runs on new-ish data (ofc that might not be easy to detect) that merges things (ofc very unclear how to do that)
-						// 2) Centralize all insert actions
-						// Ah here's some more interest - looks like Hbase and Cassandra's eventual consistency can cause duplicates:
-						// http://s3.thinkaurelius.com/docs/titan/1.0.0/eventual-consistency.html ... tldr: basically need to have regular "clean up jobs" and live with transient issues
-						// (or use a consistent data store - would also require a decent amount of code here because our dedup strategy is not perfect)
-						
-						final Function<String, PropertyKey> getOrCreateProperty = field -> Optional.ofNullable(mgmt.getPropertyKey(field)).orElseGet(() -> mgmt.makePropertyKey(field).dataType(String.class).make());						
-						
-						final PropertyKey name_index = getOrCreateProperty.apply(GraphAnnotationBean.name);
-						final PropertyKey type_index = getOrCreateProperty.apply(GraphAnnotationBean.type);
-						
-						if (_USE_ES_FOR_DEDUP_INDEXES) {
-							mgmt.buildIndex(GLOBAL_DEFAULT_INDEX_GV, Vertex.class)
-								.addKey(name_index, Mapping.TEXTSTRING.asParameter())
-								.addKey(type_index, Mapping.STRING.asParameter())
-								.buildMixedIndex("search");
-						}
-						else { // use the storage backend which should have better consistency properties
-							mgmt.buildIndex(GLOBAL_DEFAULT_INDEX_GV, Vertex.class)
-								.addKey(name_index)	
-								.addKey(type_index)	
-								.buildCompositeIndex();
-							
-							//(in this case, also index "name" as an ES field to make it easier to search over)
-							mgmt.buildIndex(GLOBAL_DEFAULT_INDEX_GV + "_TEXT", Vertex.class) 
-							.addKey(name_index, Mapping.TEXT.asParameter())
-							.buildMixedIndex("search");													
-						}
-					}
-					catch (IllegalArgumentException e) {
-						//DEBUG
-						//_logger.error(ErrorUtils.getLongForm("{0}", e));
-						//e.printStackTrace();
-						
-					} // (already indexed, this is fine/expected)
-					return Collections.emptyList();
-				});
-				
-				//TODO (ALEPH-15): allow other indexes (etc) via the schema override				
-				mgmt.commit();
-				
-				//TODO (ALEPH-15): want to complete the future only once the indexing steps are done?
-				return CompletableFuture.completedFuture(ret_val); 
+			if (data_services.contains(DataSchemaBean.GraphSchemaBean.name)) {	
+				return createIndices(bucket, _titan, _USE_ES_FOR_DEDUP_INDEXES);
 			}
 			else {
 				return CompletableFuture.completedFuture(Collections.emptyList()); 			
@@ -406,6 +291,23 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 			DataBucketBean bucket, Optional<String> secondary_buffer,
 			boolean bucket_or_buffer_getting_deleted) {
 		
+		//(this first call just ensures indexes are present)
+		return createIndices(bucket, _titan, _USE_ES_FOR_DEDUP_INDEXES)
+				.thenCompose(__ -> this.handleBucketDeletionRequest_internal(bucket, secondary_buffer, bucket_or_buffer_getting_deleted));
+	}
+	
+	/** Deletes a bucket
+	 * @param bucket
+	 * @param secondary_buffer
+	 * @param bucket_or_buffer_getting_deleted
+	 * @return
+	 */
+	private CompletableFuture<BasicMessageBean> handleBucketDeletionRequest_internal(
+			DataBucketBean bucket, Optional<String> secondary_buffer,
+			boolean bucket_or_buffer_getting_deleted) {
+		
+		//TODO (ALEPH-15): check if the indexes exist - just return if so
+		
 		if (secondary_buffer.isPresent()) {
 			return CompletableFuture.completedFuture(ErrorUtils.buildErrorMessage(this.getClass().getSimpleName(), "handleBucketDeletionRequest", ErrorUtils.BUFFERS_NOT_SUPPORTED, bucket.full_name()));			
 		}
@@ -458,6 +360,135 @@ public class TitanGraphService implements IGraphService, IGenericDataService, IE
 		
 	}
 
+	//////////////////////////////////////////////////////
+
+	// Worker utils
+	
+	/** Utility method for building the graph indices
+	 * @param bucket
+	 * @return
+	 */
+	public static CompletableFuture<Collection<BasicMessageBean>> createIndices(DataBucketBean bucket, TitanGraph titan, boolean use_es_for_dedup_indices) {
+				
+		final TitanManagement mgmt = titan.openManagement();
+		
+		// First off, let's ensure that a2_p is indexed: (note these apply to both vertixes and edges)
+		try {
+			final PropertyKey bucket_index = mgmt.makePropertyKey(GraphAnnotationBean.a2_p).dataType(String.class).cardinality(Cardinality.SET).make();
+			try {
+				mgmt.buildIndex(GLOBAL_PATH_INDEX_GV, Vertex.class)
+					.addKey(bucket_index, Mapping.STRING.asParameter())
+					.buildMixedIndex(SEARCH_INDEX_NAME);
+			}
+			catch (IllegalArgumentException e) {
+				//DEBUG
+				//_logger.error(ErrorUtils.getLongForm("{0}", e));
+				//e.printStackTrace();
+			} // (already indexed, this is fine/expected)				
+			try {
+				mgmt.buildIndex(GLOBAL_PATH_INDEX_GE, Edge.class)
+					.addKey(bucket_index, Mapping.STRING.asParameter())
+					.buildMixedIndex(SEARCH_INDEX_NAME);
+			}
+			catch (IllegalArgumentException e) {
+				//DEBUG
+				//_logger.error(ErrorUtils.getLongForm("{0}", e));
+				//e.printStackTrace();
+			} // (already indexed, this is fine/expected)
+		}
+		catch (IllegalArgumentException e) {
+			//DEBUG
+			//e.printStackTrace();
+		} // (already indexed, this is fine/expected)
+
+		// Created/modified
+		try {
+			mgmt.buildIndex(GLOBAL_CREATED_GV, Vertex.class)
+				.addKey(mgmt.makePropertyKey(GraphAnnotationBean.a2_tc).dataType(Long.class).make())
+				.buildMixedIndex(SEARCH_INDEX_NAME);					
+		}
+		catch (IllegalArgumentException e) {
+			//DEBUG
+			//_logger.error(ErrorUtils.getLongForm("{0}", e));
+			//e.printStackTrace();
+			
+		} // (already indexed, this is fine/expected)				
+		try {
+			mgmt.buildIndex(GLOBAL_MODIFIED_GV, Vertex.class)
+				.addKey(mgmt.makePropertyKey(GraphAnnotationBean.a2_tm).dataType(Long.class).make())
+				.buildMixedIndex(SEARCH_INDEX_NAME);					
+		}
+		catch (IllegalArgumentException e) {
+			//DEBUG
+			//_logger.error(ErrorUtils.getLongForm("{0}", e));
+			//e.printStackTrace();
+			
+		} // (already indexed, this is fine/expected)
+		
+		// Then check that the global default index is set
+		Optional<List<String>> maybe_dedup_fields = Optionals.of(() -> bucket.data_schema().graph_schema().deduplication_fields());
+		final Collection<BasicMessageBean> ret_val = maybe_dedup_fields.map(dedup_fields -> {
+			//TODO (ALEPH-15): manage the index pointed to by the bucket's signature					
+			return Arrays.asList(ErrorUtils.buildErrorMessage(TitanGraph.class.getSimpleName(), "onPublishOrUpdate", ErrorUtils.NOT_YET_IMPLEMENTED, "custom:deduplication_fields"));			
+		})
+		.orElseGet(() -> {
+			try {
+				//TODO (ALEPH-15): There's a slightly tricky decision here...
+				// using ES makes dedup actions "very" no longer transactional because of the index refresh
+				// (in theory using Cassandra or HBase makes things transactional, though I haven't tested that)
+				// Conversely not using ES puts more of the load on the smaller Cassandra/HBase clusters						
+				// Need to make configurable, but default to using the transactional layer
+				// Of course, if I move to eg unipop later on then I'll have to fix this
+				// It's not really any different to deduplication _except_ it can happen across buckets (unlike dedup) so it's much harder to stop
+				// A few possibilities:
+				// 1) Have a job that runs on new-ish data (ofc that might not be easy to detect) that merges things (ofc very unclear how to do that)
+				// 2) Centralize all insert actions
+				// Ah here's some more interest - looks like Hbase and Cassandra's eventual consistency can cause duplicates:
+				// http://s3.thinkaurelius.com/docs/titan/1.0.0/eventual-consistency.html ... tldr: basically need to have regular "clean up jobs" and live with transient issues
+				// (or use a consistent data store - would also require a decent amount of code here because our dedup strategy is not perfect)
+				
+				final Function<String, PropertyKey> getOrCreateProperty = field -> Optional.ofNullable(mgmt.getPropertyKey(field)).orElseGet(() -> mgmt.makePropertyKey(field).dataType(String.class).make());						
+				
+				final PropertyKey name_index = getOrCreateProperty.apply(GraphAnnotationBean.name);
+				final PropertyKey type_index = getOrCreateProperty.apply(GraphAnnotationBean.type);
+				
+				if (use_es_for_dedup_indices) {
+					mgmt.buildIndex(GLOBAL_DEFAULT_INDEX_GV, Vertex.class)
+						.addKey(name_index, Mapping.TEXTSTRING.asParameter())
+						.addKey(type_index, Mapping.STRING.asParameter())
+						.buildMixedIndex(SEARCH_INDEX_NAME);
+				}
+				else { // use the storage backend which should have better consistency properties
+					mgmt.buildIndex(GLOBAL_DEFAULT_INDEX_GV, Vertex.class)
+						.addKey(name_index)	
+						.addKey(type_index)
+						//TODO (ALEPH-15: make this unique()? and then have multiple contexts, either via property or lots of graphs?
+						.buildCompositeIndex();
+					
+					//(in this case, also index "name" as an ES field to make it easier to search over)
+					mgmt.buildIndex(GLOBAL_DEFAULT_INDEX_GV + "_TEXT", Vertex.class) 
+					.addKey(name_index, Mapping.TEXT.asParameter())
+					.buildMixedIndex(SEARCH_INDEX_NAME);													
+				}
+			}
+			catch (IllegalArgumentException e) {
+				//DEBUG
+				//_logger.error(ErrorUtils.getLongForm("{0}", e));
+				//e.printStackTrace();
+				
+			} // (already indexed, this is fine/expected)
+			return Collections.emptyList();
+		});
+		
+		//TODO (ALEPH-15): allow other indexes (etc) via the schema technology override		
+		
+		// Complete management transaction
+		mgmt.commit();
+		
+		//TODO (ALEPH-15): want to complete the future only once the indexing steps are done?
+		return CompletableFuture.completedFuture(ret_val); 
+	}
+	
 	//////////////////////////////////////////////////////
 	
 	// Configuration utils

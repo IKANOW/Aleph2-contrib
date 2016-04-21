@@ -60,7 +60,7 @@ import com.thinkaurelius.titan.core.schema.TitanManagement;
 import fj.Unit;
 
 /** Some utilities to check out how Titan works
- *  All @Tests removed since not actually test code, that was just for convenience
+ *  All @org.junit.Tests removed since not actually test code, that was just for convenience
  * @author Alex
  *
  */
@@ -83,7 +83,7 @@ public class TestMiscTitanProperties {
 	}
 
 	@SuppressWarnings("unchecked")
-	//@Test
+	//@org.junit.Test
 	public void test_elementProperties_edge() throws IOException, InterruptedException {
 		
 		final String tmpdir = System.getProperty("java.io.tmpdir") + "/titan-test-" + UuidUtils.get().getRandomUuid();
@@ -134,7 +134,7 @@ public class TestMiscTitanProperties {
 	}	
 	
 	@SuppressWarnings("unchecked")
-	//@Test
+	//@org.junit.Test
 	public void test_elementProperties_vertex() throws IOException, InterruptedException {
 		
 		final String tmpdir = System.getProperty("java.io.tmpdir") + "/titan-test-" + UuidUtils.get().getRandomUuid();
@@ -240,7 +240,7 @@ public class TestMiscTitanProperties {
 	
 	
 	@SuppressWarnings("unchecked")
-	//@Test
+	//@org.junit.Test
 	public void test_someBasicGraphBehavior() throws IOException {
 	
 		// Test some basic properties and transferring to/from GraphSON
@@ -313,7 +313,7 @@ public class TestMiscTitanProperties {
 			.ifPresent(j -> System.out.println("?? " + j.toString()));
 	}
 	
-	//@Test
+	//@org.junit.Test
 	public void test_someGraphErrors() throws IOException {
 	
 		// Test some graph errors
@@ -379,7 +379,7 @@ public class TestMiscTitanProperties {
 	}
 	
 	@SuppressWarnings("unchecked")
-	//@Test
+	//@org.junit.Test
 	public void test_concurrentChanges_conflicting() throws IOException {
 		
 		// Test some graph errors
@@ -393,6 +393,7 @@ public class TestMiscTitanProperties {
 		
 		final Supplier<TitanTransaction> build_trans = () -> {
 			final TitanTransaction tx = titan.buildTransaction().start();		
+			tx.addVertex("test_label");
 			Optionals.<TitanVertex>streamOf(tx.query().has("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something"));
 			return tx;
 		};
@@ -400,10 +401,12 @@ public class TestMiscTitanProperties {
 		
 		final TitanTransaction tx2 = titan.buildTransaction().start();
 		Optionals.<TitanVertex>streamOf(tx2.query().has("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something_else"));
+		tx2.addVertex("test_label");
 		tx2.commit();
 		
 		try {
 			tx1.commit();
+			fail("Should have thrown");
 		}
 		catch (TitanException e) {
 			System.out.println("Threw expected titan exception: " + e.getClass().toString() + " / cause = " + e.getCause() + " .. "  + e.getCause().getCause());
@@ -414,7 +417,45 @@ public class TestMiscTitanProperties {
 	}	
 	
 	@SuppressWarnings("unchecked")
-	//@Test
+	@org.junit.Test
+	public void test_concurrentChanges_conflicting_threadedTrans() throws IOException {
+		
+		// Test some graph errors
+		
+		TitanGraph titan = TitanFactory.build()
+				.set("storage.backend", "inmemory")
+				.set("query.force-index", false) //(not supported)
+			.open();
+		
+		buildSmallGraph(titan);
+		
+		final Supplier<TitanTransaction> build_trans = () -> {
+			final TitanTransaction tx = titan.newTransaction();		
+			tx.addVertex("test_label");
+			Optionals.<TitanVertex>streamOf(tx.query().has("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something"));
+			return tx;
+		};
+		final TitanTransaction tx1 = build_trans.get();
+		
+		final TitanTransaction tx2 = titan.newTransaction();
+		Optionals.<TitanVertex>streamOf(tx2.query().has("type", "rabbit").vertices(), false).forEach(v -> v.property("change", "something_else"));
+		tx2.addVertex("test_label");
+		tx2.commit();
+		
+		try {
+			tx1.commit();
+			fail("Should have thrown");
+		}
+		catch (TitanException e) {
+			System.out.println("Threw expected titan exception: " + e.getClass().toString() + " / cause = " + e.getCause() + " .. "  + e.getCause().getCause());
+			assertEquals(com.thinkaurelius.titan.diskstorage.locking.PermanentLockingException.class, e.getCause().getCause().getClass());
+		}
+		// Check can retry:
+		build_trans.get().commit();
+	}	
+	
+	@SuppressWarnings("unchecked")
+	//@org.junit.Test
 	public void test_concurrentChanges_nonConflicting() throws IOException {
 		
 		// Test some graph errors
@@ -454,6 +495,7 @@ public class TestMiscTitanProperties {
 		// I was expecting this to work, but it still fails ... might be an issue with the inmemory storage again?
 		try {
 			tx1.commit();
+			fail("Should have thrown");
 		}
 		catch (TitanException e) {
 			System.out.println("Threw expected titan exception: " + e.getClass().toString() + " / cause = " + e.getCause() + " .. "  + e.getCause().getCause());

@@ -55,6 +55,7 @@ import com.thinkaurelius.titan.core.TitanEdge;
 import com.thinkaurelius.titan.core.TitanException;
 import com.thinkaurelius.titan.core.TitanTransaction;
 import com.thinkaurelius.titan.core.TitanVertex;
+import com.thinkaurelius.titan.diskstorage.TemporaryBackendException;
 import com.thinkaurelius.titan.diskstorage.locking.PermanentLockingException;
 
 /**
@@ -186,16 +187,12 @@ public class TestTitanGraphBuilderEnrichmentService extends TestTitanCommon {
 		{
 			// Create some recoverable errors:
 			{
-				final PermanentLockingException inner = Mockito.mock(PermanentLockingException.class);
 				final PermanentLockingException outer = Mockito.mock(PermanentLockingException.class);
-				Mockito.when(outer.getCause()).thenReturn(inner);
 				graph_enrich_service._MUTABLE_TEST_ERRORS.push(new TitanException("test", outer));
 			}
 			{
-				final PermanentLockingException inner_inner = Mockito.mock(PermanentLockingException.class);
-				final PermanentLockingException inner = Mockito.mock(PermanentLockingException.class);
-				final PermanentLockingException outer = Mockito.mock(PermanentLockingException.class);
-				Mockito.when(inner.getCause()).thenReturn(inner_inner);
+				final TemporaryBackendException inner = Mockito.mock(TemporaryBackendException.class);
+				final TitanException outer = Mockito.mock(TitanException.class);
 				Mockito.when(outer.getCause()).thenReturn(inner);
 				graph_enrich_service._MUTABLE_TEST_ERRORS.push(new TitanException("test", outer));
 			}			

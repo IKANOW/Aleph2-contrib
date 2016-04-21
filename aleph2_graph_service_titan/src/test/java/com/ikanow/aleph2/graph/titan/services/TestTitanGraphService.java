@@ -367,16 +367,16 @@ public class TestTitanGraphService extends TestTitanCommon {
 		{
 			final Config cfg = _mock_graph_db_service.createRemoteConfig(Optional.empty(), ConfigFactory.empty());
 			
-			assertEquals("inmemory", cfg.getString(TitanGraphConfigBean.PROPERTIES_ROOT + ".storage.backend"));
-			assertEquals("elasticsearch", cfg.getString(TitanGraphConfigBean.PROPERTIES_ROOT + ".index.search.backend"));
+			assertEquals("inmemory", cfg.getString(TitanGraphConfigBean.PROPERTIES_ROOT + ".config_override.storage.backend"));
+			assertEquals("elasticsearch", cfg.getString(TitanGraphConfigBean.PROPERTIES_ROOT + ".config_override.index.search.backend"));
 		}
 		//(just double check it replaces)
 		{
 			final Config cfg = _mock_graph_db_service.createRemoteConfig(Optional.empty(), 
 					ConfigFactory.empty().withValue(TitanGraphConfigBean.PROPERTIES_ROOT, ConfigFactory.empty().root()));
 			
-			assertEquals("inmemory", cfg.getString(TitanGraphConfigBean.PROPERTIES_ROOT + ".storage.backend"));
-			assertEquals("elasticsearch", cfg.getString(TitanGraphConfigBean.PROPERTIES_ROOT + ".index.search.backend"));
+			assertEquals("inmemory", cfg.getString(TitanGraphConfigBean.PROPERTIES_ROOT + ".config_override.storage.backend"));
+			assertEquals("elasticsearch", cfg.getString(TitanGraphConfigBean.PROPERTIES_ROOT + ".config_override.index.search.backend"));
 		}
 	}
 	

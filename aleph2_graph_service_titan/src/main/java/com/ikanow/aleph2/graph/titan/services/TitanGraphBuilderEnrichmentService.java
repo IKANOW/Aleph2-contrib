@@ -52,13 +52,14 @@ import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
 import com.ikanow.aleph2.data_model.utils.Tuples;
+import com.ikanow.aleph2.data_model.utils.UuidUtils;
 import com.ikanow.aleph2.graph.titan.data_model.GraphBuilderConfigBean;
 import com.ikanow.aleph2.graph.titan.utils.TitanGraphBuildingUtils;
 import com.ikanow.aleph2.graph.titan.utils.TitanGraphBuildingUtils.MutableStatsBean;
 import com.thinkaurelius.titan.core.TitanException;
 import com.thinkaurelius.titan.core.TitanGraph;
 import com.thinkaurelius.titan.core.TitanTransaction;
-import com.thinkaurelius.titan.core.TransactionBuilder;
+import com.thinkaurelius.titan.diskstorage.TemporaryBackendException;
 import com.thinkaurelius.titan.diskstorage.locking.PermanentLockingException;
 
 /** Service for building the edges and vertices from the incoming records and updating any existing entries in the database
@@ -68,7 +69,7 @@ import com.thinkaurelius.titan.diskstorage.locking.PermanentLockingException;
  *
  */
 public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModule {
-	//TODO (ALEPH-15): should persist all the found (/created) existing vertices across batches (and then remove from query entry?)
+	public final static String UUID = UuidUtils.get().getRandomUuid().split("-")[4];
 	
 	protected final SetOnce<IEnrichmentBatchModule> _custom_graph_decomp_handler = new SetOnce<>();
 	protected final SetOnce<GraphDecompEnrichmentContext> _custom_graph_decomp_context = new SetOnce<>();
@@ -83,8 +84,12 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 	protected final SetOnce<MutableStatsBean> _mutable_stats = new SetOnce<>();
 	protected final SetOnce<TitanGraph> _titan = new SetOnce<>();
 	
+	protected final LinkedList<ObjectNode> _mutable_new_vertex_keys = new LinkedList<>();
+	
 	// Special test mode
 	protected LinkedList<TitanException> _MUTABLE_TEST_ERRORS = new LinkedList<>();
+	
+	protected Long[] _BACKOFF_TIMES_MS = { 1500L, 3000L, 6000L, 12000L, 24000L };
 	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule#onStageInitialize(com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean, scala.Tuple2, java.util.Optional)
@@ -198,8 +203,10 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 			try {
 				// Create transaction
 				
-				final TransactionBuilder tx_b = _titan.get().buildTransaction();
-				final TitanTransaction mutable_tx = tx_b.start();
+				//TRACE
+//				System.err.println(new java.util.Date().toString() + ": GRABBING TRANS " + i);
+				
+				final TitanTransaction mutable_tx = _titan.get().newTransaction();
 				final Stream<ObjectNode> copy_vertices_and_edges = vertices_and_edges.stream().map(o -> o.deepCopy());
 				
 				// Fill in transaction
@@ -208,6 +215,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				
 				try {
 					TitanGraphBuildingUtils.buildGraph_handleMerge(mutable_tx, _config.get(), _security_context.get(), _logger.optional(), mutable_stats,
+							_mutable_new_vertex_keys,
 							_custom_graph_merge_handler.optional().map(handler -> Tuples._2T(handler, _custom_graph_merge_context.get()))
 							, 
 							_bucket.get(),
@@ -227,8 +235,15 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 					throw e;
 				}
 				
+				//TRACE
+				//System.err.println(new java.util.Date().toString() + ": COMMITTING TRANS " + i);				
+				
 				// Attempt to commit
 				mutable_tx.commit();
+
+				//TRACE
+				//System.err.println(new java.util.Date().toString() + ": COMMITTED TRANS " + i);				
+				
 				
 				_logger.optional().ifPresent(logger -> {
 					logger.log(Level.DEBUG,
@@ -236,9 +251,10 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 									() -> "GraphBuilderEnrichmentService",
 									() -> "system.onStageComplete",
 									() -> null, 
-									() -> ErrorUtils.get("Graph stats: V_emitted={0} V_matched={1} V_created={2} V_updated={3} V_errors={4} E_emitted={5} E_matched={6} E_created={7} E_updated={8} E_errors={9}",
+									() -> ErrorUtils.get("Graph stats: V_emitted={0} V_matched={1} V_created={2} V_updated={3} V_errors={4} E_emitted={5} E_matched={6} E_created={7} E_updated={8} E_errors={9} (uuid={10})",
 											mutable_stats.vertices_emitted, mutable_stats.vertex_matches_found, mutable_stats.vertices_created, mutable_stats.vertices_updated, mutable_stats.vertex_errors,
-											mutable_stats.edges_emitted, mutable_stats.vertex_matches_found, mutable_stats.edges_created, mutable_stats.edges_updated, mutable_stats.edge_errors
+											mutable_stats.edges_emitted, mutable_stats.vertex_matches_found, mutable_stats.edges_created, mutable_stats.edges_updated, mutable_stats.edge_errors,
+											UUID
 											), 
 									() -> BeanTemplateUtils.toMap(mutable_stats)));
 				});
@@ -247,14 +263,19 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				return true; // (ie ends the loop)
 			}
 			catch (TitanException e) {
-				if ((MAX_ATTEMPT_NUM == i) || (!isRecoverableError(e))) {
+				if ((i >= MAX_ATTEMPT_NUM) || !isRecoverableError(e)) {
+
+					//DEBUG
+					//System.err.println(new java.util.Date().toString() + ": HERE2 NON_RECOV: " + i + " vs " + MAX_ATTEMPT_NUM);
+					//e.printStackTrace();					
+					
 					_logger.optional().ifPresent(logger -> {
 						logger.log(Level.ERROR,
 								ErrorUtils.lazyBuildMessage(false, 
 										() -> "GraphBuilderEnrichmentService",
 										() -> "system.onStageComplete",
 										() -> null, 
-										() -> ErrorUtils.getLongForm("Failed to commit transaction due to local conflicts, attempt_num={1} error={0}", e, i),
+										() -> ErrorUtils.getLongForm("Failed to commit transaction due to local conflicts, attempt_num={1} error={0} (uuid={2})", e, i, UUID),
 										() -> null));
 					});					
 					throw e;
@@ -262,19 +283,30 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 
 				// If we're here, we're going to retry the transaction
 				
+				//DEBUG
+//				System.err.println(new java.util.Date().toString() + ": HERE3 RECOVERABLE");
+				
 				_logger.optional().ifPresent(logger -> {
 					logger.log(Level.DEBUG,
 							ErrorUtils.lazyBuildMessage(false, 
 									() -> "GraphBuilderEnrichmentService",
 									() -> "system.onStageComplete",
 									() -> null, 
-									() -> ErrorUtils.get("Failed to commit transaction due to local conflicts, attempt_num={0}", i),
+									() -> ErrorUtils.get("Failed to commit transaction due to local conflicts, attempt_num={0} (uuid={1})", i, UUID),
 									() -> null));
 				});
+				
+				try { Thread.sleep(_BACKOFF_TIMES_MS[i]); } catch (Exception interrupted) {}				
 				return false;
 				
 				// (If it's a versioning conflict then try again)
 			}
+			//TRACE:
+//			catch (Throwable x) {
+//				System.err.println(new java.util.Date().toString() + ": HERE1 OTHER ERR");
+//				x.printStackTrace();
+//				throw x;
+//			}
 		})
 		.findFirst() // ie stop as soon as we have successfully transacted
 		;		
@@ -284,14 +316,23 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 	 * @param e
 	 * @return
 	 */
+	private static boolean isRecoverableError_internal(Throwable e) {
+		// (temporary backend encompasses temporary locking)
+		return (PermanentLockingException.class.isAssignableFrom(e.getClass()) || TemporaryBackendException.class.isAssignableFrom(e.getClass()));
+				
+	}
+	
+	/** Utility to check for recoverable errors
+	 * @param e
+	 * @return
+	 */
 	protected static boolean isRecoverableError(TitanException e) {
 		if (null != e.getCause()) {
-			if (PermanentLockingException.class.isAssignableFrom(e.getCause().getClass())) // versioning error, repeat transaction					
+			if (isRecoverableError_internal(e.getCause())) // versioning error, repeat transaction					
 			{
 				return true;				
 			}
-			else if ((null != e.getCause().getCause()) &&
-					PermanentLockingException.class.isAssignableFrom(e.getCause().getCause().getClass())) //versioning error, repeat transaction
+			else if ((null != e.getCause().getCause()) && isRecoverableError_internal(e.getCause().getCause())) //versioning error, repeat transaction
 			{
 				return true;
 			}
@@ -305,15 +346,19 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 	@Override
 	public void onStageComplete(boolean is_original) {
 		
+		//TODO (ALEPH-15): should persist all the found (/created) existing vertices across batches (and then remove from query entry?)
+		// one final merge....
+		
 		_logger.optional().ifPresent(logger -> {
 			logger.log(Level.INFO,
 					ErrorUtils.lazyBuildMessage(true, 
 							() -> "GraphBuilderEnrichmentService",
 							() -> "system.onStageComplete",
 							() -> null, 
-							() -> ErrorUtils.get("Graph stats: V_emitted={0} V_matched={1} V_created={2} V_updated={3} V_errors={4} E_emitted={5} E_matched={6} E_created={7} E_updated={8} E_errors={9}",
+							() -> ErrorUtils.get("Graph stats: V_emitted={0} V_matched={1} V_created={2} V_updated={3} V_errors={4} E_emitted={5} E_matched={6} E_created={7} E_updated={8} E_errors={9} (uuid={10})",
 									_mutable_stats.get().vertices_emitted, _mutable_stats.get().vertex_matches_found, _mutable_stats.get().vertices_created, _mutable_stats.get().vertices_updated, _mutable_stats.get().vertex_errors,
-									_mutable_stats.get().edges_emitted, _mutable_stats.get().vertex_matches_found, _mutable_stats.get().edges_created, _mutable_stats.get().edges_updated, _mutable_stats.get().edge_errors
+									_mutable_stats.get().edges_emitted, _mutable_stats.get().vertex_matches_found, _mutable_stats.get().edges_created, _mutable_stats.get().edges_updated, _mutable_stats.get().edge_errors,
+									UUID
 									), 
 							() -> BeanTemplateUtils.toMap(_mutable_stats.get())));
 		});
