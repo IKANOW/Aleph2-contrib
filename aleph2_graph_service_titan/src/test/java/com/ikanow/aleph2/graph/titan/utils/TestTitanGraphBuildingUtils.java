@@ -73,6 +73,7 @@ import com.thinkaurelius.titan.core.Cardinality;
 import com.thinkaurelius.titan.core.TitanFactory;
 import com.thinkaurelius.titan.core.TitanGraph;
 import com.thinkaurelius.titan.core.TitanTransaction;
+import com.thinkaurelius.titan.core.TitanVertex;
 import com.thinkaurelius.titan.core.schema.TitanManagement;
 
 import fj.data.Validation;
@@ -1520,15 +1521,17 @@ public class TestTitanGraphBuildingUtils {
 			final Vertex winner = v_sorted.values().stream().skip(0).findFirst().get();
 			winner.property(GraphAnnotationBean.a2_tm, 0L); // overwritten
 			winner.property("test1", "test1"); // overwritten
+			winner.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, GraphAnnotationBean.a2_p, "/other");
+			winner.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, GraphAnnotationBean.a2_p, "/other/1");
 			final Vertex mid_loser = v_sorted.values().stream().skip(1).findFirst().get();
 			mid_loser.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, GraphAnnotationBean.a2_p, "/test");
+			mid_loser.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, GraphAnnotationBean.a2_p, "/other/1");
 			mid_loser.property(GraphAnnotationBean.a2_tc, 0L); // ignored
 			final Vertex loser = v_sorted.values().stream().skip(1).findFirst().get();
 			loser.property("test1", "test1b"); // overwritten
 			loser.property("test2", "test2"); // overwritten
 			loser.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, GraphAnnotationBean.a2_p, "/test");
 			loser.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, GraphAnnotationBean.a2_p, "/test/2");
-			final String loser_label = loser.label();
 			
 			final Object winner_id = winner.id();
 			
@@ -1548,25 +1551,76 @@ public class TestTitanGraphBuildingUtils {
 			// Check results:
 			{
 				final TitanTransaction tx2 = titan.newTransaction();
-				assertEquals(3, Optionals.streamOf(tx2.query().vertices(), false).count()); // (winner + loser + v4)
+				assertEquals(2, Optionals.streamOf(tx2.query().vertices(), false).count()); // (winner + v4)
 				
-				final Vertex winner_again = Optionals.<Vertex>streamOf(tx2.query().has(GraphAnnotationBean.a2_p, "/test").vertices(), false).iterator().next();
+				//TRACE
+//				System.out.println(Optionals.<TitanVertex>streamOf(tx2.query().vertices(), false)
+//						.map(v -> Optionals.streamOf(v.properties(GraphAnnotationBean.a2_p), false).map(vp -> vp.value().toString()).collect(Collectors.joining(";")))
+//						.collect(Collectors.joining(" // ")));
+				
+				final Vertex winner_again = Optionals.<TitanVertex>streamOf(tx2.query().has(GraphAnnotationBean.a2_p, "/test").vertices(), false).iterator().next();
 				assertEquals(winner_id, winner_again.id());
 				assertEquals(2, stats_bean.vertex_matches_found); // (v1,v2,v3)-winner
 				assertEquals(2, stats_bean.vertices_updated);
-				// Properties:
-				assertEquals(1, Optionals.streamOf(winner_again.properties(GraphAnnotationBean.a2_p), false).count());
-				assertEquals(Arrays.asList(GraphAnnotationBean.a2_p, GraphAnnotationBean.a2_tm, "test1", "test2"),
+ 				// Properties: (4x a2_p, no a2_tm)
+				assertEquals(Arrays.asList(
+						GraphAnnotationBean.a2_p, GraphAnnotationBean.a2_p, GraphAnnotationBean.a2_p, GraphAnnotationBean.a2_p,
+						GraphAnnotationBean.a2_tm, "test1", "test2"),
 						Optionals.streamOf(winner_again.properties(), false).map(vp -> vp.key()).sorted().collect(Collectors.toList()));
-				assertTrue(Optionals.streamOf(winner_again.properties(GraphAnnotationBean.a2_tm), false).anyMatch(vp -> (Long)vp.value() > 0L));
 				assertTrue(Optionals.streamOf(winner_again.properties("test1"), false).anyMatch(vp -> "test1b".equals(vp.value().toString())));
 				
-				final Vertex v3_again = Optionals.streamOf(tx2.query().vertices(), false).filter(v -> v.label().equals(loser_label)).iterator().next();
-				assertEquals(Arrays.asList("/test/2"), Optionals.streamOf(v3_again.properties(GraphAnnotationBean.a2_p), false).map(vp -> vp.value().toString()).collect(Collectors.toList()));
+				//(tidy everything up, for next test)
+				tx2.vertices().forEachRemaining(v -> v.remove());
 				
 				tx2.commit();
 			}		
 		}		
+		// Quick test to check >1 cardinality always wins
+		{
+			final TitanTransaction tx = titan.newTransaction();
+			
+			final Vertex v1 = tx.addVertex("v1");
+			final Vertex v2 = tx.addVertex("v2");
+			final Vertex v3 = tx.addVertex("v3");
+			final Vertex v4 = tx.addVertex("v4");			
+			assertEquals(4, Optionals.streamOf(tx.query().vertices(), false).count());			
+			
+			final Map<Long, Vertex> v_sorted = new TreeMap<>(Stream.of(v1, v2, v3).collect(Collectors.toMap((Vertex v) -> (Long)v.id(), v->v)));
+			
+			final Vertex winner = v_sorted.values().stream().skip(0).findFirst().get();
+			winner.property(GraphAnnotationBean.a2_p, "/just/one");
+			final Vertex mid_loser = v_sorted.values().stream().skip(1).findFirst().get();
+			mid_loser.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, GraphAnnotationBean.a2_p, "/test");
+			mid_loser.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, GraphAnnotationBean.a2_p, "/test/2");
+			final Vertex loser = v_sorted.values().stream().skip(1).findFirst().get();
+			loser.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, GraphAnnotationBean.a2_p, "/test");
+			loser.property(org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.set, GraphAnnotationBean.a2_p, "/test/2");
+			
+			final Object read_winner_id = mid_loser.id();
+			
+			final Map<JsonNode, List<Vertex>> grouped_vertices = 
+					ImmutableMap.of(_mapper.createObjectNode(), 
+							Arrays.asList(v1, v2, v3),
+							_mapper.createObjectNode().put("key", "test"),
+							Arrays.asList(v4),							
+							_mapper.createObjectNode().put("key", "tes2"),
+							Arrays.asList()							
+							);			
+			
+			TitanGraphBuildingUtils.mergeDuplicates(tx, "/test", grouped_vertices, stats_bean);
+			
+			tx.commit();
+			
+			// Check results:
+			{
+				final TitanTransaction tx2 = titan.newTransaction();
+				assertEquals(2, Optionals.streamOf(tx2.query().vertices(), false).count()); // (read_winner==mid_loser + v4)
+				
+				final Vertex winner_again = Optionals.<TitanVertex>streamOf(tx2.query().has(GraphAnnotationBean.a2_p, "/test").vertices(), false).iterator().next();
+				assertEquals(read_winner_id, winner_again.id());
+				tx2.commit();
+			}		
+		}						
 	}
 	
 	@Test
@@ -1608,11 +1662,11 @@ public class TestTitanGraphBuildingUtils {
 			final Edge e51_new = v5.addEdge("e51", v1_new);
 			e51_new.property(GraphAnnotationBean.a2_p, "/test"); // (means is processed)
 			
-			TitanGraphBuildingUtils.mergeEdges("/test", Direction.IN, v1_old, v1_new, stats_bean);
+			TitanGraphBuildingUtils.mergeEdges("/test", Direction.IN, true, v1_old, v1_new, stats_bean);
 			assertEquals(1, stats_bean.edge_matches_found); //e51
 			assertEquals(1, stats_bean.edges_updated); //e51
 			
-			TitanGraphBuildingUtils.mergeEdges("/test", Direction.OUT, v1_old, v1_new, stats_bean);			
+			TitanGraphBuildingUtils.mergeEdges("/test", Direction.OUT, true, v1_old, v1_new, stats_bean);			
 			assertEquals(3, stats_bean.edge_matches_found); //e12, e14 (+prev)
 			assertEquals(2, stats_bean.edges_updated); //e14 (+prev)
 			

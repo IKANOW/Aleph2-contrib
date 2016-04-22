@@ -237,7 +237,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 								() -> null, 
 								() -> ErrorUtils.get("Graph stats: V_emitted={0} V_matched={1} V_created={2} V_updated={3} V_errors={4} E_emitted={5} E_matched={6} E_created={7} E_updated={8} E_errors={9} (uuid={10})",
 										mutable_stats.vertices_emitted, mutable_stats.vertex_matches_found, mutable_stats.vertices_created, mutable_stats.vertices_updated, mutable_stats.vertex_errors,
-										mutable_stats.edges_emitted, mutable_stats.vertex_matches_found, mutable_stats.edges_created, mutable_stats.edges_updated, mutable_stats.edge_errors,
+										mutable_stats.edges_emitted, mutable_stats.edge_matches_found, mutable_stats.edges_created, mutable_stats.edges_updated, mutable_stats.edge_errors,
 										UUID
 										), 
 								() -> BeanTemplateUtils.toMap(mutable_stats)));
@@ -368,7 +368,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 		// First off sleep somewhere between 0 and 2s to ensure the blocks get out of sync
 		if (is_original) {
 			final Random random_generator = new Random(new Date().getTime());
-			try { Thread.sleep(random_generator.nextInt(2000)); } catch (Exception e) {}
+			try { Thread.sleep(500 + random_generator.nextInt(1500)); } catch (Exception e) {}
 		}
 		
 		final int batch_size = 250;
@@ -377,12 +377,14 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 		
 		final MutableStatsBean global_combine_stats = new MutableStatsBean();
 		final MutableStatsBean combine_stats = new MutableStatsBean();
+		
 		Iterators.partition(_mutable_new_vertex_keys.iterator(), batch_size)
 			.forEachRemaining(batch -> {						
 				tryRecoverableTransaction(tx -> {
 					
 					final MutableStatsBean per_batch_stats = new MutableStatsBean();
-					
+													
+					// (want nodes with multiple keys including my own, in case something else has latched onto one of my keys in the meantime...)
 					final Map<JsonNode, List<Vertex>> grouped_vertices = 
 							TitanGraphBuildingUtils.getGroupedVertices(batch, tx, 
 									_config.get().deduplication_fields(), 
@@ -391,22 +393,21 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 									);
 										
 					TitanGraphBuildingUtils.mergeDuplicates(tx, _bucket.get().full_name(), grouped_vertices, per_batch_stats);
-					
+
 					global_combine_stats.combine(per_batch_stats);
 					combine_stats.reset();
 					combine_stats.combine(per_batch_stats);
 				},
 				() -> {
-					//TODO stats have slightly different meaning (use different bean?)
 					_logger.optional().ifPresent(logger -> {
 						logger.log(Level.DEBUG,
 								ErrorUtils.lazyBuildMessage(true, 
 										() -> "GraphBuilderEnrichmentService",
 										() -> "system.onStageComplete",
 										() -> null, 
-										() -> ErrorUtils.get("Batch merge stats: V_emitted={0} V_matched={1} V_created={2} V_updated={3} V_errors={4} E_emitted={5} E_matched={6} E_created={7} E_updated={8} E_errors={9} (uuid={10})",
-												combine_stats.vertices_emitted, combine_stats.vertex_matches_found, combine_stats.vertices_created, combine_stats.vertices_updated, combine_stats.vertex_errors,
-												combine_stats.edges_emitted, combine_stats.vertex_matches_found, combine_stats.edges_created, combine_stats.edges_updated, combine_stats.edge_errors,
+										() -> ErrorUtils.get("Batch merge stats: V_matched={0} V_updated={1} E_matched={2} E_updated={3} (uuid={4})",
+												global_combine_stats.vertex_matches_found, global_combine_stats.vertices_updated, 
+												global_combine_stats.edge_matches_found, global_combine_stats.edges_updated, 
 												UUID
 												), 
 										() -> BeanTemplateUtils.toMap(_mutable_stats.get())));
@@ -415,16 +416,15 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				);
 			});		
 
-		//TODO stats have slightly different meaning
 		_logger.optional().ifPresent(logger -> {
 			logger.log(Level.INFO,
 					ErrorUtils.lazyBuildMessage(true, 
 							() -> "GraphBuilderEnrichmentService",
 							() -> "system.onStageComplete",
 							() -> null, 
-							() -> ErrorUtils.get("Final merge stats: V_emitted={0} V_matched={1} V_created={2} V_updated={3} V_errors={4} E_emitted={5} E_matched={6} E_created={7} E_updated={8} E_errors={9} (uuid={10})",
-									global_combine_stats.vertices_emitted, global_combine_stats.vertex_matches_found, global_combine_stats.vertices_created, global_combine_stats.vertices_updated, global_combine_stats.vertex_errors,
-									global_combine_stats.edges_emitted, global_combine_stats.vertex_matches_found, global_combine_stats.edges_created, global_combine_stats.edges_updated, global_combine_stats.edge_errors,
+							() -> ErrorUtils.get("Final merge stats: V_matched={0} V_updated={1} E_matched={2} E_updated={3} (uuid={4})",
+									combine_stats.vertex_matches_found, combine_stats.vertices_updated, 
+									combine_stats.edge_matches_found, combine_stats.edges_updated, 
 									UUID
 									), 
 							() -> BeanTemplateUtils.toMap(_mutable_stats.get())));

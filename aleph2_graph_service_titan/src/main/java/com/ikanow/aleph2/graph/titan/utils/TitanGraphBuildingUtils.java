@@ -239,6 +239,8 @@ public class TitanGraphBuildingUtils {
 			// 1.2.a.1) (Allow user to delete the others if he has permission, by the usual emit "id" only - but don't automatically do it because it gets complicated what to do with the other _bs)
 			// 1.2.b) copy any properties from the original objects into the winner and remove any so-desired properties
 
+			final long prev_created = mutable_stats.vertices_created; //(nasty hack, see below)
+			
 			final Optional<Vertex> maybe_vertex_winner = 
 					invokeUserMergeCode(tx, config, security_service, logger, maybe_merger, titan_mapper, mutable_stats, Vertex.class, bucket.full_name(), key, vertices, existing_vertices, Collections.emptyMap())
 						.stream()
@@ -247,6 +249,11 @@ public class TitanGraphBuildingUtils {
 			
 			maybe_vertex_winner.ifPresent(vertex_winner -> {
 				mutable_per_merge_cached_vertices.put(key, vertex_winner);
+				
+				//(slighty nasty hack, use stats to see if a vertex was created vs updated...)
+				if (mutable_stats.vertices_created > prev_created) {
+					mutable_new_vertex_keys.add(key);
+				}
 				
 				// 1.3) Tidy up (mutate) the edges				
 
@@ -673,16 +680,23 @@ public class TitanGraphBuildingUtils {
 	{
 		grouped_vertices.entrySet().stream().filter(kv -> !kv.getValue().isEmpty()).forEach(kv -> {
 			
-			final Stream<Vertex> vertices = kv.getValue().stream().sorted((a, b) -> ((Long)a.id()).compareTo((Long)b.id()));
+			final Stream<Vertex> vertices = kv.getValue().stream().sorted((a, b) -> postProcSortingMethod(a, b));
 			final Iterator<Vertex> it = vertices.iterator();
 			if (it.hasNext()) {
-				mutable_stats_per_batch.vertex_matches_found += kv.getValue().size() - 1;
-				mutable_stats_per_batch.vertices_updated++;
+				final long matches_found = kv.getValue().size() - 1;
+				mutable_stats_per_batch.vertex_matches_found += matches_found; //(#vertices)
+				if (matches_found > 0) {
+					mutable_stats_per_batch.vertices_updated++;//(#keys)
+				}
 				
 				final Vertex merge_into = it.next();
+				if (it.hasNext()) {
+					mutable_stats_per_batch.vertices_updated++;					
+				}
 				it.forEachRemaining(v -> {
 					// special case: add all buckets, update times etc
-					merge_into.property(Cardinality.set, GraphAnnotationBean.a2_p, bucket_path);
+					Optionals.streamOf(v.properties(GraphAnnotationBean.a2_p), false).map(vp -> vp.value())
+								.forEach(val -> merge_into.property(Cardinality.set, GraphAnnotationBean.a2_p, val));
 					merge_into.property(GraphAnnotationBean.a2_tm, new Date().getTime());
 					
 					// copy vertex properties into the "merge_into" vertex
@@ -691,12 +705,14 @@ public class TitanGraphBuildingUtils {
 						.forEach(vp -> merge_into.property(vp.key(), vp.value()));
 					
 					// OK edges are the difficult bit
-					mergeEdges(bucket_path, Direction.IN, merge_into, v, mutable_stats_per_batch);
-					mergeEdges(bucket_path, Direction.OUT, merge_into, v, mutable_stats_per_batch);
+					mergeEdges(bucket_path, Direction.IN, false, merge_into, v, mutable_stats_per_batch);
+					mergeEdges(bucket_path, Direction.OUT, false, merge_into, v, mutable_stats_per_batch);
 					
 					// (finally remove this vertex)
-					Optionals.streamOf(v.properties(GraphAnnotationBean.a2_p), false).filter(vp -> bucket_path.equals(vp.value())).forEach(vp -> vp.remove());
-					if (!v.properties(GraphAnnotationBean.a2_p).hasNext()) v.remove();
+					// (previously - commened out code, we just removed the bucket, but since we're trying to remove singletons, we'll always delete)
+					//Optionals.streamOf(v.properties(GraphAnnotationBean.a2_p), false).filter(vp -> bucket_path.equals(vp.value())).forEach(vp -> vp.remove());
+					//if (!v.properties(GraphAnnotationBean.a2_p).hasNext()) v.remove();
+					v.remove();
 				});
 			}
 			
@@ -704,10 +720,14 @@ public class TitanGraphBuildingUtils {
 	}
 	
 	/** Merge edges from one vertex into another
+	 * @param bucket_path
+	 * @param dir
+	 * @param delete_edges - if true then deletes the edges, always used false because deleting all the vertices
 	 * @param merge_into
 	 * @param merge_from
+	 * @param mutable_stats_per_batch
 	 */
-	protected static void mergeEdges(final String bucket_path, final Direction dir, final Vertex merge_into, final Vertex merge_from, final MutableStatsBean mutable_stats_per_batch) {
+	protected static void mergeEdges(final String bucket_path, final Direction dir, boolean delete_edges, final Vertex merge_into, final Vertex merge_from, final MutableStatsBean mutable_stats_per_batch) {
 		// First get a map of other side:
 		final Map<Object, Edge> merge_into_edges =
 				Optionals.streamOf(merge_into.edges(dir), false).collect(Collectors.toMap(e -> e.inVertex() == merge_into ? e.outVertex().id() : e.inVertex().id(), e -> e));		
@@ -735,7 +755,7 @@ public class TitanGraphBuildingUtils {
 					.forEach(ep -> edge_merge_into.property(ep.key(), ep.value()));
 				
 				// Now finally remove the edge
-				edge.remove();
+				if (delete_edges) edge.remove();
 			});
 	}
 	
@@ -1007,6 +1027,23 @@ public class TitanGraphBuildingUtils {
 		}
 		
 		return Validation.success(o);
+	}
+	
+	/** Util to sort vertices (as part of the cleanup node merge), so that any vertices with >1 bucket has highest prio, then sort by id
+	 * @param v1
+	 * @param v2
+	 * @return
+	 */
+	private static int postProcSortingMethod(final Vertex v1, final Vertex v2) {
+		final boolean v1_has_extra_buckets = Optionals.streamOf(v1.properties(GraphAnnotationBean.a2_p), false).skip(1).findFirst().isPresent();
+		final boolean v2_has_extra_buckets = Optionals.streamOf(v2.properties(GraphAnnotationBean.a2_p), false).skip(1).findFirst().isPresent();
+		if (v1_has_extra_buckets && !v2_has_extra_buckets) {
+			return -1; // (v1 "wins" ie is lower)
+		}
+		else if (!v1_has_extra_buckets && v2_has_extra_buckets) {
+			return 1; // (v2 wins)			
+		}
+		else return ((Long)v1.id()).compareTo((Long)v2.id()); // (same, order by id)
 	}
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

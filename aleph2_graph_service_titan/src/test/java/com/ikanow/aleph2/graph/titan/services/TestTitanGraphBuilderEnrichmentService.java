@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import org.apache.tinkerpop.gremlin.structure.Vertex;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -240,7 +241,46 @@ public class TestTitanGraphBuilderEnrichmentService extends TestTitanCommon {
 			catch (Exception e) {}		
 		}
 		
-		// (coverage)
+		// Now we'll insert some more vertices and check that calling onStageComplete removes them:
+		{
+			final TitanTransaction tx = _titan.buildTransaction().start();
+			
+			assertEquals(5, StreamUtils.stream(tx.query().hasNot(GraphAnnotationBean.a2_p, "get_everything").vertices()).count());
+
+			{
+				final Vertex v = tx.addVertex("to_merge");
+				v.property(GraphAnnotationBean.a2_p, "/test/end/2/end");
+				v.property(GraphAnnotationBean.a2_p, "/test/other/bucket"); // (ensures will be winner)
+				v.property(GraphAnnotationBean.a2_tc, 0L);
+				v.property(GraphAnnotationBean.a2_tm, 0L);
+				v.property(GraphAnnotationBean.name, "ipB");
+				v.property(GraphAnnotationBean.type, "ip");
+				v.property("other", true);
+			}
+			{
+				final Vertex v = tx.addVertex("to_merge_leave");
+				v.property(GraphAnnotationBean.a2_p, "/test/end/2/end");
+				v.property(GraphAnnotationBean.a2_p, "/test/other/bucket"); // (ensures will be winner)
+				v.property(GraphAnnotationBean.name, "ipB");
+				v.property(GraphAnnotationBean.type, "not_an_ip");
+			}
+			
+			//(create another vertex that has a different type)
+			Thread.sleep(1100); // (just give index enough time to finish)
+			assertEquals(7, StreamUtils.stream(tx.query().hasNot(GraphAnnotationBean.a2_p, "get_everything").vertices()).count());
+			
+			tx.commit();
+		}
+		
+		// (this should tidy up any duplicate edges)
 		graph_enrich_service.onStageComplete(true);
+						
+		// check results
+		{
+			Thread.sleep(1100); // (just give index enough time to finish)
+			final TitanTransaction tx = _titan.buildTransaction().start();			
+			assertEquals(6, StreamUtils.stream(tx.query().hasNot(GraphAnnotationBean.a2_p, "get_everything").vertices()).count());			
+			tx.commit();
+		}
 	}
 }
