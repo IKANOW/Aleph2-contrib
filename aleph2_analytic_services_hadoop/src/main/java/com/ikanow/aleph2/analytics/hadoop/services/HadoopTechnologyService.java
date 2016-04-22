@@ -32,6 +32,7 @@ import org.apache.logging.log4j.Logger;
 import com.google.inject.Module;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopErrorUtils;
+import com.ikanow.aleph2.analytics.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;

@@ -17,7 +17,7 @@ package com.ikanow.aleph2.analytics.hadoop.data_model;
 
 import java.util.List;
 
-import com.ikanow.aleph2.analytics.hadoop.services.BatchEnrichmentContext;
+import com.ikanow.aleph2.analytics.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
 

@@ -50,6 +50,7 @@ import com.ikanow.aleph2.analytics.hadoop.data_model.IBeJobService;
 import com.ikanow.aleph2.analytics.hadoop.data_model.HadoopTechnologyOverrideBean;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopBatchEnrichmentUtils;
+import com.ikanow.aleph2.analytics.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean;

@@ -26,6 +26,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.google.inject.Inject;
+import com.ikanow.aleph2.analytics.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.data_model.objects.shared.GlobalPropertiesBean;
 
 /** NOT CURRENTLY USED - MIGHT GET PORTED ACROSS INTO A SemiLocalHadoopController IF THAT MAKES SENSE LATER ON
