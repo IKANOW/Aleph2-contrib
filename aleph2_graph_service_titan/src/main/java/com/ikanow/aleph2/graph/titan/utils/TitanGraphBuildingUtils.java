@@ -21,11 +21,13 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -45,6 +47,7 @@ import scala.Tuple4;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
@@ -164,7 +167,6 @@ public class TitanGraphBuildingUtils {
 	 * @param vertices_and_edges
 	 * @return
 	 */
-	@SuppressWarnings("unchecked")
 	public static Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> buildGraph_collectUserGeneratedAssets(
 			final TitanTransaction tx, 
 			final GraphSchemaBean config,
@@ -178,41 +180,9 @@ public class TitanGraphBuildingUtils {
 		
 		final Map<ObjectNode, Tuple2<List<ObjectNode>, List<ObjectNode>>> nodes_to_get = groupNewEdgesAndVertices(config, mutable_stats, vertices_and_edges);	
 		
-		final Stream<TitanVertex> dups = Lambdas.get(() -> {
-			final Map<String, Set<Object>> dedup_query_builder = 		
-					nodes_to_get.keySet().stream()
-						.flatMap(j -> Optionals.streamOf(j.fields(), false))
-						.collect(Collectors.groupingBy(kv -> kv.getKey(), Collectors.mapping(kv -> jsonNodeToObject(kv.getValue()), Collectors.toSet())));
-						;		
-			
-			//TODO (ALEPH-15): would be nice to support custom "fuzzier" queries, since we're doing a dedup stage to pick the actual winning vertices anyway
-			// that way you could say query on tokenized-version of name and get anyone with the same first or last name (say) and then pick the most likely
-			// one based on the graph ... of course you'd probably want the full graph for that, so it might end up being better served as a "self-analytic" to do is part
-			// of post processing?
-			// (NOTE: same remarks apply for edges)
-			// (NOTE: currently I've been going in the opposite direction, ie enforcing only one vertex per keyset per bucket ... otherwise it's going to get really 
-			//  confusing when you try to merge all the different versions that Titan creates because of the lack of an upsert function....)
-						
-			final TitanGraphQuery<?> matching_nodes_query = dedup_query_builder.entrySet().stream()
-				.reduce(tx.query()
-						,
-						(query, kv) -> query.has(kv.getKey(), Contain.IN, kv.getValue())
-						,
-						(query1, query2) -> query1 // (can't occur since reduce not parallel)
-						);		
-			
-			return Optionals.streamOf(matching_nodes_query.vertices(), false);
-		});
-		
-		// Remove false positives, un-authorized nodes, and group by key
-				
-		final Map<JsonNode, List<Vertex>> grouped_vertices = dups 
-					.map(vertex -> Tuples._2T((Vertex) vertex, getElementProperties(vertex, config.deduplication_fields())))
-					.filter(vertex_key -> nodes_to_get.keySet().contains(vertex_key._2())) // (remove false positives)
-					.filter(vertex_key -> isAllowed(bucket.full_name(), security_service, vertex_key._1())) // (remove un-authorized nodes)
-					.collect(Collectors.groupingBy(t2 -> (JsonNode) t2._2(),  // (group by key)
-								Collectors.mapping(t2 -> t2._1(), Collectors.toList())))
-					;
+		final Map<JsonNode, List<Vertex>> grouped_vertices = 
+				getGroupedVertices(nodes_to_get.keySet(), tx, 
+						config.deduplication_fields(), vertex -> isAllowed(bucket.full_name(), security_service, vertex));
 		
 		//TRACE:
 		//System.err.println(new Date().toString() + ": DUPS=" + grouped_vertices);
@@ -239,7 +209,7 @@ public class TitanGraphBuildingUtils {
 				final Tuple2<String, ISecurityService> security_service,
 				final Optional<IBucketLogger> logger,
 				final MutableStatsBean mutable_stats,
-				final List<ObjectNode> mutable_new_vertex_keys,
+				final Collection<ObjectNode> mutable_new_vertex_keys,
 				final Optional<Tuple2<IEnrichmentBatchModule, GraphMergeEnrichmentContext>> maybe_merger,
 				final DataBucketBean bucket,
 				final Stream<Tuple4<ObjectNode, List<ObjectNode>, List<ObjectNode>, List<Vertex>>> mergeable
@@ -341,6 +311,60 @@ public class TitanGraphBuildingUtils {
 	////////////////////////////////
 	
 	// UTILS - HIGH LEVEL
+	
+	/** Utility to get the vertices in the DB matching the specified keys TODO: move to intermediate utils  
+	 * @param keys
+	 * @param bucket_filter
+	 * @return
+	 */
+	@SuppressWarnings("unchecked")
+	public static final Map<JsonNode, List<Vertex>> getGroupedVertices(
+			final Collection<ObjectNode> keys,
+			final TitanTransaction tx,
+			final List<String> key_fields,
+			final Predicate<Vertex> vertex_filter
+			)
+	{
+		final Stream<TitanVertex> dups = Lambdas.get(() -> {
+			final Map<String, Set<Object>> dedup_query_builder = 		
+					keys.stream()
+						.flatMap(j -> Optionals.streamOf(j.fields(), false))
+						.collect(Collectors.groupingBy(kv -> kv.getKey(), Collectors.mapping(kv -> jsonNodeToObject(kv.getValue()), Collectors.toSet())));
+						;		
+			
+			//TODO (ALEPH-15): would be nice to support custom "fuzzier" queries, since we're doing a dedup stage to pick the actual winning vertices anyway
+			// that way you could say query on tokenized-version of name and get anyone with the same first or last name (say) and then pick the most likely
+			// one based on the graph ... of course you'd probably want the full graph for that, so it might end up being better served as a "self-analytic" to do is part
+			// of post processing?
+			// (NOTE: same remarks apply for edges)
+			// (NOTE: currently I've been going in the opposite direction, ie enforcing only one vertex per keyset per bucket ... otherwise it's going to get really 
+			//  confusing when you try to merge all the different versions that Titan creates because of the lack of an upsert function....)
+						
+			final TitanGraphQuery<?> matching_nodes_query = dedup_query_builder.entrySet().stream()
+				.reduce(tx.query()
+						,
+						(query, kv) -> query.has(kv.getKey(), Contain.IN, kv.getValue())
+						,
+						(query1, query2) -> query1 // (can't occur since reduce not parallel)
+						);		
+			
+			return Optionals.streamOf(matching_nodes_query.vertices(), false);
+		});
+		
+		// Remove false positives, un-authorized nodes, and group by key
+				
+		final Map<JsonNode, List<Vertex>> grouped_vertices = dups 
+					.map(vertex -> Tuples._2T((Vertex) vertex, getElementProperties(vertex, key_fields)))
+					.filter(vertex_key -> keys.contains(vertex_key._2())) // (remove false positives)
+					.filter(vertex_key -> vertex_filter.test(vertex_key._1())) // (remove un-authorized nodes)
+					.collect(Collectors.groupingBy(t2 -> (JsonNode) t2._2(),  // (group by key)
+								Collectors.mapping(t2 -> t2._1(), Collectors.toList())))
+					;
+		
+		
+		
+		return grouped_vertices; 
+	}
 	
 	/** Separates out edges/vertices, groups by key
 	 * @param config
@@ -514,6 +538,7 @@ public class TitanGraphBuildingUtils {
 						Stream.concat(
 								new_elements.stream().map(j -> Tuples._2T(0L, new BatchRecordUtils.JsonBatchRecord(j))), 
 								existing_elements.stream()
+													.sorted((a, b) -> ((Long)a.id()).compareTo((Long)b.id())) // (ensure first found element has the lowest id)
 													.map(v -> _mapper.convertValue(titan_mapper.convertValue(v, Map.class), JsonNode.class))
 													.map(j -> Tuples._2T(0L, new BatchRecordUtils.InjectedJsonBatchRecord(j)))
 						);
@@ -633,7 +658,86 @@ public class TitanGraphBuildingUtils {
 		}
 	}	
 
-	//TODO: have a final merge where we do another query every (say) 250 new vertices, and merge any multiple edges that have been created
+	private static final Set<String> _RESERVED_PROPERTIES = 
+			ImmutableSet.of(GraphAnnotationBean.a2_p, GraphAnnotationBean.a2_tm, GraphAnnotationBean.a2_tc, GraphAnnotationBean.a2_r);
+	
+	/** Tidy up duplicates created because of the lack of consistency in deduplication (+lack of upsert!)
+	 * @param tx
+	 * @param grouped_vertices
+	 * @param mutable_stats_per_batch
+	 */
+	public static void mergeDuplicates(final TitanTransaction tx,
+			final String bucket_path,
+			final Map<JsonNode, List<Vertex>> grouped_vertices, 
+			final MutableStatsBean mutable_stats_per_batch)
+	{
+		grouped_vertices.entrySet().stream().filter(kv -> !kv.getValue().isEmpty()).forEach(kv -> {
+			
+			final Stream<Vertex> vertices = kv.getValue().stream().sorted((a, b) -> ((Long)a.id()).compareTo((Long)b.id()));
+			final Iterator<Vertex> it = vertices.iterator();
+			if (it.hasNext()) {
+				mutable_stats_per_batch.vertex_matches_found += kv.getValue().size() - 1;
+				mutable_stats_per_batch.vertices_updated++;
+				
+				final Vertex merge_into = it.next();
+				it.forEachRemaining(v -> {
+					// special case: add all buckets, update times etc
+					merge_into.property(Cardinality.set, GraphAnnotationBean.a2_p, bucket_path);
+					merge_into.property(GraphAnnotationBean.a2_tm, new Date().getTime());
+					
+					// copy vertex properties into the "merge_into" vertex
+					Optionals.streamOf(v.properties(), false)
+						.filter(vp -> !_RESERVED_PROPERTIES.contains(vp.key())) // (ie don't overwrite system properties)
+						.forEach(vp -> merge_into.property(vp.key(), vp.value()));
+					
+					// OK edges are the difficult bit
+					mergeEdges(bucket_path, Direction.IN, merge_into, v, mutable_stats_per_batch);
+					mergeEdges(bucket_path, Direction.OUT, merge_into, v, mutable_stats_per_batch);
+					
+					// (finally remove this vertex)
+					Optionals.streamOf(v.properties(GraphAnnotationBean.a2_p), false).filter(vp -> bucket_path.equals(vp.value())).forEach(vp -> vp.remove());
+					if (!v.properties(GraphAnnotationBean.a2_p).hasNext()) v.remove();
+				});
+			}
+			
+		});
+	}
+	
+	/** Merge edges from one vertex into another
+	 * @param merge_into
+	 * @param merge_from
+	 */
+	protected static void mergeEdges(final String bucket_path, final Direction dir, final Vertex merge_into, final Vertex merge_from, final MutableStatsBean mutable_stats_per_batch) {
+		// First get a map of other side:
+		final Map<Object, Edge> merge_into_edges =
+				Optionals.streamOf(merge_into.edges(dir), false).collect(Collectors.toMap(e -> e.inVertex() == merge_into ? e.outVertex().id() : e.inVertex().id(), e -> e));		
+		
+		// Now compare against the incoming edges:
+		Optionals.streamOf(merge_from.edges(dir), false)
+			.filter(edge -> Optionals.streamOf(edge.properties(GraphAnnotationBean.a2_p), false).anyMatch(ep -> bucket_path.equals(ep.value()))) // (belongs to me)
+			.forEach(edge -> {
+				mutable_stats_per_batch.edge_matches_found++;
+								
+				final Vertex other_end = (edge.inVertex() == merge_from) ? edge.outVertex() : edge.inVertex(); 
+				
+				//TRACE
+				//System.out.println(dir + ": " + merge_into.label() + " - " + edge.label() + " - " + other_end.label());
+				
+				final Edge edge_merge_into = merge_into_edges.computeIfAbsent(other_end.id(), k -> {
+					mutable_stats_per_batch.edges_updated++;
+					final Edge new_edge = (Direction.OUT == dir) ? merge_into.addEdge(edge.label(), other_end) : other_end.addEdge(edge.label(), merge_into);
+					new_edge.property(GraphAnnotationBean.a2_p, bucket_path);
+					return new_edge;
+				});
+				// copy other edge properties into the "merge_into" edge
+				Optionals.streamOf(edge.properties(), false)
+					.filter(ep -> !_RESERVED_PROPERTIES.contains(ep.key())) // (ie don't overwrite system properties)
+					.forEach(ep -> edge_merge_into.property(ep.key(), ep.value()));
+				
+				// Now finally remove the edge
+				edge.remove();
+			});
+	}
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////

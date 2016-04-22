@@ -18,20 +18,27 @@ package com.ikanow.aleph2.graph.titan.services;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
+import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import org.apache.logging.log4j.Level;
+import org.apache.tinkerpop.gremlin.structure.Vertex;
 
 import scala.Tuple2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterators;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule;
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
@@ -84,7 +91,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 	protected final SetOnce<MutableStatsBean> _mutable_stats = new SetOnce<>();
 	protected final SetOnce<TitanGraph> _titan = new SetOnce<>();
 	
-	protected final LinkedList<ObjectNode> _mutable_new_vertex_keys = new LinkedList<>();
+	protected final Set<ObjectNode> _mutable_new_vertex_keys = new HashSet<>();
 	
 	// Special test mode
 	protected LinkedList<TitanException> _MUTABLE_TEST_ERRORS = new LinkedList<>();
@@ -198,6 +205,52 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 
 		final MutableStatsBean mutable_stats = new MutableStatsBean();
 		
+		tryRecoverableTransaction(mutable_tx -> {
+			final Stream<ObjectNode> copy_vertices_and_edges = vertices_and_edges.stream().map(o -> o.deepCopy());
+			
+			// Fill in transaction
+			
+			mutable_stats.reset();
+			
+			TitanGraphBuildingUtils.buildGraph_handleMerge(mutable_tx, _config.get(), _security_context.get(), _logger.optional(), mutable_stats,
+					_mutable_new_vertex_keys,
+					_custom_graph_merge_handler.optional().map(handler -> Tuples._2T(handler, _custom_graph_merge_context.get()))
+					, 
+					_bucket.get(),
+					TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(mutable_tx, _config.get(), 
+							_security_context.get(), _logger.optional(), 
+							_bucket.get(), mutable_stats,
+							copy_vertices_and_edges
+					));					
+
+			//(test mode for errors)
+			if (!_MUTABLE_TEST_ERRORS.isEmpty()) {
+				throw _MUTABLE_TEST_ERRORS.pop();
+			}			
+		},
+		() -> {
+			_logger.optional().ifPresent(logger -> {
+				logger.log(Level.DEBUG,
+						ErrorUtils.lazyBuildMessage(true, 
+								() -> "GraphBuilderEnrichmentService",
+								() -> "system.onObjectBatch",
+								() -> null, 
+								() -> ErrorUtils.get("Graph stats: V_emitted={0} V_matched={1} V_created={2} V_updated={3} V_errors={4} E_emitted={5} E_matched={6} E_created={7} E_updated={8} E_errors={9} (uuid={10})",
+										mutable_stats.vertices_emitted, mutable_stats.vertex_matches_found, mutable_stats.vertices_created, mutable_stats.vertices_updated, mutable_stats.vertex_errors,
+										mutable_stats.edges_emitted, mutable_stats.vertex_matches_found, mutable_stats.edges_created, mutable_stats.edges_updated, mutable_stats.edge_errors,
+										UUID
+										), 
+								() -> BeanTemplateUtils.toMap(mutable_stats)));
+			});		
+			_mutable_stats.get().combine(mutable_stats);		
+		});		
+	}
+
+	protected void tryRecoverableTransaction(
+			final Consumer<TitanTransaction> transaction,
+			final Runnable on_success
+			)
+	{
 		final int MAX_ATTEMPT_NUM = 4;
 		IntStream.range(0, 1 + MAX_ATTEMPT_NUM).boxed().filter(i -> { //(at most 5 attempts)
 			try {
@@ -207,28 +260,8 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 //				System.err.println(new java.util.Date().toString() + ": GRABBING TRANS " + i);
 				
 				final TitanTransaction mutable_tx = _titan.get().newTransaction();
-				final Stream<ObjectNode> copy_vertices_and_edges = vertices_and_edges.stream().map(o -> o.deepCopy());
-				
-				// Fill in transaction
-				
-				mutable_stats.reset();
-				
 				try {
-					TitanGraphBuildingUtils.buildGraph_handleMerge(mutable_tx, _config.get(), _security_context.get(), _logger.optional(), mutable_stats,
-							_mutable_new_vertex_keys,
-							_custom_graph_merge_handler.optional().map(handler -> Tuples._2T(handler, _custom_graph_merge_context.get()))
-							, 
-							_bucket.get(),
-							TitanGraphBuildingUtils.buildGraph_collectUserGeneratedAssets(mutable_tx, _config.get(), 
-									_security_context.get(), _logger.optional(), 
-									_bucket.get(), mutable_stats,
-									copy_vertices_and_edges
-							));					
-	
-					//(test mode for errors)
-					if (!_MUTABLE_TEST_ERRORS.isEmpty()) {
-						throw _MUTABLE_TEST_ERRORS.pop();
-					}
+					transaction.accept(mutable_tx);
 				}
 				catch (Exception e) { //(close the transaction without saving)
 					mutable_tx.rollback();
@@ -244,22 +277,8 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				//TRACE
 				//System.err.println(new java.util.Date().toString() + ": COMMITTED TRANS " + i);				
 				
+				on_success.run();
 				
-				_logger.optional().ifPresent(logger -> {
-					logger.log(Level.DEBUG,
-							ErrorUtils.lazyBuildMessage(true, 
-									() -> "GraphBuilderEnrichmentService",
-									() -> "system.onStageComplete",
-									() -> null, 
-									() -> ErrorUtils.get("Graph stats: V_emitted={0} V_matched={1} V_created={2} V_updated={3} V_errors={4} E_emitted={5} E_matched={6} E_created={7} E_updated={8} E_errors={9} (uuid={10})",
-											mutable_stats.vertices_emitted, mutable_stats.vertex_matches_found, mutable_stats.vertices_created, mutable_stats.vertices_updated, mutable_stats.vertex_errors,
-											mutable_stats.edges_emitted, mutable_stats.vertex_matches_found, mutable_stats.edges_created, mutable_stats.edges_updated, mutable_stats.edge_errors,
-											UUID
-											), 
-									() -> BeanTemplateUtils.toMap(mutable_stats)));
-				});
-				
-				_mutable_stats.get().combine(mutable_stats);
 				return true; // (ie ends the loop)
 			}
 			catch (TitanException e) {
@@ -309,9 +328,9 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 //			}
 		})
 		.findFirst() // ie stop as soon as we have successfully transacted
-		;		
+		;				
 	}
-
+	
 	/** Utility to check for recoverable errors
 	 * @param e
 	 * @return
@@ -346,8 +365,70 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 	@Override
 	public void onStageComplete(boolean is_original) {
 		
-		//TODO (ALEPH-15): should persist all the found (/created) existing vertices across batches (and then remove from query entry?)
-		// one final merge....
+		// First off sleep somewhere between 0 and 2s to ensure the blocks get out of sync
+		if (is_original) {
+			final Random random_generator = new Random(new Date().getTime());
+			try { Thread.sleep(random_generator.nextInt(2000)); } catch (Exception e) {}
+		}
+		
+		final int batch_size = 250;
+		
+		// OK now going to start merging new records one final time:
+		
+		final MutableStatsBean global_combine_stats = new MutableStatsBean();
+		final MutableStatsBean combine_stats = new MutableStatsBean();
+		Iterators.partition(_mutable_new_vertex_keys.iterator(), batch_size)
+			.forEachRemaining(batch -> {						
+				tryRecoverableTransaction(tx -> {
+					
+					final MutableStatsBean per_batch_stats = new MutableStatsBean();
+					
+					final Map<JsonNode, List<Vertex>> grouped_vertices = 
+							TitanGraphBuildingUtils.getGroupedVertices(batch, tx, 
+									_config.get().deduplication_fields(), 
+									vertex -> Optionals.streamOf(vertex.properties(GraphAnnotationBean.a2_p), false)
+															.anyMatch(p -> _bucket.get().full_name().equals(p.value()))
+									);
+										
+					TitanGraphBuildingUtils.mergeDuplicates(tx, _bucket.get().full_name(), grouped_vertices, per_batch_stats);
+					
+					global_combine_stats.combine(per_batch_stats);
+					combine_stats.reset();
+					combine_stats.combine(per_batch_stats);
+				},
+				() -> {
+					//TODO stats have slightly different meaning (use different bean?)
+					_logger.optional().ifPresent(logger -> {
+						logger.log(Level.DEBUG,
+								ErrorUtils.lazyBuildMessage(true, 
+										() -> "GraphBuilderEnrichmentService",
+										() -> "system.onStageComplete",
+										() -> null, 
+										() -> ErrorUtils.get("Batch merge stats: V_emitted={0} V_matched={1} V_created={2} V_updated={3} V_errors={4} E_emitted={5} E_matched={6} E_created={7} E_updated={8} E_errors={9} (uuid={10})",
+												combine_stats.vertices_emitted, combine_stats.vertex_matches_found, combine_stats.vertices_created, combine_stats.vertices_updated, combine_stats.vertex_errors,
+												combine_stats.edges_emitted, combine_stats.vertex_matches_found, combine_stats.edges_created, combine_stats.edges_updated, combine_stats.edge_errors,
+												UUID
+												), 
+										() -> BeanTemplateUtils.toMap(_mutable_stats.get())));
+					});
+				}
+				);
+			});		
+
+		//TODO stats have slightly different meaning
+		_logger.optional().ifPresent(logger -> {
+			logger.log(Level.INFO,
+					ErrorUtils.lazyBuildMessage(true, 
+							() -> "GraphBuilderEnrichmentService",
+							() -> "system.onStageComplete",
+							() -> null, 
+							() -> ErrorUtils.get("Final merge stats: V_emitted={0} V_matched={1} V_created={2} V_updated={3} V_errors={4} E_emitted={5} E_matched={6} E_created={7} E_updated={8} E_errors={9} (uuid={10})",
+									global_combine_stats.vertices_emitted, global_combine_stats.vertex_matches_found, global_combine_stats.vertices_created, global_combine_stats.vertices_updated, global_combine_stats.vertex_errors,
+									global_combine_stats.edges_emitted, global_combine_stats.vertex_matches_found, global_combine_stats.edges_created, global_combine_stats.edges_updated, global_combine_stats.edge_errors,
+									UUID
+									), 
+							() -> BeanTemplateUtils.toMap(_mutable_stats.get())));
+		});		
 		
 		_logger.optional().ifPresent(logger -> {
 			logger.log(Level.INFO,
