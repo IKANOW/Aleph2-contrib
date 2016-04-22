@@ -18,7 +18,6 @@ package com.ikanow.aleph2.graph.titan.services;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -96,7 +95,8 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 	// Special test mode
 	protected LinkedList<TitanException> _MUTABLE_TEST_ERRORS = new LinkedList<>();
 	
-	protected Long[] _BACKOFF_TIMES_MS = { 1500L, 3000L, 6000L, 12000L, 24000L };
+	protected final static int _MAX_ATTEMPT_NUM = 9;
+	protected final static Integer[] _BACKOFF_TIMES_MS = { 50, 100, 250, 1500, 3000, 6000, 12000, 24000, 48000, 96000 }; // (final one never called, that's the one we bail out on)
 	
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule#onStageInitialize(com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean, scala.Tuple2, java.util.Optional)
@@ -251,8 +251,8 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 			final Runnable on_success
 			)
 	{
-		final int MAX_ATTEMPT_NUM = 4;
-		IntStream.range(0, 1 + MAX_ATTEMPT_NUM).boxed().filter(i -> { //(at most 5 attempts)
+		final Random random_generator = new Random(java.util.UUID.randomUUID().getMostSignificantBits());
+		IntStream.range(0, 1 + _MAX_ATTEMPT_NUM).boxed().filter(i -> { //(at most 5 attempts)
 			try {
 				// Create transaction
 				
@@ -282,7 +282,7 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				return true; // (ie ends the loop)
 			}
 			catch (TitanException e) {
-				if ((i >= MAX_ATTEMPT_NUM) || !isRecoverableError(e)) {
+				if ((i >= _MAX_ATTEMPT_NUM) || !isRecoverableError(e)) {
 
 					//DEBUG
 					//System.err.println(new java.util.Date().toString() + ": HERE2 NON_RECOV: " + i + " vs " + MAX_ATTEMPT_NUM);
@@ -305,17 +305,20 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				//DEBUG
 //				System.err.println(new java.util.Date().toString() + ": HERE3 RECOVERABLE");
 				
+				final int min_sleep_time = _BACKOFF_TIMES_MS[i]/2;
+				final int sleep_time = min_sleep_time + random_generator.nextInt(min_sleep_time);
+				
 				_logger.optional().ifPresent(logger -> {
 					logger.log(Level.DEBUG,
 							ErrorUtils.lazyBuildMessage(false, 
 									() -> "GraphBuilderEnrichmentService",
 									() -> "system.onStageComplete",
 									() -> null, 
-									() -> ErrorUtils.get("Failed to commit transaction due to local conflicts, attempt_num={0} (uuid={1})", i, UUID),
+									() -> ErrorUtils.get("Failed to commit transaction due to local conflicts, attempt_num={0} (uuid={1} sleep_ms={2})", i, UUID, sleep_time),
 									() -> null));
 				});
 				
-				try { Thread.sleep(_BACKOFF_TIMES_MS[i]); } catch (Exception interrupted) {}				
+				try { Thread.sleep(sleep_time); } catch (Exception interrupted) {}				
 				return false;
 				
 				// (If it's a versioning conflict then try again)
@@ -365,11 +368,16 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 	@Override
 	public void onStageComplete(boolean is_original) {
 		
-		// First off sleep somewhere between 0 and 2s to ensure the blocks get out of sync
-		if (is_original) {
-			final Random random_generator = new Random(new Date().getTime());
-			try { Thread.sleep(500 + random_generator.nextInt(1500)); } catch (Exception e) {}
-		}
+		// First off sleep somewhere between 1 and 4s to ensure the blocks get out of sync
+		final int sleep_time = Lambdas.get(() -> {
+			if (is_original) {
+				final Random random_generator = new Random(java.util.UUID.randomUUID().getMostSignificantBits());
+				int local_sleep_time = 1000 + random_generator.nextInt(3000);
+				try { Thread.sleep(local_sleep_time); } catch (Exception e) {}
+				return local_sleep_time;
+			}
+			else return 0;
+		});
 		
 		final int batch_size = 250;
 		
@@ -391,7 +399,22 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 									vertex -> Optionals.streamOf(vertex.properties(GraphAnnotationBean.a2_p), false)
 															.anyMatch(p -> _bucket.get().full_name().equals(p.value()))
 									);
-										
+
+					//TRACE
+//					_logger.optional().ifPresent(logger -> {
+//						logger.log(Level.DEBUG,
+//								ErrorUtils.lazyBuildMessage(true, 
+//										() -> "GraphBuilderEnrichmentService",
+//										() -> "system.onStageComplete",
+//										() -> null, 
+//										() -> ErrorUtils.get("TRACE: {0} vs {1} (uuid={2} sleep_ms={3})",
+//												batch.toString(),
+//												grouped_vertices.toString(),
+//												UUID, sleep_time
+//												), 
+//										() -> BeanTemplateUtils.toMap(combine_stats)));
+//					});
+					
 					TitanGraphBuildingUtils.mergeDuplicates(tx, _bucket.get().full_name(), grouped_vertices, per_batch_stats);
 
 					global_combine_stats.combine(per_batch_stats);
@@ -406,11 +429,11 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 										() -> "system.onStageComplete",
 										() -> null, 
 										() -> ErrorUtils.get("Batch merge stats: V_matched={0} V_updated={1} E_matched={2} E_updated={3} (uuid={4})",
-												global_combine_stats.vertex_matches_found, global_combine_stats.vertices_updated, 
-												global_combine_stats.edge_matches_found, global_combine_stats.edges_updated, 
+												combine_stats.vertex_matches_found, combine_stats.vertices_updated, 
+												combine_stats.edge_matches_found, combine_stats.edges_updated, 
 												UUID
 												), 
-										() -> BeanTemplateUtils.toMap(_mutable_stats.get())));
+										() -> BeanTemplateUtils.toMap(combine_stats)));
 					});
 				}
 				);
@@ -422,12 +445,12 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 							() -> "GraphBuilderEnrichmentService",
 							() -> "system.onStageComplete",
 							() -> null, 
-							() -> ErrorUtils.get("Final merge stats: V_matched={0} V_updated={1} E_matched={2} E_updated={3} (uuid={4})",
-									combine_stats.vertex_matches_found, combine_stats.vertices_updated, 
-									combine_stats.edge_matches_found, combine_stats.edges_updated, 
-									UUID
+							() -> ErrorUtils.get("Final merge stats: V_matched={0} V_updated={1} E_matched={2} E_updated={3} (uuid={4} sleep_ms={5})",
+									global_combine_stats.vertex_matches_found, global_combine_stats.vertices_updated, 
+									global_combine_stats.edge_matches_found, global_combine_stats.edges_updated, 
+									UUID, sleep_time
 									), 
-							() -> BeanTemplateUtils.toMap(_mutable_stats.get())));
+							() -> BeanTemplateUtils.toMap(global_combine_stats)));
 		});		
 		
 		_logger.optional().ifPresent(logger -> {

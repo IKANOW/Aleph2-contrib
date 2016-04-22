@@ -729,8 +729,13 @@ public class TitanGraphBuildingUtils {
 	 */
 	protected static void mergeEdges(final String bucket_path, final Direction dir, boolean delete_edges, final Vertex merge_into, final Vertex merge_from, final MutableStatsBean mutable_stats_per_batch) {
 		// First get a map of other side:
-		final Map<Object, Edge> merge_into_edges =
-				Optionals.streamOf(merge_into.edges(dir), false).collect(Collectors.toMap(e -> e.inVertex() == merge_into ? e.outVertex().id() : e.inVertex().id(), e -> e));		
+		final Map<Tuple2<Object, String>, Edge> merge_into_edges =
+				Optionals.streamOf(merge_into.edges(dir), false)
+							.collect(Collectors.toMap(
+									e -> Tuples._2T((e.inVertex() == merge_into) ? e.outVertex().id() : e.inVertex().id(), e.label()), 
+									e -> e,
+									(v1, v2) -> v1 // (in theory can have multiple edges of the same type/id .. just pick the first if so...)
+									));		
 		
 		// Now compare against the incoming edges:
 		Optionals.streamOf(merge_from.edges(dir), false)
@@ -743,7 +748,7 @@ public class TitanGraphBuildingUtils {
 				//TRACE
 				//System.out.println(dir + ": " + merge_into.label() + " - " + edge.label() + " - " + other_end.label());
 				
-				final Edge edge_merge_into = merge_into_edges.computeIfAbsent(other_end.id(), k -> {
+				final Edge edge_merge_into = merge_into_edges.computeIfAbsent(Tuples._2T(other_end.id(), edge.label()), k -> {
 					mutable_stats_per_batch.edges_updated++;
 					final Edge new_edge = (Direction.OUT == dir) ? merge_into.addEdge(edge.label(), other_end) : other_end.addEdge(edge.label(), merge_into);
 					new_edge.property(GraphAnnotationBean.a2_p, bucket_path);
