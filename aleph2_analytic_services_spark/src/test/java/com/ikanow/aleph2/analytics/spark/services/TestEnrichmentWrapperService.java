@@ -19,11 +19,17 @@ package com.ikanow.aleph2.analytics.spark.services;
 import static org.junit.Assert.*;
 
 import java.util.Arrays;
+import java.util.stream.Collectors;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.Before;
 import org.junit.Test;
+
+import scala.Tuple2;
+
+import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.Tuples;
 
 /**
  * @author Alex
@@ -45,7 +51,23 @@ public class TestEnrichmentWrapperService {
 	public void test_groupingBehavior() {
 		
 		//(quickly test teh whole thing works!)
-		JavaRDD<String> test = _spark.parallelize(Arrays.asList("a", "b", "c"));		
-		assertEquals(3L, test.map(s -> s + "X").count());		
+		{
+			JavaRDD<String> test = _spark.parallelize(Arrays.asList("a", "b", "c"));		
+			assertEquals(3L, test.map(s -> s + "X").count());		
+		}		
+		
+		// (sampel group)
+		{
+			JavaRDD<Tuple2<String, String>> test = _spark.parallelize(Arrays.asList(Tuples._2T("a", "resa1"), Tuples._2T("b", "resb1"), Tuples._2T("a", "resa2")));
+			assertEquals(2L, test
+				.groupBy(t2 -> t2._1())
+				.map(key_lt2 -> {
+					System.out.println("key=" + key_lt2._1() + ".. vals = " + Optionals.streamOf(key_lt2._2(), false).map(t2 -> t2.toString()).collect(Collectors.joining(";")));
+					return null;
+				})
+				.count()
+			);
+		}
+		
 	}
 }
