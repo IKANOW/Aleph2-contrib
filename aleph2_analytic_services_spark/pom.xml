@@ -8,6 +8,7 @@
         <aleph2.scope>provided</aleph2.scope>
         <aleph2.hadoop>2.7.1</aleph2.hadoop>
         <aleph2.spark>1.5.2</aleph2.spark>
+		<maven.test.skip>true</maven.test.skip>
     </properties>
 
     <build>
@@ -135,56 +136,6 @@
             <scope>system</scope>
 		    <systemPath>${JAVA_HOME}/lib/tools.jar</systemPath>
         </dependency>
-        <!-- Note these are provided - there's no spark code called to kick spark off so only need it in YARN context where we'll have it externally -->
-        <!--  (this is fortunate because there's a significant amount of JAR version conflicts here) -->
-        <dependency>
-            <groupId>org.apache.spark</groupId>
-            <artifactId>spark-core_2.10</artifactId>
-            <version>${aleph2.spark}</version>
-            <scope>provided</scope>
-            <exclusions>
-            	<exclusion>
-            		<artifactId>hadoop-client</artifactId>
-            		<groupId>org.apache.hadoop</groupId>
-            	</exclusion>
-            	<exclusion>
-            		<artifactId>scala-library</artifactId>
-            		<groupId>org.scala-lang</groupId>
-            	</exclusion>
-            </exclusions>        
-        </dependency>
-        <dependency>
-            <groupId>org.apache.spark</groupId>
-            <artifactId>spark-sql_2.10</artifactId>
-            <version>${aleph2.spark}</version>
-            <scope>provided</scope>
-        </dependency>
-        <!-- Added these to try to get the spark interpreter working, in practice should probably make an example project
-             (NOTE V DEPENDENT ON SPARK/SCALA VERSION)
-        <dependency>
-            <groupId>org.apache.spark</groupId>
-            <artifactId>spark-repl_2.10</artifactId>
-            <version>${aleph2.spark}</version>
-			<exclusions>
-				<exclusion>
-					<groupId>*</groupId>
-					<artifactId>*</artifactId>
-				</exclusion>
-			</exclusions>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-			  <groupId>org.scala-lang</groupId>
-			  <artifactId>scala-compiler</artifactId>
-			  <version>2.10.4</version>
-			  <exclusions>
-			  	<exclusion>
-			  		<artifactId>scala-library</artifactId>
-			  		<groupId>org.scala-lang</groupId>
-			  	</exclusion>
-			  </exclusions>
-        </dependency>
- 		-->
  		
         <!-- Example of internal dependency (always need data model anyway) -->
         <dependency>
@@ -237,44 +188,163 @@
 			<version>${aleph2.version}</version>
 			<scope>${aleph2.scope}</scope>  		
 		</dependency>
-        <!-- Test deps -->
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.12</version>
-            <scope>test</scope>
-        </dependency>
-        <!-- Not sure which of these internal test deps we'll need
-        <dependency>
-            <groupId>com.ikanow.aleph2</groupId>
-            <artifactId>aleph2_storage_service_hdfs</artifactId>
-            <version>${aleph2.version}</version>
-            <scope>test</scope>
-            <exclusions>
-            	<exclusion>
-            		<artifactId>hadoop-client</artifactId>
-            		<groupId>org.apache.hadoop</groupId>
-            	</exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>com.ikanow.aleph2</groupId>
-            <artifactId>aleph2_analytics_context_library</artifactId>
-            <version>${aleph2.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.ikanow.aleph2</groupId>
-            <artifactId>aleph2_management_db_service_mongodb</artifactId>
-            <version>${aleph2.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.ikanow.aleph2</groupId>
-            <artifactId>aleph2_search_index_service_elasticsearch</artifactId>
-            <version>${aleph2.version}</version>
-            <scope>test</scope>
-        </dependency>
-         -->
     </dependencies>
+	
+	<profiles>
+	
+		<!-- Attempt to get a test setup with Spark -->
+		<profile>
+			<id>normal_dependencies</id>
+			<activation>
+				<property>
+					<name>skipTests</name>
+					<value>true</value>
+				</property>
+			</activation>
+			<properties>
+				<maven.test.skip>true</maven.test.skip>
+			</properties>
+			<dependencies>
+		        <!-- Note these are provided - there's no spark code called to kick spark off so only need it in YARN context where we'll have it externally -->
+		        <!--  (this is fortunate because there's a significant amount of JAR version conflicts here) -->
+		        <dependency>
+		            <groupId>org.apache.spark</groupId>
+		            <artifactId>spark-core_2.10</artifactId>
+		            <version>${aleph2.spark}</version>
+		            <scope>provided</scope>
+		            <exclusions>
+		            	<exclusion>
+		            		<artifactId>hadoop-client</artifactId>
+		            		<groupId>org.apache.hadoop</groupId>
+		            	</exclusion>
+		            	<exclusion>
+		            		<artifactId>scala-library</artifactId>
+		            		<groupId>org.scala-lang</groupId>
+		            	</exclusion>
+		            </exclusions>        
+		        </dependency>
+		        <dependency>
+		            <groupId>org.apache.spark</groupId>
+		            <artifactId>spark-sql_2.10</artifactId>
+		            <version>${aleph2.spark}</version>
+		            <scope>provided</scope>
+		        </dependency>
+		        <!-- Added these to try to get the spark interpreter working, in practice should probably make an example project
+		             (NOTE V DEPENDENT ON SPARK/SCALA VERSION)
+		        <dependency>
+		            <groupId>org.apache.spark</groupId>
+		            <artifactId>spark-repl_2.10</artifactId>
+		            <version>${aleph2.spark}</version>
+					<exclusions>
+						<exclusion>
+							<groupId>*</groupId>
+							<artifactId>*</artifactId>
+						</exclusion>
+					</exclusions>
+		            <scope>compile</scope>
+		        </dependency>
+		        <dependency>
+					  <groupId>org.scala-lang</groupId>
+					  <artifactId>scala-compiler</artifactId>
+					  <version>2.10.4</version>
+					  <exclusions>
+					  	<exclusion>
+					  		<artifactId>scala-library</artifactId>
+					  		<groupId>org.scala-lang</groupId>
+					  	</exclusion>
+					  </exclusions>
+		        </dependency>
+		 		-->
+			</dependencies>
+		</profile>
+	
+		<!-- Test dependencies -->
+		<profile>
+			<id>test_dependencies</id>
+			<activation>
+				<property>
+					<name>skipTests</name>
+					<value>!true</value>
+				</property>
+			</activation>
+			<properties>
+				<maven.test.skip>false</maven.test.skip>
+			</properties>
+			<dependencies>
+				<!-- System -->
+		        <dependency>
+		            <groupId>junit</groupId>
+		            <artifactId>junit</artifactId>
+		            <version>4.12</version>
+		            <scope>test</scope>
+		        </dependency>
+				<!-- Scala/Spark -->
+		        <dependency>
+		            <groupId>org.apache.spark</groupId>
+		            <artifactId>spark-core_2.11</artifactId>
+		            <version>${aleph2.spark}</version>
+		            <scope>provided</scope>
+		            <exclusions>
+		            	<exclusion>
+		            		<artifactId>jackson-databind</artifactId>
+		            		<groupId>com.fasterxml.jackson.core</groupId>
+		            	</exclusion>
+		            	<exclusion>
+		            		<artifactId>jackson-module-scala_2.11</artifactId>
+		            		<groupId>com.fasterxml.jackson.module</groupId>
+		            	</exclusion>
+		            	<exclusion>
+		            		<artifactId>hadoop-client</artifactId>
+		            		<groupId>org.apache.hadoop</groupId>
+		            	</exclusion>
+		            	<exclusion>
+		            		<artifactId>scala-library</artifactId>
+		            		<groupId>org.scala-lang</groupId>
+		            	</exclusion>
+		            </exclusions>        
+		        </dependency>
+		        <dependency>
+		            <groupId>com.fasterxml.jackson.module</groupId>
+		            <artifactId>jackson-module-scala_2.11</artifactId>
+		            <version>2.6.2</version>
+		            <scope>provided</scope>
+		        </dependency>
+		        <dependency>
+		            <groupId>org.apache.spark</groupId>
+		            <artifactId>spark-sql_2.11</artifactId>
+		            <version>${aleph2.spark}</version>
+		            <scope>provided</scope>
+		        </dependency>
+		        
+				<!-- Aleph2 -->
+				<!-- TODO -->
+				<!-- 
+				<dependency>
+					<groupId>com.ikanow.aleph2</groupId>
+					<artifactId>aleph2_storage_service_hdfs</artifactId>
+					<version>${aleph2.version}</version>
+					<scope>test</scope>
+				</dependency>
+				<dependency>
+					<groupId>com.ikanow.aleph2</groupId>
+					<artifactId>aleph2_management_db_service_mongodb</artifactId>
+					<version>${aleph2.version}</version>
+					<scope>test</scope>
+				</dependency>
+				<dependency>
+					<groupId>com.ikanow.aleph2</groupId>
+					<artifactId>aleph2_search_index_service_elasticsearch</artifactId>
+					<version>${aleph2.version}</version>
+					<scope>test</scope>
+				</dependency>		
+				<dependency>
+					<groupId>com.ikanow.aleph2</groupId>
+					<artifactId>aleph2_logging_service</artifactId>
+					<version>${aleph2.version}</version>
+					<scope>test</scope>
+				</dependency>
+				 -->
+			</dependencies>
+		</profile>
+	</profiles>	
 </project>

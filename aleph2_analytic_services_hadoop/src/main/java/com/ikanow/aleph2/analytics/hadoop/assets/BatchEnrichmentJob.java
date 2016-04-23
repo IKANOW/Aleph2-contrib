@@ -522,7 +522,7 @@ public class BatchEnrichmentJob{
 										config.grouping_fields().stream() // (non empty by construction)	
 												.reduce(ObjectNodeWritableComparable._mapper.createObjectNode(),
 														(acc, v) -> {
-															JsonUtils.getProperty(v, out_object).ifPresent(val -> acc.put(v, val));
+															JsonUtils.getProperty(v, out_object).ifPresent(val -> acc.set(v, val));
 															return acc;
 														},
 														(acc1, acc2) -> acc1 // (can't ever happen)

@@ -113,7 +113,7 @@ public class TestTitanGraphBuildingUtils {
 			final ObjectNode test = base_test.deepCopy();
 			test.put(GraphAnnotationBean.label, "test_label");
 			test.put(GraphAnnotationBean.type, GraphAnnotationBean.ElementType.edge.toString());
-			test.put(GraphAnnotationBean.properties, _mapper.createObjectNode());
+			test.set(GraphAnnotationBean.properties, _mapper.createObjectNode());
 			
 			final Validation<BasicMessageBean, ObjectNode> ret_val = TitanGraphBuildingUtils.validateMergedElement(test, graph_schema);
 			assertTrue("Should be valid: " + ret_val.validation(fail -> fail.message(), success -> ""), ret_val.isSuccess());
@@ -187,7 +187,7 @@ public class TestTitanGraphBuildingUtils {
 		// 1.2) Other valid incarnations
 		{
 			final ObjectNode test = base_test.deepCopy();
-			test.put(GraphAnnotationBean.id, _mapper.createObjectNode().put("name", "a").put("type", "b"));
+			test.set(GraphAnnotationBean.id, _mapper.createObjectNode().put("name", "a").put("type", "b"));
 			final Validation<BasicMessageBean, ObjectNode> ret_val = TitanGraphBuildingUtils.validateUserElement(test, graph_schema);
 			assertEquals("Should return the inserted object: " + ret_val.success() + " vs " + test, test.toString(), ret_val.success().toString());			
 		}
@@ -196,7 +196,7 @@ public class TestTitanGraphBuildingUtils {
 			final ObjectNode test = base_test.deepCopy();
 			test.remove(GraphAnnotationBean.id);
 			test.put(GraphAnnotationBean.type, GraphAnnotationBean.ElementType.edge.toString());
-			test.put(GraphAnnotationBean.inV, _mapper.createObjectNode().put("name", "a").put("type", "b"));
+			test.set(GraphAnnotationBean.inV, _mapper.createObjectNode().put("name", "a").put("type", "b"));
 			test.put(GraphAnnotationBean.outV, 0L);
 			final Validation<BasicMessageBean, ObjectNode> ret_val = TitanGraphBuildingUtils.validateUserElement(test, graph_schema);
 			assertEquals("Should return the inserted object: " + ret_val.success() + " vs " + test, test.toString(), ret_val.success().toString());			
@@ -226,7 +226,7 @@ public class TestTitanGraphBuildingUtils {
 		{
 			final ObjectNode test = base_test.deepCopy();
 			test.put(GraphAnnotationBean.type, GraphAnnotationBean.ElementType.edge.toString());
-			test.put(GraphAnnotationBean.inV, _mapper.createObjectNode().put("name", "a"));
+			test.set(GraphAnnotationBean.inV, _mapper.createObjectNode().put("name", "a"));
 			test.put(GraphAnnotationBean.outV, 0L);
 			final Validation<BasicMessageBean, ObjectNode> ret_val = TitanGraphBuildingUtils.validateUserElement(test, graph_schema);
 			assertFalse("Should be invalid", ret_val.isSuccess());			

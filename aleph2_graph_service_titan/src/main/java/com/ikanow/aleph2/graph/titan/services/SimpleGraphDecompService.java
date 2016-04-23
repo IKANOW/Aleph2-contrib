@@ -94,35 +94,35 @@ public class SimpleGraphDecompService implements IEnrichmentBatchModule {
 					final JsonNode to = from_to._2();
 					
 					final ObjectNode mutable_from_key = _mapper.createObjectNode();
-					mutable_from_key.put(GraphAnnotationBean.name, from);
+					mutable_from_key.set(GraphAnnotationBean.name, from);
 					mutable_from_key.put(GraphAnnotationBean.type, el.from_type());
 					final ObjectNode mutable_to_key = _mapper.createObjectNode();
-					mutable_to_key.put(GraphAnnotationBean.name, to);
+					mutable_to_key.set(GraphAnnotationBean.name, to);
 					mutable_to_key.put(GraphAnnotationBean.type, el.to_type());
 					
 					if (mutable_dedup_set.add(mutable_from_key)) {
 						final ObjectNode mutable_from_vertex = _mapper.createObjectNode();
 						mutable_from_vertex.put(GraphAnnotationBean.type, GraphAnnotationBean.ElementType.vertex.toString());
-						mutable_from_vertex.put(GraphAnnotationBean.id, mutable_from_key);
+						mutable_from_vertex.set(GraphAnnotationBean.id, mutable_from_key);
 						mutable_from_vertex.put(GraphAnnotationBean.label, from.asText());
-						mutable_from_vertex.put(GraphAnnotationBean.properties, mutable_from_key.deepCopy());
+						mutable_from_vertex.set(GraphAnnotationBean.properties, mutable_from_key.deepCopy());
 						_context.get().emitImmutableObject(_context.get().getNextUnusedId(), mutable_from_vertex, Optional.empty(), Optional.empty(), Optional.empty());
 					}
 					
 					if (mutable_dedup_set.add(mutable_to_key)) {
 						final ObjectNode mutable_to_vertex = _mapper.createObjectNode();
 						mutable_to_vertex.put(GraphAnnotationBean.type, GraphAnnotationBean.ElementType.vertex.toString());
-						mutable_to_vertex.put(GraphAnnotationBean.id, mutable_to_key);
+						mutable_to_vertex.set(GraphAnnotationBean.id, mutable_to_key);
 						mutable_to_vertex.put(GraphAnnotationBean.label, to.asText());
-						mutable_to_vertex.put(GraphAnnotationBean.properties, mutable_to_key.deepCopy());
+						mutable_to_vertex.set(GraphAnnotationBean.properties, mutable_to_key.deepCopy());
 						_context.get().emitImmutableObject(_context.get().getNextUnusedId(), mutable_to_vertex, Optional.empty(), Optional.empty(), Optional.empty());
 					}
 					
 					final ObjectNode mutable_edge = _mapper.createObjectNode();
 					mutable_edge.put(GraphAnnotationBean.type, GraphAnnotationBean.ElementType.edge.toString());
 					mutable_edge.put(GraphAnnotationBean.label, el.edge_name());
-					mutable_edge.put(GraphAnnotationBean.outV, mutable_from_key);
-					mutable_edge.put(GraphAnnotationBean.inV, mutable_to_key);					
+					mutable_edge.set(GraphAnnotationBean.outV, mutable_from_key);
+					mutable_edge.set(GraphAnnotationBean.inV, mutable_to_key);					
 					_context.get().emitImmutableObject(_context.get().getNextUnusedId(), mutable_edge, Optional.empty(), Optional.empty(), Optional.empty());
 				});
 			});

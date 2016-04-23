@@ -68,7 +68,10 @@ import fj.data.Either;
  */
 public class StormControllerUtil {
 	private static final Logger _logger = LogManager.getLogger();
-	private final static Set<String> dirs_to_ignore = Sets.newHashSet("org/slf4j", "org/apache/log4j");
+	// Incompatible things:
+	// - logging
+	// - jackson needs to be at 2.3.1, spark need 2.4+, es needs 2.6 etc
+	private final static Set<String> dirs_to_ignore = Sets.newHashSet("org/slf4j", "org/apache/log4j", "com/fasterxml/jackson");
 	protected final static ConcurrentHashMap<String, Date> storm_topology_jars_cache = new ConcurrentHashMap<>();
 	protected final static long MAX_RETRIES = 60; //60 retries at 1s == 1m max retry time
 	

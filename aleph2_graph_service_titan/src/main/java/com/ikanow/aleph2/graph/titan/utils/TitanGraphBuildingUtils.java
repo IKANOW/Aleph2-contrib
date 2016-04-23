@@ -444,12 +444,12 @@ public class TitanGraphBuildingUtils {
 			if (null == off_key) {
 				mutable_edge.put(GraphAnnotationBean.inV, (Long) vertex_winner.id());
 				mutable_edge.put(GraphAnnotationBean.outV, (Long) vertex_winner.id());
-				mutable_edge.put(GraphAnnotationBean.inVLabel, key); // (internal, see below)
-				mutable_edge.put(GraphAnnotationBean.outVLabel, key); // (internal, see below)
+				mutable_edge.set(GraphAnnotationBean.inVLabel, key); // (internal, see below)
+				mutable_edge.set(GraphAnnotationBean.outVLabel, key); // (internal, see below)
 			}
 			else {
 				mutable_edge.put((matching_key == in_key) ? GraphAnnotationBean.inV : GraphAnnotationBean.outV, (Long) vertex_winner.id());
-				mutable_edge.put((matching_key == in_key) ? GraphAnnotationBean.inVLabel : GraphAnnotationBean.outVLabel, key); // (internal, see below)
+				mutable_edge.set((matching_key == in_key) ? GraphAnnotationBean.inVLabel : GraphAnnotationBean.outVLabel, key); // (internal, see below)
 			}
 			
 			return ((null == off_key) || off_key.isIntegralNumber());

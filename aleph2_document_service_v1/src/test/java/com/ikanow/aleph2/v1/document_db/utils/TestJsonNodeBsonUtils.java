@@ -134,7 +134,7 @@ public class TestJsonNodeBsonUtils {
 		assertEquals(0, o1.size());		
 		assertEquals(0, o1b.size());
 
-		o1.putAll(JsonNodeBsonUtils.from(m1)); // will be minus one object
+		o1.setAll(JsonNodeBsonUtils.from(m1)); // will be minus one object
 		assertEquals(2, o1.size());
 		assertTrue(o1c.containsValue(mapper.convertValue(true, JsonNode.class)));
 		assertFalse(o1c.containsValue("banana"));
