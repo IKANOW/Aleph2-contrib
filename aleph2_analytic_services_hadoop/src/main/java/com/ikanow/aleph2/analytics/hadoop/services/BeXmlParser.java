@@ -235,6 +235,9 @@ public class BeXmlParser implements IParser {
 								mutable_json = (ObjectNode)tmp;								
 							}
 							catch (Exception e) {
+								//DEBUG
+								//e.printStackTrace();
+								
 								return null; // (leave the mutable_reader intact since the XML outline appears to be valid)							
 							}
 							if (null == mutable_json) return null; //(as above)
@@ -274,7 +277,7 @@ public class BeXmlParser implements IParser {
 			//(carry on, will return EOF)
 			
 			//DEBUG
-			e.printStackTrace();
+			//e.printStackTrace();
 		}
 		try {
 			if (null != _mutable_reader) {
