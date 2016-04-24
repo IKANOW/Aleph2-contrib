@@ -19,10 +19,10 @@ package com.ikanow.aleph2.analytics.spark.services;
 import java.io.Serializable;
 
 import scala.compat.java8.JFunction;
-import scala.compat.java8.JFunction1;
 import scala.collection.JavaConverters;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -33,7 +33,6 @@ import java.util.List;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import org.apache.logging.log4j.Level;
 import org.apache.spark.api.java.JavaRDD;
@@ -54,6 +53,9 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.FlatMapFunction;
 
 import scala.Tuple2;
+
+
+
 
 
 
@@ -117,7 +119,7 @@ import com.ikanow.aleph2.data_model.utils.Tuples;
  * @author Alex
  *
  */
-public class EnrichmentWrapperService implements Serializable {
+public class EnrichmentPipelineService implements Serializable {
 	private static final long serialVersionUID = 5696574452500014975L;
 	protected static final int _DEFAULT_BATCH_SIZE = 100;
 	
@@ -129,35 +131,74 @@ public class EnrichmentWrapperService implements Serializable {
 	//
 	// C'TOR	
 	
+	/** Creates an enrichment/transform pipeline service with the specified elements
+	 * @param aleph2_context
+	 * @param pipeline_elements
+	 * @return
+	 */
+	public EnrichmentPipelineService create(final IAnalyticsContext aleph2_context, final List<EnrichmentControlMetadataBean> pipeline_elements) {
+		return new EnrichmentPipelineService(aleph2_context, pipeline_elements);
+	}
+	/** Selects a set of enrichment/transform pipeline elements from the current job, and creates a service out of them
+	 * @param aleph2_context
+	 * @param names
+	 * @return
+	 */
+	public EnrichmentPipelineService select(final IAnalyticsContext aleph2_context, String... names) {
+		return new EnrichmentPipelineService(aleph2_context, names);
+	}
+	/** Selects a set of enrichment/transform pipeline elements from the current job, and creates a service out of them
+	 * @param aleph2_context
+	 * @param names
+	 * @return
+	 */
+	public EnrichmentPipelineService select(final IAnalyticsContext aleph2_context, final Collection<String> names) {
+		return new EnrichmentPipelineService(aleph2_context, names.stream().toArray(String[]::new));
+	}
+
+	//////////////////////////////////////////////////////////////////
+	
 	/** Creates a wrapper for a single enrichment job
 	 * @param aleph2_context - the Aleph2 analytic context
 	 * @param name - the name of the enrichment pipeline from the job
+	 * @param dummy - just to differentatiate
 	 */
 	@SuppressWarnings("unchecked")
-	public EnrichmentWrapperService(final IAnalyticsContext aleph2_context, final Set<String> names) {
-		this(aleph2_context
-				,
-				aleph2_context.getJob()
-					.map(j -> j.config())
-					.map(cfg -> cfg.get(EnrichmentControlMetadataBean.ENRICHMENT_PIPELINE))
-					.<List<Object>>map(pipe -> Patterns.match().<List<Object>>andReturn()
-										.when(List.class, l -> l)
-										.otherwise(() -> null)
+	protected EnrichmentPipelineService(final IAnalyticsContext aleph2_context, final String... names) {
+		final Map<String, EnrichmentControlMetadataBean> pipeline_elements_map =		
+			aleph2_context.getJob()
+				.map(j -> j.config())
+				.map(cfg -> cfg.get(EnrichmentControlMetadataBean.ENRICHMENT_PIPELINE))
+				.<List<Object>>map(pipe -> Patterns.match().<List<Object>>andReturn()
+									.when(List.class, l -> (List<Object>)l)
+									.otherwise(() -> (List<Object>)null)
+					)
+				.<Map<String, EnrichmentControlMetadataBean>>map(l -> l.stream()
+						.<EnrichmentControlMetadataBean>map(o -> BeanTemplateUtils.from((Map<String, Object>)o, EnrichmentControlMetadataBean.class).get())
+						.collect(Collectors.toMap((EnrichmentControlMetadataBean cfg) -> cfg.name(), cfg -> cfg))
 						)
-					.<List<EnrichmentControlMetadataBean>>map(l -> l.stream()
-							.<EnrichmentControlMetadataBean>map(o -> BeanTemplateUtils.from((Map<String, Object>)o, EnrichmentControlMetadataBean.class).get())
-							.filter(cfg -> names.contains(cfg.name()))
-							.collect(Collectors.toList())
-							)
-					.orElse(Collections.emptyList())
-			);
+				.orElse(Collections.emptyMap())
+				;
+
+		final List<EnrichmentControlMetadataBean> pipeline_elements = Arrays.stream(names).map(n -> pipeline_elements_map.get(n)).filter(cfg -> null != cfg).collect(Collectors.toList());
+		
+		_analytics_context = aleph2_context;
+		_pipeline_elements = pipeline_elements;
+		
+		if (_pipeline_elements.isEmpty()) {
+			throw new RuntimeException(ErrorUtils.get(SparkErrorUtils.NO_PIPELINE_ELEMENTS_SPECIFIED, 
+							aleph2_context.getBucket().map(b -> b.full_name()).orElse("(unknown bucket)"),
+							aleph2_context.getJob().map(j -> j.name()).orElse("(unknown job)")));
+							
+		}
+		
 	}
 	
 	/** Creates a wrapper for a pipeline of enrichment control (no grouping/fan in/fan out allowed)
 	 * @param aleph2_context - the Aleph2 analytic context
 	 * @param name - the name of the enrichment pipeline from the job
 	 */
-	public EnrichmentWrapperService(final IAnalyticsContext aleph2_context, final List<EnrichmentControlMetadataBean> pipeline_elements) {		
+	protected EnrichmentPipelineService(final IAnalyticsContext aleph2_context, final List<EnrichmentControlMetadataBean> pipeline_elements) {		
 		_analytics_context = aleph2_context;
 		_pipeline_elements = pipeline_elements;
 		
@@ -176,9 +217,9 @@ public class EnrichmentWrapperService implements Serializable {
 	
 	protected Wrapper _chain_start = null;
 	
-	//TODO: handle streaming case (includes map), different input to pipeline etc
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	//TODO: scala version of map/groupBy
+	// SCALA VERSIONS
 	
 	/** A transform/enrichment function that can be used in mapPartitions (scala version)
 	 * @return
@@ -193,9 +234,17 @@ public class EnrichmentWrapperService implements Serializable {
 					).apply(it));
 	}	
 	
-//	private Function<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>> semiScalaInMapPartitions() {
-//		return ;
-//	}
+	//TODO: other scala versions
+	
+	//TODO: scala stream (flatMap)
+	
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	// JAVA VERSIONS
+	
+	//TODO: other scala versions
+	
+	//TODO: scala stream (flatMap)
 	
 	/** A transform/enrichment function that can be used in mapPartitions (java version)
 	 * @return
@@ -203,7 +252,7 @@ public class EnrichmentWrapperService implements Serializable {
 	public FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<Long, IBatchRecord>> javaInMapPartitions() {
 		return it -> {			
 			_chain_start = new Wrapper(Streamable.of(_pipeline_elements), _DEFAULT_BATCH_SIZE, 
-									Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch)); //(unknown: could be input or previous stage in chain)
+									Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch), Optional.empty()); //(unknown: could be input or previous stage in chain)
 			
 			return StreamUtils.unfold(it, itit -> {
 				return itit.hasNext() ? Optional.of(itit) : Optional.empty();
@@ -211,22 +260,53 @@ public class EnrichmentWrapperService implements Serializable {
 			.map(itit -> Tuples._2T(itit.next(), itit.hasNext()))
 			.<Tuple2<Long, IBatchRecord>>flatMap(id_record__islast -> {
 				
-				return _chain_start.process(Arrays.asList(id_record__islast._1()), id_record__islast._2(), Optional.empty());
+				return _chain_start.process(addIncomingRecord(id_record__islast._1()), id_record__islast._2(), Optional.empty()).map(t2 -> t2._1());
 			})
 			::iterator
 			;
 		};	
 	}
 
-	/** A transform/enrichment function that can be used in mapPartitions immediately following a grouping key
+	/** A transform/enrichment function that can be used in mapPartitions (java version) immediately preceding a grouping operation
+	 * @param names - an ordered list of field names (dot notation), is used to create a grouping key (["?"] means the enrichment engine can pick whatever it wants)
 	 * @return
 	 */
-	public FlatMapFunction<Iterator<Tuple2<JsonNode, Iterable<Tuple2<Long, IBatchRecord>>>>, Tuple2<Long, IBatchRecord>> inMapPartitionsAfterGroup(final JsonNode groupingKey) {
+	public FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> javaInMapPartitionsPreGroup(final String... names) {
+		return javaInMapPartitionsPreGroup(Arrays.stream(names).collect(Collectors.toList()));
+	}
+	
+	/** A transform/enrichment function that can be used in mapPartitions (java version) immediately preceding a grouping operation
+	 * @param names - an ordered list of field names (dot notation), is used to create a grouping key (["?"] means the enrichment engine can pick whatever it wants)
+	 * @return
+	 */
+	public FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> javaInMapPartitionsPreGroup(final List<String> grouping_fields) {
+		return it -> {			
+			_chain_start = new Wrapper(Streamable.of(_pipeline_elements), _DEFAULT_BATCH_SIZE, 
+									Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch), Optional.of(grouping_fields)); //(unknown: could be input or previous stage in chain)
+			
+			return StreamUtils.unfold(it, itit -> {
+				return itit.hasNext() ? Optional.of(itit) : Optional.empty();
+			})
+			.map(itit -> Tuples._2T(itit.next(), itit.hasNext()))
+			.<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>flatMap(id_record__islast -> {
+				
+				return _chain_start.process(addIncomingRecord(id_record__islast._1()), id_record__islast._2(), Optional.empty());
+			})
+			::iterator
+			;
+		};	
+	}
+
+
+	/** A transform/enrichment function that can be used in mapPartitions (java version) immediately following a grouping key operation
+	 * @return
+	 */
+	public FlatMapFunction<Iterator<Tuple2<JsonNode, Iterable<Tuple2<Long, IBatchRecord>>>>, Tuple2<Long, IBatchRecord>> inMapPartitionsPostGroup() {
 		return it -> {			
 			final Tuple2<JsonNode, Iterable<Tuple2<Long, IBatchRecord>>> key_objects = it.next();
 			if (null == _chain_start) {
 				_chain_start = new Wrapper(Streamable.of(_pipeline_elements), _DEFAULT_BATCH_SIZE, 
-						Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch)); //(unknown: could be input or previous stage in chain)
+						Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch), Optional.empty()); //(unknown: could be input or previous stage in chain)
 			}
 			final Wrapper chain_start = _chain_start.clone();
 			
@@ -236,7 +316,7 @@ public class EnrichmentWrapperService implements Serializable {
 			.map(itit -> Tuples._2T(itit.next(), itit.hasNext()))
 			.<Tuple2<Long, IBatchRecord>>flatMap(id_record__islast -> {
 
-				return chain_start.process(Arrays.asList(id_record__islast._1()), id_record__islast._2(), Optional.of(key_objects._1()));				
+				return chain_start.process(addIncomingRecord(id_record__islast._1()), id_record__islast._2(), Optional.of(key_objects._1())).map(t2 -> t2._1());				
 			})
 			::iterator
 			;
@@ -271,16 +351,17 @@ public class EnrichmentWrapperService implements Serializable {
 	protected class Wrapper {
 		final protected Wrapper _next;
 		final protected int _batch_size;
-		final protected List<Tuple2<Long, IBatchRecord>> mutable_list = new LinkedList<>();		
+		final protected List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> mutable_list = new LinkedList<>();		
 		final protected IEnrichmentBatchModule _batch_module;
 		final IEnrichmentModuleContext _enrichment_context;		
 		final protected Optional<IBucketLogger> _logger;
+		protected Wrapper _variable_clone_cache = null;
 		
 		/** User c'tor
 		 * @param - list of enrichment objects
 		 */
 		protected Wrapper(final Streamable<EnrichmentControlMetadataBean> remaining_elements, final int default_batch_size, 
-							final Tuple2<ProcessingStage, ProcessingStage> previous_next)
+							final Tuple2<ProcessingStage, ProcessingStage> previous_next, final Optional<List<String>> next_grouping_fields)
 		{
 			final EnrichmentControlMetadataBean control = remaining_elements.stream().findFirst().get();			
 			_enrichment_context = _analytics_context.getUnderlyingPlatformDriver(IEnrichmentModuleContext.class, Optional.empty()).get();
@@ -322,21 +403,22 @@ public class EnrichmentWrapperService implements Serializable {
 			
 			_batch_module.onStageInitialize(_enrichment_context, _analytics_context.getBucket().get(), control,  
 											Tuples._2T(previous_next._1(), is_final_stage ? ProcessingStage.unknown : previous_next._2()),
-											Optional.empty() //(not sure what to do about next_grouping_fields?)
+											next_grouping_fields.filter(__ -> is_final_stage)
 											);
 			
 			if (!is_final_stage) {
 				final Tuple2<ProcessingStage, ProcessingStage> next__previous_next = 
 						Tuples._2T(previous_next._2(), is_final_stage ? ProcessingStage.unknown : previous_next._2());
 						
-				_next = new Wrapper(remaining_elements.skip(1), _batch_size, next__previous_next);
+				_next = new Wrapper(remaining_elements.skip(1), _batch_size, next__previous_next, next_grouping_fields);
 			}
 			else _next = null;
 		}
 		
-		//TODO: clone function + state
+		//TODO: clone function + state (then cache)
 		public Wrapper clone() {
-			return this;
+			if (null != _variable_clone_cache) return _variable_clone_cache;
+			else return this;
 		}
 		
 		/** Processes the next stage of a chain of pipelines
@@ -344,19 +426,19 @@ public class EnrichmentWrapperService implements Serializable {
 		 * @param last - note only called immediately before the cleanup call
 		 * @return
 		 */
-		public Stream<Tuple2<Long, IBatchRecord>> process(final List<Tuple2<Long, IBatchRecord>> list, boolean last, Optional<JsonNode> grouping_key) {
+		public Stream<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> process(final List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> list, boolean last, Optional<JsonNode> grouping_key) {
 			mutable_list.addAll(list);
 			if (last || (mutable_list.size() > _batch_size)) {
-				return Optionals.streamOf(Iterators.partition(mutable_list.iterator(), _batch_size), false).<Tuple2<Long, IBatchRecord>>flatMap(l -> {
+				return Optionals.streamOf(Iterators.partition(mutable_list.iterator(), _batch_size), false).<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>flatMap(l -> {
 					
-					_batch_module.onObjectBatch(l.stream(), Optional.of(l.size()), grouping_key);
+					_batch_module.onObjectBatch(l.stream().map(t2 -> t2._1()), Optional.of(l.size()), grouping_key);
 					
-					_batch_module.onStageComplete(true); //(TODOD also need to add support for this in batch enrichment)
+					_batch_module.onStageComplete(true); //(TODO also need to add support for this in batch enrichment)
 					@SuppressWarnings("unchecked")
-					final List<Tuple2<Long, IBatchRecord>> stage_output = (List<Tuple2<Long, IBatchRecord>>)
+					final List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> stage_output = (List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>)
 							_enrichment_context.getUnderlyingPlatformDriver(List.class, Optional.empty()).get();
 										
-					final Stream<Tuple2<Long, IBatchRecord>> ret_vals_int =  (null != _next)
+					final Stream<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> ret_vals_int =  (null != _next)
 							? _next.process(stage_output, true, Optional.empty())
 							: stage_output.stream()
 							;
@@ -367,6 +449,14 @@ public class EnrichmentWrapperService implements Serializable {
 			}
 			else return Stream.empty();
 		}
+	}
+	
+	/** Adds the incoming element from the previous stage to the batch
+	 * @param el
+	 * @return
+	 */
+	protected static List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> addIncomingRecord(final Tuple2<Long, IBatchRecord> el) {
+		return Arrays.asList(Tuples._2T(el, Optional.empty()));
 	}
 	
 }
