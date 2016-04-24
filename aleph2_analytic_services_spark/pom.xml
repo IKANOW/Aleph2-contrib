@@ -229,6 +229,11 @@
 		            <version>${aleph2.spark}</version>
 		            <scope>provided</scope>
 		        </dependency>
+				<dependency>
+					<groupId>org.scala-lang.modules</groupId>
+					<artifactId>scala-java8-compat_2.10</artifactId>
+					<version>0.5.0</version>
+				</dependency>
 		        <!-- Added these to try to get the spark interpreter working, in practice should probably make an example project
 		             (NOTE V DEPENDENT ON SPARK/SCALA VERSION)
 		        <dependency>
@@ -315,6 +320,11 @@
 		            <version>${aleph2.spark}</version>
 		            <scope>provided</scope>
 		        </dependency>
+				<dependency>
+					<groupId>org.scala-lang.modules</groupId>
+					<artifactId>scala-java8-compat_2.11</artifactId>
+					<version>0.7.0</version>
+				</dependency>
 		        
 				<!-- Aleph2 -->
 				<!-- TODO -->

@@ -17,6 +17,11 @@
 package com.ikanow.aleph2.analytics.spark.services;
 
 import java.io.Serializable;
+
+import scala.compat.java8.JFunction;
+import scala.compat.java8.JFunction1;
+import scala.collection.JavaConverters;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
@@ -49,6 +54,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.FlatMapFunction;
 
 import scala.Tuple2;
+
+
 
 
 
@@ -133,7 +140,7 @@ public class EnrichmentWrapperService implements Serializable {
 				aleph2_context.getJob()
 					.map(j -> j.config())
 					.map(cfg -> cfg.get(EnrichmentControlMetadataBean.ENRICHMENT_PIPELINE))
-					.map(pipe -> Patterns.match().<List<Object>>andReturn()
+					.<List<Object>>map(pipe -> Patterns.match().<List<Object>>andReturn()
 										.when(List.class, l -> l)
 										.otherwise(() -> null)
 						)
@@ -170,11 +177,30 @@ public class EnrichmentWrapperService implements Serializable {
 	protected Wrapper _chain_start = null;
 	
 	//TODO: handle streaming case (includes map), different input to pipeline etc
+
+	//TODO: scala version of map/groupBy
 	
-	/** A transform/enrichment function that can be used in mapPartitions
+	/** A transform/enrichment function that can be used in mapPartitions (scala version)
 	 * @return
 	 */
-	public FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<Long, IBatchRecord>> inMapPartitions() {
+	public scala.Function1<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>> inMapPartitions() {
+		return JFunction.func(
+				it -> 
+				// (Alternative to above double function, might be faster, not sure if the cast will work)
+				//(JFunction1<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>>)
+					Lambdas.<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>>wrap_u(
+							it1 -> JavaConverters.asScalaIteratorConverter(this.javaInMapPartitions().call(JavaConverters.asJavaIteratorConverter(it1).asJava()).iterator()).asScala()
+					).apply(it));
+	}	
+	
+//	private Function<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>> semiScalaInMapPartitions() {
+//		return ;
+//	}
+	
+	/** A transform/enrichment function that can be used in mapPartitions (java version)
+	 * @return
+	 */
+	public FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<Long, IBatchRecord>> javaInMapPartitions() {
 		return it -> {			
 			_chain_start = new Wrapper(Streamable.of(_pipeline_elements), _DEFAULT_BATCH_SIZE, 
 									Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch)); //(unknown: could be input or previous stage in chain)
@@ -228,7 +254,7 @@ public class EnrichmentWrapperService implements Serializable {
 	 * @return
 	 */
 	public JavaRDD<Tuple2<Long, IBatchRecord>> map(JavaRDD<Tuple2<Long, IBatchRecord>> rdd) {
-		return rdd.mapPartitions(this.inMapPartitions());
+		return rdd.mapPartitions(this.javaInMapPartitions());
 	}
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
