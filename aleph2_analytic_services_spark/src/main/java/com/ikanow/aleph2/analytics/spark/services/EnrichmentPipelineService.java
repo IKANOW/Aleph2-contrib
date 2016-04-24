@@ -236,15 +236,11 @@ public class EnrichmentPipelineService implements Serializable {
 	
 	//TODO: other scala versions
 	
-	//TODO: scala stream (flatMap)
-	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	// JAVA VERSIONS
 	
 	//TODO: other scala versions
-	
-	//TODO: scala stream (flatMap)
 	
 	/** A transform/enrichment function that can be used in mapPartitions (java version)
 	 * @return
@@ -344,6 +340,8 @@ public class EnrichmentPipelineService implements Serializable {
 	
 	//TODO: log stats and record when batch completes 
 	
+	//TODO: validation in calling stack
+	
 	/** Utility class to handle a chained list of pipeline elements
 	 * @author Alex
 	 *
@@ -364,18 +362,18 @@ public class EnrichmentPipelineService implements Serializable {
 							final Tuple2<ProcessingStage, ProcessingStage> previous_next, final Optional<List<String>> next_grouping_fields)
 		{
 			final EnrichmentControlMetadataBean control = remaining_elements.stream().findFirst().get();			
-			_enrichment_context = _analytics_context.getUnderlyingPlatformDriver(IEnrichmentModuleContext.class, Optional.empty()).get();
-			_logger = Optional.ofNullable(_analytics_context.getLogger(Optional.empty()));
-			
 			_batch_size = Optional.ofNullable(control.technology_override().get(EnrichmentControlMetadataBean.BATCH_SIZE_OVERRIDE))
-									.map(o -> Patterns.match(o).<Integer>andReturn()
-												.when(Integer.class, __->__)
-												.when(Long.class, l->l.intValue())
-												.when(String.class, s -> Integer.parseInt(s))
-												.otherwise(() -> null)
-										)
-									.orElse(default_batch_size)
-									;
+					.map(o -> Patterns.match(o).<Integer>andReturn()
+								.when(Integer.class, __->__)
+								.when(Long.class, l->l.intValue())
+								.when(String.class, s -> Integer.parseInt(s))
+								.otherwise(() -> null)
+						)
+					.orElse(default_batch_size)
+					;
+
+			_enrichment_context = _analytics_context.getUnderlyingPlatformDriver(IEnrichmentModuleContext.class, Optional.of(Integer.toString(_batch_size))).get();
+			_logger = Optional.ofNullable(_analytics_context.getLogger(Optional.empty()));
 			
 			final Map<String, SharedLibraryBean> library_beans = _analytics_context.getLibraryConfigs();
 			final Optional<String> entryPoint = BucketUtils.getBatchEntryPoint(library_beans, control);
@@ -431,12 +429,14 @@ public class EnrichmentPipelineService implements Serializable {
 			if (last || (mutable_list.size() > _batch_size)) {
 				return Optionals.streamOf(Iterators.partition(mutable_list.iterator(), _batch_size), false).<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>flatMap(l -> {
 					
-					_batch_module.onObjectBatch(l.stream().map(t2 -> t2._1()), Optional.of(l.size()), grouping_key);
-					
-					_batch_module.onStageComplete(true); //(TODO also need to add support for this in batch enrichment)
 					@SuppressWarnings("unchecked")
 					final List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> stage_output = (List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>)
 							_enrichment_context.getUnderlyingPlatformDriver(List.class, Optional.empty()).get();
+					
+					stage_output.clear();
+					_batch_module.onObjectBatch(l.stream().map(t2 -> t2._1()), Optional.of(l.size()), grouping_key);
+					
+					_batch_module.onStageComplete(true); //TODO (ALEPH-62): (also need to add support for this in batch enrichment, though it's a fair bit of work)
 										
 					final Stream<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> ret_vals_int =  (null != _next)
 							? _next.process(stage_output, true, Optional.empty())
