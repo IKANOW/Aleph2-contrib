@@ -141,6 +141,7 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 			DataBucketBean new_analytic_bucket,
 			Collection<AnalyticThreadJobBean> jobs, IAnalyticsContext context,
 			boolean enabled) {
+		
 		return CompletableFuture.completedFuture(SparkTechnologyUtils.validateJobs(new_analytic_bucket, jobs));
 	}
 
@@ -153,6 +154,7 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 			DataBucketBean new_analytic_bucket,
 			Collection<AnalyticThreadJobBean> jobs, boolean is_enabled,
 			Optional<BucketDiffBean> diff, IAnalyticsContext context) {
+		
 		return CompletableFuture.completedFuture(SparkTechnologyUtils.validateJobs(new_analytic_bucket, jobs));
 	}
 

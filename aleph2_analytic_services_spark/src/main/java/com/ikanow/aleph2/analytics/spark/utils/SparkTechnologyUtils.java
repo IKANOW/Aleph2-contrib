@@ -524,6 +524,8 @@ public class SparkTechnologyUtils {
 	 */
 	public static BasicMessageBean validateJobs(final DataBucketBean new_analytic_bucket, final Collection<AnalyticThreadJobBean> jobs) {
 		
+		//TODO: validate batch enrichment				
+		
 		final LinkedList<String> mutable_errs = new LinkedList<>();
 		
 		jobs.stream().forEach(job -> {

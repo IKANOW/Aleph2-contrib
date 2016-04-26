@@ -283,6 +283,12 @@
 		            <version>4.12</version>
 		            <scope>test</scope>
 		        </dependency>
+				<dependency>
+					<groupId>org.mockito</groupId>
+					<artifactId>mockito-all</artifactId>
+					<version>1.9.5</version>
+					<scope>test</scope>
+				</dependency>		
 				<!-- Scala/Spark -->
 		        <dependency>
 		            <groupId>org.apache.spark</groupId>
@@ -327,6 +333,15 @@
 				</dependency>
 		        
 				<!-- Aleph2 -->
+				<!-- 
+				(can't include this or anything that includes akka because it causes akka mismatch problems...)
+				<dependency>
+					<groupId>com.ikanow.aleph2</groupId>
+					<artifactId>aleph2_analytics_context_library</artifactId>
+					<version>${aleph2.version}</version>
+					<scope>test</scope>
+				</dependency>
+				 -->
 				<!-- TODO -->
 				<!-- 
 				<dependency>
