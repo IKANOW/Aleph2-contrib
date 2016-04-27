@@ -157,7 +157,7 @@ public class HadoopTechnologyUtils {
 									.stream()
 									.forEach(dependency -> {
 										final String normalized_dep = Optional.ofNullable(dependency).orElse("");
-										if (!"$previous".equals(normalized_dep) && !"".equals(normalized_dep) && !reducer_steps.contains(normalized_dep)) {
+										if (!EnrichmentControlMetadataBean.PREVIOUS_STEP_DEPENDENCY.equals(normalized_dep) && !"".equals(normalized_dep) && !reducer_steps.contains(normalized_dep)) {
 											errors.add(ErrorUtils.get(HadoopErrorUtils.CURR_DEPENDENCY_RESTRICTIONS, normalized_dep, config.name(), analytic_bucket.full_name(), job.name()));																
 										}
 									});
