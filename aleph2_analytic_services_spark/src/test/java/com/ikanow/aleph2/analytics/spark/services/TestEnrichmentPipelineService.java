@@ -57,6 +57,7 @@ import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IUnderlyingService;
+import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_import.AnnotationBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataBucketStatusBean;
@@ -195,6 +196,17 @@ public class TestEnrichmentPipelineService {
 							.done().get()
 							);			
 			
+			final AnalyticThreadJobBean job = BeanTemplateUtils.build(AnalyticThreadJobBean.class)
+						.with(AnalyticThreadJobBean::config, 
+								new LinkedHashMap<>(
+										ImmutableMap.of(EnrichmentControlMetadataBean.ENRICHMENT_PIPELINE,
+												pipeline_elements.stream().map(b -> BeanTemplateUtils.toMap(b)).collect(Collectors.toList())
+												)
+										)
+								)
+					.done().get();			
+			Mockito.when(mock_analytics_context.getJob()).thenAnswer(new JobAnswer(job));
+			
 			// Actual test:
 			{
 				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, pipeline_elements);
@@ -230,7 +242,7 @@ public class TestEnrichmentPipelineService {
 			}
 			// Test with pre-group
 			{
-				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, pipeline_elements);
+				final EnrichmentPipelineService under_test = EnrichmentPipelineService.select(mock_analytics_context, "test1", "test2", "test3");
 
 				JavaRDD<Tuple2<Long, IBatchRecord>> test = _spark.parallelize(Arrays.asList(
 						_mapper.createObjectNode().put("id", "1").put("grouper", "A"),
@@ -306,9 +318,111 @@ public class TestEnrichmentPipelineService {
 								;
 				
 				assertEquals(10, out.count());							
+				// (the other counts have been performed sufficiently many times for code coverage safety at this point)
 				
 			}
-			//TODO: test with clone mode enabled
+			// As above but with clone mode enabled
+			{
+				final List<EnrichmentControlMetadataBean> cloning_pipeline_elements = 
+						Arrays.asList(
+								BeanTemplateUtils.build(EnrichmentControlMetadataBean.class)
+									.with(EnrichmentControlMetadataBean::name, "test1")
+									.with(EnrichmentControlMetadataBean::entry_point, TestEnrichmentModule.class.getName())								
+									.with(EnrichmentControlMetadataBean::technology_override, 
+											new LinkedHashMap<String, Object>(ImmutableMap.of(
+													"batch_size", "10"
+													))
+											)
+									.with(EnrichmentControlMetadataBean::config, 
+											new LinkedHashMap<String, Object>(ImmutableMap.of(
+													"append_field", "test1_field",
+													"stop_field", "test1_stop",
+													"clone_mode", true
+													))
+											)
+								.done().get()
+								,
+								pipeline_elements.get(1), pipeline_elements.get(2));
+				
+				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, cloning_pipeline_elements);
+
+				RDD<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>> test = 
+						_spark.parallelize(Arrays.asList(
+						_mapper.createObjectNode().put("id", "1").put("grouper", "A"),
+						_mapper.createObjectNode().put("id", "2").put("test1_stop", true).put("grouper", "A"),
+						_mapper.createObjectNode().put("id", "3").put("grouper", "A"),
+						_mapper.createObjectNode().put("id", "4").put("grouper", "B"),
+						_mapper.createObjectNode().put("id", "5").put("test2_stop", true).put("grouper", "B"),
+						_mapper.createObjectNode().put("id", "6").put("grouper", "B"),
+						_mapper.createObjectNode().put("id", "7").put("grouper", "C"),
+						_mapper.createObjectNode().put("id", "8").put("grouper", "C"),
+						_mapper.createObjectNode().put("id", "9").put("test3_stop", true).put("grouper", "D"), // (wont' get promoted)
+						_mapper.createObjectNode().put("id", "10").put("grouper", "D")
+						)
+						.stream()
+						.<Tuple2<Long, IBatchRecord>>
+							map(j -> Tuples._2T(0L, new BatchRecordUtils.JsonBatchRecord((JsonNode) j)))
+						.collect(Collectors.toList()))
+						.groupBy(t2 -> (IBatchRecord) new BatchRecordUtils.JsonBatchRecord(t2._2().getJson().get("grouper")))
+						.rdd()
+						;		
+
+				assertEquals(4, test.count());											
+				
+				JavaRDD<Tuple2<Long, IBatchRecord>> out = 
+						JavaRDD.fromRDD(
+								test.mapPartitions(under_test.inMapPartitionsPostGroup(), true, scala.reflect.ClassTag$.MODULE$.apply(Tuple2.class)),
+								scala.reflect.ClassTag$.MODULE$.apply(Tuple2.class))
+								;
+				
+				assertEquals(14, out.count());							
+				// (the other counts have been performed sufficiently many times for code coverage safety at this point)
+			}
+			// Finally, a combined pre-post group
+			{
+				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, pipeline_elements);
+
+				RDD<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>> test = 
+						_spark.parallelize(Arrays.asList(
+						_mapper.createObjectNode().put("id", "1").put("grouper", "A"),
+						_mapper.createObjectNode().put("id", "2").put("test1_stop", true).put("grouper", "A"),
+						_mapper.createObjectNode().put("id", "3").put("grouper", "A"),
+						_mapper.createObjectNode().put("id", "4").put("grouper", "B"),
+						_mapper.createObjectNode().put("id", "5").put("test2_stop", true).put("grouper", "B"),
+						_mapper.createObjectNode().put("id", "6").put("grouper", "B"),
+						_mapper.createObjectNode().put("id", "7").put("grouper", "C"),
+						_mapper.createObjectNode().put("id", "8").put("grouper", "C"),
+						_mapper.createObjectNode().put("id", "9").put("test3_stop", true).put("grouper", "D"), // (wont' get promoted)
+						_mapper.createObjectNode().put("id", "10").put("grouper", "D")
+						)
+						.stream()
+						.<Tuple2<Long, IBatchRecord>>
+							map(j -> Tuples._2T(0L, new BatchRecordUtils.JsonBatchRecord((JsonNode) j)))
+						.collect(Collectors.toList()))
+						.groupBy(t2 -> (IBatchRecord) new BatchRecordUtils.JsonBatchRecord(t2._2().getJson().get("grouper")))
+						.rdd()
+						;		
+				
+				JavaRDD<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>> out = 
+						JavaRDD.fromRDD(
+								test.mapPartitions(under_test.inMapPartitionsPrePostGroup("grouper"), true, scala.reflect.ClassTag$.MODULE$.apply(Tuple2.class)),
+								scala.reflect.ClassTag$.MODULE$.apply(Tuple2.class))
+								;
+						
+				//TRACE
+				//out.foreach(f -> System.out.println(f + " ... " + f._1()._2().getJson()));
+				
+				assertEquals(10, out.count());			
+				assertEquals(7, out.filter(t2 -> t2._2()._2().getJson().has("test1_field")).count()); // 7 objects that pass through and aren't filtered by any stages (not the appended 1)
+				assertEquals(8, out.filter(t2 -> t2._2()._2().getJson().has("test2_field")).count()); // 8 objects that pass through (7+1 from parent) and .. (not the appended 1)
+				assertEquals(9, out.filter(t2 -> t2._2()._2().getJson().has("test3_field")).count()); // 9 objects that pass through (8+1 from parent) and .. (not the appended 1)
+				assertEquals(3, out.filter(t2 -> t2._2()._2().getJson().has("appended")).count());
+				assertEquals(2, out.filter(t2 -> Optional.ofNullable(t2._1().getJson().get("grouper")).map(j -> j.asText()).map(s -> s.equals("A")).orElse(false)).count());
+				assertEquals(2, out.filter(t2 -> Optional.ofNullable(t2._1().getJson().get("grouper")).map(j -> j.asText()).map(s -> s.equals("B")).orElse(false)).count());
+				assertEquals(2, out.filter(t2 -> Optional.ofNullable(t2._1().getJson().get("grouper")).map(j -> j.asText()).map(s -> s.equals("C")).orElse(false)).count());
+				assertEquals(1, out.filter(t2 -> Optional.ofNullable(t2._1().getJson().get("grouper")).map(j -> j.asText()).map(s -> s.equals("D")).orElse(false)).count());
+				assertEquals(3, out.filter(t2 -> 0 == t2._1().getJson().size()).count()); // (the injected records)
+			}
 		}
 		
 	}
@@ -325,8 +439,23 @@ public class TestEnrichmentPipelineService {
 		String _stop_field;
 		String _name;
 		IEnrichmentModuleContext _context;
+		boolean _clone_mode;
 		
-		//TODO: boolean clone mode
+		/** System c'tor
+		 */
+		public TestEnrichmentModule() {}
+		
+		/** Copy c'tor
+		 * @param copy
+		 */
+		protected TestEnrichmentModule(TestEnrichmentModule copy) {
+			_append_field = copy._append_field;
+			_stop_field = copy._stop_field;
+			_context = copy._context;
+			_next_grouping_fields = copy._next_grouping_fields;
+			_name = copy._name;
+			_clone_mode = copy._clone_mode;
+		}
 		
 		/* (non-Javadoc)
 		 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule#onStageInitialize(com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext, com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean, com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean, scala.Tuple2, java.util.Optional)
@@ -342,6 +471,7 @@ public class TestEnrichmentPipelineService {
 			_context = context;
 			_next_grouping_fields = next_grouping_fields;
 			_name = control.name();
+			_clone_mode = Optional.ofNullable(control.config().get("clone_mode")).map(b -> (Boolean)b).orElse(false);
 		}
 
 		/* (non-Javadoc)
@@ -372,6 +502,19 @@ public class TestEnrichmentPipelineService {
 			// Send one extra object
 			final ObjectNode o = _mapper.createObjectNode().put("appended", _name);
 			_context.emitMutableObject(1000, o, Optional.empty(), Optional.empty());
+		}
+
+		/* (non-Javadoc)
+		 * @see com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModule#cloneForNewGrouping()
+		 */
+		@Override
+		public IEnrichmentBatchModule cloneForNewGrouping() {
+			if (_clone_mode) {
+				return new TestEnrichmentModule(this);
+			}
+			else {
+				return this;
+			}
 		}
 		
 	}
@@ -621,6 +764,23 @@ public class TestEnrichmentPipelineService {
 	
 	// Analytics context
 	
+	@SuppressWarnings("rawtypes")
+	public static class JobAnswer implements Answer, Serializable {
+		private static final long serialVersionUID = -3489108224499090639L;
+
+		final AnalyticThreadJobBean _job;
+		
+		JobAnswer(final AnalyticThreadJobBean job) { _job = job; }
+		
+		/* (non-Javadoc)
+		 * @see org.mockito.stubbing.Answer#answer(org.mockito.invocation.InvocationOnMock)
+		 */
+		@Override
+		public Object answer(InvocationOnMock invocation) throws Throwable {
+			return Optional.of(_job);
+		}
+		
+	}
 	@SuppressWarnings("rawtypes")
 	public static class ContextAnswer implements Answer, Serializable {
 		private static final long serialVersionUID = -3489108224499090639L;

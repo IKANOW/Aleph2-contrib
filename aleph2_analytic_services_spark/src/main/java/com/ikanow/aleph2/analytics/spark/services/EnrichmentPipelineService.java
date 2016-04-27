@@ -97,6 +97,9 @@ import scala.Tuple2;
 
 
 
+
+
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -123,6 +126,8 @@ import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
+
+import fj.Unit;
 
 /** A utility service that runs an Aleph2 enrichment service inside Spark
  * @author Alex
@@ -195,13 +200,7 @@ public class EnrichmentPipelineService implements Serializable {
 	 * @return
 	 */
 	public scala.Function1<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>> inMapPartitionsPreGroup(final String... names) {
-		return JFunction.<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>>func(
-				it -> 
-				// (Alternative to above double function, might be faster, not sure if the cast will work)
-				//(JFunction1<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>>)
-				Lambdas.<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>>wrap_u(
-							it1 -> JavaConverters.asScalaIteratorConverter(this.javaInMapPartitionsPreGroup(names).call(JavaConverters.asJavaIteratorConverter(it1).asJava()).iterator()).asScala()
-					).apply(it));
+		return inMapPartitionsPreGroup(Arrays.stream(names).collect(Collectors.toList()));
 	}	
 	
 	/** A transform/enrichment function that can be used in mapPartitions (scala version) immediately preceding a grouping operation
@@ -215,6 +214,28 @@ public class EnrichmentPipelineService implements Serializable {
 				//(JFunction1<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>>)
 					Lambdas.<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>>wrap_u(
 							it1 -> JavaConverters.asScalaIteratorConverter(this.javaInMapPartitionsPreGroup(grouping_fields).call(JavaConverters.asJavaIteratorConverter(it1).asJava()).iterator()).asScala()
+					).apply(it));
+	}	
+	
+	/** A transform/enrichment function that can be used in mapPartitions (java version) immediately following a grouping key operation and that itself groups
+	 * @param names - an ordered list of field names (dot notation), is used to create a grouping key (["?"] means the enrichment engine can pick whatever it wants)
+	 * @return
+	 */
+	public <T> scala.Function1<scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>> inMapPartitionsPrePostGroup(final String... names) {
+		return inMapPartitionsPrePostGroup(Arrays.stream(names).collect(Collectors.toList()));
+	}	
+	
+	/** A transform/enrichment function that can be used in mapPartitions (java version) immediately following a grouping key operation and that itself groups
+	 * @param grouping_fields - an ordered list of field names (dot notation), is used to create a grouping key (["?"] means the enrichment engine can pick whatever it wants)
+	 * @return
+	 */
+	public <T> scala.Function1<scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>> inMapPartitionsPrePostGroup(final List<String> grouping_fields) {
+		return JFunction.<scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>>func(
+				it -> 
+				// (Alternative to above double function, might be faster, not sure if the cast will work)
+				//(JFunction1<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>>)
+					Lambdas.<scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>>wrap_u(
+							it1 -> JavaConverters.asScalaIteratorConverter(this.javaInMapPartitionsPrePostGroup(grouping_fields).call(JavaConverters.asJavaIteratorConverter(it1).asJava()).iterator()).asScala()
 					).apply(it));
 	}	
 	
@@ -285,6 +306,32 @@ public class EnrichmentPipelineService implements Serializable {
 		};	
 	}
 
+	/** A transform/enrichment function that can be used in mapPartitions (java version) immediately preceding a grouping operation and where the data is being grouped
+	 * @param names - an ordered list of field names (dot notation), is used to create a grouping key (["?"] means the enrichment engine can pick whatever it wants)
+	 * @return
+	 */
+	public FlatMapFunction<Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>> javaInMapPartitionsPrePostGroup(final String... names) {
+		return javaInMapPartitionsPrePostGroup(Arrays.stream(names).collect(Collectors.toList()));
+	}
+	
+	/** A transform/enrichment function that can be used in mapPartitions (java version) immediately preceding a grouping operation and where the data is being grouped
+	 * @param grouping_fields - an ordered list of field names (dot notation), is used to create a grouping key (["?"] means the enrichment engine can pick whatever it wants)
+	 * @return
+	 */
+	public FlatMapFunction<Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>> javaInMapPartitionsPrePostGroup(final List<String> grouping_fields) {
+		return it -> {			
+			
+			// OK so we're inside a map partition so we might well have a number of keys handled inside this one method
+			// Note all objects are shared across all the "subsequent" enrichers
+
+			return applyPostgroup(Optional.of(grouping_fields), it)
+					.map(t2 -> Tuples._2T((IBatchRecord) new BatchRecordUtils.JsonBatchRecord(t2._2().orElse(_mapper.createObjectNode())), t2._1()))
+					::iterator
+					;			
+		};	
+	}
+	
+	
 	/** A transform/enrichment function that can be used in mapPartitions (java version) immediately following a grouping key operation
 	 * @return
 	 */
@@ -294,39 +341,42 @@ public class EnrichmentPipelineService implements Serializable {
 			// OK so we're inside a map partition so we might well have a number of keys handled inside this one method
 			// Note all objects are shared across all the "subsequent" enrichers
 
-			//TODO: hmm it's a bit nasty but the first enricher needs to get last separately			
-			// so it should be eg E1,E2: A:a,b,c, X:x -> E1(A),a,false, E1(A),b,false, E1(A),b,true, ...E2:c,*false*... E1(X),x,true, E2,x,true
-			// so have like last_in_group, last_group -> process
-			
-			return createStream(it).flatMap(key_objects__last -> {
-			
-				final Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>> key_objects = key_objects__last._1();
-				if (null == _chain_start) {
-					_chain_start = new Wrapper(Streamable.of(_pipeline_elements), _DEFAULT_BATCH_SIZE, 
-							Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch), Optional.empty()); //(unknown: could be input or previous stage in chain)
-				}
-				final Wrapper chain_start = _chain_start.cloneWrapper();
-	
-				/**/
-				//TRACE
-				System.out.println("Grouping ... " + key_objects._1().getJson() + " .. " + StreamUtils.stream(key_objects._2()).count() + ".. " + key_objects__last._2());
-				
-				final Stream<Tuple2<Long, IBatchRecord>> ret_val = createStream(key_objects._2().iterator())
-						.<Tuple2<Long, IBatchRecord>>flatMap(id_record__islast -> {
-	
-					/**/
-					//TRACE						
-					System.out.println("javaInMapPartitionsPostGroup: " + id_record__islast + ".. grouped by " + key_objects._1().getJson());
-							
-					return chain_start.process(addIncomingRecord(id_record__islast._1()), id_record__islast._2(), key_objects__last._2(), Optional.of(key_objects._1().getJson())).map(t2 -> t2._1());				
-				});
-				return ret_val;
-			})
-			::iterator
-			;
+			return applyPostgroup(Optional.empty(), it).map(t2 -> t2._1())
+					::iterator
+					;			
 		};	
 	}
 
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	// Shared functionality:
+	
+	protected Stream<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> applyPostgroup(final Optional<List<String>> maybe_grouping_fields, final Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>> it) {
+		return createStream(it).flatMap(key_objects__last -> {
+			
+			final Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>> key_objects = key_objects__last._1();
+			if (null == _chain_start) {
+				_chain_start = new Wrapper(Streamable.of(_pipeline_elements), _DEFAULT_BATCH_SIZE, 
+						Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch), maybe_grouping_fields); //(unknown: could be input or previous stage in chain)
+			}
+			final Wrapper chain_start = _chain_start.cloneWrapper();
+
+			//TRACE
+			//System.out.println("Grouping ... " + key_objects._1().getJson() + " .. " + StreamUtils.stream(key_objects._2()).count() + ".. " + key_objects__last._2());
+			
+			final Stream<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> ret_val = createStream(key_objects._2().iterator())
+					.<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>flatMap(id_record__islast -> {
+
+				//TRACE						
+				//System.out.println("javaInMapPartitionsPostGroup: " + id_record__islast + ".. grouped by " + key_objects._1().getJson());
+						
+				return chain_start.process(addIncomingRecord(id_record__islast._1()), id_record__islast._2(), key_objects__last._2(), Optional.of(key_objects._1().getJson()));
+			});
+			return ret_val;
+		})
+		;
+	}
+	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//
@@ -344,7 +394,7 @@ public class EnrichmentPipelineService implements Serializable {
 			aleph2_context.getJob()
 				.map(j -> j.config())
 				.map(cfg -> cfg.get(EnrichmentControlMetadataBean.ENRICHMENT_PIPELINE))
-				.<List<Object>>map(pipe -> Patterns.match().<List<Object>>andReturn()
+				.<List<Object>>map(pipe -> Patterns.match(pipe).<List<Object>>andReturn()
 									.when(List.class, l -> (List<Object>)l)
 									.otherwise(() -> (List<Object>)null)
 					)
@@ -397,13 +447,14 @@ public class EnrichmentPipelineService implements Serializable {
 	protected class Wrapper {
 		final protected Wrapper _next;
 		final protected int _batch_size;
-		protected List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> _variable_list = new LinkedList<>();		
 		final protected IEnrichmentBatchModule _batch_module;
 		final protected IEnrichmentModuleContext _enrichment_context;	
 		final protected EnrichmentControlMetadataBean _control;
 		final protected Optional<IBucketLogger> _logger;
+		final protected IEnrichmentBatchModule _clone_of;
+		
+		protected List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> _variable_list = new LinkedList<>();		
 		protected Wrapper _variable_clone_cache = null;
-		final IEnrichmentBatchModule _clone_of;
 		
 		protected class MutableStats {
 			int in = 0;
@@ -421,6 +472,8 @@ public class EnrichmentPipelineService implements Serializable {
 		protected Wrapper(final Streamable<EnrichmentControlMetadataBean> remaining_elements, final int default_batch_size, 
 							final Tuple2<ProcessingStage, ProcessingStage> previous_next, final Optional<List<String>> next_grouping_fields)
 		{
+			// Set up state
+			
 			_clone_of = null;
 			_control = remaining_elements.stream().findFirst().get();			
 			_batch_size = Optional.ofNullable(_control.technology_override().get(EnrichmentControlMetadataBean.BATCH_SIZE_OVERRIDE))
@@ -459,6 +512,8 @@ public class EnrichmentPipelineService implements Serializable {
 			;
 
 			final boolean is_final_stage = !remaining_elements.skip(1).stream().findFirst().isPresent();
+			
+			// Initalize stage:
 			
 			_batch_module.onStageInitialize(_enrichment_context, _analytics_context.getBucket().get(), _control,  
 											Tuples._2T(previous_next._1(), is_final_stage ? ProcessingStage.unknown : previous_next._2()),
@@ -528,81 +583,96 @@ public class EnrichmentPipelineService implements Serializable {
 		 */
 		@SuppressWarnings("unchecked")
 		public Stream<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> process(final List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> list, boolean parent_last_in_group, boolean last_group, Optional<JsonNode> grouping_key) {
-			//TODO: errr what clears mutable list?!
 			_variable_list.addAll(list);
 			if (parent_last_in_group || (_variable_list.size() > _batch_size)) {
 				try {
 					return createStream(Iterators.partition(_variable_list.iterator(), _batch_size)).flatMap(l_last -> {
 						final boolean this_last = parent_last_in_group && l_last._2(); // (ie last dump of objects (in group if grouped) *and* final batch)
 						
-						/**/
-						System.out.println("??? BATCH");						
-						
-						final List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> stage_output = (List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>)
-								_enrichment_context.getUnderlyingPlatformDriver(List.class, Optional.empty()).get();
-						
-						stage_output.clear();
-						_batch_module.onObjectBatch(l_last._1().stream().map(t2 -> t2._1()), Optional.of(l_last._1().size()), grouping_key);
-						
-						/**/
-						//TRACE
-						System.out.println("?? onObjectBatch: " + _control.name() + ": " + stage_output.size() + "... " + l_last._1().size() + " ..." + l_last._2());
-						
-						if ((null != _clone_of) && (_clone_of != _batch_module)) { // if this is a grouped record with cloning enabled then do a little differently
-							if (this_last) _batch_module.onStageComplete(false);
-							if (this_last && last_group) _clone_of.onStageComplete(true);
+						// Apply batch object:
+						final Function<fj.Unit, List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>> applyObjectBatch = __ -> {
+							final List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> stage_output = (List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>)
+									_enrichment_context.getUnderlyingPlatformDriver(List.class, Optional.empty()).get();
 							
-							/**/
-							//TRACE
-							System.out.println("?? onStageComplete: " + _control.name() + ": " + stage_output.size());						
-						}
-						else if (this_last && last_group) {
-							_batch_module.onStageComplete(true); 
+							stage_output.clear();
+							_batch_module.onObjectBatch(l_last._1().stream().map(t2 -> t2._1()), Optional.of(l_last._1().size()), grouping_key);
 							
-							/**/
 							//TRACE
-							System.out.println("?? onStageComplete: " + _control.name() + ": " + stage_output.size());
-						}
+							//System.out.println("?? onObjectBatch: " + _control.name() + ": " + stage_output.size() + "... " + l_last._1().size() + " ..." + l_last._2());
+
+							return stage_output;
+						};			
 						
-						final int batch_in = l_last._1().size();
-						final int batch_out = stage_output.size();
+						// Complete stage if needed
+						final Function<List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>, List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>> applyStageComplete = out -> {
 						
-						_stats.in += batch_in;
-						_stats.out += batch_out;
-						
-						_logger.ifPresent(log -> log.log(Level.TRACE, 						
-								ErrorUtils.lazyBuildMessage(true, () -> "EnrichmentPipelineService", 
-										() -> Optional.ofNullable(_control.name()).orElse("no_name") + ".onObjectBatch", 
-										() -> null, 
-										() -> ErrorUtils.get("New batch stage {0} task={1} in={2} out={3} cumul_in={4}, cumul_out={5}", 
-												Optional.ofNullable(_control.name()).orElse("(no name)"),  UUID, Integer.toString(batch_in), Integer.toString(batch_out), Integer.toString(_stats.in),  Integer.toString(_stats.out)),
-										() -> null)
-										));			
-						
-						if (this_last) {
-							_logger.ifPresent(log -> log.log(Level.INFO, 						
-									ErrorUtils.lazyBuildMessage(true, () -> "EnrichmentPipelineService", 
-											() -> Optional.ofNullable(_control.name()).orElse("no_name") + ".onStageComplete", 
-											() -> null, 
-											() -> ErrorUtils.get("Completed stage {0} task={1} in={2} out={3}", 
-													Optional.ofNullable(_control.name()).orElse("(no name)"),  UUID, Integer.toString(_stats.in),  Integer.toString(_stats.out)),
-											() -> _mapper.convertValue(_stats, Map.class))
-											));
-						}
-						
-						final Stream<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> ret_vals_int =  (null != _next)
-								? _next.process(stage_output, this_last, last_group, Optional.empty())
-								: new ArrayList<>(stage_output).stream() // (need to copy here since stage_output is mutable)
-								;
+							if ((null != _clone_of) && (_clone_of != _batch_module)) { // if this is a grouped record with cloning enabled then do a little differently
+								if (this_last) _batch_module.onStageComplete(false);
+								if (this_last && last_group) _clone_of.onStageComplete(true);
 								
-						return ret_vals_int;
+								//TRACE
+								//System.out.println("?? onStageComplete: " + _control.name() + ": " + stage_output.size());						
+							}
+							else if (this_last && last_group) {
+								_batch_module.onStageComplete(true); 
+								
+								//TRACE
+								//System.out.println("?? onStageComplete: " + _control.name() + ": " + stage_output.size());
+							}
+							return out;
+						};
+
+						// Update statistics
+						final Function<List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>, List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>> applyUpdateStatistics = out -> {
+							
+							final int batch_in = l_last._1().size();
+							final int batch_out = out.size();
+							
+							_stats.in += batch_in;
+							_stats.out += batch_out;
+							
+							_logger.ifPresent(log -> log.log(Level.TRACE, 						
+									ErrorUtils.lazyBuildMessage(true, () -> "EnrichmentPipelineService", 
+											() -> Optional.ofNullable(_control.name()).orElse("no_name") + ".onObjectBatch", 
+											() -> null, 
+											() -> ErrorUtils.get("New batch stage {0} task={1} in={2} out={3} cumul_in={4}, cumul_out={5}", 
+													Optional.ofNullable(_control.name()).orElse("(no name)"),  UUID, Integer.toString(batch_in), Integer.toString(batch_out), Integer.toString(_stats.in),  Integer.toString(_stats.out)),
+											() -> null)
+											));			
+							
+							if (this_last) {
+								_logger.ifPresent(log -> log.log(Level.INFO, 						
+										ErrorUtils.lazyBuildMessage(true, () -> "EnrichmentPipelineService", 
+												() -> Optional.ofNullable(_control.name()).orElse("no_name") + ".onStageComplete", 
+												() -> null, 
+												() -> ErrorUtils.get("Completed stage {0} task={1} in={2} out={3}", 
+														Optional.ofNullable(_control.name()).orElse("(no name)"),  UUID, Integer.toString(_stats.in),  Integer.toString(_stats.out)),
+												() -> _mapper.convertValue(_stats, Map.class))
+												));
+							}
+							return out;
+						};
+						
+						// Pipeline:
+						return applyObjectBatch
+								.andThen(applyStageComplete)
+								.andThen(applyUpdateStatistics)
+								.andThen(out -> {
+									final Stream<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>> ret_vals_int =  (null != _next)
+											? _next.process(out, this_last, last_group, Optional.empty())
+											: new ArrayList<>(out).stream() // (need to copy here since stage_output is mutable)
+											;
+											
+									return ret_vals_int;									
+								})
+								.apply(Unit.unit())
+								;						
 					})
 					;
 				}
 				finally {
-					/**/
-					//TODO: ugh ugh ugh the stream isn't evaluated until after this has run because it's a stream .. I think this _mutable_ list needs to be a variable list
-					System.out.println("??? CLEAR " + parent_last_in_group + "... " + _variable_list.size());
+					//TRACE
+					//System.out.println("Clear " + parent_last_in_group + "... " + _variable_list.size());
 					
 					_variable_list = new LinkedList<>();										
 				}
