@@ -96,6 +96,11 @@
 		<scope>${aleph2.scope}</scope>  		  		
   	</dependency>
   	<dependency>
+  		<groupId>org.elasticsearch</groupId>
+  		<artifactId>elasticsearch</artifactId>
+  		<version>2.3.1</version>
+  	</dependency>
+  	<dependency>
   		<groupId>org.apache.metamodel</groupId>
   		<artifactId>MetaModel-elasticsearch</artifactId>
   		<version>4.3.3</version>
