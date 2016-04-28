@@ -116,6 +116,7 @@ public class TestPassthroughTopology extends TestPassthroughBase {
 		// 4b: write to kafka
 		
 		final String topic_name = cds.generateTopicName(test_bucket.full_name(), Optional.empty());
+		Iterator<String> consumer = cds.consumeAs(end_queue_topic, Optional.empty());
 		cds.produce(topic_name, "{\"test\":\"test1\"}");
 		_logger.info("******** Written to CDS: " + topic_name);
 		
@@ -135,8 +136,7 @@ public class TestPassthroughTopology extends TestPassthroughBase {
 		assertEquals("Object should be test:test1", 1L, crud_service.countObjectsBySpec(CrudUtils.allOf().when("test", "test1")).get().intValue());		
 		
 		// 5b: check kafka queue
-		
-		Iterator<String> consumer = cds.consumeAs(end_queue_topic, Optional.empty());
+		Thread.sleep(5000); //wait for producers to dump batch
 		int message_count = 0;
 		//read the item off the queue
 		while ( consumer.hasNext() ) {
