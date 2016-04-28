@@ -32,8 +32,10 @@ import java.util.stream.StreamSupport;
 
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
+import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
+import org.elasticsearch.common.xcontent.XContentParser;
 
 import scala.Tuple2;
 import scala.Tuple3;
@@ -162,12 +164,12 @@ public class ElasticsearchIndexUtils {
 		return Arrays.<Object>stream( 						
 		client.admin().cluster().prepareState()
 				.setIndices(index_list)
-				.setRoutingTable(false).setNodes(false).setListenerThreaded(false).get().getState()
+				.setRoutingTable(false).setNodes(false).get().getState()
 				.getMetaData().getIndices().values().toArray()
 			)
 			.map(obj -> (IndexMetaData)obj)
 			.collect(Collector.of(LinkedHashMultimap::create, 
-					(acc, v) -> Optionals.streamOf(v.getMappings().keysIt(), false).filter(t -> !t.equals("_default_")).forEach(t -> acc.put(v.index(), t)),
+					(acc, v) -> Optionals.streamOf(v.getMappings().keysIt(), false).filter(t -> !t.equals("_default_")).forEach(t -> acc.put(v.getIndex(), t)),
 					(acc1, acc2) -> { acc1.putAll(acc2); return acc1; }));
 	}
 	
@@ -781,14 +783,14 @@ public class ElasticsearchIndexUtils {
 												doc_schema.map(ds -> 
 													Optionals.streamOf(ds.fields(), false)
 														.reduce(props,
-																Lambdas.wrap_u((acc, kv) -> acc.rawField(kv.getKey(), kv.getValue().toString().getBytes())),
+																Lambdas.wrap_u((acc, kv) -> acc.rawField(kv.getKey(), new BytesArray(kv.getValue().toString()))),
 																(acc1, acc2) -> acc1 // shouldn't be possible
 																)
 												)
 										.orElse(props))
 										.get()
 								, 
-								Lambdas.wrap_u((acc, t2) -> acc.rawField(t2._1().left().value(), t2._2().toString().getBytes())), // (left by construction) 
+								Lambdas.wrap_u((acc, t2) -> acc.rawField(t2._1().left().value(),  new BytesArray(t2._2().toString()))), // (left by construction) 
 								(acc1, acc2) -> acc1) // (not actually possible)
 							.endObject();
 
@@ -800,7 +802,7 @@ public class ElasticsearchIndexUtils {
 					.reduce(
 							properties.startArray("dynamic_templates"),
 							Lambdas.wrap_u((acc, t2) -> acc.startObject()
-															.rawField(getFieldNameFromMatchPair(t2._1().right().value()), t2._2().toString().getBytes()) // (right by construction)
+															.rawField(getFieldNameFromMatchPair(t2._1().right().value()), new BytesArray(t2._2().toString())) // (right by construction)
 														.endObject()),  						
 							(acc1, acc2) -> acc1) // (not actually possible)
 					.endArray();
@@ -1040,7 +1042,6 @@ public class ElasticsearchIndexUtils {
 											.map(s -> s.aliases())
 											.map(o -> mapper.convertValue(o, JsonNode.class))
 											.orElse(mapper.createObjectNode());
-			
 			if (is_primary) { // add the "read only" prefix alias
 				aliases.set(ElasticsearchContext.READ_PREFIX + ElasticsearchIndexUtils.getBaseIndexName(bucket, Optional.empty()), mapper.createObjectNode());
 			}
@@ -1054,7 +1055,7 @@ public class ElasticsearchIndexUtils {
 					return start;
 				}
 				else {
-					return start.rawField("settings", settings.toString().getBytes());
+					return start.rawField("settings", new BytesArray(settings.toString()));
 				}
 			})
 			// Aliases
@@ -1063,14 +1064,14 @@ public class ElasticsearchIndexUtils {
 					return json;
 				}
 				else {
-					return start.rawField("aliases", aliases.toString().getBytes());
+					return start.rawField("aliases", new BytesArray(aliases.toString()));
 				}
 			}))
 			// Mappings and overrides
 			.andThen(Lambdas.wrap_u(json -> json.startObject("mappings").startObject(type_key)))
 			// Add the secondary buffer name to the metadata:
 			.andThen(Lambdas.wrap_u(json -> {				
-				return json.rawField(CUSTOM_META, createMergedMeta(Either.right(mapper), bucket, is_primary, secondary_buffer).toString().getBytes())
+				return json.rawField(CUSTOM_META, new BytesArray(createMergedMeta(Either.right(mapper), bucket, is_primary, secondary_buffer).toString()))
 						;
 			}))
 			// More mapping overrides
@@ -1086,12 +1087,12 @@ public class ElasticsearchIndexUtils {
 											(acc, kv) -> {
 												if (CUSTOM_META.equals(kv.getKey())) { // meta is a special case, merge my results in regardless
 													return acc.rawField(kv.getKey(), 
-															createMergedMeta(Either.left(mapper.convertValue(kv.getValue(), JsonNode.class)), 
-																				bucket, is_primary, secondary_buffer).toString().getBytes())
+															new BytesArray(createMergedMeta(Either.left(mapper.convertValue(kv.getValue(), JsonNode.class)), 
+																				bucket, is_primary, secondary_buffer).toString()))
 													;
 												}
 												else {
-													return acc.rawField(kv.getKey(), mapper.convertValue(kv.getValue(), JsonNode.class).toString().getBytes());
+													return acc.rawField(kv.getKey(), new BytesArray(mapper.convertValue(kv.getValue(), JsonNode.class).toString()));
 												}
 											}), 
 									(acc1, acc2) -> acc1 // (can't actually ever happen)

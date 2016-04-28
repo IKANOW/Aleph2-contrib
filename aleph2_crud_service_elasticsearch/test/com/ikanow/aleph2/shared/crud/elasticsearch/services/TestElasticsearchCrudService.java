@@ -48,7 +48,7 @@ import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexRequest.OpType;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.common.settings.ImmutableSettings;
+import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.node.NodeBuilder;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -157,7 +157,7 @@ public class TestElasticsearchCrudService {
 		if (create_index) {
 			_factory.getClient().admin().indices().prepareCreate(test_name)
 				// (leave this at its default of 1 - that's what happens if the index gets auto-created unless there's a template mapping which is beyond the scope of this)
-				//.setSettings(ImmutableSettings.builder().put("index.number_of_shards", 2).build())
+				//.setSettings(Settings.builder().put("index.number_of_shards", 2).build())
 			.execute().actionGet();
 			//(Wait for above operation to be completed)
 			_factory.getClient().admin().cluster().health(new ClusterHealthRequest(test_name).waitForYellowStatus()).actionGet();
@@ -1676,11 +1676,11 @@ public class TestElasticsearchCrudService {
 			//(for some reason prepareGetAliases didn't work, but this does)
 			ClusterStateResponse csr = service._state.client.admin().cluster().prepareState()
 			.setIndices("test_checkmaxindexsize*")
-			.setRoutingTable(false).setNodes(false).setListenerThreaded(false).get();
-			assertEquals(1, csr.getState().getMetaData().aliases().size());
-			assertTrue("Found an alias for test_checkmaxindexsize", null != csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize"));
-			assertEquals(1, csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize").size());
-			assertEquals("test_checkmaxindexsize", csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize").keysIt().next());
+			.setRoutingTable(false).setNodes(false).get();
+			assertEquals(1, csr.getState().getMetaData().findAliases(new String[]{"*"}, new String[]{"*"}).size());
+			assertTrue("Found an alias for test_checkmaxindexsize", null != csr.getState().getMetaData().findAliases(new String[]{"r__test_checkmaxindexsize"}, new String[]{"test_checkmaxindexsize*"}));
+			assertEquals(1, csr.getState().getMetaData().findAliases(new String[]{"r__test_checkmaxindexsize"}, new String[]{"test_checkmaxindexsize*"}).size());
+			assertEquals("test_checkmaxindexsize", csr.getState().getMetaData().findAliases(new String[]{"r__test_checkmaxindexsize"}, new String[]{"test_checkmaxindexsize*"}).keysIt().next());
 			
 			final TestBean test = new TestBean();
 			test._id = "_id_3";
@@ -1756,11 +1756,11 @@ public class TestElasticsearchCrudService {
 		Thread.sleep(3000L);
 		ClusterStateResponse csr = service._state.client.admin().cluster().prepareState()
 		.setIndices("test_checkmaxindexsize*")
-		.setRoutingTable(false).setNodes(false).setListenerThreaded(false).get();
-		assertEquals(1, csr.getState().getMetaData().aliases().size());
-		assertTrue("Found an alias for test_checkmaxindexsize", null != csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize"));
-		assertEquals(2, csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize").size());
-		assertEquals("test_checkmaxindexsize:test_checkmaxindexsize_1", StreamSupport.stream(csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize").keys().spliterator(), false).map(x -> x.value).sorted().collect(Collectors.joining(":")));
+		.setRoutingTable(false).setNodes(false).get();
+		assertEquals(1, csr.getState().getMetaData().findAliases(new String[]{"*"}, new String[]{"*"}).size());
+		assertTrue("Found an alias for test_checkmaxindexsize", null != csr.getState().getMetaData().findAliases(new String[]{"r__test_checkmaxindexsize"}, new String[]{"*"}));
+		assertEquals(2, csr.getState().getMetaData().findAliases(new String[]{"r__test_checkmaxindexsize"}, new String[]{"*"}).size());
+		assertEquals("test_checkmaxindexsize:test_checkmaxindexsize_1", StreamSupport.stream(csr.getState().getMetaData().findAliases(new String[]{"r__test_checkmaxindexsize"}, new String[]{"*"}).keys().spliterator(), false).map(x -> x.value).sorted().collect(Collectors.joining(":")));
 		
 		// 7) Check that delete datastore removes all the indexes in the context
 		
@@ -1805,11 +1805,11 @@ public class TestElasticsearchCrudService {
 		//(for some reason prepareGetAliases didn't work, but this does)
 		ClusterStateResponse csr = service._state.client.admin().cluster().prepareState()
 		.setIndices("test_checkmaxindexsize_unlimitedindex*")
-		.setRoutingTable(false).setNodes(false).setListenerThreaded(false).get();
-		assertEquals(1, csr.getState().getMetaData().aliases().size());
-		assertTrue("Found an alias for test_checkmaxindexsize_unlimitedindex", null != csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize_unlimitedindex"));
-		assertEquals(1, csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize_unlimitedindex").size());
-		assertEquals("test_checkmaxindexsize_unlimitedindex", csr.getState().getMetaData().getAliases().get("r__test_checkmaxindexsize_unlimitedindex").keysIt().next());
+		.setRoutingTable(false).setNodes(false).get();
+		assertEquals(1, csr.getState().getMetaData().findAliases(new String[]{"*"}, new String[]{"*"}).size());
+		assertTrue("Found an alias for test_checkmaxindexsize_unlimitedindex", null != csr.getState().getMetaData().findAliases(new String[]{"r__test_checkmaxindexsize_unlimitedindex"}, new String[]{"*"}).get("r__test_checkmaxindexsize_unlimitedindex"));
+		assertEquals(1, csr.getState().getMetaData().findAliases(new String[]{"r__test_checkmaxindexsize_unlimitedindex"}, new String[]{"*"}).size());
+		assertEquals("test_checkmaxindexsize_unlimitedindex", csr.getState().getMetaData().findAliases(new String[]{"r__test_checkmaxindexsize_unlimitedindex"}, new String[]{"*"}).keysIt().next());
 		
 		// 2) Add another object, check that it adds it to the same index
 		{

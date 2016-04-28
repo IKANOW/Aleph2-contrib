@@ -51,9 +51,9 @@ import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesResp
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.metadata.IndexTemplateMetaData;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
-import org.elasticsearch.common.settings.ImmutableSettings;
+import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.indices.IndexMissingException;
+import org.elasticsearch.index.IndexNotFoundException;
 
 import scala.Tuple2;
 import scala.Tuple3;
@@ -216,7 +216,7 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 		final JsonNode new_json_mappings = Optional.ofNullable(new_mapping.get("mappings")).orElse(mapper.createObjectNode());
 		
 		final JsonNode stored_json_settings = mapper.convertValue(
-												Optional.ofNullable(stored_mapping.settings()).orElse(ImmutableSettings.settingsBuilder().build())
+												Optional.ofNullable(stored_mapping.settings()).orElse(Settings.settingsBuilder().build())
 													.getAsMap(), JsonNode.class);
 
 		final JsonNode new_json_settings = Optional.ofNullable(new_mapping.get("settings")).orElse(mapper.createObjectNode());
@@ -583,7 +583,7 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 									ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", "Bucket {0} Added {1} Removed {2}", bucket.full_name(), secondary_buffer, curr_primary.orElse("(none)"))
 								,
 								(t, cf) -> { // Error handler - mainly need to handle the case where the remove global didn't exist
-									if (!indexes.isEmpty() && (t instanceof IndexMissingException)) { // This is probably because the "to be deleted" glob didn't exist
+									if (!indexes.isEmpty() && (t instanceof IndexNotFoundException)) { // This is probably because the "to be deleted" glob didn't exist
 										final IndicesAliasesRequestBuilder iarb2 = _crud_factory.getClient().admin().indices().prepareAliases();
 										
 										indexes.stream()  //(NOTE: repeated above, need to sync changes)
@@ -609,7 +609,7 @@ public class ElasticsearchIndexService implements IDataWarehouseService, ISearch
 										cf.completeExceptionally(t);
 								})
 								.exceptionally(t -> 
-									(t instanceof IndexMissingException)
+									(t instanceof IndexNotFoundException)
 										? ErrorUtils.buildSuccessMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", "Bucket {0} Added {1} Removed {2} (no indexes to switch)", bucket.full_name(), secondary_buffer, curr_primary.orElse("(none)"))
 										: ErrorUtils.buildErrorMessage("ElasticsearchDataService", "switchCrudServiceToPrimaryBuffer", ErrorUtils.getLongForm("Unknown error bucket {1}: {0}", t, bucket.full_name()))											
 								)

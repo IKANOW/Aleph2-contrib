@@ -26,12 +26,13 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import org.elasticsearch.action.search.SearchRequestBuilder;
-import org.elasticsearch.index.query.FilterBuilder;
-import org.elasticsearch.index.query.FilterBuilders;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 
 import scala.Tuple2;
 
+import com.codepoetics.protonpack.StreamUtils;
 import com.google.common.collect.LinkedHashMultimap;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
@@ -65,7 +66,7 @@ public class ElasticsearchUtils {
 	 * @param id_ranges_ok - true if the _id is indexed, enables range queries on _ids, false - if not, only all/single-term queries supported
 	 * @return a tuple2, first element is the query, second element contains the meta ("$skip", "$limit")
 	 */
-	public static <T> Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> convertToElasticsearchFilter(final QueryComponent<T> query_in) {
+	public static <T> Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> convertToElasticsearchFilter(final QueryComponent<T> query_in) {
 		return convertToElasticsearchFilter(query_in, false);
 	}
 	
@@ -75,15 +76,15 @@ public class ElasticsearchUtils {
 	 * @return a tuple2, first element is the query, second element contains the meta ("$skip", "$limit")
 	 */
 	@SuppressWarnings("unchecked")
-	public static <T> Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> convertToElasticsearchFilter(final QueryComponent<T> query_in, boolean id_ranges_ok) {
+	public static <T> Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> convertToElasticsearchFilter(final QueryComponent<T> query_in, boolean id_ranges_ok) {
 		
-		final Function<List<FilterBuilder>, FilterBuilder> andVsOr = getMultiOperator(query_in.getOp());
+		final Function<List<QueryBuilder>, QueryBuilder> andVsOr = getMultiOperator(query_in.getOp());
 		
-		final FilterBuilder query_out = Patterns.match(query_in)
-				.<FilterBuilder>andReturn()
+		final QueryBuilder query_out = Patterns.match(query_in)
+				.<QueryBuilder>andReturn()
 					.when((Class<SingleQueryComponent<T>>)(Class<?>)SingleQueryComponent.class, q -> convertToElasticsearchFilter_single(andVsOr, q, id_ranges_ok))
 					.when((Class<MultiQueryComponent<T>>)(Class<?>)MultiQueryComponent.class, q -> convertToElasticsearchFilter_multi(andVsOr, q, id_ranges_ok))
-					.otherwise(() -> FilterBuilders.matchAllFilter());
+					.otherwise(() -> QueryBuilders.matchAllQuery());
 		
 		// Meta commands
 
@@ -118,37 +119,37 @@ public class ElasticsearchUtils {
 	 * @param operator_args - an operator enum and a pair of objects whose context depends on the operator
 	 * @return the MongoDB clause
 	 */
-	protected static FilterBuilder operatorToFilter(final String field, final Tuple2<Operator, Tuple2<Object, Object>> operator_args, boolean id_ranges_ok) {
+	protected static QueryBuilder operatorToFilter(final String field, final Tuple2<Operator, Tuple2<Object, Object>> operator_args, boolean id_ranges_ok) {
 		
-		return Patterns.match(operator_args).<FilterBuilder>andReturn()
+		return Patterns.match(operator_args).<QueryBuilder>andReturn()
 
 				//(es - handle _ids/_types differently)
 				.when(op_args -> field.equals(JsonUtils._ID) && Operator.exists == op_args._1(), op_args -> { throw new RuntimeException(ErrorUtils.EXISTS_ON_IDS); })				
 				.when(op_args -> field.equals("_type") && Operator.exists == op_args._1(), op_args -> { throw new RuntimeException(ErrorUtils.EXISTS_ON_TYPES); })				
 				
 				.when(op_args -> Operator.exists == op_args._1(), op_args -> {
-					final FilterBuilder exists = FilterBuilders.existsFilter(field);
-					return objToBool(op_args._2()._1()) ? exists : FilterBuilders.notFilter(exists);
+					final QueryBuilder exists = QueryBuilders.existsQuery(field);
+					return objToBool(op_args._2()._1()) ? exists : QueryBuilders.notQuery(exists);
 				})
 
 				//(es - handle _ids/_types differently)
 				.when(op_args -> field.equals(JsonUtils._ID) && (Operator.any_of == op_args._1()), op_args -> 
-					FilterBuilders.idsFilter().addIds(StreamSupport.stream(((Iterable<?>)op_args._2()._1()).spliterator(), false).map(x -> x.toString()).collect(Collectors.toList()).toArray(new String[0])))										
+					QueryBuilders.idsQuery().addIds(StreamSupport.stream(((Iterable<?>)op_args._2()._1()).spliterator(), false).map(x -> x.toString()).collect(Collectors.toList()).toArray(new String[0])))										
 				.when(op_args -> field.equals(JsonUtils._ID) && (Operator.all_of == op_args._1()), __ -> { throw new RuntimeException(ErrorUtils.ALL_OF_ON_IDS); }) 				
 				.when(op_args -> field.equals("_type") && (Operator.any_of == op_args._1()), __ -> { throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "any_of/_type")); })
 				.when(op_args -> field.equals("_type") && (Operator.all_of == op_args._1()), __ -> { throw new RuntimeException(ErrorUtils.ALL_OF_ON_TYPES); }) 				
 				
-				.when(op_args -> (Operator.any_of == op_args._1()), op_args -> FilterBuilders.termsFilter(field, (Iterable<?>)op_args._2()._1()).execution("or"))
-				.when(op_args -> (Operator.all_of == op_args._1()), op_args -> FilterBuilders.termsFilter(field, (Iterable<?>)op_args._2()._1()).execution("and")) 
+				.when(op_args -> (Operator.any_of == op_args._1()), op_args -> QueryBuilders.termsQuery(field, (Iterable<?>)op_args._2()._1()))
+				.when(op_args -> (Operator.all_of == op_args._1()), op_args -> StreamUtils.stream((Iterable<?>)op_args._2()._1()).reduce(QueryBuilders.boolQuery(), (acc, v) -> acc.must(QueryBuilders.termQuery(field, v)), (a1, a2)->a1) )
 
 				//(es - handle _ids/_types differently)
-				.when(op_args -> field.equals(JsonUtils._ID) && (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> FilterBuilders.notFilter(FilterBuilders.idsFilter().addIds(op_args._2()._2().toString())) )
-				.when(op_args -> field.equals(JsonUtils._ID) && (Operator.equals == op_args._1()), op_args -> FilterBuilders.idsFilter().addIds(op_args._2()._1().toString()) )				
-				.when(op_args -> field.equals("_type") && (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> FilterBuilders.notFilter(FilterBuilders.typeFilter(op_args._2()._2().toString())) )
-				.when(op_args -> field.equals("_type") && (Operator.equals == op_args._1()), op_args -> FilterBuilders.typeFilter(op_args._2()._1().toString()) )				
+				.when(op_args -> field.equals(JsonUtils._ID) && (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> QueryBuilders.notQuery(QueryBuilders.idsQuery().addIds(op_args._2()._2().toString())) )
+				.when(op_args -> field.equals(JsonUtils._ID) && (Operator.equals == op_args._1()), op_args -> QueryBuilders.idsQuery().addIds(op_args._2()._1().toString()) )				
+				.when(op_args -> field.equals("_type") && (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> QueryBuilders.notQuery(QueryBuilders.typeQuery(op_args._2()._2().toString())) )
+				.when(op_args -> field.equals("_type") && (Operator.equals == op_args._1()), op_args -> QueryBuilders.typeQuery(op_args._2()._1().toString()) )				
 				
-				.when(op_args -> (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> FilterBuilders.notFilter(FilterBuilders.termFilter(field, op_args._2()._2())) )
-				.when(op_args -> (Operator.equals == op_args._1()), op_args -> FilterBuilders.termFilter(field, op_args._2()._1()) )
+				.when(op_args -> (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> QueryBuilders.notQuery(QueryBuilders.termQuery(field, op_args._2()._2())) )
+				.when(op_args -> (Operator.equals == op_args._1()), op_args -> QueryBuilders.termQuery(field, op_args._2()._1()) )
 										
 				// unless id_ranges_ok, exception out here:
 				.when(op_args -> field.equals(JsonUtils._ID) && !id_ranges_ok && _RANGE_OP.contains(op_args._1()), __ -> {
@@ -157,7 +158,7 @@ public class ElasticsearchUtils {
 				.when(op_args -> field.equals("_type"),  __ -> { throw new RuntimeException(ErrorUtils.RANGES_ON_TYPES); })
 				
 				.when(op_args ->_RANGE_OP.contains(op_args._1()), op_args -> {					
-					return Optional.of(FilterBuilders.rangeFilter(field))
+					return Optional.of(QueryBuilders.rangeQuery(field))
 								.map(f -> Optional.ofNullable(op_args._2()._1()).map(b -> 
 												f.from(b).includeLower(EnumSet.of(Operator.range_closed_closed, Operator.range_closed_open).contains(op_args._1())))
 											.orElse(f))
@@ -166,7 +167,7 @@ public class ElasticsearchUtils {
 											.orElse(f))
 								.get();
 				})
-				.otherwise(op_args -> FilterBuilders.matchAllFilter());
+				.otherwise(op_args -> QueryBuilders.matchAllQuery());
 	}
 
 	/** Runs the query in isolation to check if it needs _id to be indexed in order to work
@@ -191,18 +192,18 @@ public class ElasticsearchUtils {
 	 * @param getter
 	 * @return
 	 */
-	private static FilterBuilder emptyOr(final List<FilterBuilder> l, final Supplier<FilterBuilder> getter) {
-		return l.isEmpty() ? FilterBuilders.matchAllFilter() : getter.get();
+	private static QueryBuilder emptyOr(final List<QueryBuilder> l, final Supplier<QueryBuilder> getter) {
+		return l.isEmpty() ? QueryBuilders.matchAllQuery() : getter.get();
 	}
 	
 	/** Top-level "is this query ANDing terms or ORing them"
 	 * @param op_in - the operator enum
 	 * @return - a function to combine a list of filter builders using the designated operator
 	 */
-	protected static Function<List<FilterBuilder>, FilterBuilder> getMultiOperator(final Operator op_in) {		
-		return Patterns.match(op_in).<Function<List<FilterBuilder>, FilterBuilder>>andReturn()
-				.when(op -> Operator.any_of == op, __ -> l -> emptyOr(l, () -> FilterBuilders.orFilter(l.toArray(new FilterBuilder[0]))))
-				.otherwise(__ -> l -> emptyOr(l, () -> FilterBuilders.andFilter(l.toArray(new FilterBuilder[0])))); //(ie and)
+	protected static Function<List<QueryBuilder>, QueryBuilder> getMultiOperator(final Operator op_in) {		
+		return Patterns.match(op_in).<Function<List<QueryBuilder>, QueryBuilder>>andReturn()
+				.when(op -> Operator.any_of == op, __ -> l -> emptyOr(l, () -> l.stream().reduce(QueryBuilders.boolQuery(), (acc, v) -> acc.should(v), (a1,a2)->a1)))
+				.otherwise(__ -> l -> emptyOr(l, () -> l.stream().reduce(QueryBuilders.boolQuery(), (acc, v) -> acc.must(v), (a1,a2)->a1)));
 	}
 	
 	/** Creates a big and/or list of the list of "multi query components"
@@ -211,11 +212,11 @@ public class ElasticsearchUtils {
 	 * @return the Elasticsearch filter object (no meta - that is added above)
 	 */
 	@SuppressWarnings("unchecked")
-	protected static <T> FilterBuilder convertToElasticsearchFilter_multi(final Function<List<FilterBuilder>, FilterBuilder> andVsOr, final MultiQueryComponent<T> query_in, boolean id_ranges_ok) {
+	protected static <T> QueryBuilder convertToElasticsearchFilter_multi(final Function<List<QueryBuilder>, QueryBuilder> andVsOr, final MultiQueryComponent<T> query_in, boolean id_ranges_ok) {
 		
 		return andVsOr.apply(query_in.getElements().stream()
-				.<FilterBuilder>map(entry -> 
-					(FilterBuilder)Patterns.match(entry).<FilterBuilder>andReturn()
+				.<QueryBuilder>map(entry -> 
+					(QueryBuilder)Patterns.match(entry).<QueryBuilder>andReturn()
 						//(^not sure why all this extra cast is needed here, ecj works fine but oraclej complains)
 							.when(SingleQueryComponent.class, 
 									e -> convertToElasticsearchFilter_single(getMultiOperator(e.getOp()), e, id_ranges_ok))
@@ -233,13 +234,13 @@ public class ElasticsearchUtils {
 	 * @param query_in - a single query (ie set of fields)
 	 * @return the MongoDB query object (no meta - that is added above)
 	 */
-	protected static <T> FilterBuilder convertToElasticsearchFilter_single(final Function<List<FilterBuilder>, FilterBuilder> andVsOr, final SingleQueryComponent<T> query_in, boolean id_ranges_ok) {
+	protected static <T> QueryBuilder convertToElasticsearchFilter_single(final Function<List<QueryBuilder>, QueryBuilder> andVsOr, final SingleQueryComponent<T> query_in, boolean id_ranges_ok) {
 		final LinkedHashMultimap<String, Tuple2<Operator, Tuple2<Object, Object>>> fields = query_in.getAll();
 		
 		// The actual query:
 
 		return fields.isEmpty()
-			? FilterBuilders.matchAllFilter()
+			? QueryBuilders.matchAllQuery()
 			: andVsOr.apply(
 				fields.asMap().entrySet().stream()
 							.<Tuple2<String, Tuple2<Operator, Tuple2<Object, Object>>>>

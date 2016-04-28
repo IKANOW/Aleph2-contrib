@@ -66,9 +66,9 @@ import org.elasticsearch.client.Client;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.index.query.FilterBuilder;
+import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.indices.IndexMissingException;
+import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.sort.SortOrder;
@@ -553,7 +553,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		try {
 			//TODO (ALEPH-14): Handle case where no source is present but fields are
 			
-			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(unique_spec, _state.id_ranges_ok);
+			Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(unique_spec, _state.id_ranges_ok);
 			
 			final SearchRequestBuilder srb = Optional
 						.of(
@@ -583,7 +583,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				}
 			},
 			(err, future) -> {
-				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				if ((err instanceof IndexNotFoundException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
 				{ 
 					// just treat this like an "object not found"
 					future.complete(Optional.empty());
@@ -646,7 +646,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 					}
 				},
 				(err, future) -> {
-					if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+					if ((err instanceof IndexNotFoundException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
 					{ 
 						// just treat this like an "object not found"
 						future.complete(Optional.empty());
@@ -681,7 +681,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			
 			//TODO (ALEPH-14): if there's an obvious timestamp range then apply to getReadableIndexArray
 			
-			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(spec, _state.id_ranges_ok);
+			Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(spec, _state.id_ranges_ok);
 
 			final SearchRequestBuilder srb = Optional
 						.of(
@@ -711,7 +711,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				return new ElasticsearchCursor(sr);
 			},
 			(err, future) -> {
-				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				if ((err instanceof IndexNotFoundException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
 				{ 	
 					// just treat this like an "object not found"
 					future.complete(new ElasticsearchCursor(null));
@@ -733,7 +733,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	@Override
 	public CompletableFuture<Long> countObjectsBySpec(QueryComponent<O> spec) {
 		try {
-			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(spec, _state.id_ranges_ok);
+			Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(spec, _state.id_ranges_ok);
 			
 			final CountRequestBuilder crb = _state.client.prepareCount()
 					.setIndices(_state.es_context.indexContext().getReadableIndexArray(Optional.empty()))
@@ -745,7 +745,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				return cr.getCount();
 			},
 			(err, future) -> {
-				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				if ((err instanceof IndexNotFoundException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
 				{
 					future.complete(0L);
 				}
@@ -775,7 +775,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				return cr.getCount();
 			},
 			(err, future) -> {
-				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				if ((err instanceof IndexNotFoundException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
 				{
 					future.complete(0L);
 				}
@@ -865,7 +865,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 					return sr.isFound();
 				},
 				(err, future) -> {
-					if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+					if ((err instanceof IndexNotFoundException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
 					{ 
 						// just treat this like an "object not found"
 						future.complete(false);
@@ -888,7 +888,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	@Override
 	public CompletableFuture<Boolean> deleteObjectBySpec(final QueryComponent<O> unique_spec) {
 		try {
-			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(unique_spec, _state.id_ranges_ok);
+			Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(unique_spec, _state.id_ranges_ok);
 			
 			final SearchRequestBuilder srb = 
 					Optional
@@ -921,7 +921,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				}
 			},
 			(err, future) -> {
-				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				if ((err instanceof IndexNotFoundException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
 				{ 
 					// just treat this like an "object not found"
 					future.complete(false);
@@ -979,7 +979,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	@Override
 	public CompletableFuture<Long> deleteObjectsBySpec(final QueryComponent<O> spec) {
 		try {		
-			Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(spec, _state.id_ranges_ok);
+			Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query = ElasticsearchUtils.convertToElasticsearchFilter(spec, _state.id_ranges_ok);
 			
 			final Optional<Long> maybe_size = Optional.ofNullable(spec.getLimit()).filter(x -> x > 0);
 			// (don't scroll if a limit is set and we're sorting - note sorting is ignored otherwise)
@@ -1047,7 +1047,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				return mutable_count; //(just return an estimate)
 			},
 			(err, future) -> {
-				if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+				if ((err instanceof IndexNotFoundException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
 				{ 
 					// just treat this like an "object not found"
 					future.complete(0L);
@@ -1099,7 +1099,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 						return true;
 					},
 					(err, future) -> {
-						if ((err instanceof IndexMissingException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
+						if ((err instanceof IndexNotFoundException) || (err instanceof SearchPhaseExecutionException)) //(this one can come up as on a read on a newly created index)
 						{
 							future.complete(false);
 						}

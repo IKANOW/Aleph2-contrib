@@ -15,13 +15,14 @@
  *******************************************************************************/
 package com.ikanow.aleph2.shared.crud.elasticsearch.services;
 
+import java.net.InetSocketAddress;
 import java.util.Optional;
 
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.transport.TransportClient;
-import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.settings.ImmutableSettings.Builder;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.settings.Settings.Builder;
 import org.elasticsearch.common.transport.InetSocketTransportAddress;
 
 import com.google.inject.Inject;
@@ -56,7 +57,7 @@ public class ElasticsearchCrudServiceFactory implements IElasticsearchCrudServic
 	public synchronized Client getClient() {
 		if (!_client.isSet()) {
 			try {
-				final Builder settings_builder = ImmutableSettings.settingsBuilder();
+				final Builder settings_builder = Settings.settingsBuilder();
 				final Settings settings = null != _config_bean.cluster_name()
 						? settings_builder.put("cluster.name", _config_bean.cluster_name()).build()
 						: settings_builder.put("client.transport.ignore_cluster_name", true).build();
@@ -66,8 +67,8 @@ public class ElasticsearchCrudServiceFactory implements IElasticsearchCrudServic
 											final String[] host_port = hostport.split("\\s*:\\s*");
 											return Tuples._2T(host_port[0], host_port.length > 1 ? host_port[1] : "9300");
 										})
-										.reduce(new TransportClient(settings),
-												(acc, host_port) -> acc.addTransportAddress(new InetSocketTransportAddress(host_port._1(), Integer.parseInt(host_port._2()))),
+										.reduce(TransportClient.builder().settings(settings).build(),
+												(acc, host_port) -> acc.addTransportAddress(new InetSocketTransportAddress(new InetSocketAddress(host_port._1(), Integer.parseInt(host_port._2())))),
 												(acc1, acc2) -> acc1) // (not possible)
 				);
 			}

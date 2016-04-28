@@ -32,7 +32,7 @@ import java.util.stream.Stream;
 
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.indices.IndexMissingException;
+import org.elasticsearch.index.IndexNotFoundException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -293,8 +293,8 @@ public abstract class ElasticsearchContext {
 								return Unit.unit();
 							},
 							(e, cf) -> {
-								if ((e instanceof IndexMissingException) ||
-										((null != e.getCause()) && (e.getCause() instanceof IndexMissingException)))
+								if ((e instanceof IndexNotFoundException) ||
+										((null != e.getCause()) && (e.getCause() instanceof IndexNotFoundException)))
 								{
 									if (number_of_tries > 0) {
 										recursiveAliasCreate(base_index, index_name, number_of_tries - 1);

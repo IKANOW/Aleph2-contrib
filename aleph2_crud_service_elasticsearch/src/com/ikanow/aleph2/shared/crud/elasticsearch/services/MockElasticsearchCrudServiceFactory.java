@@ -20,7 +20,7 @@ import java.util.Optional;
 
 import org.apache.commons.io.FileUtils;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.common.settings.ImmutableSettings;
+import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.node.NodeBuilder;
 
@@ -45,8 +45,8 @@ public class MockElasticsearchCrudServiceFactory implements IElasticsearchCrudSe
 				//(Clean up existing dir)
 				try { FileUtils.deleteDirectory(new File("data/aleph2")); } catch (Exception e) {}
 				
-				final ImmutableSettings.Builder test_settings = 
-						ImmutableSettings.settingsBuilder()
+				final Settings.Builder test_settings = 
+						Settings.settingsBuilder()
 					        .put("cluster.name", "aleph2")
 					        .put("node.gateway.type", "none")
 					        .put("index.store.type", "memory")
@@ -54,7 +54,7 @@ public class MockElasticsearchCrudServiceFactory implements IElasticsearchCrudSe
 					        .put("index.number_of_shards", 1)
 					        .put("node.http.enabled", false);
 										
-				_root_node.set(NodeBuilder.nodeBuilder().settings(test_settings).loadConfigSettings(false).node());				
+				_root_node.set(NodeBuilder.nodeBuilder().settings(test_settings).node());				
 			}
 		}
 		if (!_client.isSet()) {			

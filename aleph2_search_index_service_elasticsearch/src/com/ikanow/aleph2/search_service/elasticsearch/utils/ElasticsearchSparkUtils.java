@@ -26,9 +26,9 @@ import java.util.stream.Stream;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.SQLContext;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.common.collect.ImmutableMap;
 import org.elasticsearch.spark.sql.api.java.JavaEsSparkSQL;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
 import com.ikanow.aleph2.core.shared.utils.TimeSliceDirUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;

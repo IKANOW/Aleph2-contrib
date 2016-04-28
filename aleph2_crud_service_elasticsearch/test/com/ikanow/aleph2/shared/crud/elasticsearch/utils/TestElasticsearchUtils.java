@@ -30,7 +30,7 @@ import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.query.FilterBuilder;
+import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.search.sort.SortOrder;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -110,7 +110,7 @@ public class TestElasticsearchUtils {
 	private static String sortOutQuotesAndStuff(final String before) {
 		return before.replace("\"", "'").replace("\n", "").replace("\r", "");
 	}
-	private static String toXContentThenString(final FilterBuilder f) throws IOException {
+	private static String toXContentThenString(final QueryBuilder f) throws IOException {
 		XContentBuilder result_1 = XContentFactory.contentBuilder(XContentType.JSON);
 		f.toXContent(result_1, ToXContent.EMPTY_PARAMS);
 		return sortOutQuotesAndStuff(result_1.string());		
@@ -127,7 +127,7 @@ public class TestElasticsearchUtils {
 		
 		{
 			final SingleQueryComponent<TestBean> query_comp_1 = CrudUtils.allOf(BeanTemplate.of(new TestBean())); 		
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
 			MockSearchRequestBuilder msrb = new MockSearchRequestBuilder();
 			query_meta_1._2().apply(msrb.srb);
 			assertEquals("{  'match_all' : { }}", sortOutQuotesAndStuff(query_meta_1._1().toString()));
@@ -142,7 +142,7 @@ public class TestElasticsearchUtils {
 			final SingleQueryComponent<TestBean> query_comp_2 = CrudUtils.anyOf(template2)
 														.orderBy(Tuples._2T("test_field_1", 1), Tuples._2T("test_field_2", -1));		
 	
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_2 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_2);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_2 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_2);
 			
 			MockSearchRequestBuilder msrb = new MockSearchRequestBuilder();
 			query_meta_2._2().apply(msrb.srb);
@@ -168,8 +168,8 @@ public class TestElasticsearchUtils {
 					.when("bool_field", true)
 					.when("string_field", "string_field");
 			
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1b = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1b);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1b = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1b);
 			
 			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
 													.startObject("and").startArray("filters")
@@ -215,8 +215,8 @@ public class TestElasticsearchUtils {
 					.whenNot("long_field", 13)
 					.limit(100);		
 			
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_2 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_2);
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_2b = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_2b);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_2 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_2);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_2b = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_2b);
 			
 			final XContentBuilder expected_2 = XContentFactory.jsonBuilder().startObject()
 													.startObject("or").startArray("filters")
@@ -304,8 +304,8 @@ public class TestElasticsearchUtils {
 				.orderBy(Tuples._2T("test_field_1", 1)).orderBy(Tuples._2T("test_field_2", -1))		
 				.limit(200);
 		
-		final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
-		final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1b = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1b);
+		final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
+		final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1b = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1b);
 
 		final XContentBuilder expected_1 = 
 				XContentFactory.jsonBuilder().startObject()
@@ -428,7 +428,7 @@ public class TestElasticsearchUtils {
 															.limit(5) 
 															.orderBy(Tuples._2T("test_field_2", -1));
 															
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);			
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);			
 					
 			
 			final XContentBuilder expected_1 = 
@@ -497,7 +497,7 @@ public class TestElasticsearchUtils {
 					)
 					.withPresent("long_field");
 					
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_2 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_2);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_2 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_2);
 
 			final XContentBuilder expected_2 = 
 					XContentFactory.jsonBuilder().startObject()
@@ -574,7 +574,7 @@ public class TestElasticsearchUtils {
 			
 			assertTrue("No id ranges", ElasticsearchUtils.queryContainsIdRanges(query_comp_1));
 			
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
 			
 			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
 													.startObject("and").startArray("filters")
@@ -634,7 +634,7 @@ public class TestElasticsearchUtils {
 					.when(TestBean::bool_field, true)
 					.whenNot(TestBean::_id, "not_id");
 			
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
 			
 			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
 													.startObject("and").startArray("filters")
@@ -664,7 +664,7 @@ public class TestElasticsearchUtils {
 					.when(TestBean::bool_field, true)
 					.whenNot("_type", "not_id");
 			
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
 			
 			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
 													.startObject("and").startArray("filters")
@@ -693,7 +693,7 @@ public class TestElasticsearchUtils {
 					.when(TestBean::bool_field, true)
 					.when("_type", "id");
 			
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
 			
 			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
 													.startObject("and").startArray("filters")
@@ -720,7 +720,7 @@ public class TestElasticsearchUtils {
 																	.when(TestBean::bool_field, true)
 																	.withAny("_id", Arrays.asList("id1", "id2", "id3"));
 			
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
 			
 			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
 													.startObject("and").startArray("filters")
@@ -806,7 +806,7 @@ public class TestElasticsearchUtils {
 				assertEquals(ErrorUtils.NO_ID_RANGES_UNLESS_IDS_INDEXED, e.getMessage());
 			}			
 			
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1, true);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1, true);
 			
 			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
 													.startObject("and").startArray("filters")
@@ -960,8 +960,8 @@ public class TestElasticsearchUtils {
 			final MultiQueryComponent<TestBean> multi_query_1 = CrudUtils.<TestBean>allOf(query_comp_1).orderBy(Tuples._2T("test_field_2", -1)).limit(5);
 			final MultiQueryComponent<TestBean> multi_query_2 = CrudUtils.<TestBean>anyOf(query_comp_1);
 					
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_1);
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_2 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_2);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_1);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_2 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_2);
 	
 			final MockSearchRequestBuilder msrb1 = new MockSearchRequestBuilder();
 			query_meta_1._2().apply(msrb1.srb);
@@ -1066,10 +1066,10 @@ public class TestElasticsearchUtils {
 				.endArray().endObject().endObject()
 				);
 								
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_3 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_3);
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_4 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_4);
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_5 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_5);
-			final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_6 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_6);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_3 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_3);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_4 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_4);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_5 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_5);
+			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_6 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_6);
 
 			final XContentBuilder multi_expected_3 =
 				Lambdas.wrap_u(__ -> 
@@ -1136,8 +1136,8 @@ public class TestElasticsearchUtils {
 		final MultiQueryComponent<TestBean> multi_query_test_1 = CrudUtils.anyOf(multi_query_1, multi_query_2);
 		final MultiQueryComponent<TestBean> multi_query_test_2 = CrudUtils.allOf(multi_query_1, query_comp_1b);
 		
-		final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> multi_query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_test_1);
-		final Tuple2<FilterBuilder, UnaryOperator<SearchRequestBuilder>> multi_query_meta_2 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_test_2);
+		final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> multi_query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_test_1);
+		final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> multi_query_meta_2 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_test_2);
 		
 		final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
 				.startObject("or").startArray("filters")
