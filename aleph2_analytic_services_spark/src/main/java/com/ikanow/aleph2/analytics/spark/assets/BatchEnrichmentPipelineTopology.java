@@ -17,23 +17,26 @@
 package com.ikanow.aleph2.analytics.spark.assets;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import scala.Tuple2;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Multimap;
+import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
+import com.ikanow.aleph2.analytics.spark.utils.RddDependencyUtils;
 import com.ikanow.aleph2.analytics.spark.utils.SparkTechnologyUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
-import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.Optionals;
 
 import fj.data.Either;
 import fj.data.Validation;
@@ -46,8 +49,6 @@ public class BatchEnrichmentPipelineTopology {
 
 	public static void main(String[] args) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
 
-		//TODO: actually implement the batch pipeline logic
-		
 		try {			
 			final Tuple2<IAnalyticsContext, Optional<ProcessingTestSpecBean>> aleph2_tuple = SparkTechnologyUtils.initializeAleph2(args);
 			final IAnalyticsContext context = aleph2_tuple._1();
@@ -66,28 +67,32 @@ public class BatchEnrichmentPipelineTopology {
 			//INFO:
 			test_spec.ifPresent(spec -> System.out.println("OPTIONS: test_spec = " + BeanTemplateUtils.toJson(spec).toString()));
 			
+			final SparkTopologyConfigBean config = BeanTemplateUtils.from(context.getJob().map(job -> job.config()).orElse(Collections.emptyMap()), SparkTopologyConfigBean.class).get();
+			
 			//DEBUG
 			//final boolean test_mode = test_spec.isPresent(); // (serializable thing i can pass into the map)
 			
 			try (final JavaSparkContext jsc = new JavaSparkContext(spark_context)) {
 	
 				final Multimap<String, JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>> inputs = SparkTechnologyUtils.buildBatchSparkInputs(context, test_spec, jsc, Collections.emptySet());
+
+				final Validation<String, //(error)
+				Tuple2<
+				Map<String, Either<JavaRDD<Tuple2<Long, IBatchRecord>>, JavaRDD<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>>>, //(list of all RDDs)
+				Map<String, JavaRDD<Tuple2<Long, IBatchRecord>>> //(just outputs
+				>>
+				enrichment_pipeline = RddDependencyUtils.buildEnrichmentPipeline(context, jsc, inputs, Optionals.ofNullable(config.enrich_pipeline()));
 				
-				final Optional<JavaPairRDD<Object, Tuple2<Long, IBatchRecord>>> input = inputs.values().stream().reduce((acc1, acc2) -> acc1.union(acc2));
 				
-				long written = input.map(in -> in.values())
-						.map(rdd -> {
-							return rdd
-								.map(t2 -> {
-									final Validation<BasicMessageBean, JsonNode> ret_val = context.emitObject(Optional.empty(), context.getJob().get(), Either.left(t2._2().getJson()), Optional.empty());
-									return ret_val; // (doesn't matter what I return, just want to count it up)
-								})
-								//DEBUG: (print the output JSON on success and the error message on fail)
-								//.map(val -> test_mode ? val.f().bind(f -> Validation.fail("FAIL: " + f.message())) : val)
-								.count();
-						})
-						.orElse(-1L)
+				if (enrichment_pipeline.isFail()) {
+					throw new RuntimeException("ERROR: BatchEnrichmentPipelineTopology: " + enrichment_pipeline.fail());
+				}
+				
+				final Optional<JavaRDD<Tuple2<Long, IBatchRecord>>> all_outputs = 
+						enrichment_pipeline.success()._2().values().stream().reduce((acc1, acc2) -> acc1.union(acc2))
 						;
+				
+				long written = all_outputs.map(rdd -> rdd.count()).orElse(-1L);
 				
 				jsc.stop();
 				

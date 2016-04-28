@@ -50,9 +50,19 @@ import org.apache.logging.log4j.Level;
 
 
 
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.rdd.RDD;
 
 import scala.Tuple2;
+
+
+
+
+
+
+
+
 
 
 
@@ -118,6 +128,7 @@ import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModul
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
+import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
@@ -128,6 +139,8 @@ import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
 
 import fj.Unit;
+import fj.data.Either;
+import fj.data.Validation;
 
 /** A utility service that runs an Aleph2 enrichment service inside Spark
  * @author Alex
@@ -141,6 +154,7 @@ public class EnrichmentPipelineService implements Serializable {
 	
 	final protected List<EnrichmentControlMetadataBean> _pipeline_elements;
 	final protected IAnalyticsContext _analytics_context;
+	final protected boolean _emit_when_done;
 	protected transient Wrapper _chain_start = null;
 			
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -153,24 +167,24 @@ public class EnrichmentPipelineService implements Serializable {
 	 * @param pipeline_elements
 	 * @return
 	 */
-	public static EnrichmentPipelineService create(final IAnalyticsContext aleph2_context, final List<EnrichmentControlMetadataBean> pipeline_elements) {
-		return new EnrichmentPipelineService(aleph2_context, pipeline_elements);
+	public static EnrichmentPipelineService create(final IAnalyticsContext aleph2_context, boolean emit_when_done, final List<EnrichmentControlMetadataBean> pipeline_elements) {
+		return new EnrichmentPipelineService(aleph2_context, emit_when_done, pipeline_elements);
 	}
 	/** Selects a set of enrichment/transform pipeline elements from the current job, and creates a service out of them
 	 * @param aleph2_context
 	 * @param names
 	 * @return
 	 */
-	public static EnrichmentPipelineService select(final IAnalyticsContext aleph2_context, String... names) {
-		return new EnrichmentPipelineService(aleph2_context, names);
+	public static EnrichmentPipelineService select(final IAnalyticsContext aleph2_context, boolean emit_when_done, String... names) {
+		return new EnrichmentPipelineService(aleph2_context, emit_when_done, names);
 	}
 	/** Selects a set of enrichment/transform pipeline elements from the current job, and creates a service out of them
 	 * @param aleph2_context
 	 * @param names
 	 * @return
 	 */
-	public static EnrichmentPipelineService select(final IAnalyticsContext aleph2_context, final Collection<String> names) {
-		return new EnrichmentPipelineService(aleph2_context, names.stream().toArray(String[]::new));
+	public static EnrichmentPipelineService select(final IAnalyticsContext aleph2_context, boolean emit_when_done, final Collection<String> names) {
+		return new EnrichmentPipelineService(aleph2_context, emit_when_done, names.stream().toArray(String[]::new));
 	}
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -218,6 +232,7 @@ public class EnrichmentPipelineService implements Serializable {
 	}	
 	
 	/** A transform/enrichment function that can be used in mapPartitions (java version) immediately following a grouping key operation and that itself groups
+	 *  (NOTE operates on *java* iterables - you will need to convert in order to operate on your own groupby calls)
 	 * @param names - an ordered list of field names (dot notation), is used to create a grouping key (["?"] means the enrichment engine can pick whatever it wants)
 	 * @return
 	 */
@@ -226,6 +241,7 @@ public class EnrichmentPipelineService implements Serializable {
 	}	
 	
 	/** A transform/enrichment function that can be used in mapPartitions (java version) immediately following a grouping key operation and that itself groups
+	 *  (NOTE operates on *java* iterables - you will need to convert in order to operate on your own groupby calls)
 	 * @param grouping_fields - an ordered list of field names (dot notation), is used to create a grouping key (["?"] means the enrichment engine can pick whatever it wants)
 	 * @return
 	 */
@@ -240,6 +256,7 @@ public class EnrichmentPipelineService implements Serializable {
 	}	
 	
 	/** A transform/enrichment function that can be used in mapPartitions (java version) immediately following a grouping key operation
+	 *  (NOTE operates on *java* iterables - you will need to convert in order to operate on your own groupby calls)
 	 * @return
 	 */
 	public <T> scala.Function1<scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>> inMapPartitionsPostGroup() {
@@ -251,7 +268,6 @@ public class EnrichmentPipelineService implements Serializable {
 							it1 -> JavaConverters.asScalaIteratorConverter(this.javaInMapPartitionsPostGroup().call(JavaConverters.asJavaIteratorConverter(it1).asJava()).iterator()).asScala()
 					).apply(it));
 	}	
-	
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -330,8 +346,7 @@ public class EnrichmentPipelineService implements Serializable {
 					;			
 		};	
 	}
-	
-	
+
 	/** A transform/enrichment function that can be used in mapPartitions (java version) immediately following a grouping key operation
 	 * @return
 	 */
@@ -347,6 +362,29 @@ public class EnrichmentPipelineService implements Serializable {
 		};	
 	}
 
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	//
+	// MISC API
+
+	/** Performs the Spark grouping from the output of a pre-group operation (java version)
+ 	 * @param groupable
+	 * @return
+	 */
+	public static JavaRDD<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>> javaGroupOf(final JavaRDD<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>> groupable) {
+		return groupable.groupBy(t2 -> t2._1()).map(t2 -> Tuples._2T(t2._1(), (Iterable<Tuple2<Long, IBatchRecord>>)StreamUtils.stream(t2._2()).map(tt2 -> tt2._2())::iterator));				
+	}
+	
+	/** Performs the Spark grouping from the output of a pre-group operation (scala version)
+	 *  (NOTE: returns java iterables, ie designed for use with the inMapPartition* functions above)
+ 	 * @param groupable
+	 * @return
+	 */
+	public static RDD<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>> groupOf(final RDD<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>> groupable) {
+		return javaGroupOf(new JavaRDD<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>(groupable, scala.reflect.ClassTag$.MODULE$.apply(Tuple2.class))).rdd();
+	}
+		
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	// Shared functionality:
@@ -389,7 +427,7 @@ public class EnrichmentPipelineService implements Serializable {
 	 * @param dummy - just to differentatiate
 	 */
 	@SuppressWarnings("unchecked")
-	protected EnrichmentPipelineService(final IAnalyticsContext aleph2_context, final String... names) {
+	protected EnrichmentPipelineService(final IAnalyticsContext aleph2_context, boolean emit_when_done, final String... names) {
 		final Map<String, EnrichmentControlMetadataBean> pipeline_elements_map =		
 			aleph2_context.getJob()
 				.map(j -> j.config())
@@ -408,6 +446,7 @@ public class EnrichmentPipelineService implements Serializable {
 		final List<EnrichmentControlMetadataBean> pipeline_elements = Arrays.stream(names).map(n -> pipeline_elements_map.get(n)).filter(cfg -> null != cfg).collect(Collectors.toList());
 		
 		_analytics_context = aleph2_context;
+		_emit_when_done = emit_when_done;
 		_pipeline_elements = pipeline_elements;
 		
 		if (_pipeline_elements.isEmpty()) {
@@ -423,8 +462,9 @@ public class EnrichmentPipelineService implements Serializable {
 	 * @param aleph2_context - the Aleph2 analytic context
 	 * @param name - the name of the enrichment pipeline from the job
 	 */
-	protected EnrichmentPipelineService(final IAnalyticsContext aleph2_context, final List<EnrichmentControlMetadataBean> pipeline_elements) {		
+	protected EnrichmentPipelineService(final IAnalyticsContext aleph2_context, boolean emit_when_done, final List<EnrichmentControlMetadataBean> pipeline_elements) {		
 		_analytics_context = aleph2_context;
+		_emit_when_done = emit_when_done;
 		_pipeline_elements = pipeline_elements;
 		
 		if (_pipeline_elements.isEmpty()) {
@@ -667,6 +707,14 @@ public class EnrichmentPipelineService implements Serializable {
 								})
 								.apply(Unit.unit())
 								;						
+					})
+					.map(t2 -> {
+						if (_emit_when_done) {
+							@SuppressWarnings("unused")
+							final Validation<BasicMessageBean, JsonNode> emit_success = 
+									_analytics_context.emitObject(Optional.empty(), _analytics_context.getJob().get(), Either.left(t2._1()._2().getJson()), Optional.empty());
+						}
+						return t2;
 					})
 					;
 				}

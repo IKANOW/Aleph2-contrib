@@ -372,7 +372,7 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 						}
 						catch (Exception e) { // (service mode)
 							//TODO (ALEPH-63): derive this from "this" using the core shared lib util
-							return "/opt/aleph2-home/lib/aleph2_spark_analytics_services.jar";						
+							return globals.local_root_dir() + "/lib/aleph2_spark_analytics_services.jar";
 						}
 					}))
 					;

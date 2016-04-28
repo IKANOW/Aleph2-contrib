@@ -136,7 +136,7 @@ public class TestEnrichmentPipelineService {
 		
 			try {
 				@SuppressWarnings("unused")
-				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, pipeline_elements);
+				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, false, pipeline_elements);
 				fail("Should error");
 			}
 			catch (Exception e) {
@@ -209,7 +209,7 @@ public class TestEnrichmentPipelineService {
 			
 			// Actual test:
 			{
-				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, pipeline_elements);
+				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, false, pipeline_elements);
 				
 				JavaRDD<Tuple2<Long, IBatchRecord>> test = _spark.parallelize(Arrays.asList(
 						_mapper.createObjectNode().put("id", "1"),
@@ -236,13 +236,13 @@ public class TestEnrichmentPipelineService {
 				assertEquals(3, out.filter(t2 -> t2._2().getJson().has("appended")).count());
 				
 				// Scala version:
-				final EnrichmentPipelineService scala_under_test = EnrichmentPipelineService.create(mock_analytics_context, pipeline_elements);
+				final EnrichmentPipelineService scala_under_test = EnrichmentPipelineService.create(mock_analytics_context, false, pipeline_elements);
 				assertEquals(10, test.rdd().mapPartitions(scala_under_test.inMapPartitions(), true, scala.reflect.ClassTag$.MODULE$.apply(Tuple2.class)).count());
 				
 			}
 			// Test with pre-group
 			{
-				final EnrichmentPipelineService under_test = EnrichmentPipelineService.select(mock_analytics_context, "test1", "test2", "test3");
+				final EnrichmentPipelineService under_test = EnrichmentPipelineService.select(mock_analytics_context, false, "test1", "test2", "test3");
 
 				JavaRDD<Tuple2<Long, IBatchRecord>> test = _spark.parallelize(Arrays.asList(
 						_mapper.createObjectNode().put("id", "1").put("grouper", "A"),
@@ -284,29 +284,33 @@ public class TestEnrichmentPipelineService {
 				// Other scala version/test can reuse the function. ie it's immutable:
 				assertEquals(10, test.rdd().mapPartitions(under_test.inMapPartitionsPreGroup(Arrays.asList("group")), true, scala.reflect.ClassTag$.MODULE$.apply(Tuple2.class)).count());				
 			}
-			// Test with post group (no cloing of test_1 enricher)
+			// Test with post group (no cloing of test_1 enricher) ... java version
 			{
-				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, pipeline_elements);
+				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, false, pipeline_elements);
 
+				JavaRDD<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>> test_java = 
+						EnrichmentPipelineService.javaGroupOf(
+							_spark.parallelize(Arrays.asList(
+							_mapper.createObjectNode().put("id", "1").put("grouper", "A"),
+							_mapper.createObjectNode().put("id", "2").put("test1_stop", true).put("grouper", "A"),
+							_mapper.createObjectNode().put("id", "3").put("grouper", "A"),
+							_mapper.createObjectNode().put("id", "4").put("grouper", "B"),
+							_mapper.createObjectNode().put("id", "5").put("test2_stop", true).put("grouper", "B"),
+							_mapper.createObjectNode().put("id", "6").put("grouper", "B"),
+							_mapper.createObjectNode().put("id", "7").put("grouper", "C"),
+							_mapper.createObjectNode().put("id", "8").put("grouper", "C"),
+							_mapper.createObjectNode().put("id", "9").put("test3_stop", true).put("grouper", "D"), // (wont' get promoted)
+							_mapper.createObjectNode().put("id", "10").put("grouper", "D")
+							)
+							.stream()
+							.<Tuple2<Long, IBatchRecord>>
+								map(j -> Tuples._2T(0L, new BatchRecordUtils.JsonBatchRecord((JsonNode) j)))
+								.map(t2 -> Tuples._2T((IBatchRecord) new BatchRecordUtils.JsonBatchRecord(t2._2().getJson().get("grouper")), t2))
+							.collect(Collectors.toList())))
+						;
+				
 				RDD<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>> test = 
-						_spark.parallelize(Arrays.asList(
-						_mapper.createObjectNode().put("id", "1").put("grouper", "A"),
-						_mapper.createObjectNode().put("id", "2").put("test1_stop", true).put("grouper", "A"),
-						_mapper.createObjectNode().put("id", "3").put("grouper", "A"),
-						_mapper.createObjectNode().put("id", "4").put("grouper", "B"),
-						_mapper.createObjectNode().put("id", "5").put("test2_stop", true).put("grouper", "B"),
-						_mapper.createObjectNode().put("id", "6").put("grouper", "B"),
-						_mapper.createObjectNode().put("id", "7").put("grouper", "C"),
-						_mapper.createObjectNode().put("id", "8").put("grouper", "C"),
-						_mapper.createObjectNode().put("id", "9").put("test3_stop", true).put("grouper", "D"), // (wont' get promoted)
-						_mapper.createObjectNode().put("id", "10").put("grouper", "D")
-						)
-						.stream()
-						.<Tuple2<Long, IBatchRecord>>
-							map(j -> Tuples._2T(0L, new BatchRecordUtils.JsonBatchRecord((JsonNode) j)))
-						.collect(Collectors.toList()))
-						.groupBy(t2 -> (IBatchRecord) new BatchRecordUtils.JsonBatchRecord(t2._2().getJson().get("grouper")))
-						.rdd()
+						test_java.rdd()
 						;		
 
 				assertEquals(4, test.count());											
@@ -320,8 +324,11 @@ public class TestEnrichmentPipelineService {
 				assertEquals(10, out.count());							
 				// (the other counts have been performed sufficiently many times for code coverage safety at this point)
 				
+				//(can uncomment to check compiles ... but is called by scala so coverage is fine)
+				//test_java.mapPartitions(under_test.javaInMapPartitionsPostGroup());
+				
 			}
-			// As above but with clone mode enabled
+			// As above but with clone mode enabled (plus use direct grouping in scala for coverage purposes)
 			{
 				final List<EnrichmentControlMetadataBean> cloning_pipeline_elements = 
 						Arrays.asList(
@@ -344,9 +351,9 @@ public class TestEnrichmentPipelineService {
 								,
 								pipeline_elements.get(1), pipeline_elements.get(2));
 				
-				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, cloning_pipeline_elements);
+				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, false, cloning_pipeline_elements);
 
-				RDD<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>> test = 
+				RDD<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>> test = 
 						_spark.parallelize(Arrays.asList(
 						_mapper.createObjectNode().put("id", "1").put("grouper", "A"),
 						_mapper.createObjectNode().put("id", "2").put("test1_stop", true).put("grouper", "A"),
@@ -362,17 +369,20 @@ public class TestEnrichmentPipelineService {
 						.stream()
 						.<Tuple2<Long, IBatchRecord>>
 							map(j -> Tuples._2T(0L, new BatchRecordUtils.JsonBatchRecord((JsonNode) j)))
-						.collect(Collectors.toList()))
-						.groupBy(t2 -> (IBatchRecord) new BatchRecordUtils.JsonBatchRecord(t2._2().getJson().get("grouper")))
-						.rdd()
-						;		
+							.map(t2 -> Tuples._2T((IBatchRecord) new BatchRecordUtils.JsonBatchRecord(t2._2().getJson().get("grouper")), t2))
+						.collect(Collectors.toList())).rdd()
+					;
 
-				assertEquals(4, test.count());											
+				assertEquals(10, test.count()); //(pre grouping)
 				
 				JavaRDD<Tuple2<Long, IBatchRecord>> out = 
 						JavaRDD.fromRDD(
-								test.mapPartitions(under_test.inMapPartitionsPostGroup(), true, scala.reflect.ClassTag$.MODULE$.apply(Tuple2.class)),
-								scala.reflect.ClassTag$.MODULE$.apply(Tuple2.class))
+								EnrichmentPipelineService.groupOf(test)
+									.mapPartitions(
+										under_test.inMapPartitionsPostGroup(), true, 
+										scala.reflect.ClassTag$.MODULE$.apply(Tuple2.class)
+									),
+									scala.reflect.ClassTag$.MODULE$.apply(Tuple2.class))
 								;
 				
 				assertEquals(14, out.count());							
@@ -380,7 +390,7 @@ public class TestEnrichmentPipelineService {
 			}
 			// Finally, a combined pre-post group
 			{
-				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, pipeline_elements);
+				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, false, pipeline_elements);
 
 				RDD<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>> test = 
 						_spark.parallelize(Arrays.asList(
