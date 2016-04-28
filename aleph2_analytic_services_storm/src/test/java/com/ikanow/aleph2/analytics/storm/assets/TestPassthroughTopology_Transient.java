@@ -81,10 +81,10 @@ public class TestPassthroughTopology_Transient extends TestPassthroughBase {
 								.done().get())
 						.done().get())
 				.done().get();
-
-		//////////////////////////////////////////////////////
-		// PHASE 2: SPECIFICALLY FOR THIS TEST
-		//(Also: register a listener on the output to generate a secondary queue)
+//
+//		//////////////////////////////////////////////////////
+//		// PHASE 2: SPECIFICALLY FOR THIS TEST
+//		//(Also: register a listener on the output to generate a secondary queue)
 		final ICoreDistributedServices cds = _service_context.getService(ICoreDistributedServices.class, Optional.empty()).get();		
 		final String inter_queue_topic = cds.generateTopicName(test_bucket.full_name(), Optional.of("analytic_job1"));
 		cds.createTopic(inter_queue_topic, Optional.of(Collections.emptyMap()));
@@ -115,17 +115,17 @@ public class TestPassthroughTopology_Transient extends TestPassthroughBase {
 		
 		// 4b: write to kafka
 		
+		final String topic_name = cds.generateTopicName(test_bucket.full_name(), Optional.empty());	
 		Iterator<String> consumer = cds.consumeAs(inter_queue_topic, Optional.empty());
-		
-		final String topic_name = cds.generateTopicName(test_bucket.full_name(), Optional.empty());
 		cds.produce(topic_name, "{\"test\":\"test1\"}");
+		Thread.sleep(5000); //wait for producers to dump batch
 		_logger.info("******** Written to CDS: " + topic_name);
 		
 		//////////////////////////////////////////////////////
 		//PHASE 5: CHECK OUTPUT DATA		
 		
 		// 5a: check ES index
-		
+		Thread.sleep(5000); //wait for producers to dump batch
 		for (int i = 0; i < 60; ++i) {
 			Thread.sleep(1000L);
 			if (consumer.hasNext()) { 
@@ -136,13 +136,13 @@ public class TestPassthroughTopology_Transient extends TestPassthroughBase {
 		assertEquals("Should be 0 objects in the repo", 0L, crud_service.countObjects().get().intValue());		
 		
 		// 5b: check kafka queue
-		
 		int message_count = 0;
 		//read the item off the queue
 		while ( consumer.hasNext() ) {
 			consumer.next();
         	message_count++;
 		}
+		
 		assertEquals(1, message_count);
 	}
 	
