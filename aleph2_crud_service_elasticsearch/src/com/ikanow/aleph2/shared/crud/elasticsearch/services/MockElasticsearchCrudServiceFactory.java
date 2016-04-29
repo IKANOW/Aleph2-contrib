@@ -52,7 +52,8 @@ public class MockElasticsearchCrudServiceFactory implements IElasticsearchCrudSe
 					        .put("index.store.type", "memory")
 					        .put("index.number_of_replicas", 0)
 					        .put("index.number_of_shards", 1)
-					        .put("node.http.enabled", false);
+					        .put("node.http.enabled", false)
+					        .put("path.home", "/data");
 										
 				_root_node.set(NodeBuilder.nodeBuilder().settings(test_settings).node());				
 			}
