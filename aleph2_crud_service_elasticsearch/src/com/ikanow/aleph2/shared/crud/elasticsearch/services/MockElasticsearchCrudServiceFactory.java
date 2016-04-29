@@ -49,7 +49,6 @@ public class MockElasticsearchCrudServiceFactory implements IElasticsearchCrudSe
 						Settings.settingsBuilder()
 					        .put("cluster.name", "aleph2")
 					        .put("node.gateway.type", "none")
-					        .put("index.store.type", "memory")
 					        .put("index.number_of_replicas", 0)
 					        .put("index.number_of_shards", 1)
 					        .put("node.http.enabled", false)

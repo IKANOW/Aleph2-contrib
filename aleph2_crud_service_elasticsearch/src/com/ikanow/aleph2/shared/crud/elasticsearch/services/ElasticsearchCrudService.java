@@ -202,6 +202,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	private IndexRequestBuilder singleObjectIndexRequest(final Either<ReadWriteContext, Tuple2<String, String>> rw_context, 
 			final Either<O, Tuple2<String, String>> new_object, final boolean replace_if_present, final boolean bulk)
 	{
+		//String id = ((JsonNode)new_object.left()).remove(JsonUtils._ID);
 		final Either<JsonNode, Tuple2<String, String>> json_object =
 				new_object.left().map(left-> {
 					return ((JsonNode.class.isAssignableFrom(_state.clazz))
@@ -218,10 +219,11 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 									right ->_state.client.prepareIndex(right._1(), right._2()))
 					.setOpType(replace_if_present ? OpType.INDEX : OpType.CREATE)
 					.setConsistencyLevel(WriteConsistencyLevel.ONE)
-					.setRefresh(!bulk && CreationPolicy.OPTIMIZED != _state.creation_policy)
-					.setSource(json_object.<String>either(left -> left.toString(), right -> right._2()))
-						)
-				.map(i -> json_object.<IndexRequestBuilder>either(left -> left.has(JsonUtils._ID) ? i.setId(left.get(JsonUtils._ID).asText()) : i, right -> i.setId(right._1())))
+					.setRefresh(!bulk && CreationPolicy.OPTIMIZED != _state.creation_policy) )
+					.map(i -> json_object.<IndexRequestBuilder>either(left -> left.has(JsonUtils._ID) ? i.setId(left.get(JsonUtils._ID).asText()) : i, right -> i.setId(right._1())))
+					.map(i -> i.setSource(json_object.<String>either(left -> {
+						((ObjectNode)left).remove(JsonUtils._ID); return left.toString();
+					}, right -> right._2())))				
 				//DEBUG
 				//.map(irb -> { System.out.println("REQUEST INDICES = " + Arrays.toString(irb.request().indices())); return irb; })
 				.get();		
