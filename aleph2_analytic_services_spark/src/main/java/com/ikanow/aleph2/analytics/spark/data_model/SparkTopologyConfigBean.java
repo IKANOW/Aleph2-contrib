@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
+
 /** Config bean for individual spark jobs
  * @author Alex
  */
@@ -108,6 +110,8 @@ public class SparkTopologyConfigBean implements Serializable {
 	 * @return
 	 */
 	public List<String> uploaded_lang_files() { return Optional.ofNullable(uploaded_lang_files).orElse(Collections.emptyList()); }	
+	 
+	public List<EnrichmentControlMetadataBean> enrich_pipeline() { return Optional.ofNullable(enrich_pipeline).orElse(Collections.emptyList()); }	
 	
 	private String cluster_mode;
 	
@@ -126,4 +130,6 @@ public class SparkTopologyConfigBean implements Serializable {
 	private List<String> external_jars;
 	private List<String> external_files;
 	private List<String> external_lang_files;
+	
+	private List<EnrichmentControlMetadataBean> enrich_pipeline;
 }

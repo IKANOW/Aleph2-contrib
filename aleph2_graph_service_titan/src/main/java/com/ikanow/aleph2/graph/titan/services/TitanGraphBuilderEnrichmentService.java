@@ -256,26 +256,39 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 			try {
 				// Create transaction
 				
+				/**/
 				//TRACE
-//				System.err.println(new java.util.Date().toString() + ": GRABBING TRANS " + i);
+				System.err.println(new java.util.Date().toString() + ": GRABBING TRANS " + i);
 				
 				final TitanTransaction mutable_tx = _titan.get().newTransaction();
+				
+				/**/
+				//TRACE
+				System.err.println(new java.util.Date().toString() + ": GRABBED TRANS " + i + " toS=" + mutable_tx.toString());
+				
+				
 				try {
 					transaction.accept(mutable_tx);
 				}
 				catch (Exception e) { //(close the transaction without saving)
+					/**/
+					//TRACE
+					System.err.println(new java.util.Date().toString() + ": (ERROR) ROLLING BACK TRANS " + i);				
+					
 					mutable_tx.rollback();
 					throw e;
 				}
-				
+
+				/**/
 				//TRACE
-				//System.err.println(new java.util.Date().toString() + ": COMMITTING TRANS " + i);				
+				System.err.println(new java.util.Date().toString() + ": COMMITTING TRANS " + i + " tx=" + mutable_tx.hasModifications()+ " open=" + mutable_tx.isOpen() + " toS=" + mutable_tx.toString());
 				
 				// Attempt to commit
 				mutable_tx.commit();
 
+				/**/
 				//TRACE
-				//System.err.println(new java.util.Date().toString() + ": COMMITTED TRANS " + i);				
+				System.err.println(new java.util.Date().toString() + ": COMMITTED TRANS " + i);				
 				
 				on_success.run();
 				
@@ -284,8 +297,9 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 			catch (TitanException e) {
 				if ((i >= _MAX_ATTEMPT_NUM) || !isRecoverableError(e)) {
 
+					/**/
 					//DEBUG
-					//System.err.println(new java.util.Date().toString() + ": HERE2 NON_RECOV: " + i + " vs " + MAX_ATTEMPT_NUM);
+					System.err.println(new java.util.Date().toString() + ": HERE2 NON_RECOV: " + i + " vs " + _MAX_ATTEMPT_NUM + ErrorUtils.getLongForm(" error={0}", e));
 					//e.printStackTrace();					
 					
 					_logger.optional().ifPresent(logger -> {
@@ -301,9 +315,10 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				}
 
 				// If we're here, we're going to retry the transaction
-				
+
+				/**/
 				//DEBUG
-//				System.err.println(new java.util.Date().toString() + ": HERE3 RECOVERABLE");
+				System.err.println(new java.util.Date().toString() + ": HERE3 RECOVERABLE" + ErrorUtils.getLongForm(" error={0}", e));
 				
 				final int min_sleep_time = _BACKOFF_TIMES_MS[i]/2;
 				final int sleep_time = min_sleep_time + random_generator.nextInt(min_sleep_time);
@@ -323,12 +338,13 @@ public class TitanGraphBuilderEnrichmentService implements IEnrichmentBatchModul
 				
 				// (If it's a versioning conflict then try again)
 			}
+			/**/
 			//TRACE:
-//			catch (Throwable x) {
-//				System.err.println(new java.util.Date().toString() + ": HERE1 OTHER ERR");
-//				x.printStackTrace();
-//				throw x;
-//			}
+			catch (Throwable x) {
+				System.err.println(new java.util.Date().toString() + ": HERE1 OTHER ERR" + ErrorUtils.getLongForm(" error={0}", x));
+				//x.printStackTrace();
+				throw x;
+			}
 		})
 		.findFirst() // ie stop as soon as we have successfully transacted
 		;				
