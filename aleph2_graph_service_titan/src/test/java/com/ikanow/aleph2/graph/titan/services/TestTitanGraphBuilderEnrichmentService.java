@@ -189,12 +189,16 @@ public class TestTitanGraphBuilderEnrichmentService extends TestTitanCommon {
 			// Create some recoverable errors:
 			{
 				final PermanentLockingException outer = Mockito.mock(PermanentLockingException.class);
+				Mockito.when(outer.getStackTrace()).thenReturn(new StackTraceElement[0]);
 				graph_enrich_service._MUTABLE_TEST_ERRORS.push(new TitanException("test", outer));
 			}
 			{
 				final TemporaryBackendException inner = Mockito.mock(TemporaryBackendException.class);
+				Mockito.when(inner.getStackTrace()).thenReturn(new StackTraceElement[0]);
 				final TitanException outer = Mockito.mock(TitanException.class);
 				Mockito.when(outer.getCause()).thenReturn(inner);
+				Mockito.when(outer.getStackTrace()).thenReturn(new StackTraceElement[0]);
+				 
 				graph_enrich_service._MUTABLE_TEST_ERRORS.push(new TitanException("test", outer));
 			}			
 			
