@@ -39,6 +39,7 @@ import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean;
 import com.ikanow.aleph2.data_model.objects.data_import.DataSchemaBean;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.distributed_services.services.ICoreDistributedServices;
 
 public class TestPassthroughTopology_Transient extends TestPassthroughBase {
@@ -116,7 +117,7 @@ public class TestPassthroughTopology_Transient extends TestPassthroughBase {
 		// 4b: write to kafka
 		
 		final String topic_name = cds.generateTopicName(test_bucket.full_name(), Optional.empty());	
-		Iterator<String> consumer = cds.consumeAs(inter_queue_topic, Optional.empty());
+		Iterator<String> consumer = cds.consumeAs(inter_queue_topic, Optional.of(BucketUtils.getUniqueSignature(test_bucket.full_name(), Optional.empty())), Optional.empty());
 		cds.produce(topic_name, "{\"test\":\"test1\"}");
 		Thread.sleep(5000); //wait for producers to dump batch
 		_logger.info("******** Written to CDS: " + topic_name);
