@@ -21,6 +21,7 @@ export LOGSTASH_FILE=$(ls /opt/aleph2-home/apps/plugins/aleph2_logstash_harveste
 export SCRIPT_FILE=$(ls /opt/aleph2-home/apps/plugins/aleph2_script_harvester*.jar)
 export STORM_FILE=$(ls /opt/aleph2-home/apps/plugins/aleph2_storm_script_topo*.jar)
 export SPARK_FILE=$(ls /opt/aleph2-home/apps/plugins/spark_technology.jar)
+export SPARK_SCRIPT_FILE=$(ls /opt/aleph2-home/apps/plugins/spark_script_engine.jar)
 
 #############################
 
@@ -212,6 +213,38 @@ var share={
 "mediaType" : "application/java-archive", 
 "documentLocation" : 
 	{ "collection" : "$SPARK_FILE" }, 
+"communities" : [ { 
+		"_id" : ObjectId("4c927585d591d31d7b37097a"), 
+		"name" : "Infinit.e System Community", 	
+		"comment" : "Added by addWidgetsToMongo.sh" 
+	} ] 
+}
+
+var curr = db.share.findOne( { "_id" : id } , { _id : 1 } );
+if (curr) db.share.update( { "_id" : id } , { \$set: { title: share.title, modified: share.modified, documentLocation: { "collection" : share.documentLocation.collection } } }, false, false );
+if (!curr) db.share.save(share);
+
+/////////////////////////////////////////////////////////////
+//
+// Spark script engine
+
+//(CHANGE ID FOR EACH NEW ENGINE)
+var id = ObjectId("52f43a222222222000000070");
+
+use social;
+var share={ 
+"_id" : id, 
+"created" : ISODate("$cur_date"), 
+"modified" : ISODate("$cur_date"), 
+"owner" : { "_id" : ObjectId("4e3706c48d26852237078005"), 
+"email" : "$ADMIN_EMAIL", "displayName" : "Admin Infinite" }, 
+"endorsed" : [  ObjectId("4c927585d591d31d7b37097a") ], 
+"type" : "binary",
+"title" : "/app/aleph2/library/spark_script_engine.jar", 
+"description" : "com.ikanow.aleph2.analytics.spark.assets.SparkScalaInterpreterTopology", 
+"mediaType" : "application/java-archive", 
+"documentLocation" : 
+	{ "collection" : "$SPARK_SCRIPT_FILE" }, 
 "communities" : [ { 
 		"_id" : ObjectId("4c927585d591d31d7b37097a"), 
 		"name" : "Infinit.e System Community", 	
