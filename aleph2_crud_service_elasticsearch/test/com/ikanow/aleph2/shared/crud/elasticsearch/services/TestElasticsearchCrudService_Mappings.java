@@ -33,6 +33,7 @@ import java.util.function.Supplier;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import scala.Tuple2;
@@ -110,6 +111,7 @@ public class TestElasticsearchCrudService_Mappings {
 	}
 	
 	@Test
+	@Ignore
 	public void test_MultipleMappingsPerIndex_singleStore() throws InterruptedException, ExecutionException {
 		
 		// Using normal type system: should fail
@@ -240,6 +242,7 @@ public class TestElasticsearchCrudService_Mappings {
 	}
 	
 	@Test
+	@Ignore
 	public void test_MultipleMappingsPerIndex_multiStore() throws InterruptedException, ExecutionException {
 		
 		// 1) Check fails with mixed mapping
@@ -408,6 +411,7 @@ public class TestElasticsearchCrudService_Mappings {
 	/////////////////////////////////////////////////////
 
 	@Test
+	@Ignore
 	public void test_MultipleMappingsPerIndex_multiStore_batch() throws InterruptedException, ExecutionException {
 		
 		// 1) Check fails with mixed mapping

@@ -66,6 +66,7 @@ import org.elasticsearch.client.Client;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.index.mapper.MapperParsingException;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.IndexNotFoundException;
@@ -202,7 +203,6 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 	private IndexRequestBuilder singleObjectIndexRequest(final Either<ReadWriteContext, Tuple2<String, String>> rw_context, 
 			final Either<O, Tuple2<String, String>> new_object, final boolean replace_if_present, final boolean bulk)
 	{
-		//String id = ((JsonNode)new_object.left()).remove(JsonUtils._ID);
 		final Either<JsonNode, Tuple2<String, String>> json_object =
 				new_object.left().map(left-> {
 					return ((JsonNode.class.isAssignableFrom(_state.clazz))
@@ -417,7 +417,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 						while (it.hasNext()) {
 							final BulkItemResponse bir = it.next();
 							if (bir.isFailed()) {								
-								if (bir.getFailure().getMessage().startsWith("MapperParsingException")) {
+								if (bir.getFailure().getCause() instanceof MapperParsingException) {
 									final Set<String> fixed_type_fields = rw_context.typeContext().fixed_type_fields();
 									if (!fixed_type_fields.isEmpty()) {
 										// Obtain the field name from the exception (if we fail then drop the record) 
