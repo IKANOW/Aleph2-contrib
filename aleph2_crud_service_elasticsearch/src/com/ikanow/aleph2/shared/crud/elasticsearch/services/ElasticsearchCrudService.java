@@ -562,7 +562,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 							_state.client.prepareSearch()
 							.setIndices(_state.es_context.indexContext().getReadableIndexArray(Optional.empty()))
 							.setTypes(_state.es_context.typeContext().getReadableTypeArray())
-							.setQuery(QueryBuilders.constantScoreQuery(query._1()))
+							.setQuery(QueryBuilders.boolQuery().filter(query._1()))
 							.setSize(1))
 						.map(s -> field_list.isEmpty() 
 								? s 
@@ -690,7 +690,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 							_state.client.prepareSearch()
 							.setIndices(_state.es_context.indexContext().getReadableIndexArray(Optional.empty()))
 							.setTypes(_state.es_context.typeContext().getReadableTypeArray())
-							.setQuery(QueryBuilders.constantScoreQuery(query._1()))							
+							.setQuery(QueryBuilders.boolQuery().filter(query._1()))							
 							)
 						.map(s -> (null != spec.getLimit())
 									? s.setSize(spec.getLimit().intValue())
@@ -740,7 +740,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			final CountRequestBuilder crb = _state.client.prepareCount()
 					.setIndices(_state.es_context.indexContext().getReadableIndexArray(Optional.empty()))
 					.setTypes(_state.es_context.typeContext().getReadableTypeArray())
-					.setQuery(QueryBuilders.constantScoreQuery(query._1()))
+					.setQuery(QueryBuilders.boolQuery().filter(query._1()))
 					;
 			
 			return ElasticsearchFutureUtils.wrap(crb.execute(), cr -> {
@@ -898,7 +898,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 							_state.client.prepareSearch()
 							.setIndices(_state.es_context.indexContext().getReadableIndexArray(Optional.empty()))
 							.setTypes(_state.es_context.typeContext().getReadableTypeArray())
-							.setQuery(QueryBuilders.constantScoreQuery(query._1()))
+							.setQuery(QueryBuilders.boolQuery().filter(query._1()))
 							.setSize(1))
 						.get();
 			
@@ -991,7 +991,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			final SearchRequestBuilder srb = Optional.of(_state.client.prepareSearch()
 						.setIndices(_state.es_context.indexContext().getReadableIndexArray(Optional.empty()))
 						.setTypes(_state.es_context.typeContext().getReadableTypeArray())
-						.setQuery(QueryBuilders.constantScoreQuery(query._1()))
+						.setQuery(QueryBuilders.boolQuery().filter(query._1()))
 						.setSize(1000)
 						.setFetchSource(false)
 						.setNoFields())

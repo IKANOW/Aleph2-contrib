@@ -31,6 +31,7 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -172,7 +173,7 @@ public class TestElasticsearchUtils {
 			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1b = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1b);
 			
 			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
-													.startObject("and").startArray("filters")
+													.startObject("bool").startArray("must")
 														.startObject()
 															.startObject("term")
 																.field("bool_field", true)
@@ -219,7 +220,7 @@ public class TestElasticsearchUtils {
 			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_2b = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_2b);
 			
 			final XContentBuilder expected_2 = XContentFactory.jsonBuilder().startObject()
-													.startObject("or").startArray("filters")
+													.startObject("bool").startArray("should")
 														.startObject()
 															.startObject("term")
 																.field("string_field", "string_field")
@@ -228,7 +229,6 @@ public class TestElasticsearchUtils {
 														.startObject()
 															.startObject("terms")
 																.array("string_field", "test1a", "test1b")
-																.field("execution", "or")
 															.endObject()
 														.endObject()
 														.startObject()
@@ -237,20 +237,33 @@ public class TestElasticsearchUtils {
 															.endObject()
 														.endObject()
 														.startObject()
-															.startObject("not").startObject("filter")
+															.startObject("not").startObject("query")
 																.startObject("exists")
 																	.field("field", "long_field")
 																.endObject()
 															.endObject().endObject()
 														.endObject()
 														.startObject()
-															.startObject("terms")
-																.array("long_field", 10, 11, 12)
-																.field("execution", "and")
-															.endObject()
-														.endObject()
+															.startObject("bool").startArray("must")
+																.startObject()
+																	.startObject("term")
+																		.field("long_field", 10)
+																	.endObject()
+																.endObject()
+																.startObject()
+																	.startObject("term")
+																		.field("long_field", 11)
+																	.endObject()
+																.endObject()
+																.startObject()
+																	.startObject("term")
+																		.field("long_field", 12)
+																	.endObject()
+																.endObject()
+															.endArray()
+														.endObject().endObject()
 														.startObject()
-															.startObject("not").startObject("filter")
+															.startObject("not").startObject("query")
 																.startObject("term")
 																	.field("long_field", 13)
 																.endObject()
@@ -309,7 +322,7 @@ public class TestElasticsearchUtils {
 
 		final XContentBuilder expected_1 = 
 				XContentFactory.jsonBuilder().startObject()
-					.startObject("and").startArray("filters")
+					.startObject("bool").startArray("must")
 						.startObject()
 							.startObject("range")
 								.startObject("string_field")
@@ -429,11 +442,10 @@ public class TestElasticsearchUtils {
 															.orderBy(Tuples._2T("test_field_2", -1));
 															
 			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);			
-					
 			
 			final XContentBuilder expected_1 = 
 					XContentFactory.jsonBuilder().startObject()
-					.startObject("and").startArray("filters")
+					.startObject("bool").startArray("must")
 						.startObject()
 							.startObject("term")
 								.field("string_field", "a")
@@ -447,7 +459,6 @@ public class TestElasticsearchUtils {
 						.startObject()
 							.startObject("terms")
 								.array("nested_list.nested_string_field", "x", "y")
-								.field("execution", "or")
 							.endObject()
 						.endObject()
 						.startObject()
@@ -501,7 +512,7 @@ public class TestElasticsearchUtils {
 
 			final XContentBuilder expected_2 = 
 					XContentFactory.jsonBuilder().startObject()
-					.startObject("and").startArray("filters")
+					.startObject("bool").startArray("must")
 						.startObject()
 							.startObject("term")
 								.field("string_field", "a")
@@ -520,7 +531,6 @@ public class TestElasticsearchUtils {
 						.startObject()
 							.startObject("terms")
 								.array("nested_list.nested_string_field", "x", "y")
-								.field("execution", "or")
 							.endObject()
 						.endObject()
 						.startObject()
@@ -539,7 +549,7 @@ public class TestElasticsearchUtils {
 							.endObject()
 						.endObject()
 						.startObject()
-							.startObject("not").startObject("filter")
+							.startObject("not").startObject("query")
 								.startObject("exists")
 									.field("field", "nested_list.nested_object.nested_nested_string_field")
 								.endObject()
@@ -577,7 +587,7 @@ public class TestElasticsearchUtils {
 			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
 			
 			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
-													.startObject("and").startArray("filters")
+													.startObject("bool").startArray("must")
 														.startObject()
 															.startObject("term")
 																.field("bool_field", true)
@@ -637,14 +647,14 @@ public class TestElasticsearchUtils {
 			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
 			
 			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
-													.startObject("and").startArray("filters")
+													.startObject("bool").startArray("must")
 														.startObject()
 															.startObject("term")
 																.field("bool_field", true)
 															.endObject()
 														.endObject()
 														.startObject()
-															.startObject("not").startObject("filter")
+															.startObject("not").startObject("query")
 																.startObject("ids")
 																	.array("types")
 																	.array("values", "not_id")
@@ -667,14 +677,14 @@ public class TestElasticsearchUtils {
 			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
 			
 			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
-													.startObject("and").startArray("filters")
+													.startObject("bool").startArray("must")
 														.startObject()
 															.startObject("term")
 																.field("bool_field", true)
 															.endObject()
 														.endObject()
 														.startObject()
-															.startObject("not").startObject("filter")
+															.startObject("not").startObject("query")
 																.startObject("type")
 																	.field("value", "not_id")
 																	.endObject()
@@ -696,7 +706,7 @@ public class TestElasticsearchUtils {
 			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
 			
 			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
-													.startObject("and").startArray("filters")
+													.startObject("bool").startArray("must")
 														.startObject()
 															.startObject("term")
 																.field("bool_field", true)
@@ -723,7 +733,7 @@ public class TestElasticsearchUtils {
 			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1);
 			
 			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
-													.startObject("and").startArray("filters")
+													.startObject("bool").startArray("must")
 														.startObject()
 															.startObject("term")
 																.field("bool_field", true)
@@ -809,7 +819,7 @@ public class TestElasticsearchUtils {
 			final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> query_meta_1 = ElasticsearchUtils.convertToElasticsearchFilter(query_comp_1, true);
 			
 			final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
-													.startObject("and").startArray("filters")
+													.startObject("bool").startArray("must")
 														.startObject()
 															.startObject("term")
 																.field("bool_field", true)
@@ -872,7 +882,7 @@ public class TestElasticsearchUtils {
 		
 		Function<XContentBuilder, XContentBuilder> xcbuilder = Lambdas.wrap_u(xcb ->
 				xcb.startObject()
-					.startObject("and").startArray("filters")
+					.startObject("bool").startArray("must")
 						.startObject()
 							.startObject("range")
 								.startObject("string_field")
@@ -970,16 +980,16 @@ public class TestElasticsearchUtils {
 	
 			final XContentBuilder multi_expected_1 = xcbuilder.apply(
 					XContentFactory.jsonBuilder().startObject()
-						.startObject("and").startArray("filters")
+						.startObject("bool").field("must")
 						)
-						.endArray().endObject()
+						.endObject()
 					.endObject();
 	
 			final XContentBuilder multi_expected_2 = xcbuilder.apply(
 					XContentFactory.jsonBuilder().startObject()
-						.startObject("or").startArray("filters")
+						.startObject("bool").field("should")
 						)
-						.endArray().endObject()
+						.endObject()
 					.endObject();
 			
 			assertEquals(sortOutQuotesAndStuff(multi_expected_1.string()), toXContentThenString(query_meta_1._1()));
@@ -1019,7 +1029,7 @@ public class TestElasticsearchUtils {
 
 			Function<XContentBuilder, XContentBuilder> xcbuilder_2 = Lambdas.wrap_u(xcb ->
 				xcb.startObject()
-					.startObject("and").startArray("filters")
+					.startObject("bool").startArray("must")
 					.startObject()
 						.startObject("term")
 							.field("string_field", "a")
@@ -1033,7 +1043,6 @@ public class TestElasticsearchUtils {
 					.startObject()
 						.startObject("terms")
 							.array("nested_list.nested_string_field", "x", "y")
-							.field("execution", "or")
 						.endObject()
 					.endObject()
 					.startObject()
@@ -1052,7 +1061,7 @@ public class TestElasticsearchUtils {
 						.endObject()
 					.endObject()
 					.startObject()
-						.startObject("not").startObject("filter")
+						.startObject("not").startObject("query")
 							.startObject("exists")
 								.field("field", "nested_list.nested_object.nested_nested_string_field")
 							.endObject()
@@ -1073,7 +1082,7 @@ public class TestElasticsearchUtils {
 
 			final XContentBuilder multi_expected_3 =
 				Lambdas.wrap_u(__ -> 
-					XContentFactory.jsonBuilder().startObject().startObject("and").startArray("filters"))
+					XContentFactory.jsonBuilder().startObject().startObject("bool").startArray("must"))
 							.andThen(xcbuilder)
 							.andThen(xcbuilder_2)
 						.apply(null)
@@ -1082,7 +1091,7 @@ public class TestElasticsearchUtils {
 			
 			final XContentBuilder multi_expected_4 =
 					Lambdas.wrap_u(__ -> 
-						XContentFactory.jsonBuilder().startObject().startObject("or").startArray("filters"))
+						XContentFactory.jsonBuilder().startObject().startObject("bool").startArray("should"))
 								.andThen(xcbuilder)
 								.andThen(xcbuilder_2)
 							.apply(null)
@@ -1140,49 +1149,49 @@ public class TestElasticsearchUtils {
 		final Tuple2<QueryBuilder, UnaryOperator<SearchRequestBuilder>> multi_query_meta_2 = ElasticsearchUtils.convertToElasticsearchFilter(multi_query_test_2);
 		
 		final XContentBuilder expected_1 = XContentFactory.jsonBuilder().startObject()
-				.startObject("or").startArray("filters")
+				.startObject("bool").startArray("should")
 					.startObject()				
-						.startObject("and").startArray("filters")
+						.startObject("bool").startArray("must")
 							.startObject()
-								.startObject("or").startArray("filters")
+								.startObject("bool").field("should")
 									.startObject()				
 										.startObject("term")
 											.field("string_field", "string_field")
 										.endObject()
 									.endObject()
-								.endArray().endObject()
+								.endObject()
 							.endObject()
 							.startObject()
-								.startObject("and").startArray("filters")
+								.startObject("bool").field("must")
 									.startObject()
 										.startObject("term")
 											.field("bool_field", true)
 										.endObject()
 									.endObject()
-								.endArray().endObject()
+								.endObject()
 							.endObject()
 						.endArray().endObject()
 					.endObject()
 					
 					.startObject()				
-						.startObject("and").startArray("filters")
+						.startObject("bool").startArray("must")
 							.startObject()
-								.startObject("and").startArray("filters")
+								.startObject("bool").field("must")
 									.startObject()
 										.startObject("term")
 											.field("string_field", "string_field_b")
 										.endObject()
 									.endObject()
-								.endArray().endObject()
+								.endObject()
 							.endObject()
 							.startObject()
-								.startObject("or").startArray("filters")
+								.startObject("bool").field("should")
 									.startObject()
 										.startObject("term")
 											.field("bool_field", false)
 										.endObject()
 									.endObject()
-								.endArray().endObject()
+								.endObject()
 							.endObject()
 						.endArray().endObject()
 					.endObject()
@@ -1191,38 +1200,38 @@ public class TestElasticsearchUtils {
 			.endObject();
 		
 		final XContentBuilder expected_2 = XContentFactory.jsonBuilder().startObject()
-				.startObject("and").startArray("filters")
+				.startObject("bool").startArray("must")
 					.startObject()				
-						.startObject("and").startArray("filters")
+						.startObject("bool").startArray("must")
 							.startObject()
-								.startObject("or").startArray("filters")
+								.startObject("bool").field("should")
 									.startObject()				
 										.startObject("term")
 											.field("string_field", "string_field")
 										.endObject()
 									.endObject()
-								.endArray().endObject()
+								.endObject()
 							.endObject()
 							.startObject()
-								.startObject("and").startArray("filters")
+								.startObject("bool").field("must")
 									.startObject()
 										.startObject("term")
 											.field("bool_field", true)
 										.endObject()
 									.endObject()
-								.endArray().endObject()
+								.endObject()
 							.endObject()
 						.endArray().endObject()
 					.endObject()
 					
 					.startObject()				
-						.startObject("and").startArray("filters")
+						.startObject("bool").field("must")
 							.startObject()
 								.startObject("term")
 									.field("string_field", "string_field_b")
 								.endObject()
 							.endObject()
-						.endArray().endObject()
+						.endObject()
 					.endObject()
 					
 				.endArray().endObject()

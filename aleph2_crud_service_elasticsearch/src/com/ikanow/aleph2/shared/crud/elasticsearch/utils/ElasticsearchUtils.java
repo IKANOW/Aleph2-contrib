@@ -15,6 +15,7 @@
  *******************************************************************************/
 package com.ikanow.aleph2.shared.crud.elasticsearch.utils;
 
+import java.util.Collection;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.List;
@@ -139,8 +140,8 @@ public class ElasticsearchUtils {
 				.when(op_args -> field.equals("_type") && (Operator.any_of == op_args._1()), __ -> { throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "any_of/_type")); })
 				.when(op_args -> field.equals("_type") && (Operator.all_of == op_args._1()), __ -> { throw new RuntimeException(ErrorUtils.ALL_OF_ON_TYPES); }) 				
 				
-				.when(op_args -> (Operator.any_of == op_args._1()), op_args -> QueryBuilders.termsQuery(field, (Iterable<?>)op_args._2()._1()))
-				.when(op_args -> (Operator.all_of == op_args._1()), op_args -> StreamUtils.stream((Iterable<?>)op_args._2()._1()).reduce(QueryBuilders.boolQuery(), (acc, v) -> acc.must(QueryBuilders.termQuery(field, v)), (a1, a2)->a1) )
+				.when(op_args -> (Operator.any_of == op_args._1()), op_args -> QueryBuilders.termsQuery(field, (Collection<?>)op_args._2()._1()))
+				.when(op_args -> (Operator.all_of == op_args._1()), op_args -> StreamUtils.stream((Collection<?>)op_args._2()._1()).reduce(QueryBuilders.boolQuery(), (acc, v) -> acc.must(QueryBuilders.termQuery(field, v)), (a1, a2)->a1) )
 
 				//(es - handle _ids/_types differently)
 				.when(op_args -> field.equals(JsonUtils._ID) && (Operator.equals == op_args._1()) && (null != op_args._2()._2()), op_args -> QueryBuilders.notQuery(QueryBuilders.idsQuery().addIds(op_args._2()._2().toString())) )
