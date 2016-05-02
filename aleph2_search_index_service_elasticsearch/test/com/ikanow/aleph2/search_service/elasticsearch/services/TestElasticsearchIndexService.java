@@ -38,6 +38,7 @@ import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesRequest;
 import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesResponse;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.Mockito;
 
@@ -678,10 +679,12 @@ public class TestElasticsearchIndexService {
 	// (including getCrudService)
 	
 	@Test
+	@Ignore
 	public void test_endToEnd_autoTime() throws IOException, InterruptedException, ExecutionException {
 		test_endToEnd_autoTime(true, Optional.empty());
 	}
 	@Test
+	@Ignore
 	public void test_endToEnd_autoTime_nonDefaultPrimary() throws IOException, InterruptedException, ExecutionException {
 		test_endToEnd_autoTime(true, Optional.of("primary_test"));
 	}
