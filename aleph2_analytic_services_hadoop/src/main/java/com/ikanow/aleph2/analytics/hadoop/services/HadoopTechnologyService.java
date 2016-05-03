@@ -264,7 +264,7 @@ public class HadoopTechnologyService implements IAnalyticsTechnologyService, IEx
 		wrapped_context.setBucket(converted_bucket);
 
 		final BeJobLauncher beJobService = new BeJobLauncher(wrapped_context.getServiceContext().getGlobalProperties(), wrapped_context);
-		final Validation<String, Job> result = beJobService.runEnhancementJob(converted_bucket, test_spec);
+		final Validation<String, Job> result = beJobService.runEnhancementJob(converted_bucket, test_spec, Optional.ofNullable(context.getLogger(Optional.of(analytic_bucket))));
 
 		return result;
 	}

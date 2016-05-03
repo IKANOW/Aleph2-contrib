@@ -36,6 +36,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -52,6 +53,7 @@ import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.hadoop.utils.HadoopBatchEnrichmentUtils;
 import com.ikanow.aleph2.analytics.services.BatchEnrichmentContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ISecurityService;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputBean;
@@ -111,7 +113,7 @@ public class BeJobLauncher implements IBeJobService{
 	 * @see com.ikanow.aleph2.analytics.hadoop.services.IBeJobService#runEnhancementJob(java.lang.String, java.lang.String, java.lang.String)
 	 */
 	@Override
-	public Validation<String, Job> runEnhancementJob(final DataBucketBean bucket, final Optional<ProcessingTestSpecBean> testSpec){
+	public Validation<String, Job> runEnhancementJob(final DataBucketBean bucket, final Optional<ProcessingTestSpecBean> testSpec, final Optional<IBucketLogger> a2_logger){
 		
 		final Configuration config = getHadoopConfig();
 		
@@ -176,6 +178,11 @@ public class BeJobLauncher implements IBeJobService{
 						
 							logger.info(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));
 							
+							a2_logger.ifPresent(l -> l.log(Level.INFO, true, 
+									() -> ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))),
+									() -> this.getClass().getSimpleName(), 
+									() -> "startAnalyticJobOrTest"));
+							
 						    final Job inputJob = Job.getInstance(config);
 						    inputJob.setInputFormatClass(BeFileInputFormat.class);				
 							paths.stream().forEach(Lambdas.wrap_consumer_u(path -> FileInputFormat.addInputPath(inputJob, new Path(path))));
@@ -188,10 +195,19 @@ public class BeJobLauncher implements IBeJobService{
 							Optional<HadoopBatchEnrichmentUtils.HadoopAccessContext> input_format_info = _batchEnrichmentContext.getAnalyticsContext().getServiceInput(HadoopBatchEnrichmentUtils.HadoopAccessContext.class, Optional.of(bucket), _batchEnrichmentContext.getJob(), input_with_test_settings);
 							if (!input_format_info.isPresent()) {
 								logger.warn(ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input_with_test_settings)));
+								
+								a2_logger.ifPresent(l -> l.log(Level.WARN, true, 
+										() -> ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input_with_test_settings)),
+										() -> this.getClass().getSimpleName(), 
+										() -> "startAnalyticJobOrTest"));
 							}
 							else {
-								logger.info(ErrorUtils.get("Adding data service path for bucket {0}: {1}", bucket.full_name(),
-										input_format_info.get().describe()));
+								logger.info(ErrorUtils.get("Adding data service path for bucket {0}: {1}", bucket.full_name(), input_format_info.get().describe()));
+
+								a2_logger.ifPresent(l -> l.log(Level.INFO, true, 
+										() -> ErrorUtils.get("Adding data service path for bucket {0}: {1}", bucket.full_name(), input_format_info.get().describe()),
+										() -> this.getClass().getSimpleName(), 
+										() -> "startAnalyticJobOrTest"));								
 								
 							    final Job inputJob = Job.getInstance(config);
 							    inputJob.setInputFormatClass(input_format_info.get().getAccessService().either(l -> l.getClass(), r -> r));
@@ -207,6 +223,11 @@ public class BeJobLauncher implements IBeJobService{
 			if (!inputBuilder.hasInputs()) {
 				// No way of returning this to the bucket status, could have a Tuple2<Job, String> with the number of inputs broken down maybe)
 				logger.warn(ErrorUtils.get("No data in specified inputs for bucket {0} job {1}", bucket.full_name(), _batchEnrichmentContext.getJob()));
+				
+				a2_logger.ifPresent(l -> l.log(Level.WARN, true, 
+						() -> ErrorUtils.get("No data in specified inputs for bucket {0} job {1}", bucket.full_name(), _batchEnrichmentContext.getJob()),
+						() -> this.getClass().getSimpleName(), 
+						() -> "startAnalyticJobOrTest"));				
 			}
 					
 		    // Now do everything else
@@ -216,7 +237,7 @@ public class BeJobLauncher implements IBeJobService{
 		    
 			final String jobName = BucketUtils.getUniqueSignature(bucket.full_name(), Optional.ofNullable(_batchEnrichmentContext.getJob().name()));
 			
-			this.handleHadoopConfigOverrides(bucket, config);
+			this.handleHadoopConfigOverrides(bucket, config, a2_logger);
 			
 		    // do not set anything into config past this line (can set job.getConfiguration() elements though - that is what the builder does)
 		    job.set(Job.getInstance(config, jobName));
@@ -283,6 +304,14 @@ public class BeJobLauncher implements IBeJobService{
 				if (job.isSet()) {
 					logger.error(ErrorUtils.get("Error submitting, config= {0}",  
 							Optionals.streamOf(job.get().getConfiguration().iterator(), false).map(kv -> kv.getKey() + ":" + kv.getValue()).collect(Collectors.joining("; "))));
+					
+					a2_logger.ifPresent(l -> l.log(Level.ERROR, true, 
+							() -> ErrorUtils.get("Error submitting, config= {0}",  
+									Optionals.streamOf(job.get().getConfiguration().iterator(), false).map(kv -> kv.getKey() + ":" + kv.getValue()).collect(Collectors.joining("; ")))
+									,
+							() -> this.getClass().getSimpleName(), 
+							() -> "startAnalyticJobOrTest"));				
+					
 				}			
 				return Validation.fail(ErrorUtils.getLongForm("{0}", tt));
 			}
@@ -297,7 +326,7 @@ public class BeJobLauncher implements IBeJobService{
 	 * @param bucket
 	 * @param config
 	 */
-	protected void handleHadoopConfigOverrides(final DataBucketBean bucket, final Configuration config) {
+	protected void handleHadoopConfigOverrides(final DataBucketBean bucket, final Configuration config, final Optional<IBucketLogger> a2_logger) {
 		// Try to minimize class conflicts vs Hadoop's ancient libraries:
 		config.set("mapreduce.job.user.classpath.first", "true");		
 		
@@ -342,6 +371,13 @@ public class BeJobLauncher implements IBeJobService{
 			logger.info(ErrorUtils.get("Hadoop-level overrides for bucket {0}: {1}", bucket.full_name(),
 					task_overrides.keySet().stream().collect(Collectors.joining(","))
 					));
+			
+			a2_logger.ifPresent(l -> l.log(Level.INFO, true, 
+					() -> ErrorUtils.get("Hadoop-level overrides for bucket {0}: {1}", bucket.full_name(),
+							task_overrides.keySet().stream().collect(Collectors.joining(","))
+							),
+					() -> this.getClass().getSimpleName(), 
+					() -> "startAnalyticJobOrTest"));				
 			
 			task_overrides.entrySet().forEach(kv -> config.set(kv.getKey().replace(":", "."), kv.getValue()));
 		}		

@@ -47,6 +47,7 @@ import com.ikanow.aleph2.analytics.spark.utils.SparkPyTechnologyUtils;
 import com.ikanow.aleph2.analytics.spark.utils.SparkTechnologyUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsTechnologyService;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IExtraDependencyLoader;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadTriggerBean.AnalyticThreadComplexTriggerBean;
@@ -277,6 +278,8 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 			Optional<ProcessingTestSpecBean> test_spec
 			)
 	{
+		final Optional<IBucketLogger> a2_logger = Optional.ofNullable(context.getLogger(Optional.of(analytic_bucket)));
+		
 		try {
 			final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
 			final String bucket_signature = BucketUtils.getUniqueSignature(analytic_bucket.full_name(), Optional.of(job_to_start.name()));
@@ -304,13 +307,28 @@ public class SparkTechnologyService implements IAnalyticsTechnologyService, IExt
 			_logger.log(DEBUG_LEVEL, "start_job_results = " + err_pid);						
 			
 			if (null != err_pid._1()) {
+				a2_logger.ifPresent(l -> l.log(Level.ERROR, true, 
+						() -> "Failed to launch Spark client: " + err_pid._1(),
+						() -> this.getClass().getSimpleName() + "." + Optional.ofNullable(job_to_start.name()).orElse("no_name"), 
+						() -> "startAnalyticJobOrTest"));
+				
 				return Validation.fail("Failed to launch Spark client: " + err_pid._1());
 			}
 			else {
+				a2_logger.ifPresent(l -> l.log(Level.INFO, true, 
+						() -> "Launched Spark client: " + err_pid._2(),
+						() -> this.getClass().getSimpleName() + "." + Optional.ofNullable(job_to_start.name()).orElse("no_name"), 
+						() -> "startAnalyticJobOrTest"));
+				
 				return Validation.success("Launched Spark client: " + err_pid._2());
 			}
 		}
 		catch (Throwable e) {
+			a2_logger.ifPresent(l -> l.log(Level.ERROR, true, 
+					() -> ErrorUtils.getLongForm("startAnalyticJobOrTest: {0}", e),
+					() -> this.getClass().getSimpleName() + "." + Optional.ofNullable(job_to_start.name()).orElse("no_name"), 
+					() -> "startAnalyticJobOrTest"));			
+			
 			return Validation.fail(ErrorUtils.getLongForm("startAnalyticJobOrTest: {0}", e));
 		}
 	}

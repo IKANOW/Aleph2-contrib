@@ -28,6 +28,9 @@ import java.util.stream.Collectors;
 
 
 
+
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.RecordReader;
@@ -42,7 +45,12 @@ import org.elasticsearch.hadoop.mr.EsInputFormat;
 
 
 
+
+import org.elasticsearch.hadoop.mr.HadoopCfgUtils;
+
 import scala.Tuple2;
+
+
 
 
 
@@ -127,6 +135,22 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 			_max_records_per_split = Optional.ofNullable(context.getConfiguration().get(BE_DEBUG_MAX_SIZE))
 										.map(str -> Long.parseLong(str))
 										.orElse(Long.MAX_VALUE);
+
+			// Spark has some issues with oddly set config it would appear?
+			{
+				final Configuration config = context.getConfiguration();
+				try {					
+					HadoopCfgUtils.getTaskTimeout(config);
+				}
+				catch (Exception e) {
+					context.getConfiguration().set("mapreduce.task.timeout", "300000");					
+					/**/
+					System.out.println("ODD CONFIG ISSUE IN SPARK:");
+			        for (java.util.Map.Entry<String, String> entry : config) {
+			            System.out.println("CFG: " + entry.getKey() + " = " + entry.getValue());
+			        }
+				}
+			}
 			
 			Lambdas.wrap_runnable_u(() -> _delegate.initialize(split, context)).run();
 		}

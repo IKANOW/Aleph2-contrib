@@ -6,8 +6,10 @@
   <properties>
 	<aleph2.version>2.9.0</aleph2.version>
 	<aleph2.scope>compile</aleph2.scope>
-	<aleph2.hadoop>2.7.1</aleph2.hadoop>
+	<aleph2.hadoop>2.7.1</aleph2.hadoop>	
 	<maven.test.skip>true</maven.test.skip>
+	<!-- (jackson needs to be locked to whatever aleph2_data_model is at) -->
+	<jackson.version>2.3.1</jackson.version>
   </properties>
   <build>
     <plugins>
@@ -156,7 +158,7 @@
 	<dependency>
 		<groupId>com.fasterxml.jackson.dataformat</groupId>
 		<artifactId>jackson-dataformat-xml</artifactId>
-		<version>2.6.2</version>
+		<version>${jackson.version}</version>
 		<exclusions>
 			<exclusion>
 				<artifactId>jackson-core</artifactId>

@@ -44,6 +44,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -64,6 +65,7 @@ import com.ikanow.aleph2.core.shared.utils.JarBuilderUtil;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputBean;
 import com.ikanow.aleph2.data_model.objects.data_analytics.AnalyticThreadJobBean.AnalyticThreadJobInputConfigBean;
@@ -81,6 +83,7 @@ import com.ikanow.aleph2.analytics.hadoop.utils.HadoopTechnologyUtils;
 import com.ikanow.aleph2.analytics.spark.assets.BeFileInputFormat_Pure;
 import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean;
 import com.ikanow.aleph2.analytics.spark.data_model.SparkTopologyConfigBean.SparkType;
+import com.ikanow.aleph2.analytics.spark.services.SparkTechnologyService;
 
 /** Utilities for building spark jobs
  * @author Alex
@@ -401,12 +404,19 @@ public class SparkTechnologyUtils {
 			.filter(input -> !exclude_names.contains(input.name()))
 			.forEach(Lambdas.wrap_consumer_u(input_with_test_settings -> {
 				
+				final Optional<IBucketLogger> a2_logger = Optional.ofNullable(context.getLogger(Optional.of(bucket)));
+				
 				final List<String> paths = context.getInputPaths(Optional.empty(), job, input_with_test_settings);
 				
 				if (!paths.isEmpty()) {
 				
 					_logger.info(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));
 	
+					a2_logger.ifPresent(l -> l.log(Level.INFO, true, 
+							() -> ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))),
+							() -> SparkTechnologyService.class.getSimpleName() + "." + Optional.ofNullable(job.name()).orElse("no_name"), 
+							() -> "startAnalyticJobOrTest"));
+					
 					//DEBUG
 					//System.out.println(ErrorUtils.get("Adding storage paths for bucket {0}: {1}", bucket.full_name(), paths.stream().collect(Collectors.joining(";"))));	
 					
@@ -423,13 +433,22 @@ public class SparkTechnologyUtils {
 					if (!input_format_info.isPresent()) {
 						_logger.warn(ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input_with_test_settings)));
 	
+						a2_logger.ifPresent(l -> l.log(Level.WARN, true, 
+								() -> ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input_with_test_settings)),
+								() -> SparkTechnologyService.class.getSimpleName() + "." + Optional.ofNullable(job.name()).orElse("no_name"), 
+								() -> "startAnalyticJobOrTest"));						
+						
 						//DEBUG
 						//System.out.println(ErrorUtils.get("Tried but failed to get input format from {0}", BeanTemplateUtils.toJson(input_with_test_settings)));
 					}
 					else {
-						_logger.info(ErrorUtils.get("Adding data service path for bucket {0}: {1}", bucket.full_name(),
-								input_format_info.get().describe()));
+						_logger.info(ErrorUtils.get("Adding data service path for bucket {0}: {1}", bucket.full_name(), input_format_info.get().describe()));
 	
+						a2_logger.ifPresent(l -> l.log(Level.INFO, true, 
+								() -> ErrorUtils.get("Adding data service path for bucket {0}: {1}", bucket.full_name(), input_format_info.get().describe()),
+								() -> SparkTechnologyService.class.getSimpleName() + "." + Optional.ofNullable(job.name()).orElse("no_name"), 
+								() -> "startAnalyticJobOrTest"));
+						
 						//DEBUG
 						//System.out.println(ErrorUtils.get("Adding data service path for bucket {0}: {1}", bucket.full_name(),input_format_info.get().describe()));
 						
@@ -524,7 +543,7 @@ public class SparkTechnologyUtils {
 	 */
 	public static BasicMessageBean validateJobs(final DataBucketBean new_analytic_bucket, final Collection<AnalyticThreadJobBean> jobs) {
 		
-		//TODO: validate batch enrichment				
+		//TODO (ALEPH-63): validate batch enrichment				
 		
 		final LinkedList<String> mutable_errs = new LinkedList<>();
 		
