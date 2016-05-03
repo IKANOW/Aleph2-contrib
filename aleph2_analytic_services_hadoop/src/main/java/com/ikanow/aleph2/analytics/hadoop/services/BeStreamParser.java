@@ -32,6 +32,8 @@ import com.ikanow.aleph2.core.shared.utils.BatchRecordUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 
+//TODO (ALEPH-12): this isn't supposed to read the binary in until requested (And then in blocks, so can handle high memory cases)
+
 /** Parser for readining in binary data
  * @author Alex
  */

@@ -70,7 +70,8 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 
 	private static final Logger logger = LogManager.getLogger(BeJobLauncher.class);
 
-	protected final String _my_uuid = UuidUtils.get().getRandomUuid();
+	protected String LOCK_SUFFIX = ".a2_lock__";
+	protected final String _my_uuid = "." + UuidUtils.get().getRandomUuid() + LOCK_SUFFIX;
 	
 	protected CombineFileSplit _fileSplit;
 	protected InputStream _inStream = null;
@@ -89,7 +90,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	protected DataBucketBean _dataBucket;
 
 	protected List<IParser> _parsers = null; // (initialized in Initialize method) 	
-	protected Date start = null;
+	protected Date start = null;	
 	
 	/** User c'tor
 	 */
@@ -184,6 +185,19 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 				// BUT ONLY IF IT'S MY FILE!
 				final Path in = _fileSplit.getPath(_currFile);
 				if (in.toString().contains(IStorageService.TO_IMPORT_DATA_SUFFIX)) {
+					if (in.toString().endsWith(LOCK_SUFFIX)) { // this is an old file from a previous run, can simply delete it
+						_fs.delete(in, false);
+						_currFile++;
+						if (_currFile < _numFiles) {
+							if (null != _inStream) _inStream.close();
+							_inStream = null;
+							return nextKeyValue();		// (just a lazy way of getting to the next file)		
+						}
+						else {
+							return false; // all done
+						}
+					}//(end check for if is old orphaned file)
+					
 					final Path renamed = in.suffix(_my_uuid);
 					_fs.rename(in, renamed);
 					_inStream = _fs.open(renamed);

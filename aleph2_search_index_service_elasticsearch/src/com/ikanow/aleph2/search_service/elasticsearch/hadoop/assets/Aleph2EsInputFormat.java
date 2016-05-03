@@ -143,12 +143,12 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 					HadoopCfgUtils.getTaskTimeout(config);
 				}
 				catch (Exception e) {
-					context.getConfiguration().set("mapreduce.task.timeout", "300000");					
-					/**/
+					//TRACE: this happened intermittently then stopped
 					System.out.println("ODD CONFIG ISSUE IN SPARK:");
 			        for (java.util.Map.Entry<String, String> entry : config) {
 			            System.out.println("CFG: " + entry.getKey() + " = " + entry.getValue());
 			        }
+					context.getConfiguration().set("mapreduce.task.timeout", "300000");					
 				}
 			}
 			
