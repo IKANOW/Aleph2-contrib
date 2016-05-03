@@ -135,6 +135,10 @@
 					<artifactId>curator-recipes</artifactId>
 					<groupId>org.apache.curator</groupId>
 				</exclusion>
+				<exclusion>
+					<artifactId>javax.servlet</artifactId>
+					<groupId>org.eclipse.jetty.orbit</groupId>
+				</exclusion>
 			</exclusions>
 		</dependency>
 		<dependency>
@@ -220,8 +224,8 @@
 					<groupId>javax.servlet.jsp</groupId>
 				</exclusion>
 				<exclusion>
-					<artifactId>jetty-all</artifactId>
-					<groupId>org.eclipse.jetty.aggregate</groupId>
+					<artifactId>javax.servlet</artifactId>
+					<groupId>org.eclipse.jetty.orbit</groupId>
 				</exclusion>
 			</exclusions>
 		</dependency>
