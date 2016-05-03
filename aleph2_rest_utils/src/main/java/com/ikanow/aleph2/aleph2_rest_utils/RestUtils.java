@@ -15,29 +15,15 @@
  *******************************************************************************/
 package com.ikanow.aleph2.aleph2_rest_utils;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
-
-import javax.ws.rs.container.ContainerRequestContext;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.Response;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.glassfish.jersey.process.Inflector;
-import org.glassfish.jersey.server.ResourceConfig;
-import org.glassfish.jersey.server.model.Resource;
-import org.glassfish.jersey.server.model.ResourceMethod;
 
 import scala.Tuple2;
 
@@ -60,7 +46,6 @@ import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
-import com.ikanow.aleph2.data_model.utils.ModuleUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.FutureUtils.ManagementFuture;
@@ -75,7 +60,7 @@ import fj.data.Either;
  * @author Burch
  *
  */
-public class RestUtils extends ResourceConfig {
+public class RestUtils {
 	//service types
 	private static final String SERVICE_TYPE_DATA_SERVICE = "DATA_SERVICE";
 	private static final String SERVICE_TYPE_MANAGEMENT_DB = "MANAGEMENT_DB";
@@ -114,21 +99,21 @@ public class RestUtils extends ResourceConfig {
 	 * @param function
 	 * @return
 	 */
-	public static Resource buildResource(final String path, final String method, final Collection<String> consume_media_types, final Collection<String> produce_media_types, final IServiceContext service_context, final Function<ContainerRequestContext, Response> function) {
-		final Resource.Builder resourceBuilder = Resource.builder();
-		final ResourceMethod.Builder methodBuilder = resourceBuilder.addMethod(method);
-		resourceBuilder.path(path);
-		methodBuilder
-		.consumes((String[]) consume_media_types.toArray())
-		.produces((String[])produce_media_types.toArray())
-        .handledBy(new Inflector<ContainerRequestContext, Response>() {
-            @Override
-            public Response apply(ContainerRequestContext containerRequestContext) {
-            	return function.apply(containerRequestContext); 
-            }
-        });
-		return resourceBuilder.build();
-	}
+//	public static Resource buildResource(final String path, final String method, final Collection<String> consume_media_types, final Collection<String> produce_media_types, final IServiceContext service_context, final Function<ContainerRequestContext, Response> function) {
+//		final Resource.Builder resourceBuilder = Resource.builder();
+//		final ResourceMethod.Builder methodBuilder = resourceBuilder.addMethod(method);
+//		resourceBuilder.path(path);
+//		methodBuilder
+//		.consumes((String[]) consume_media_types.toArray())
+//		.produces((String[])produce_media_types.toArray())
+//        .handledBy(new Inflector<ContainerRequestContext, Response>() {
+//            @Override
+//            public Response apply(ContainerRequestContext containerRequestContext) {
+//            	return function.apply(containerRequestContext); 
+//            }
+//        });
+//		return resourceBuilder.build();
+//	}
 	
 
 	
@@ -140,14 +125,14 @@ public class RestUtils extends ResourceConfig {
 	 * @param containerRequestContext
 	 * @return
 	 */
-	public static <T> Either<String,Tuple2<ICrudService<T>, Class<T>>> parseRequest(final ContainerRequestContext containerRequestContext, final IServiceContext service_context) {
-		final String service_type = containerRequestContext.getUriInfo().getPathParameters().getFirst("service_name");
-		final String access_level = containerRequestContext.getUriInfo().getPathParameters().getFirst("read_write");
-		final String service_identifier = containerRequestContext.getUriInfo().getPathParameters().getFirst("identifier");
-		final Optional<String> bucket_full_names = Optional.ofNullable(containerRequestContext.getUriInfo().getQueryParameters().getFirst("buckets")); 
-				
-		return getCrudService(service_context, service_type, access_level, service_identifier, bucket_full_names);
-	}
+//	public static <T> Either<String,Tuple2<ICrudService<T>, Class<T>>> parseRequest(final ContainerRequestContext containerRequestContext, final IServiceContext service_context) {
+//		final String service_type = containerRequestContext.getUriInfo().getPathParameters().getFirst("service_name");
+//		final String access_level = containerRequestContext.getUriInfo().getPathParameters().getFirst("read_write");
+//		final String service_identifier = containerRequestContext.getUriInfo().getPathParameters().getFirst("identifier");
+//		final Optional<String> bucket_full_names = Optional.ofNullable(containerRequestContext.getUriInfo().getQueryParameters().getFirst("buckets")); 
+//				
+//		return getCrudService(service_context, service_type, access_level, service_identifier, bucket_full_names);
+//	}
 	
 	/**
 	 * Returns a crud service pointed at the passed in arguments
