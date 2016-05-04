@@ -29,6 +29,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import scala.Tuple2;
+import scala.Tuple3;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -55,6 +56,17 @@ public class RestCrudFunctions {
 	public enum FunctionType {
 		QUERY,
 		COUNT
+	}
+	
+	public static class CreateResponse {
+		public final String id;
+		public final Boolean success;
+		public final String message;
+		public CreateResponse(final String id, final Boolean success, final String message){
+			this.id = id;
+			this.success = success;
+			this.message = message;
+		}
 	}
 	
 	public static <T> Response readFunction(IServiceContext service_context, FunctionType function_type, String service_type, String access_level, String service_identifier, Optional<String> bucket_full_names, 
@@ -128,21 +140,19 @@ public class RestCrudFunctions {
 		}).orElseGet(()-> ((ICrudService<FileDescriptor>)crud_service_either.right().value()._1).storeObject(file_upload));
 		
 		try {
-			String res = fut.handle((ok, ex) -> {
+			final Tuple3<String, Boolean, String> id_or_error = fut.handle((ok, ex) -> {
 				if ( ok != null )
-					return "ok TODO return something useful";
-				else if ( ex != null) 
-					return ErrorUtils.getLongForm("Exception storing object: {0}",ex);
+					return new Tuple3<String, Boolean, String>(ok.get().toString(), true, "ok");
+				else if ( ex != null)
+					return new Tuple3<String, Boolean, String>(null, false, ErrorUtils.getLongForm("Exception storing object: {0}",ex));
 				else
-					return "something broke";
+					return new Tuple3<String, Boolean, String>(null, false, "something went very wrong, shouldn't have reached this piece of code");
 			}).get();
-			return Response.ok(res).build();
+			return Response.ok(RestUtils.convertObjectToJson(new CreateResponse(id_or_error._1(), id_or_error._2(), id_or_error._3())).toString()).build();
 		} catch (Exception e) {
 			return Response.status(Status.BAD_REQUEST).entity(ErrorUtils.getLongForm("Error: {0}", e)).build();
 		}		
 	}
-	
-	
 	
 	public static <T> Response updateFunction(IServiceContext service_context, String service_type, String access_level, String service_identifier, Optional<String> bucket_full_names, 
 			Optional<String> json) {

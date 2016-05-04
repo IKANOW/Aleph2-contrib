@@ -100,8 +100,8 @@ public class DataStoreCrudService implements ICrudService<FileDescriptor> {
 		} catch (Exception e) {
 			return FutureUtils.returnError(e);
 		}
-		//TODO what to return, suppose to return an ID?
-		return CompletableFuture.completedFuture(()->"success");
+		//return file_name, that is what is used to query/delete by id
+		return CompletableFuture.completedFuture(()->new_object.file_name());
 	}
 
 	/* (non-Javadoc)
@@ -347,12 +347,42 @@ public class DataStoreCrudService implements ICrudService<FileDescriptor> {
 	@Override
 	public CompletableFuture<Boolean> deleteObjectById(Object id) {		
 		try {			
-			return CompletableFuture.completedFuture(fileContext.delete(new Path(output_directory + id.toString()), false));		
+			final Path path = new Path(output_directory + id.toString());
+			_logger.error("Trying to delete: " + path.toString());
+			final boolean delete_success = fileContext.delete(path, false); //this is always returning false
+			_logger.error("success deleteing: " + delete_success);			
+			return CompletableFuture.completedFuture(!doesPathExist(path, fileContext)); //if file does not exist, delete was a success
 		} catch (IllegalArgumentException | IOException e) {
 			final CompletableFuture<Boolean> fut = new CompletableFuture<Boolean>();
 			fut.completeExceptionally(e);
 			return fut;
 		}
+	}
+	
+	/**
+	 * Utility for checking if a file exists or not, attempts to get
+	 * the paths status and returns true if that is successful and
+	 * its either a file or dir.
+	 * 
+	 * If a filenotfound exception is thrown, returns false
+	 * 
+	 * Lets all other exceptions raise
+	 * 
+	 * This is used to get around FileContext.delete not reporting correctly if a file has been successfully deleted.
+	 * @param path
+	 * @param context
+	 * @return
+	 * @throws AccessControlException
+	 * @throws UnsupportedFileSystemException
+	 * @throws IOException
+	 */
+	private static boolean doesPathExist(final Path path, final FileContext context) throws AccessControlException, UnsupportedFileSystemException, IOException {
+		try {
+			FileStatus status = context.getFileStatus(path);
+			return status.isFile() || status.isDirectory();
+		} catch (FileNotFoundException e) {
+			return false; 
+		}		
 	}
 
 	/* (non-Javadoc)

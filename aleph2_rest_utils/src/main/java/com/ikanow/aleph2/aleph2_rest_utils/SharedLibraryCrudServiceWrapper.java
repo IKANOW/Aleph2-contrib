@@ -40,7 +40,7 @@ import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
  *
  */
 public class SharedLibraryCrudServiceWrapper implements ICrudService<Tuple2<SharedLibraryBean, FileDescriptor>> {
-	final Logger _logger = LogManager.getLogger();
+	private static final Logger _logger = LogManager.getLogger();
 	final ICrudService<SharedLibraryBean> shared_library_crud;
 	final IServiceContext service_context;
 	public SharedLibraryCrudServiceWrapper(final ICrudService<SharedLibraryBean> shared_library_crud, final IServiceContext service_context) {
@@ -54,16 +54,18 @@ public class SharedLibraryCrudServiceWrapper implements ICrudService<Tuple2<Shar
 	public CompletableFuture<Supplier<Object>> storeObject(
 			Tuple2<SharedLibraryBean, FileDescriptor> new_object) {
 		//if storing shared_lib object is successful, try to store the file
-		return this.shared_library_crud.storeObject(new_object._1).thenCompose(f->{
-			System.out.println(f.get());
-			final Tuple2<ICrudService<FileDescriptor>, FileDescriptor> storage = getSharedLibraryDataStore(service_context, new_object._1, new_object._2);
-			return storage._1.storeObject(storage._2);
+		return this.shared_library_crud.storeObject(new_object._1).thenCompose(f->{			
+			_logger.error("stored object: " + f.get()); //I think I should be returning this
+			final Tuple2<ICrudService<FileDescriptor>, FileDescriptor> storage = getSharedLibraryDataStore(service_context, new_object._1.path_name(), new_object._2);
+			storage._1.storeObject(storage._2);
+			return CompletableFuture.completedFuture(f);
 		});
 	}
 	
-	private static Tuple2<ICrudService<FileDescriptor>, FileDescriptor> getSharedLibraryDataStore(final IServiceContext service_context, final SharedLibraryBean shared_library_bean, final FileDescriptor file_descriptor) {		
-		final String path = shared_library_bean.path_name().substring(0, shared_library_bean.path_name().lastIndexOf("/")+1); //TODO what if they use \ instead of /
-		final String file_name = shared_library_bean.path_name().substring(shared_library_bean.path_name().lastIndexOf("/")+1);
+	private static Tuple2<ICrudService<FileDescriptor>, FileDescriptor> getSharedLibraryDataStore(final IServiceContext service_context, final String output_path, final FileDescriptor file_descriptor) {
+		_logger.error("filepath is: " + output_path);
+		final String path = output_path.substring(0, output_path.lastIndexOf("/")+1); //TODO what if they use \ instead of /
+		final String file_name = output_path.substring(output_path.lastIndexOf("/")+1);
 		
 		return new Tuple2<ICrudService<FileDescriptor>, FileDescriptor>( new DataStoreCrudService(service_context, path), new FileDescriptor(file_descriptor.input_stream(), file_name));
 	}
@@ -272,8 +274,19 @@ public class SharedLibraryCrudServiceWrapper implements ICrudService<Tuple2<Shar
 	 */
 	@Override
 	public CompletableFuture<Boolean> deleteObjectById(Object id) {
-		// TODO Auto-generated method stub
-		return null;
+		//delete from shared lib, then delete from filesys
+		//have to get shared lib entry, so we know where the file is on filesys
+		final Optional<SharedLibraryBean> shared_library_bean = shared_library_crud.getObjectById(id).join();
+		return shared_library_bean.map(slb->{
+			return shared_library_crud.deleteObjectById(id).<Boolean>thenCompose(f->{
+				if ( f ) {
+					final Tuple2<ICrudService<FileDescriptor>, FileDescriptor> storage = getSharedLibraryDataStore(service_context, slb.path_name(), new FileDescriptor(null, null));
+					return storage._1.deleteObjectById(storage._2.file_name());
+				} else {
+					return CompletableFuture.completedFuture(f); //false, shared object delete must have failed
+				}
+			});
+		}).orElseGet(()->CompletableFuture.completedFuture(false));
 	}
 	/* (non-Javadoc)
 	 * @see com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService#deleteObjectBySpec(com.ikanow.aleph2.data_model.utils.CrudUtils.QueryComponent)
