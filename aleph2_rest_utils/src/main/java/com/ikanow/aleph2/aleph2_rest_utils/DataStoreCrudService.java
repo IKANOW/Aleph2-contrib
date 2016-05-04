@@ -143,16 +143,17 @@ public class DataStoreCrudService implements ICrudService<FileDescriptor> {
 	@Override
 	public CompletableFuture<Boolean> deleteDatastore() {
 		//delete all files in the dir
-		try {
-			final RemoteIterator<FileStatus> it = fileContext.listStatus(new Path(output_directory));
-			while ( it.hasNext() ) {
-				final FileStatus fs = it.next();
-				fileContext.delete(fs.getPath(), true);
-			}
-		} catch (IllegalArgumentException | IOException e) {
-			return FutureUtils.returnError(e);
-		}
-		return CompletableFuture.completedFuture(true);
+//		try {
+//			final RemoteIterator<FileStatus> it = fileContext.listStatus(new Path(output_directory));
+//			while ( it.hasNext() ) {
+//				final FileStatus fs = it.next();
+//				fileContext.delete(fs.getPath(), true);
+//			}
+//		} catch (IllegalArgumentException | IOException e) {
+//			return FutureUtils.returnError(e);
+//		}
+//		return CompletableFuture.completedFuture(true);
+		return FutureUtils.returnError(new RuntimeException("deleteDatastore commented out because it is dangerous, will delete everything in output dir regardless of what put it there, use deleteObjectById with the filename as id instead"));
 	}
 
 	/* (non-Javadoc)
