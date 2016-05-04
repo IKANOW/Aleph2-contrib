@@ -9,7 +9,7 @@
 	<aleph2.hadoop>2.7.1</aleph2.hadoop>	
 	<maven.test.skip>true</maven.test.skip>
 	<!-- (jackson needs to be locked to whatever aleph2_data_model is at) -->
-	<jackson.version>2.3.1</jackson.version>
+	<jackson.version>2.6.2</jackson.version>
   </properties>
   <build>
     <plugins>
