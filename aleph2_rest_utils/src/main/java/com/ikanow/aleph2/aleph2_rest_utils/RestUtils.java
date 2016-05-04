@@ -15,6 +15,7 @@
  *******************************************************************************/
 package com.ikanow.aleph2.aleph2_rest_utils;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -85,54 +86,7 @@ public class RestUtils {
 	private static final String BUCKET_BINARY_DIR = "/data/";
 	
 	
-	private static Logger _logger = LogManager.getLogger();
-	
-	/**
-	 * Builds a resource that uses the passed in params and just calls the given function.
-	 * Jersey auto creates OPTIONS functions to support their resources so no need to create additional resources.
-	 * 
-	 * @param path
-	 * @param method
-	 * @param consume_media_types
-	 * @param produce_media_types
-	 * @param service_context
-	 * @param function
-	 * @return
-	 */
-//	public static Resource buildResource(final String path, final String method, final Collection<String> consume_media_types, final Collection<String> produce_media_types, final IServiceContext service_context, final Function<ContainerRequestContext, Response> function) {
-//		final Resource.Builder resourceBuilder = Resource.builder();
-//		final ResourceMethod.Builder methodBuilder = resourceBuilder.addMethod(method);
-//		resourceBuilder.path(path);
-//		methodBuilder
-//		.consumes((String[]) consume_media_types.toArray())
-//		.produces((String[])produce_media_types.toArray())
-//        .handledBy(new Inflector<ContainerRequestContext, Response>() {
-//            @Override
-//            public Response apply(ContainerRequestContext containerRequestContext) {
-//            	return function.apply(containerRequestContext); 
-//            }
-//        });
-//		return resourceBuilder.build();
-//	}
-	
-
-	
-	/**
-	 * Parses the url string to grab the correct crud service requested.
-	 * Returns an error on the left or a tuple with a crud service and class of the same type on the right
-	 * 
-	 * @param <T>
-	 * @param containerRequestContext
-	 * @return
-	 */
-//	public static <T> Either<String,Tuple2<ICrudService<T>, Class<T>>> parseRequest(final ContainerRequestContext containerRequestContext, final IServiceContext service_context) {
-//		final String service_type = containerRequestContext.getUriInfo().getPathParameters().getFirst("service_name");
-//		final String access_level = containerRequestContext.getUriInfo().getPathParameters().getFirst("read_write");
-//		final String service_identifier = containerRequestContext.getUriInfo().getPathParameters().getFirst("identifier");
-//		final Optional<String> bucket_full_names = Optional.ofNullable(containerRequestContext.getUriInfo().getQueryParameters().getFirst("buckets")); 
-//				
-//		return getCrudService(service_context, service_type, access_level, service_identifier, bucket_full_names);
-//	}
+	private static Logger _logger = LogManager.getLogger();	
 	
 	/**
 	 * Returns a crud service pointed at the passed in arguments
@@ -145,14 +99,15 @@ public class RestUtils {
 	 * @param multivaluedMap 
 	 * @return
 	 */
-	public static <T> Either<String,Tuple2<ICrudService<T>, Class<T>>> getCrudService(final IServiceContext service_context, final String service_type, final String access_level, final String service_identifier, final Optional<String> bucket_full_names ) {
+	public static <T> Either<String,Tuple2<ICrudService<T>, Class<T>>> getCrudService(final IServiceContext service_context, final String service_type, 
+			final String access_level, final String service_identifier, final Optional<String> bucket_full_names ) {
 		_logger.error("trying to get crud service for: " + service_type + " " + access_level + " " + service_identifier);
 		if ( service_type.toUpperCase().equals(SERVICE_TYPE_DATA_SERVICE) ) {
 			return bucket_full_names.<Either<String,Tuple2<ICrudService<T>, Class<T>>>>
 					map(b->getDataService(service_context, access_level, service_identifier, b))
 					.orElse(Either.left("Query param 'buckets' is required when trying to get a data_service"));
 		} else if ( service_type.toUpperCase().equals(SERVICE_TYPE_MANAGEMENT_DB) ) {
-			return getManagementDBService(service_context, access_level, service_identifier);
+			return getManagementDBService(service_context, access_level, service_identifier, bucket_full_names);
 		} else {
 			return Either.left("Service type did not match expected types: " + service_type);
 		}
@@ -165,9 +120,10 @@ public class RestUtils {
 	 * @param service_context
 	 * @param access_level
 	 * @param service_identifier
+	 * @param bucket_full_names 
 	 * @return
 	 */
-	private static <T> Either<String,Tuple2<ICrudService<T>, Class<T>>> getManagementDBService(final IServiceContext service_context, final String access_level, final String service_identifier) {
+	private static <T> Either<String,Tuple2<ICrudService<T>, Class<T>>> getManagementDBService(final IServiceContext service_context, final String access_level, final String service_identifier, final Optional<String> bucket_full_names) {
 		_logger.error("trying to get management db service for: " + access_level + " " + service_identifier);
 		final IManagementDbService db_service = service_context.getCoreManagementDbService();
 		//figure out which sub_service to get
@@ -193,19 +149,20 @@ public class RestUtils {
 				
 			case MANAGEMENT_SERVICE_SHARED_LIBRARY:
 				if (access_level.toUpperCase().equals(ACCESS_LEVEL_READ)) {
-					return Either.right(new Tuple2(db_service.getSharedLibraryStore().readOnlyVersion().getCrudService().get(), SharedLibraryBean.class));
+					return Either.left("Error: can only get a writable version of shared_library store TODO should I create a read version for retrieval of files?");
+//					return Either.right(new Tuple2(db_service.getSharedLibraryStore().readOnlyVersion().getCrudService().get(), SharedLibraryBean.class));
 				} else if (access_level.toUpperCase().equals(ACCESS_LEVEL_WRITE)) {
-					return Either.right(new Tuple2(db_service.getSharedLibraryStore(), SharedLibraryBean.class));
+					return Either.right(new Tuple2(new SharedLibraryCrudServiceWrapper(db_service.getSharedLibraryStore(), service_context), SharedLibraryBean.class));
+//					return Either.right(new Tuple2(db_service.getSharedLibraryStore(), SharedLibraryBean.class));
 				} else {
 					return Either.left("Access Level did not match expected types: " + access_level);
 				}
 				
-			//TODO handle bucket data (e.g. write a storage_service crud wrapper that dumps to bucket/data)
 			case MANAGEMENT_SERVICE_BUCKET_DATA:
 				if (access_level.toUpperCase().equals(ACCESS_LEVEL_READ)) {
-					return Either.right(new Tuple2(db_service.getSharedLibraryStore().readOnlyVersion().getCrudService().get(), SharedLibraryBean.class));
+					return Either.left("Error: can only get a writable version of bucket_data store TODO should I create a read version for retrieval of files?");
 				} else if (access_level.toUpperCase().equals(ACCESS_LEVEL_WRITE)) {
-					return Either.right(new Tuple2(db_service.getSharedLibraryStore(), SharedLibraryBean.class));
+					return Either.right(new Tuple2(RestUtils.getBucketDataStore(service_context, convertToBucketFullName(service_context, bucket_full_names.get())), FileDescriptor.class));
 				} else {
 					return Either.left("Access Level did not match expected types: " + access_level);
 				}
@@ -216,8 +173,8 @@ public class RestUtils {
 			default:
 				return Either.left("Service Identifier did not match expected types: " + service_identifier);
 		}
-	}
-	
+	}	
+
 	/**
 	 * Dataservice are generic, we typically just get a jsonnode typed one
 	 * 
@@ -292,13 +249,18 @@ public class RestUtils {
 		return new DataStoreCrudService(service_context, getBucketOutputDir(service_context, bucket));
 	}
 	
-	/**
-	 * @return
-	 */
+	public static DataStoreCrudService getSharedLibraryDataStore(final IServiceContext service_context) {
+		return new DataStoreCrudService(service_context, getSharedLibraryOutputDir(service_context));
+	}
+	private static String getSharedLibraryOutputDir(final IServiceContext service_context) {
+		final String output_dir = (service_context.getGlobalProperties().distributed_root_dir() + GlobalPropertiesBean.SHARED_LIBRARY_ROOT_OFFSET).replaceAll("//", "/");
+		return output_dir;
+	}
+	
 	private static String getBucketOutputDir(final IServiceContext service_context, final DataBucketBean bucket) {
 		//create the path to bucket output
 		//TODO something like globals.hdfs_location + bucket.full_name + /data/		
-		final String output_dir = (service_context.getGlobalProperties().distributed_root_dir() + GlobalPropertiesBean.BUCKET_DATA_ROOT_OFFSET + bucket.full_name() + BUCKET_BINARY_DIR).replace("//", "/");
+		final String output_dir = (service_context.getGlobalProperties().distributed_root_dir() + GlobalPropertiesBean.BUCKET_DATA_ROOT_OFFSET + bucket.full_name() + BUCKET_BINARY_DIR).replaceAll("//", "/");
 //		_logger.error("WANT TO OUTPUT DIR TO: " + output_dir);
 //		return "/tmp/burch/";
 		return output_dir;
@@ -368,7 +330,5 @@ public class RestUtils {
 			return Optional.empty();
 		return Optional.of(value);
 	}
-	
-	
 	
 }

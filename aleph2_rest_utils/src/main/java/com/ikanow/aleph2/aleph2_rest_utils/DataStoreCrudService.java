@@ -62,6 +62,7 @@ public class DataStoreCrudService implements ICrudService<FileDescriptor> {
 	public DataStoreCrudService(final IServiceContext service_context, final String output_directory) {
 		this.output_directory = output_directory;
 		this.fileContext = service_context.getStorageService().getUnderlyingPlatformDriver(FileContext.class, Optional.empty()).get();
+		_logger.error("Created DataStoreCrudService pointed at dir: " + output_directory);
 	}
 	
 	public static class DataStoreCursor extends Cursor<FileDescriptor> {
@@ -99,8 +100,7 @@ public class DataStoreCrudService implements ICrudService<FileDescriptor> {
 		} catch (Exception e) {
 			return FutureUtils.returnError(e);
 		}
-		
-		//TODO what to return?
+		//TODO what to return, suppose to return an ID?
 		return CompletableFuture.completedFuture(()->"success");
 	}
 
