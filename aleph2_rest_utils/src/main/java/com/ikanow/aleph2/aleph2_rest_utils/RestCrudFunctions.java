@@ -18,8 +18,9 @@ package com.ikanow.aleph2.aleph2_rest_utils;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Function;
+import java.util.function.Supplier;
 
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
@@ -34,6 +35,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.ICrudService;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IServiceContext;
+import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.CrudUtils.UpdateComponent;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
@@ -78,20 +80,69 @@ public class RestCrudFunctions {
     	}	
 	}
 	
+//	public static <T> Response createFunction(IServiceContext service_context, String service_type, String access_level, String service_identifier, Optional<String> bucket_full_names, 
+//			Optional<String> json) {
+//		return createFunction(service_context, service_type, access_level, service_identifier, bucket_full_names, json, Optional.empty());
+//		_logger.error("Handling CREATE request");
+//		//parse out the url params
+//		final Either<String,Tuple2<ICrudService<T>, Class<T>>> crud_service_either = RestUtils.getCrudService(service_context, service_type, access_level, service_identifier, bucket_full_names);
+//
+//		if ( crud_service_either.isLeft() )
+//    		return Response.status(Status.BAD_REQUEST).entity(crud_service_either.left().value()).build();			
+//		try {
+//			return handleCreateRequest(json, crud_service_either.right().value()._1, crud_service_either.right().value()._2);	        		        	
+//    	} catch ( Exception ex ) {
+//    		return Response.status(Status.BAD_REQUEST).entity(ErrorUtils.getLongForm("Error: {0}", ex)).build();
+//    	}
+//	}
+	
+	//create just json version
 	public static <T> Response createFunction(IServiceContext service_context, String service_type, String access_level, String service_identifier, Optional<String> bucket_full_names, 
-			Optional<String> json) {						
+			final String json) {
 		_logger.error("Handling CREATE request");
-		//parse out the url params
 		final Either<String,Tuple2<ICrudService<T>, Class<T>>> crud_service_either = RestUtils.getCrudService(service_context, service_type, access_level, service_identifier, bucket_full_names);
-
 		if ( crud_service_either.isLeft() )
     		return Response.status(Status.BAD_REQUEST).entity(crud_service_either.left().value()).build();			
+		
+		
+		_logger.error("handling regular create request (non file upload)");
 		try {
-			return handleCreateRequest(json, crud_service_either.right().value()._1, crud_service_either.right().value()._2);	        		        	
-    	} catch ( Exception ex ) {
+			return handleCreateRequest(json, crud_service_either.right().value()._1, crud_service_either.right().value()._2);
+		} catch ( Exception ex ) {
     		return Response.status(Status.BAD_REQUEST).entity(ErrorUtils.getLongForm("Error: {0}", ex)).build();
-    	}	
+    	}
 	}
+	
+	//create file upload version w/ optional json
+	public static <T> Response createFunction(IServiceContext service_context, String service_type, String access_level, String service_identifier, Optional<String> bucket_full_names, 
+			final FileDescriptor file_upload, Optional<String> json) {
+		//TODO some validation that we are getting back a file crud service (so we cant send the wrong args)
+		final Either<String,Tuple2<ICrudService<T>, Class<T>>> crud_service_either = RestUtils.getCrudService(service_context, service_type, access_level, service_identifier, bucket_full_names);
+		if ( crud_service_either.isLeft() )
+    		return Response.status(Status.BAD_REQUEST).entity(crud_service_either.left().value()).build();		
+		
+		CompletableFuture<Supplier<Object>> fut = json.map(j->{
+			//TODO exception when this isn't a shared lib bean
+			final SharedLibraryBean slb = BeanTemplateUtils.from(j, SharedLibraryBean.class).get();
+			return ((ICrudService<Tuple2<ICrudService<T>, Class<T>>>)crud_service_either.right().value()._1).storeObject(new Tuple2(slb,file_upload));	
+		}).orElseGet(()-> ((ICrudService<FileDescriptor>)crud_service_either.right().value()._1).storeObject(file_upload));
+		
+		try {
+			String res = fut.handle((ok, ex) -> {
+				if ( ok != null )
+					return "ok TODO return something useful";
+				else if ( ex != null) 
+					return ErrorUtils.getLongForm("Exception storing object: {0}",ex);
+				else
+					return "something broke";
+			}).get();
+			return Response.ok(res).build();
+		} catch (Exception e) {
+			return Response.status(Status.BAD_REQUEST).entity(ErrorUtils.getLongForm("Error: {0}", e)).build();
+		}		
+	}
+	
+	
 	
 	public static <T> Response updateFunction(IServiceContext service_context, String service_type, String access_level, String service_identifier, Optional<String> bucket_full_names, 
 			Optional<String> json) {
@@ -166,15 +217,11 @@ public class RestCrudFunctions {
 		}).orElse(Response.ok(RestUtils.convertSingleObjectToJson(crud_service.countObjects().get(), COUNT_FIELD_NAME).toString()).build());
 	}
 	
-	private static <T> Response handleCreateRequest(final Optional<String> json, final ICrudService<T> crud_service, final Class<T> clazz) throws JsonProcessingException, InterruptedException, ExecutionException {
+	private static <T> Response handleCreateRequest(final String json, final ICrudService<T> crud_service, final Class<T> clazz) throws JsonProcessingException, InterruptedException, ExecutionException {
 		//get id or a query object that was posted
-		if ( json.isPresent() ) {
-			_logger.error("input: " + json.get());
-			//TODO handle overwriting existing object
-			return Response.ok(RestUtils.convertObjectToJson(crud_service.storeObject(BeanTemplateUtils.from(json.get(), clazz).get()).get().get()).toString()).build();
-		} else {
-			return Response.status(Status.BAD_REQUEST).entity("POST requires json in the body").build();
-		}
+		_logger.error("input: " + json);
+		//TODO handle overwriting existing object
+		return Response.ok(RestUtils.convertObjectToJson(crud_service.storeObject(BeanTemplateUtils.from(json, clazz).get()).get().get()).toString()).build();
 	}
 	
 	private static <T> Response handleUpdateRequest(final Optional<String> json, final ICrudService<T> crud_service, final Class<T> clazz) throws JsonParseException, JsonMappingException, IOException, InterruptedException, ExecutionException {
