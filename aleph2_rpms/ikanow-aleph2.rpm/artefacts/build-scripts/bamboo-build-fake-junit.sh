@@ -1,4 +1,4 @@
-if [ "${bamboo.skip_unit_tests}" = "true" ]; then
+if [ "${bamboo_skip_unit_tests}" = "true" ]; then
     echo "Generating dummy report"
     mkdir -p surefire-reports
     cat <<EOT > surefire-reports/junit_dummy.xml
