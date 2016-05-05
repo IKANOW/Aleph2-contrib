@@ -21,7 +21,7 @@ export PROBLEM_PROJECTS_TECH="aleph2_analytic_services_spark"
 export PROBLEM_PROJECTS_APPS="__NONE__"
 
 #(split this up into 3 so can run in 3 different containers)
-if [ "${bamboo.skip_unit_tests}" != "true" ]; then
+if [ "${bamboo_skip_unit_tests}" != "true" ]; then
     # Run all core tests
     cd ../ikos-core
     export PROJECTS=$($M2_HOME/bin/mvn dependency:tree | grep "\[INFO\] aleph2_[^.]*$" | grep -o "aleph2_.*" | grep -v -P "$PROBLEM_PROJECTS_CORE")
