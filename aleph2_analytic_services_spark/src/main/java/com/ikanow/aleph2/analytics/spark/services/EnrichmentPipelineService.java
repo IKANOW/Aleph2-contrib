@@ -115,6 +115,7 @@ import scala.Tuple2;
 
 
 
+
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -140,6 +141,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
+import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
@@ -306,8 +308,8 @@ public class EnrichmentPipelineService implements Serializable {
 	/** A transform/enrichment function that can be used in mapPartitions (java version)
 	 * @return
 	 */
-	public FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<Long, IBatchRecord>> javaInMapPartitions() {
-		return it -> {			
+	public FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<Long, IBatchRecord>> javaInMapPartitions() {		
+		return (FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<Long, IBatchRecord>> & Serializable)it -> {			
 			_chain_start = new Wrapper(Streamable.of(_pipeline_elements), _DEFAULT_BATCH_SIZE, 
 									Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch), Optional.empty()); //(unknown: could be input or previous stage in chain)
 			
@@ -336,7 +338,7 @@ public class EnrichmentPipelineService implements Serializable {
 	 * @return
 	 */
 	public FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>> javaInMapPartitionsPreGroup(final List<String> grouping_fields) {
-		return it -> {			
+		return (FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>> & Serializable)it -> {			
 			_chain_start = new Wrapper(Streamable.of(_pipeline_elements), _DEFAULT_BATCH_SIZE, 
 									Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch), Optional.of(grouping_fields)); //(unknown: could be input or previous stage in chain)
 			
@@ -364,7 +366,7 @@ public class EnrichmentPipelineService implements Serializable {
 	 * @return
 	 */
 	public FlatMapFunction<Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>> javaInMapPartitionsPrePostGroup(final List<String> grouping_fields) {
-		return it -> {			
+		return (FlatMapFunction<Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>> & Serializable)it -> {			
 			
 			// OK so we're inside a map partition so we might well have a number of keys handled inside this one method
 			// Note all objects are shared across all the "subsequent" enrichers
@@ -380,7 +382,7 @@ public class EnrichmentPipelineService implements Serializable {
 	 * @return
 	 */
 	public FlatMapFunction<Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, Tuple2<Long, IBatchRecord>> javaInMapPartitionsPostGroup() {
-		return it -> {			
+		return (FlatMapFunction<Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, Tuple2<Long, IBatchRecord>> & Serializable) it -> {			
 			
 			// OK so we're inside a map partition so we might well have a number of keys handled inside this one method
 			// Note all objects are shared across all the "subsequent" enrichers
@@ -545,7 +547,7 @@ public class EnrichmentPipelineService implements Serializable {
 			
 			_clone_of = null;
 			_control = remaining_elements.stream().findFirst().get();			
-			_batch_size = Optional.ofNullable(_control.technology_override().get(EnrichmentControlMetadataBean.BATCH_SIZE_OVERRIDE))
+			_batch_size = Optionals.of(() -> _control.technology_override().get(EnrichmentControlMetadataBean.BATCH_SIZE_OVERRIDE))
 					.map(o -> Patterns.match(o).<Integer>andReturn()
 								.when(Integer.class, __->__)
 								.when(Long.class, l->l.intValue())

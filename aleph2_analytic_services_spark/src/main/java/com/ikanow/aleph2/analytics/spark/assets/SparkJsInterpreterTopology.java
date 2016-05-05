@@ -134,7 +134,7 @@ public class SparkJsInterpreterTopology {
 				engine.put("_a2_spark_inputs_all", all_inputs);
 				engine.put("_a2_spark_context", jsc);
 				
-				Stream.concat(config.uploaded_lang_files().stream(), Stream.of("aleph2_js_globals_before.js", ""))
+				Stream.concat(config.uploaded_lang_files().stream(), Stream.of("aleph2_sparkjs_globals_before.js", ""))
 					.flatMap(Lambdas.flatWrap_i(import_path -> {
 						try {
 							if (import_path.equals("")) { // also import the user script just before here
