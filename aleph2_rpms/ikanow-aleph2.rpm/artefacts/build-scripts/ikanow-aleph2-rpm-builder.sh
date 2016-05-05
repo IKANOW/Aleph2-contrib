@@ -13,8 +13,8 @@ export RELEASETYPE=$2
 # Just c/p Rob's code for now:
 
 mkdir dist
-find Aleph2 -name "*-shaded.jar" -exec mv '{}' dist/ \;
-find Aleph2-contrib -name "*-shaded.jar" -exec mv '{}' dist/ \;
+find Aleph2 -name "*-shaded.jar" -exec cp '{}' dist/ \;
+find Aleph2-contrib -name "*-shaded.jar" -exec cp '{}' dist/ \;
 echo "Building archive: aleph2_alljars-${VERSION}-${RELEASETYPE}-shaded.tgz"
 tar czvf aleph2_alljars-${VERSION}-${RELEASETYPE}-shaded.tgz dist/
 
