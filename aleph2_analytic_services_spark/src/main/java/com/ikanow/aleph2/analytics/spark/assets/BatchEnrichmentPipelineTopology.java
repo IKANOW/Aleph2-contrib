@@ -19,7 +19,9 @@ package com.ikanow.aleph2.analytics.spark.assets;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
+import org.apache.logging.log4j.Level;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -33,10 +35,13 @@ import com.ikanow.aleph2.analytics.spark.utils.RddDependencyUtils;
 import com.ikanow.aleph2.analytics.spark.utils.SparkTechnologyUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
+import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
 import com.ikanow.aleph2.data_model.objects.shared.ProcessingTestSpecBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
+import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Optionals;
+import com.ikanow.aleph2.data_model.utils.SetOnce;
 
 import fj.data.Either;
 import fj.data.Validation;
@@ -49,11 +54,15 @@ public class BatchEnrichmentPipelineTopology {
 
 	public static void main(String[] args) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
 
+		final SetOnce<IBucketLogger> logger = new SetOnce<>();
+		
 		try {			
 			final Tuple2<IAnalyticsContext, Optional<ProcessingTestSpecBean>> aleph2_tuple = SparkTechnologyUtils.initializeAleph2(args);
 			final IAnalyticsContext context = aleph2_tuple._1();
 			final Optional<ProcessingTestSpecBean> test_spec = aleph2_tuple._2();
 
+			logger.set(context.getLogger(context.getBucket()));
+			
 			// Optional: make really really sure it exists after the specified timeout
 			SparkTechnologyUtils.registerTestTimeout(test_spec, () -> {
 				System.exit(0);
@@ -61,6 +70,11 @@ public class BatchEnrichmentPipelineTopology {
 			
 			//INFO:
 			System.out.println("Starting BatchEnrichmentPipelineTopology");
+			
+			logger.optional().ifPresent(l -> {
+				l.inefficientLog(Level.INFO, ErrorUtils.buildSuccessMessage("BatchEnrichmentPipelineTopology", 
+						"main", "Starting BatchEnrichmentPipelineTopology.{0}", Optionals.of(() -> context.getJob().get().name()).orElse("no_name")));
+			});			
 			
 			SparkConf spark_context = new SparkConf().setAppName("BatchEnrichmentPipelineTopology");
 
@@ -83,10 +97,17 @@ public class BatchEnrichmentPipelineTopology {
 				>>
 				enrichment_pipeline = RddDependencyUtils.buildEnrichmentPipeline(context, jsc, inputs, Optionals.ofNullable(config.enrich_pipeline()));
 				
-				
 				if (enrichment_pipeline.isFail()) {
 					throw new RuntimeException("ERROR: BatchEnrichmentPipelineTopology: " + enrichment_pipeline.fail());
 				}
+				
+				logger.optional().ifPresent(l -> {
+					l.inefficientLog(Level.INFO, ErrorUtils.buildSuccessMessage("BatchEnrichmentPipelineTopology", 
+							"main", "BatchEnrichmentPipelineTopology.{0}: created pipeline: all={1} outputs={2}", 
+							Optionals.of(() -> context.getJob().get().name()).orElse("no_name"),
+							enrichment_pipeline.success()._1().keySet(), enrichment_pipeline.success()._2().keySet() 
+							));
+				});
 				
 				final Optional<JavaRDD<Tuple2<Long, IBatchRecord>>> all_outputs = 
 						enrichment_pipeline.success()._2().values().stream().reduce((acc1, acc2) -> acc1.union(acc2))
@@ -96,12 +117,24 @@ public class BatchEnrichmentPipelineTopology {
 				
 				jsc.stop();
 				
+				logger.optional().ifPresent(l -> {
+					l.inefficientLog(Level.INFO, ErrorUtils.buildSuccessMessage("BatchEnrichmentPipelineTopology", 
+							"main", "Stopping BatchEnrichmentPipelineTopology.{0}", Optionals.of(() -> context.getJob().get().name()).orElse("no_name")));
+				});
+				
 				//INFO:
 				System.out.println("Wrote: data_objects=" + written);
 			}
 		}
 		catch (Throwable t) {
+			logger.optional().ifPresent(l -> {
+				l.inefficientLog(Level.ERROR, ErrorUtils.buildSuccessMessage("BatchEnrichmentPipelineTopology", 
+						"main", ErrorUtils.getLongForm("Error executing BatchEnrichmentPipelineTopology.unknown: {0}", t)));
+			});
+			
 			System.out.println(ErrorUtils.getLongForm("ERROR: {0}", t));
+			logger.optional().ifPresent(Lambdas.wrap_consumer_u(l -> l.flush().get(10, TimeUnit.SECONDS)));
+			System.exit(-1);
 		}
 	}
 }

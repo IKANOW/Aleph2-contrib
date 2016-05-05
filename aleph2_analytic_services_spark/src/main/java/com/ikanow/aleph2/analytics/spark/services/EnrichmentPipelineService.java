@@ -18,7 +18,6 @@ package com.ikanow.aleph2.analytics.spark.services;
 
 import java.io.Serializable;
 
-import scala.compat.java8.JFunction;
 import scala.collection.JavaConverters;
 
 import java.util.ArrayList;
@@ -55,6 +54,13 @@ import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.rdd.RDD;
 
 import scala.Tuple2;
+
+
+
+
+
+
+
 
 
 
@@ -196,18 +202,27 @@ public class EnrichmentPipelineService implements Serializable {
 
 	// SCALA VERSIONS
 	
+	public abstract class SerializableAbstractFunction1<A, B> extends scala.runtime.AbstractFunction1<A, B> implements Serializable {
+		private static final long serialVersionUID = 421692222804663556L;		
+	}
+	
 	/** A transform/enrichment function that can be used in mapPartitions (scala version)
 	 * @return
 	 */
 	public scala.Function1<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>> inMapPartitions() {
-		return JFunction.<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>>func(
-				it -> 
-				// (Alternative to above double function, might be faster, not sure if the cast will work)
-				//(JFunction1<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>>)
-					Lambdas.<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>>wrap_u(
-							it1 -> JavaConverters.asScalaIteratorConverter(this.javaInMapPartitions().call(JavaConverters.asJavaIteratorConverter(it1).asJava()).iterator()).asScala()
-					).apply(it));
-	}	
+		return new SerializableAbstractFunction1<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>>() {
+			private static final long serialVersionUID = 6619928568102664447L;
+
+			@Override
+			public scala.collection.Iterator<Tuple2<Long, IBatchRecord>> apply(scala.collection.Iterator<Tuple2<Long, IBatchRecord>> it1) {
+				try {
+					return JavaConverters.asScalaIteratorConverter(javaInMapPartitions().call(JavaConverters.asJavaIteratorConverter(it1).asJava()).iterator()).asScala();
+				} catch (Exception e) {
+					throw new RuntimeException(e);
+				}
+			}
+		};
+	}
 	
 	/** A transform/enrichment function that can be used in mapPartitions (scala version) immediately preceding a grouping operation
 	 * @param names - an ordered list of field names (dot notation), is used to create a grouping key (["?"] means the enrichment engine can pick whatever it wants)
@@ -222,13 +237,18 @@ public class EnrichmentPipelineService implements Serializable {
 	 * @return
 	 */
 	public scala.Function1<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>> inMapPartitionsPreGroup(final List<String> grouping_fields) {
-		return JFunction.<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>>func(
-				it -> 
-				// (Alternative to above double function, might be faster, not sure if the cast will work)
-				//(JFunction1<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>>)
-					Lambdas.<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>>wrap_u(
-							it1 -> JavaConverters.asScalaIteratorConverter(this.javaInMapPartitionsPreGroup(grouping_fields).call(JavaConverters.asJavaIteratorConverter(it1).asJava()).iterator()).asScala()
-					).apply(it));
+		return new SerializableAbstractFunction1<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>>() {
+			private static final long serialVersionUID = 2563609106687060337L;
+
+			@Override
+			public scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>> apply(scala.collection.Iterator<Tuple2<Long, IBatchRecord>> it1) {
+				try {
+					return JavaConverters.asScalaIteratorConverter(javaInMapPartitionsPreGroup(grouping_fields).call(JavaConverters.asJavaIteratorConverter(it1).asJava()).iterator()).asScala();
+				} catch (Exception e) {
+					throw new RuntimeException(e);
+				}
+			}			
+		};		
 	}	
 	
 	/** A transform/enrichment function that can be used in mapPartitions (java version) immediately following a grouping key operation and that itself groups
@@ -246,13 +266,18 @@ public class EnrichmentPipelineService implements Serializable {
 	 * @return
 	 */
 	public <T> scala.Function1<scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>> inMapPartitionsPrePostGroup(final List<String> grouping_fields) {
-		return JFunction.<scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>>func(
-				it -> 
-				// (Alternative to above double function, might be faster, not sure if the cast will work)
-				//(JFunction1<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>>)
-					Lambdas.<scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>>wrap_u(
-							it1 -> JavaConverters.asScalaIteratorConverter(this.javaInMapPartitionsPrePostGroup(grouping_fields).call(JavaConverters.asJavaIteratorConverter(it1).asJava()).iterator()).asScala()
-					).apply(it));
+		return new SerializableAbstractFunction1<scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>>() {
+			private static final long serialVersionUID = 5772470054865757342L;
+
+			@Override
+			public scala.collection.Iterator<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>> apply(scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>> it1) {
+				try {
+					return JavaConverters.asScalaIteratorConverter(javaInMapPartitionsPrePostGroup(grouping_fields).call(JavaConverters.asJavaIteratorConverter(it1).asJava()).iterator()).asScala();
+				} catch (Exception e) {
+					throw new RuntimeException(e);
+				}
+			}
+		};		
 	}	
 	
 	/** A transform/enrichment function that can be used in mapPartitions (java version) immediately following a grouping key operation
@@ -260,13 +285,18 @@ public class EnrichmentPipelineService implements Serializable {
 	 * @return
 	 */
 	public <T> scala.Function1<scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>> inMapPartitionsPostGroup() {
-		return JFunction.<scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>>func(
-				it -> 
-				// (Alternative to above double function, might be faster, not sure if the cast will work)
-				//(JFunction1<scala.collection.Iterator<Tuple2<Long, IBatchRecord>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>>)
-					Lambdas.<scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>>wrap_u(
-							it1 -> JavaConverters.asScalaIteratorConverter(this.javaInMapPartitionsPostGroup().call(JavaConverters.asJavaIteratorConverter(it1).asJava()).iterator()).asScala()
-					).apply(it));
+		return new SerializableAbstractFunction1<scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>>, scala.collection.Iterator<Tuple2<Long, IBatchRecord>>>() {
+			private static final long serialVersionUID = -810181378636397195L;
+
+			@Override
+			public scala.collection.Iterator<Tuple2<Long, IBatchRecord>> apply(scala.collection.Iterator<Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>>> it1) {
+				try {
+					return JavaConverters.asScalaIteratorConverter(javaInMapPartitionsPostGroup().call(JavaConverters.asJavaIteratorConverter(it1).asJava()).iterator()).asScala();
+				} catch (Exception e) {
+					throw new RuntimeException(e);
+				}
+			}			
+		};
 	}	
 	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -281,11 +311,10 @@ public class EnrichmentPipelineService implements Serializable {
 			_chain_start = new Wrapper(Streamable.of(_pipeline_elements), _DEFAULT_BATCH_SIZE, 
 									Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch), Optional.empty()); //(unknown: could be input or previous stage in chain)
 			
-			return createStream(it)
-					.<Tuple2<Long, IBatchRecord>>flatMap(id_record__islast -> {
+			return createStream(it).<Tuple2<Long, IBatchRecord>>flatMap(id_record__islast -> {
 				
 				//TRACE						
-				//System.out.println("javaInMapPartitions: " + id_record__islast);
+				//System.out.println("javaInMapPartitions: " + id_record__islast + " @ " + this);
 				
 				return _chain_start.process(addIncomingRecord(id_record__islast._1()), id_record__islast._2(), true, Optional.empty()).map(t2 -> t2._1());
 			})

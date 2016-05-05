@@ -18,6 +18,8 @@ package com.ikanow.aleph2.analytics.spark.services;
 
 import static org.junit.Assert.*;
 
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
@@ -66,6 +68,7 @@ import com.ikanow.aleph2.data_model.objects.shared.AssetStateDirectoryBean.State
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
+import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 
@@ -211,6 +214,27 @@ public class TestEnrichmentPipelineService {
 			{
 				final EnrichmentPipelineService under_test = EnrichmentPipelineService.create(mock_analytics_context, false, pipeline_elements);
 				
+				// Check it's all serializable:
+				try {
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test);
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.inMapPartitions());
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.inMapPartitionsPreGroup());
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.inMapPartitionsPreGroup(Collections.emptyList()));
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.inMapPartitionsPrePostGroup());
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.inMapPartitionsPrePostGroup(Collections.emptyList()));
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.inMapPartitionsPostGroup());
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.javaInMapPartitions());
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.javaInMapPartitionsPreGroup());
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.javaInMapPartitionsPreGroup(Collections.emptyList()));
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.javaInMapPartitionsPrePostGroup());
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.javaInMapPartitionsPrePostGroup(Collections.emptyList()));
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.javaInMapPartitionsPostGroup());
+				}
+				catch (Throwable t) {
+					t.printStackTrace();
+					fail(ErrorUtils.getLongForm("{0}", t));
+				}
+				
 				JavaRDD<Tuple2<Long, IBatchRecord>> test = _spark.parallelize(Arrays.asList(
 						_mapper.createObjectNode().put("id", "1"),
 						_mapper.createObjectNode().put("id", "2").put("test1_stop", true),
@@ -244,6 +268,27 @@ public class TestEnrichmentPipelineService {
 			{
 				final EnrichmentPipelineService under_test = EnrichmentPipelineService.select(mock_analytics_context, false, "test1", "test2", "test3");
 
+				// Check it's serializable:
+				try {
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test);
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.inMapPartitions());
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.inMapPartitionsPreGroup());
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.inMapPartitionsPreGroup(Collections.emptyList()));
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.inMapPartitionsPrePostGroup());
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.inMapPartitionsPrePostGroup(Collections.emptyList()));
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.inMapPartitionsPostGroup());
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.javaInMapPartitions());
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.javaInMapPartitionsPreGroup());
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.javaInMapPartitionsPreGroup(Collections.emptyList()));
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.javaInMapPartitionsPrePostGroup());
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.javaInMapPartitionsPrePostGroup(Collections.emptyList()));
+					new ObjectOutputStream(new ByteArrayOutputStream()).writeObject(under_test.javaInMapPartitionsPostGroup());
+				}
+				catch (Throwable t) {
+					t.printStackTrace();
+					fail(ErrorUtils.getLongForm("{0}", t));
+				}
+				
 				JavaRDD<Tuple2<Long, IBatchRecord>> test = _spark.parallelize(Arrays.asList(
 						_mapper.createObjectNode().put("id", "1").put("grouper", "A"),
 						_mapper.createObjectNode().put("id", "2").put("test1_stop", true),
