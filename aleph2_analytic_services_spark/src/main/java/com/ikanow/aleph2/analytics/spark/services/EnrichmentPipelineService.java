@@ -116,6 +116,9 @@ import scala.Tuple2;
 
 
 
+
+
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -124,6 +127,8 @@ import com.codepoetics.protonpack.StreamUtils;
 import com.codepoetics.protonpack.Streamable;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterators;
 import com.ikanow.aleph2.analytics.spark.utils.SparkErrorUtils;
@@ -135,6 +140,7 @@ import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentBatchModul
 import com.ikanow.aleph2.data_model.interfaces.data_import.IEnrichmentModuleContext;
 import com.ikanow.aleph2.data_model.interfaces.shared_services.IBucketLogger;
 import com.ikanow.aleph2.data_model.objects.data_import.EnrichmentControlMetadataBean;
+import com.ikanow.aleph2.data_model.objects.data_import.DataBucketBean.MasterEnrichmentType;
 import com.ikanow.aleph2.data_model.objects.shared.BasicMessageBean;
 import com.ikanow.aleph2.data_model.objects.shared.SharedLibraryBean;
 import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
@@ -165,6 +171,9 @@ public class EnrichmentPipelineService implements Serializable {
 	final protected boolean _emit_when_done;
 	protected transient Wrapper _chain_start = null;
 			
+	final protected boolean _is_streaming;
+	protected final static Cache<EnrichmentPipelineService, Wrapper> _instance_pool = CacheBuilder.newBuilder().expireAfterAccess(1, TimeUnit.HOURS).build();
+	
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//
@@ -309,9 +318,14 @@ public class EnrichmentPipelineService implements Serializable {
 	 * @return
 	 */
 	public FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<Long, IBatchRecord>> javaInMapPartitions() {		
-		return (FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<Long, IBatchRecord>> & Serializable)it -> {			
-			_chain_start = new Wrapper(Streamable.of(_pipeline_elements), _DEFAULT_BATCH_SIZE, 
-									Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch), Optional.empty()); //(unknown: could be input or previous stage in chain)
+		return (FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<Long, IBatchRecord>> & Serializable)it -> {
+			if ((null == _chain_start) && _is_streaming) {
+				_chain_start = _instance_pool.getIfPresent(this);
+			}
+			if (null == _chain_start) {
+				_chain_start = new Wrapper(Streamable.of(_pipeline_elements), _DEFAULT_BATCH_SIZE, 
+										Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch), Optional.empty()); //(unknown: could be input or previous stage in chain)
+			}
 			
 			return createStream(it).<Tuple2<Long, IBatchRecord>>flatMap(id_record__islast -> {
 				
@@ -339,8 +353,13 @@ public class EnrichmentPipelineService implements Serializable {
 	 */
 	public FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>> javaInMapPartitionsPreGroup(final List<String> grouping_fields) {
 		return (FlatMapFunction<Iterator<Tuple2<Long, IBatchRecord>>, Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>> & Serializable)it -> {			
-			_chain_start = new Wrapper(Streamable.of(_pipeline_elements), _DEFAULT_BATCH_SIZE, 
-									Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch), Optional.of(grouping_fields)); //(unknown: could be input or previous stage in chain)
+			if ((null == _chain_start) && _is_streaming) {
+				_chain_start = _instance_pool.getIfPresent(this);
+			}
+			if (null == _chain_start) {
+				_chain_start = new Wrapper(Streamable.of(_pipeline_elements), _DEFAULT_BATCH_SIZE, 
+										Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch), Optional.of(grouping_fields)); //(unknown: could be input or previous stage in chain)
+			}
 			
 			return createStream(it)
 					.<Tuple2<IBatchRecord, Tuple2<Long, IBatchRecord>>>flatMap(id_record__islast -> {
@@ -424,6 +443,9 @@ public class EnrichmentPipelineService implements Serializable {
 		return createStream(it).flatMap(key_objects__last -> {
 			
 			final Tuple2<IBatchRecord, Iterable<Tuple2<Long, IBatchRecord>>> key_objects = key_objects__last._1();
+			if ((null == _chain_start) && _is_streaming) {
+				_chain_start = _instance_pool.getIfPresent(this);
+			}
 			if (null == _chain_start) {
 				_chain_start = new Wrapper(Streamable.of(_pipeline_elements), _DEFAULT_BATCH_SIZE, 
 						Tuples._2T(ProcessingStage.unknown, ProcessingStage.batch), maybe_grouping_fields); //(unknown: could be input or previous stage in chain)
@@ -478,7 +500,8 @@ public class EnrichmentPipelineService implements Serializable {
 		
 		_analytics_context = aleph2_context;
 		_emit_when_done = emit_when_done;
-		_pipeline_elements = pipeline_elements;
+		_pipeline_elements = pipeline_elements;		
+		_is_streaming = aleph2_context.getJob().map(j -> j.analytic_type()).map(t -> MasterEnrichmentType.streaming == t).orElse(false);
 		
 		if (_pipeline_elements.isEmpty()) {
 			throw new RuntimeException(ErrorUtils.get(SparkErrorUtils.NO_PIPELINE_ELEMENTS_SPECIFIED, 
@@ -497,6 +520,7 @@ public class EnrichmentPipelineService implements Serializable {
 		_analytics_context = aleph2_context;
 		_emit_when_done = emit_when_done;
 		_pipeline_elements = pipeline_elements;
+		_is_streaming = aleph2_context.getJob().map(j -> j.analytic_type()).map(t -> MasterEnrichmentType.streaming == t).orElse(false);
 		
 		if (_pipeline_elements.isEmpty()) {
 			throw new RuntimeException(ErrorUtils.get(SparkErrorUtils.NO_PIPELINE_ELEMENTS_SPECIFIED, 
@@ -598,6 +622,10 @@ public class EnrichmentPipelineService implements Serializable {
 				_next = new Wrapper(remaining_elements.skip(1), _batch_size, next__previous_next, next_grouping_fields);
 			}
 			else _next = null;
+			
+			if (_is_streaming) { // streaming mode: register self for the future
+				_instance_pool.put(EnrichmentPipelineService.this, this);
+			}
 		}
 		
 		/** Copy c'tor
@@ -677,18 +705,20 @@ public class EnrichmentPipelineService implements Serializable {
 						// Complete stage if needed
 						final Function<List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>, List<Tuple2<Tuple2<Long, IBatchRecord>, Optional<JsonNode>>>> applyStageComplete = out -> {
 						
-							if ((null != _clone_of) && (_clone_of != _batch_module)) { // if this is a grouped record with cloning enabled then do a little differently
-								if (this_last) _batch_module.onStageComplete(false);
-								if (this_last && last_group) _clone_of.onStageComplete(true);
-								
-								//TRACE
-								//System.out.println("?? onStageComplete: " + _control.name() + ": " + stage_output.size());						
-							}
-							else if (this_last && last_group) {
-								_batch_module.onStageComplete(true); 
-								
-								//TRACE
-								//System.out.println("?? onStageComplete: " + _control.name() + ": " + stage_output.size());
+							if (!_is_streaming) { //(else never run)
+								if ((null != _clone_of) && (_clone_of != _batch_module)) { // if this is a grouped record with cloning enabled then do a little differently
+									if (this_last) _batch_module.onStageComplete(false);
+									if (this_last && last_group) _clone_of.onStageComplete(true);
+									
+									//TRACE
+									//System.out.println("?? onStageComplete: " + _control.name() + ": " + stage_output.size());						
+								}
+								else if (this_last && last_group) {
+									_batch_module.onStageComplete(true); 
+									
+									//TRACE
+									//System.out.println("?? onStageComplete: " + _control.name() + ": " + stage_output.size());
+								}
 							}
 							return out;
 						};
@@ -711,7 +741,8 @@ public class EnrichmentPipelineService implements Serializable {
 											() -> null)
 											));			
 							
-							if (this_last) {
+							if (this_last && !_is_streaming) {
+								//TODO (ALEPH-63): for streaming, need to log periodically instead at some user-configurable interval
 								_logger.ifPresent(log -> log.log(Level.INFO, 						
 										ErrorUtils.lazyBuildMessage(true, () -> "EnrichmentPipelineService", 
 												() -> Optional.ofNullable(_control.name()).orElse("no_name") + ".onStageComplete", 
