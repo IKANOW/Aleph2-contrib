@@ -118,6 +118,7 @@ import scala.Tuple2;
 
 
 
+
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -151,6 +152,8 @@ import com.ikanow.aleph2.data_model.utils.Optionals;
 import com.ikanow.aleph2.data_model.utils.Patterns;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.data_model.utils.UuidUtils;
+import com.ikanow.aleph2.logging.utils.LoggingMergeFunctions;
+import com.ikanow.aleph2.logging.utils.LoggingRules;
 
 import fj.Unit;
 import fj.data.Either;
@@ -732,25 +735,54 @@ public class EnrichmentPipelineService implements Serializable {
 							_stats.in += batch_in;
 							_stats.out += batch_out;
 							
-							_logger.ifPresent(log -> log.log(Level.TRACE, 						
-									ErrorUtils.lazyBuildMessage(true, () -> "EnrichmentPipelineService", 
-											() -> Optional.ofNullable(_control.name()).orElse("no_name") + ".onObjectBatch", 
-											() -> null, 
-											() -> ErrorUtils.get("New batch stage {0} task={1} in={2} out={3} cumul_in={4}, cumul_out={5}", 
-													Optional.ofNullable(_control.name()).orElse("(no name)"),  UUID, Integer.toString(batch_in), Integer.toString(batch_out), Integer.toString(_stats.in),  Integer.toString(_stats.out)),
-											() -> null)
-											));			
+							if (!_is_streaming || (batch_in > 0 || batch_out > 0)) {
+								_logger.ifPresent(log -> log.log(Level.TRACE, 						
+										ErrorUtils.lazyBuildMessage(true, () -> "EnrichmentPipelineService", 
+												() -> Optional.ofNullable(_control.name()).orElse("no_name") + ".onObjectBatch", 
+												() -> null, 
+												() -> ErrorUtils.get("New batch stage {0} task={1} in={2} out={3} cumul_in={4}, cumul_out={5}", 
+														Optional.ofNullable(_control.name()).orElse("(no name)"),  UUID, Integer.toString(batch_in), Integer.toString(batch_out), Integer.toString(_stats.in),  Integer.toString(_stats.out)),
+												() -> null)
+												));
+							}
 							
 							if (this_last && !_is_streaming) {
-								//TODO (ALEPH-63): for streaming, need to log periodically instead at some user-configurable interval
-								_logger.ifPresent(log -> log.log(Level.INFO, 						
-										ErrorUtils.lazyBuildMessage(true, () -> "EnrichmentPipelineService", 
-												() -> Optional.ofNullable(_control.name()).orElse("no_name") + ".onStageComplete", 
-												() -> null, 
-												() -> ErrorUtils.get("Completed stage {0} task={1} in={2} out={3}", 
-														Optional.ofNullable(_control.name()).orElse("(no name)"),  UUID, Integer.toString(_stats.in),  Integer.toString(_stats.out)),
-												() -> _mapper.convertValue(_stats, Map.class))
+								
+								//TODO (ALEPH-63): make debug/info periods configurable
+								if (!_is_streaming) {
+									_logger.ifPresent(log -> log.log(Level.INFO, 						
+											ErrorUtils.lazyBuildMessage(true, () -> "EnrichmentPipelineService", 
+													() -> Optional.ofNullable(_control.name()).orElse("no_name") + ".onStageComplete", 
+													() -> null, 
+													() -> ErrorUtils.get("Completed stage {0} task={1} in={2} out={3}", 
+															Optional.ofNullable(_control.name()).orElse("(no name)"),  UUID, Integer.toString(_stats.in),  Integer.toString(_stats.out)),
+													() -> _mapper.convertValue(_stats, Map.class))
+													));
+								}
+								else { // streaming, generate log every 5 minutes (DEBUG), hour (INFO)
+									if (batch_in > 0 || batch_out > 0) { 
+										_logger.ifPresent(log -> log.log(Level.DEBUG, 						
+												ErrorUtils.lazyBuildMessage(true, () -> "EnrichmentPipelineService", 
+														() -> Optional.ofNullable(_control.name()).orElse("no_name") + ".onStageComplete", 
+														() -> null, 
+														() -> ErrorUtils.get("Short period log stage {0} task={1} in={2} out={3}", 
+																Optional.ofNullable(_control.name()).orElse("(no name)"),  UUID, Integer.toString(_stats.in),  Integer.toString(_stats.out)),
+														() -> _mapper.convertValue(_stats, Map.class))
+														,
+														"debug_log", Arrays.asList(LoggingRules.logEveryMilliseconds(300*1000L)), Optional.empty(), LoggingMergeFunctions.replaceMessage()
 												));
+									}									
+									_logger.ifPresent(log -> log.log(Level.INFO, 						
+											ErrorUtils.lazyBuildMessage(true, () -> "EnrichmentPipelineService", 
+													() -> Optional.ofNullable(_control.name()).orElse("no_name") + ".onStageComplete", 
+													() -> null, 
+													() -> ErrorUtils.get("Long period log stage {0} task={1} in={2} out={3}", 
+															Optional.ofNullable(_control.name()).orElse("(no name)"),  UUID, Integer.toString(_stats.in),  Integer.toString(_stats.out)),
+													() -> _mapper.convertValue(_stats, Map.class))
+													,
+													"debug_log", Arrays.asList(LoggingRules.logEveryMilliseconds(3600*1000L)), Optional.empty(), LoggingMergeFunctions.replaceMessage()
+											));
+								}
 							}
 							return out;
 						};

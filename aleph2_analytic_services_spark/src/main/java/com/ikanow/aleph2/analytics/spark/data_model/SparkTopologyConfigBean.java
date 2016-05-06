@@ -36,6 +36,7 @@ public class SparkTopologyConfigBean implements Serializable {
 	public static final String DEFAULT_SPARK_HOME = "/usr/hdp/current/spark-client/";
 	public static final String DEFAULT_CLUSTER_MODE = "yarn-cluster";
 	public static final String JOB_CONFIG_KEY = "spark.aleph2_job_config";
+	public static final String STREAMING_BATCH_INTERVAL = "spark.aleph2_streaming_batch_interval";			
 	
 	public enum SparkType { r, python, jvm, js }
 	

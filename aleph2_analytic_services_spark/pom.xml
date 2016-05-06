@@ -163,6 +163,12 @@
             <version>${aleph2.version}</version>
             <scope>${aleph2.scope}</scope>
         </dependency>
+        <dependency>
+            <groupId>com.ikanow.aleph2</groupId>
+            <artifactId>aleph2_logging_service</artifactId>
+            <version>${aleph2.version}</version>
+            <scope>${aleph2.scope}</scope>
+        </dependency>
 	 	<dependency>
 	  		<groupId>com.ikanow.aleph2</groupId>
 	  		<artifactId>aleph2_analytic_services_hadoop</artifactId>
@@ -246,32 +252,13 @@
 					<artifactId>scala-java8-compat_2.10</artifactId>
 					<version>0.5.0</version>
 				</dependency>
-		        <!-- Added these to try to get the spark interpreter working, in practice should probably make an example project
-		             (NOTE V DEPENDENT ON SPARK/SCALA VERSION)
+				<!-- (have this like this to try to set classpath order for akka when running from eclipse) -->
 		        <dependency>
-		            <groupId>org.apache.spark</groupId>
-		            <artifactId>spark-repl_2.10</artifactId>
-		            <version>${aleph2.spark}</version>
-					<exclusions>
-						<exclusion>
-							<groupId>*</groupId>
-							<artifactId>*</artifactId>
-						</exclusion>
-					</exclusions>
-		            <scope>compile</scope>
+		            <groupId>com.ikanow.aleph2</groupId>
+		            <artifactId>aleph2_core_distributed_services_library</artifactId>
+		            <version>${aleph2.version}</version>
+		            <scope>${aleph2.scope}</scope>
 		        </dependency>
-		        <dependency>
-					  <groupId>org.scala-lang</groupId>
-					  <artifactId>scala-compiler</artifactId>
-					  <version>2.10.4</version>
-					  <exclusions>
-					  	<exclusion>
-					  		<artifactId>scala-library</artifactId>
-					  		<groupId>org.scala-lang</groupId>
-					  	</exclusion>
-					  </exclusions>
-		        </dependency>
-		 		-->
 			</dependencies>
 		</profile>
 	
@@ -308,6 +295,7 @@
 		            <version>${aleph2.spark}</version>
 		            <scope>provided</scope>
 		            <exclusions>
+		            
 		            	<exclusion>
 		            		<artifactId>jackson-databind</artifactId>
 		            		<groupId>com.fasterxml.jackson.core</groupId>
@@ -357,6 +345,19 @@
 				</dependency>
 		        
 				<!-- Aleph2 -->
+				<!-- (have this like this to try to set classpath order for akka when running from eclipse) -->
+		        <dependency>
+		            <groupId>com.ikanow.aleph2</groupId>
+		            <artifactId>aleph2_core_distributed_services_library</artifactId>
+		            <version>${aleph2.version}</version>
+		            <scope>${aleph2.scope}</scope>		            
+		            <exclusions>        
+		            	<exclusion>
+		            		<artifactId>*</artifactId>
+		            		<groupId>com.typesafe.akka</groupId>
+		            	</exclusion>
+		            </exclusions>        		            
+		        </dependency>
 				<!-- 
 				(can't include this or anything that includes akka because it causes akka mismatch problems...)
 				<dependency>

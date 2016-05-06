@@ -52,11 +52,15 @@ import fj.data.Validation;
  */
 public class BatchEnrichmentPipelineTopology {
 
+	@SuppressWarnings("unused")
 	public static void main(String[] args) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
 
 		final SetOnce<IBucketLogger> logger = new SetOnce<>();
 		
-		try {			
+		try {
+			if (true)
+				throw new RuntimeException(ErrorUtils.get(ErrorUtils.NOT_YET_IMPLEMENTED, "BatchEnrichmentPipelineTopology"));
+			
 			final Tuple2<IAnalyticsContext, Optional<ProcessingTestSpecBean>> aleph2_tuple = SparkTechnologyUtils.initializeAleph2(args);
 			final IAnalyticsContext context = aleph2_tuple._1();
 			final Optional<ProcessingTestSpecBean> test_spec = aleph2_tuple._2();

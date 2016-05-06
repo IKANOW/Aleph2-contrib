@@ -34,6 +34,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import kafka.serializer.StringDecoder;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CreateFlag;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -51,11 +53,17 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaPairInputDStream;
+import org.apache.spark.streaming.api.java.JavaPairReceiverInputDStream;
+import org.apache.spark.streaming.api.java.JavaStreamingContext;
+import org.apache.spark.streaming.kafka.KafkaUtils;
 
 import scala.Tuple2;
 import scala.Tuple3;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -94,6 +102,7 @@ import com.ikanow.aleph2.analytics.spark.services.SparkTechnologyService;
  */
 public class SparkTechnologyUtils {
 	private static final Logger _logger = LogManager.getLogger(SparkTechnologyUtils.class);
+	private static final ObjectMapper _mapper = BeanTemplateUtils.configureMapper(Optional.empty());
 
 	public final static String SBT_SUBMIT_BINARY = "bin/spark-submit";
 	
@@ -462,6 +471,40 @@ public class SparkTechnologyUtils {
 				}
 			}))
 			;			
+	}
+	
+	/** Builds a map of streaming spark inputs
+	 * @param context
+	 * @param maybe_test_spec
+	 * @param streaming_context
+	 * @param exclude_names
+	 * @return
+	 */
+	public static Multimap<String, JavaDStream<JsonNode>> buildStreamingSparkInputs(
+			final IAnalyticsContext context, 
+			final Optional<ProcessingTestSpecBean> maybe_test_spec,
+			final JavaStreamingContext streaming_context,
+			final Set<String> exclude_names
+			)
+	{
+		final AnalyticThreadJobBean job = context.getJob().get();
+		
+		final Multimap<String, JavaDStream<JsonNode>> mutable_builder = HashMultimap.create();
+		
+	    transformInputBean(Optionals.ofNullable(job.inputs()).stream(), maybe_test_spec)
+	    	.filter(job_input -> !exclude_names.contains(job_input.name()))
+	    	.forEach(job_input -> {
+	    		final List<String> topics = context.getInputTopics(context.getBucket(), job, job_input);
+	    		final JavaPairInputDStream<String, String> k_stream = 
+	    				KafkaUtils.createDirectStream(streaming_context, String.class, String.class, 
+	    						StringDecoder.class, StringDecoder.class, 
+	    						com.ikanow.aleph2.distributed_services.utils.KafkaUtils.getProperties(), 
+	    						ImmutableSet.<String>builder().addAll(topics).build());
+	    		
+	    		mutable_builder.put(job_input.name(), k_stream.map(t2 -> _mapper.readTree(t2._2())));
+	    	});
+		
+		return mutable_builder;
 	}
 	
 	/** Builds a multimap of named SQL inputs
