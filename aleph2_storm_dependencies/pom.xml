@@ -201,6 +201,10 @@
  					<artifactId>javax.servlet</artifactId>
  					<groupId>org.eclipse.jetty.orbit</groupId>
  				</exclusion>
+ 				<exclusion>
+ 					<artifactId>*</artifactId>
+ 					<groupId>com.fasterxml.jackson.core</groupId>
+ 				</exclusion>
  			</exclusions> 
 		</dependency>
 	</dependencies>
