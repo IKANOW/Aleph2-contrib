@@ -54,6 +54,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.streaming.api.java.JavaDStream;
+import org.apache.spark.streaming.api.java.JavaPairDStream;
 import org.apache.spark.streaming.api.java.JavaPairInputDStream;
 import org.apache.spark.streaming.api.java.JavaPairReceiverInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
@@ -69,6 +70,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import com.google.common.io.Files;
+import com.ikanow.aleph2.core.shared.utils.BatchRecordUtils;
 import com.ikanow.aleph2.core.shared.utils.JarBuilderUtil;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsAccessContext;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IAnalyticsContext;
@@ -480,7 +482,7 @@ public class SparkTechnologyUtils {
 	 * @param exclude_names
 	 * @return
 	 */
-	public static Multimap<String, JavaDStream<JsonNode>> buildStreamingSparkInputs(
+	public static Multimap<String, JavaPairDStream<String, Tuple2<Long, IBatchRecord>>> buildStreamingSparkInputs(
 			final IAnalyticsContext context, 
 			final Optional<ProcessingTestSpecBean> maybe_test_spec,
 			final JavaStreamingContext streaming_context,
@@ -489,7 +491,7 @@ public class SparkTechnologyUtils {
 	{
 		final AnalyticThreadJobBean job = context.getJob().get();
 		
-		final Multimap<String, JavaDStream<JsonNode>> mutable_builder = HashMultimap.create();
+		final Multimap<String, JavaPairDStream<String, Tuple2<Long, IBatchRecord>>> mutable_builder = HashMultimap.create();
 		
 	    transformInputBean(Optionals.ofNullable(job.inputs()).stream(), maybe_test_spec)
 	    	.filter(job_input -> !exclude_names.contains(job_input.name()))
@@ -501,7 +503,7 @@ public class SparkTechnologyUtils {
 	    						com.ikanow.aleph2.distributed_services.utils.KafkaUtils.getProperties(), 
 	    						ImmutableSet.<String>builder().addAll(topics).build());
 	    		
-	    		mutable_builder.put(job_input.name(), k_stream.map(t2 -> _mapper.readTree(t2._2())));
+	    		mutable_builder.put(job_input.name(), k_stream.mapToPair(t2 -> Tuples._2T(t2._1(), Tuples._2T(0L, new BatchRecordUtils.JsonBatchRecord(_mapper.readTree(t2._2()))))));
 	    	});
 		
 		return mutable_builder;
