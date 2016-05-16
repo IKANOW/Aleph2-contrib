@@ -54,6 +54,7 @@ import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.count.CountRequestBuilder;
 import org.elasticsearch.action.delete.DeleteRequestBuilder;
 import org.elasticsearch.action.get.GetRequestBuilder;
+import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.index.IndexRequest.OpType;
@@ -175,11 +176,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 			return null == _hits
 					? Collections.emptyIterator()
 					: Arrays.stream(_hits.hits())
-						.<O>map(hit -> {
-							final Map<String, Object> src_fields = hit.getSource();
-							src_fields.computeIfAbsent(JsonUtils._ID, __ -> hit.getId());
-							return _object_mapper.convertValue(src_fields, _state.clazz);
-						})
+						.<O>map(hit -> createRecordFromSource(hit))
 						.iterator();
 		}
 
@@ -210,11 +207,34 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 							: BeanTemplateUtils.toJson(left));
 				});
 		
+		final Optional<String> maybe_preferred_index =
+				rw_context.<Optional<String>>either(
+						left -> Optional.of(left.indexContext().getWritableIndex(Optional.of(json_object.left().value()))),
+						right -> Optional.empty());
+		
+		// Get and remove some built-in fields if present
+		final Optional<String> maybe_id = json_object.<Optional<String>>either(json -> Optional.ofNullable(((ObjectNode)json).remove(JsonUtils._ID)).map(j -> j.asText()), json_str -> Optional.empty());
+		final Optional<String> maybe_type = json_object.<Optional<String>>either(json -> Optional.ofNullable(((ObjectNode)json).remove(ElasticsearchUtils._TYPE)).map(j -> j.asText()), json_str -> Optional.empty());
+
+		// For security reasons this needs to be a substring of the primary segment
+		final Optional<String> maybe_index = 
+				json_object.<Optional<String>>either(json -> Optional.ofNullable(((ObjectNode)json).remove(ElasticsearchUtils._INDEX)).map(j -> j.asText()), json_str -> Optional.empty())
+					.filter(index -> {
+						final String preferred_index = maybe_preferred_index.get(); // (exists by construction)
+						final int id_index = preferred_index.lastIndexOf("__");
+						if (id_index > 0) {
+							final String reqd_base = preferred_index.substring(0, id_index + 14); // 2 for __ + 12 for UUID
+							return index.startsWith(reqd_base);
+						}
+						else return false;
+					})
+					;
+		
 		return Optional
 				.of(rw_context.<IndexRequestBuilder>either(
 									left -> _state.client.prepareIndex(
-										left.indexContext().getWritableIndex(Optional.of(json_object.left().value())),
-										left.typeContext().getWriteType())
+										maybe_index.orElseGet(() -> maybe_preferred_index.get()), //(exists by construction)
+										maybe_type.orElseGet(() -> left.typeContext().getWriteType()))
 									, 
 									right ->_state.client.prepareIndex(right._1(), right._2()))
 					.setOpType(replace_if_present ? OpType.INDEX : OpType.CREATE)
@@ -222,10 +242,40 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 					.setRefresh(!bulk && CreationPolicy.OPTIMIZED != _state.creation_policy)
 					.setSource(json_object.<String>either(left -> left.toString(), right -> right._2()))
 						)
-				.map(i -> json_object.<IndexRequestBuilder>either(left -> left.has(JsonUtils._ID) ? i.setId(left.get(JsonUtils._ID).asText()) : i, right -> i.setId(right._1())))
+				.map(i -> json_object.<IndexRequestBuilder>either(left -> maybe_id.map(id -> i.setId(id)).orElse(i), right -> i.setId(right._1())))
 				//DEBUG
 				//.map(irb -> { System.out.println("REQUEST INDICES = " + Arrays.toString(irb.request().indices())); return irb; })
 				.get();		
+	}
+	
+	/** Creates a record from the source object
+	 * @param sr
+	 * @return
+	 */
+	private O createRecordFromSource(final SearchHit sr) {
+		final Map<String, Object> src_fields = sr.getSource();		
+		src_fields.computeIfAbsent(JsonUtils._ID, __ -> sr.getId());
+		// (these get discard unless we're grabbing the raw JSON)
+		if (JsonNode.class.isAssignableFrom(_state.clazz)) {
+			src_fields.computeIfAbsent(ElasticsearchUtils._INDEX, __ -> sr.getIndex());
+			src_fields.computeIfAbsent(ElasticsearchUtils._TYPE, __ -> sr.getType());
+		}
+		return _object_mapper.convertValue(src_fields, _state.clazz);
+	}
+
+	/** Creates a record from the source object
+	 * @param sr
+	 * @return
+	 */
+	private O createRecordFromSource(final GetResponse sr) {
+		final Map<String, Object> src_fields = sr.getSource();		
+		src_fields.computeIfAbsent(JsonUtils._ID, __ -> sr.getId());
+		// (these get discard unless we're grabbing the raw JSON)
+		if (JsonNode.class.isAssignableFrom(_state.clazz)) {
+			src_fields.computeIfAbsent(ElasticsearchUtils._INDEX, __ -> sr.getIndex());
+			src_fields.computeIfAbsent(ElasticsearchUtils._TYPE, __ -> sr.getType());
+		}
+		return _object_mapper.convertValue(src_fields, _state.clazz);
 	}
 	
 	/** Utility function for deleting an object
@@ -246,11 +296,33 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 							: BeanTemplateUtils.toJson(left));
 				});
 		
+		final Optional<String> maybe_preferred_index =
+				rw_context.<Optional<String>>either(
+						left -> Optional.of(left.indexContext().getWritableIndex(Optional.of(json_object.left().value()))),
+						right -> Optional.empty());
+		
+		// Get and remove some built-in fields if present
+		final Optional<String> maybe_type = json_object.<Optional<String>>either(json -> Optional.ofNullable(((ObjectNode)json).get(ElasticsearchUtils._TYPE)).map(j -> j.asText()), json_str -> Optional.empty());
+
+		// For security reasons this needs to be a substring of the primary segment
+		final Optional<String> maybe_index = 
+				json_object.<Optional<String>>either(json -> Optional.ofNullable(((ObjectNode)json).get(ElasticsearchUtils._INDEX)).map(j -> j.asText()), json_str -> Optional.empty())
+					.filter(index -> {
+						final String preferred_index = maybe_preferred_index.get(); // (exists by construction)
+						final int id_index = preferred_index.lastIndexOf("__");
+						if (id_index > 0) {
+							final String reqd_base = preferred_index.substring(0, id_index + 14); // 2 for __ + 12 for UUID
+							return index.startsWith(reqd_base);
+						}
+						else return false;
+					})
+					;
+		
 		return Optional
 				.of(rw_context.<DeleteRequestBuilder>either(
 									left -> _state.client.prepareDelete()
-										.setIndex(left.indexContext().getWritableIndex(Optional.of(json_object.left().value())))
-										.setType(left.typeContext().getWriteType())
+										.setIndex(maybe_index.orElseGet(() -> maybe_preferred_index.get())) //(exists by construction)
+										.setType(maybe_type.orElseGet(() -> left.typeContext().getWriteType()))
 									, 
 									right ->_state.client.prepareDelete().setIndex(right._1()).setType(right._2())
 									)
@@ -575,9 +647,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				final SearchHit[] sh = sr.getHits().hits();
 				
 				if (sh.length > 0) {
-					final Map<String, Object> src_fields = sh[0].getSource();
-					src_fields.computeIfAbsent(JsonUtils._ID, __ -> sh[0].getId());
-					return Optional.ofNullable(_object_mapper.convertValue(src_fields, _state.clazz));
+					return Optional.ofNullable(createRecordFromSource(sh[0]));
 				}
 				else {
 					return Optional.empty();
@@ -640,8 +710,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 				
 				return ElasticsearchFutureUtils.wrap(srb.execute(), sr -> {
 					if (sr.isExists()) {
-						final Map<String, Object> src_fields = sr.getSource();					
-						return Optional.ofNullable(_object_mapper.convertValue(src_fields, _state.clazz));
+						return Optional.ofNullable(createRecordFromSource(sr));
 					}
 					else {
 						return Optional.empty();
@@ -1201,7 +1270,10 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 		private String getPossibleDeletionRequest(final O object, final boolean is_replace_mode) {
 			if (is_replace_mode && ObjectNode.class.isAssignableFrom(object.getClass())) {
 				final ObjectNode j = (ObjectNode) object;
-				if (1 == j.size()) { // ie empty... apart from...
+				if ((1 == j.size()) || 
+						((j.size() == 2) && (j.has(ElasticsearchUtils._INDEX) || j.has(ElasticsearchUtils._TYPE))) ||
+						((j.size() == 3) && j.has(ElasticsearchUtils._INDEX) && j.has(ElasticsearchUtils._TYPE)))
+				{ // ie empty... apart from system fields, eg...
 					final JsonNode _id = j.get(JsonUtils._ID);
 					if ((null != _id) && _id.isTextual()) {  // ... an _id
 						return _id.asText();

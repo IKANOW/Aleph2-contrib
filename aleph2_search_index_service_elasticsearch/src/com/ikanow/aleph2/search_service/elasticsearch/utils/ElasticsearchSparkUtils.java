@@ -38,6 +38,7 @@ import com.ikanow.aleph2.data_model.utils.BeanTemplateUtils;
 import com.ikanow.aleph2.data_model.utils.BucketUtils;
 import com.ikanow.aleph2.data_model.utils.ErrorUtils;
 import com.ikanow.aleph2.data_model.utils.SetOnce;
+import com.ikanow.aleph2.search_service.elasticsearch.hadoop.assets.Aleph2EsInputFormat;
 import com.ikanow.aleph2.shared.crud.elasticsearch.data_model.ElasticsearchContext;
 
 import fj.data.Either;
@@ -110,6 +111,9 @@ public class ElasticsearchSparkUtils {
 				final Map<String, String> es_options = 
 						ImmutableMap.<String, String>of(
 								"es.index.read.missing.as.empty", "yes"
+								,
+								"es.read.metadata", "true",
+								"es.read.metadata.field", Aleph2EsInputFormat.ALEPH2_META_FIELD								
 								,
 								"es.resource", final_index + "/" + type_resource								
 								);

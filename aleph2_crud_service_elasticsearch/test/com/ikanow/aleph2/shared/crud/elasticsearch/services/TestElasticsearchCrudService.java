@@ -15,6 +15,8 @@
  *******************************************************************************/
 package com.ikanow.aleph2.shared.crud.elasticsearch.services;
 
+//TODO: need to write test cases for index/type setting
+
 import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
@@ -813,7 +815,7 @@ public class TestElasticsearchCrudService {
 		//DEBUG
 		//sysOut(mapper.convertToDbObject(obj2b.get().get()).toString());
 		
-		assertEquals("{\"test_long\":3}", BeanTemplateUtils.toJson(obj2b.get().get()).toString());
+		assertEquals("{\"_id\":\"id3\",\"test_long\":3}", BeanTemplateUtils.toJson(obj2b.get().get()).toString());
 		
 		// 3) Get object by _id, doesn't exist
 		
@@ -1480,7 +1482,7 @@ public class TestElasticsearchCrudService {
 
 		final Future<Optional<JsonNode>> obj1 = service.getObjectById("id1");
 
-		assertEquals("{\"test_string\":\"test_string1\",\"_id\":\"id1\",\"test_long\":1}", obj1.get().get().toString());
+		assertEquals("{\"_index\":\"testjsonrepositorycalls\",\"_type\":\"test\",\"test_string\":\"test_string1\",\"_id\":\"id1\",\"test_long\":1}", obj1.get().get().toString());
 
 		// Multi object get
 		
@@ -1497,7 +1499,7 @@ public class TestElasticsearchCrudService {
 			
 			assertEquals(4, objs.size());
 			
-			assertEquals("{\"_id\":\"id4\",\"test_long\":4}", objs.get(0).toString());			
+			assertEquals("{\"_index\":\"testjsonrepositorycalls\",\"_type\":\"test\",\"_id\":\"id4\",\"test_long\":4}", objs.get(0).toString());			
 		} 
 		catch (Exception e) {
 			//DEBUG

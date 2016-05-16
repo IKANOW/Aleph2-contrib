@@ -113,6 +113,9 @@ public class ElasticsearchHadoopUtils {
 				
 				_mutable_output.put("es.resource", final_index + "/" + type_resource);  
 								
+				_mutable_output.put("es.read.metadata", "true");							
+				_mutable_output.put("es.read.metadata.field", Aleph2EsInputFormat.ALEPH2_META_FIELD);
+				
 				_mutable_output.put("es.index.read.missing.as.empty", "yes");
 				
 				_mutable_output.put("es.query",

@@ -50,6 +50,9 @@ public class ElasticsearchUtils {
 
 	final public static EnumSet<Operator> _RANGE_OP = EnumSet.of(Operator.range_open_open, Operator.range_open_closed, Operator.range_closed_closed, Operator.range_closed_open);
 	
+	final public static String _INDEX = "_index";
+	final public static String _TYPE = "_type";
+	
 	//TOOD: put map comparison in here?
 	
 	//TODO: put code to check if the mapping supports _id ranges in here?

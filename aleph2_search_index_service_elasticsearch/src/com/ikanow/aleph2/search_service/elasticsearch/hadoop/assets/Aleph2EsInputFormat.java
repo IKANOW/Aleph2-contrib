@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 
 
 
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.io.Text;
@@ -58,12 +59,14 @@ import scala.Tuple2;
 
 
 
+
 import com.ikanow.aleph2.core.shared.utils.BatchRecordUtils;
 import com.ikanow.aleph2.data_model.interfaces.data_analytics.IBatchRecord;
 import com.ikanow.aleph2.data_model.utils.JsonUtils;
 import com.ikanow.aleph2.data_model.utils.Lambdas;
 import com.ikanow.aleph2.data_model.utils.Tuples;
 import com.ikanow.aleph2.search_service.elasticsearch.utils.JsonNodeWritableUtils;
+import com.ikanow.aleph2.shared.crud.elasticsearch.utils.ElasticsearchUtils;
 
 /** Aleph2 overlay that converts Text/MapWritable into the format required by BatchEnrichmentModule
  * Removes the generics parameters because we're going to transform them en-route, and this makes it easier
@@ -74,6 +77,10 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 	/** ,,-separated list of <,-separated-indexes>/<,-separated-types>
 	 */
 	public static final String ALEPH2_RESOURCE = "aleph2.es.resource";	
+	
+	/** The temp field name for the metadata before it's copied into the main object
+	 */
+	public static final String ALEPH2_META_FIELD = "__a2_esm";
 	
 	/** Copy of batch enrichment config param for hadoop, annoyingly has to be duplicated based on github docs
 	 *  (Note that is can be assigned independently using input_bean.config().record_limit_request())
@@ -176,6 +183,8 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		}
 
 		protected static final Text _ID = new Text(JsonUtils._ID);
+		protected static final Text _INDEX = new Text(ElasticsearchUtils._INDEX);
+		protected static final Text _TYPE = new Text(ElasticsearchUtils._TYPE);
 		
 		/* (non-Javadoc)
 		 * @see org.elasticsearch.hadoop.mr.EsInputFormat.ShardRecordReader#getCurrentValue()
@@ -184,8 +193,12 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		public Tuple2<Long, IBatchRecord> getCurrentValue() {
 			return Lambdas.wrap_u(() -> {
 				final MapWritable m = (MapWritable) _delegate.getCurrentValue();
-				// Add the _id
+				// Add the _id, _index, and _type
 				m.computeIfAbsent(_ID, Lambdas.wrap_u(k -> (Text) _delegate.getCurrentKey()));
+				Optional<MapWritable> maybe_meta = Optional.ofNullable(m.remove(ALEPH2_META_FIELD)).filter(w -> w instanceof MapWritable).map(w -> (MapWritable)w);
+				maybe_meta.map(mw -> mw.get(_INDEX)).ifPresent(index -> m.computeIfAbsent(_INDEX, k -> index));
+				maybe_meta.map(mw -> mw.get(_TYPE)).ifPresent(index -> m.computeIfAbsent(_TYPE, k -> index));
+				
 				return Tuples._2T(0L, (IBatchRecord)new BatchRecordUtils.JsonBatchRecord(JsonNodeWritableUtils.from(m)));
 			}).get();
 		}

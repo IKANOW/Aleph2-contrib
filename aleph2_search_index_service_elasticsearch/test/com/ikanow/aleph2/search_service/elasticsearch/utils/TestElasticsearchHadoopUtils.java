@@ -120,12 +120,12 @@ public class TestElasticsearchHadoopUtils {
 					Optional.of("misc_user:/bucket_path:" + BeanTemplateUtils.toJson(job_input).toString())).get();
 					
 			final Map<String, Object> res = access_context.getAccessConfig().get();
-			assertEquals(Arrays.asList("aleph2.batch.debugMaxSize", "es.index.read.missing.as.empty", "es.query", "es.resource"), res.keySet().stream().sorted().collect(Collectors.toList()));
+			assertEquals(Arrays.asList("aleph2.batch.debugMaxSize", "es.index.read.missing.as.empty", "es.query", "es.read.metadata", "es.read.metadata.field", "es.resource"), res.keySet().stream().sorted().collect(Collectors.toList()));
 			
 			assertEquals("r__" + BucketUtils.getUniqueSignature("/test", Optional.empty()) + "*/", res.get("es.resource"));
 			assertEquals("?q=*", res.get("es.query"));
 			assertEquals("yes", res.get("es.index.read.missing.as.empty"));
-			assertEquals("service_name=Aleph2EsInputFormat options={aleph2.batch.debugMaxSize=10, es.resource=r__test__f911f6d77ac9*/, es.index.read.missing.as.empty=yes, es.query=?q=*}", access_context.describe());
+			assertEquals("service_name=Aleph2EsInputFormat options={aleph2.batch.debugMaxSize=10, es.resource=r__test__f911f6d77ac9*/, es.read.metadata=true, es.read.metadata.field=__a2_esm, es.index.read.missing.as.empty=yes, es.query=?q=*}", access_context.describe());
 			assertEquals("10", res.get("aleph2.batch.debugMaxSize"));
 		}
 		
@@ -145,7 +145,7 @@ public class TestElasticsearchHadoopUtils {
 					ElasticsearchHadoopUtils.getInputFormat(_crud_factory.getClient(), job_input); // (doesn't matter what the input is here)
 			
 			final Map<String, Object> res = access_context.getAccessConfig().get();
-			assertEquals(Arrays.asList("es.index.read.missing.as.empty", "es.query", "es.resource"), res.keySet().stream().sorted().collect(Collectors.toList()));
+			assertEquals(Arrays.asList("es.index.read.missing.as.empty", "es.query", "es.read.metadata", "es.read.metadata.field", "es.resource"), res.keySet().stream().sorted().collect(Collectors.toList()));
 			
 			assertEquals("r__" + BucketUtils.getUniqueSignature("/test", Optional.empty()) + "*/data_object_test", res.get("es.resource"));
 			assertEquals("?q=*", res.get("es.query"));
@@ -171,7 +171,7 @@ public class TestElasticsearchHadoopUtils {
 					ElasticsearchHadoopUtils.getInputFormat(_crud_factory.getClient(), job_input); // (doesn't matter what the input is here)
 			
 			final Map<String, Object> res = access_context.getAccessConfig().get();
-			assertEquals(Arrays.asList("es.index.read.missing.as.empty", "es.query", "es.resource"), res.keySet().stream().sorted().collect(Collectors.toList()));
+			assertEquals(Arrays.asList("es.index.read.missing.as.empty", "es.query", "es.read.metadata", "es.read.metadata.field", "es.resource"), res.keySet().stream().sorted().collect(Collectors.toList()));
 			
 			assertEquals("r__" + BucketUtils.getUniqueSignature("/test2", Optional.empty()) + "*/", res.get("es.resource"));
 			assertEquals("?q=test", res.get("es.query"));
@@ -200,7 +200,7 @@ public class TestElasticsearchHadoopUtils {
 					ElasticsearchHadoopUtils.getInputFormat(_crud_factory.getClient(), job_input); // (doesn't matter what the input is here)
 			
 			final Map<String, Object> res = access_context.getAccessConfig().get();
-			assertEquals(Arrays.asList("es.index.read.missing.as.empty", "es.query", "es.resource"), res.keySet().stream().sorted().collect(Collectors.toList()));
+			assertEquals(Arrays.asList("es.index.read.missing.as.empty", "es.query", "es.read.metadata", "es.read.metadata.field", "es.resource"), res.keySet().stream().sorted().collect(Collectors.toList()));
 			
 			assertEquals("r__" + BucketUtils.getUniqueSignature("/test3", Optional.empty()) + "*/", res.get("es.resource"));
 			assertEquals("{\"test\":\"test2\"}", res.get("es.query"));
