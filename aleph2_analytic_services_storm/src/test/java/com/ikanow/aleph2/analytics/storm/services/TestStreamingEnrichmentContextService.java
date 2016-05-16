@@ -662,7 +662,7 @@ public class TestStreamingEnrichmentContextService {
 		//System.out.println(crud_check_index.getUnderlyingPlatformDriver(ElasticsearchContext.class, Optional.empty()).get().typeContext().getReadableTypeList());
 		
 		assertEquals(3, crud_check_index.countObjects().get().intValue());
-		assertEquals("{\"test\":\"test3\",\"extra\":\"test3_extra\"}", ((ObjectNode)
+		assertEquals("{\"_index\":\"test_object_emitting__60d498164924\",\"test\":\"test3\",\"extra\":\"test3_extra\",\"_type\":\"type_1\"}", ((ObjectNode)
 				crud_check_index.getObjectBySpec(CrudUtils.anyOf().when("test", "test3")).get().get()).remove(Arrays.asList("_id")).toString());
 		
 	}
