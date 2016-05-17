@@ -185,6 +185,7 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 		protected static final Text _ID = new Text(JsonUtils._ID);
 		protected static final Text _INDEX = new Text(ElasticsearchUtils._INDEX);
 		protected static final Text _TYPE = new Text(ElasticsearchUtils._TYPE);
+		protected static final Text ALEPH2_META_FIELD_TEXT = new Text(ALEPH2_META_FIELD);
 		
 		/* (non-Javadoc)
 		 * @see org.elasticsearch.hadoop.mr.EsInputFormat.ShardRecordReader#getCurrentValue()
@@ -195,7 +196,7 @@ public class Aleph2EsInputFormat extends EsInputFormat { //<Text, MapWritable>
 				final MapWritable m = (MapWritable) _delegate.getCurrentValue();
 				// Add the _id, _index, and _type
 				m.computeIfAbsent(_ID, Lambdas.wrap_u(k -> (Text) _delegate.getCurrentKey()));
-				Optional<MapWritable> maybe_meta = Optional.ofNullable(m.remove(ALEPH2_META_FIELD)).filter(w -> w instanceof MapWritable).map(w -> (MapWritable)w);
+				final Optional<MapWritable> maybe_meta = Optional.ofNullable(m.remove(ALEPH2_META_FIELD_TEXT)).filter(w -> w instanceof MapWritable).map(w -> (MapWritable)w);
 				maybe_meta.map(mw -> mw.get(_INDEX)).ifPresent(index -> m.computeIfAbsent(_INDEX, k -> index));
 				maybe_meta.map(mw -> mw.get(_TYPE)).ifPresent(index -> m.computeIfAbsent(_TYPE, k -> index));
 				
