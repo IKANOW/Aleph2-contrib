@@ -222,6 +222,7 @@ public class ElasticsearchCrudService<O> implements ICrudService<O> {
 					.filter(index -> {
 						final String preferred_index = maybe_preferred_index.get(); // (exists by construction)
 						final int id_index = preferred_index.lastIndexOf("__");
+						
 						if (id_index > 0) {
 							final String reqd_base = preferred_index.substring(0, id_index + 14); // 2 for __ + 12 for UUID
 							return index.startsWith(reqd_base);

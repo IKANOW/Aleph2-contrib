@@ -273,6 +273,9 @@ public class TestElasticsearchCrudService {
 		
 		@SuppressWarnings("unchecked")
 		final ElasticsearchCrudService<TestBean>.ElasticsearchBatchSubsystem batch_service = service.getUnderlyingPlatformDriver(ElasticsearchBatchSubsystem.class, Optional.empty()).get();
+
+		@SuppressWarnings("unchecked")
+		final ElasticsearchCrudService<JsonNode>.ElasticsearchBatchSubsystem batch_service_raw = service.getRawService().getUnderlyingPlatformDriver(ElasticsearchBatchSubsystem.class, Optional.empty()).get();
 		
 		assertEquals(0, service.countObjects().get().intValue());		
 		
@@ -329,9 +332,10 @@ public class TestElasticsearchCrudService {
 			final TestBean retval3 = f_retval3.get().get();
 			
 			assertEquals("{\"_id\":\"_id_1\",\"test_string\":\"test_string_2\"}", BeanTemplateUtils.toJson(retval3).toString());		
-			
-			//4) add with no id
-			
+		}
+		//4) add with no id
+		String other_id = null;
+		{	
 			final TestBean test4 = new TestBean();
 			test4.test_string = "test_string_4";
 			
@@ -346,6 +350,31 @@ public class TestElasticsearchCrudService {
 			
 			assertTrue("Was assigned _id", retval4._id != null);
 			assertEquals("test_string_4", retval4.test_string);
+			
+			other_id = retval4._id;
+		}
+		// 5) delete test
+		{
+			final TestBean test_del = new TestBean();
+			test_del._id = "_id_1";
+			
+			batch_service.storeObject(test_del, true);
+			Thread.sleep(3000L);
+			
+			// Won't delete because it's not an ObjectNode, which is the only thing you can delete
+			assertEquals(2, service.countObjects().get().intValue());
+			
+			final JsonNode jn_test_del = BeanTemplateUtils.configureMapper(Optional.empty()).createObjectNode().put("_id", test_del._id);
+			batch_service_raw.storeObject(jn_test_del, true);
+			Thread.sleep(3000L);
+			
+			assertEquals(1, service.countObjects().get().intValue());
+			
+			final JsonNode jn_test_del2 = BeanTemplateUtils.configureMapper(Optional.empty()).createObjectNode().put("_id", other_id).put("_index", "testCreateSingleObject").put("_type", "test");
+			batch_service_raw.storeObject(jn_test_del2, true);
+			Thread.sleep(3000L);
+			
+			assertEquals(0, service.countObjects().get().intValue());			
 		}
 	}
 	
@@ -430,78 +459,139 @@ public class TestElasticsearchCrudService {
 		final ElasticsearchCrudService<JsonNode> service = getTestService("testCreateMultipleObjects_json", TestBean.class).getRawService();
 		
 		// 1) Insertion without ids
-		
-		assertEquals(0, service.countObjects().get().intValue());		
-		
-		final List<JsonNode> l = IntStream.rangeClosed(1, 10).boxed()
-				.map(i -> BeanTemplateUtils.build(TestBean.class).with("test_string", "test_string" + i).done().get())
-				.map(o -> BeanTemplateUtils.toJson(o))
-				.collect(Collectors.toList());
-
-		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result = service.storeObjects(l);
-		result.get();
-		
-		assertEquals(10, service.countObjects().get().intValue());		
-		assertEquals((Long)(long)10, result.get()._2().get());
-		
-		final List<Object> ids = result.get()._1().get();
-		assertEquals(10, ids.size());
-		IntStream.rangeClosed(1, 10).boxed().map(i -> Tuples._2T(i, ids.get(i-1)))
-					.forEach(Lambdas.wrap_consumer_u(io -> {
-						final Optional<JsonNode> tb = service.getObjectById(io._2()).get();
-						assertTrue("TestBean should be present: " + io, tb.isPresent());
-						assertEquals("test_string" + io._1(), tb.get().get("test_string").asText());
-					}));
-		
+		{
+			assertEquals(0, service.countObjects().get().intValue());		
+			
+			final List<JsonNode> l = IntStream.rangeClosed(1, 10).boxed()
+					.map(i -> BeanTemplateUtils.build(TestBean.class).with("test_string", "test_string" + i).done().get())
+					.map(o -> BeanTemplateUtils.toJson(o))
+					.collect(Collectors.toList());
+	
+			final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result = service.storeObjects(l);
+			result.get();
+			
+			assertEquals(10, service.countObjects().get().intValue());		
+			assertEquals((Long)(long)10, result.get()._2().get());
+			
+			final List<Object> ids = result.get()._1().get();
+			assertEquals(10, ids.size());
+			IntStream.rangeClosed(1, 10).boxed().map(i -> Tuples._2T(i, ids.get(i-1)))
+						.forEach(Lambdas.wrap_consumer_u(io -> {
+							final Optional<JsonNode> tb = service.getObjectById(io._2()).get();
+							assertTrue("TestBean should be present: " + io, tb.isPresent());
+							assertEquals("test_string" + io._1(), tb.get().get("test_string").asText());
+						}));
+		}		
 		// 2) Insertion with ids
-		
-		service.deleteDatastore().get();
-
-		final List<JsonNode> l2 = IntStream.rangeClosed(51, 100).boxed()
-								.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done().get())
-								.map(o -> BeanTemplateUtils.toJson(o))
-								.collect(Collectors.toList());
-				
-		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_2 = service.storeObjects(l2);
-		result_2.get();
-		
-		assertEquals(50, service.countObjects().get().intValue());		
-		assertEquals(50, result_2.get()._2().get().intValue());
+		{
+			service.deleteDatastore().get();
+	
+			final List<JsonNode> l2 = IntStream.rangeClosed(51, 100).boxed()
+									.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string" + i).done().get())
+									.map(o -> BeanTemplateUtils.toJson(o))
+									.collect(Collectors.toList());
+					
+			final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_2 = service.storeObjects(l2);
+			result_2.get();
+			
+			assertEquals(50, service.countObjects().get().intValue());		
+			assertEquals(50, result_2.get()._2().get().intValue());
+		}
 		
 		// 4) Insertion with dups - fail on insert dups
-		
-		final List<JsonNode> l4 = IntStream.rangeClosed(21, 120).boxed()
-				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string2" + i).done().get())
-				.map(o -> BeanTemplateUtils.toJson(o))
-				.collect(Collectors.toList());
-		
-		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_4 = service.storeObjects(l4); // (defaults to adding true)
-		result_4.get();
-
-		try {
-			assertEquals(50, result_4.get()._2().get().intValue());
-			assertEquals(100, service.countObjects().get().intValue());					
-		}
-		catch (Exception e) {}
-		
-		// 5) Insertion with dups - overwrite 
-		
-		final List<JsonNode> l5 = IntStream.rangeClosed(21, 120).boxed()
-				.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string5" + i).done().get())
-				.map(o -> BeanTemplateUtils.toJson(o))
-				.collect(Collectors.toList());
-		
-		final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_5 = service.storeObjects(l5, true); // (defaults to adding true)
-		result_5.get();
-
-		try {
-			assertEquals(100, result_5.get()._2().get().intValue());
-			assertEquals(100, service.countObjects().get().intValue());					
+		{
+			final List<JsonNode> l4 = IntStream.rangeClosed(21, 120).boxed()
+					.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string2" + i).done().get())
+					.map(o -> BeanTemplateUtils.toJson(o))
+					.collect(Collectors.toList());
 			
-			assertEquals(100, service.countObjectsBySpec(CrudUtils.allOf().rangeAbove("test_string", "test_string5", true)).get().intValue());
+			final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_4 = service.storeObjects(l4); // (defaults to adding true)
+			result_4.get();
+	
+			try {
+				assertEquals(50, result_4.get()._2().get().intValue());
+				assertEquals(100, service.countObjects().get().intValue());					
+			}
+			catch (Exception e) {}
+		}		
+		// 5) Insertion with dups - overwrite 
+		{
+			final List<JsonNode> l5 = IntStream.rangeClosed(21, 120).boxed()
+					.map(i -> BeanTemplateUtils.build(TestBean.class).with("_id", "id" + i).with("test_string", "test_string5" + i).done().get())
+					.map(o -> BeanTemplateUtils.toJson(o))
+					.collect(Collectors.toList());
+			
+			final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result_5 = service.storeObjects(l5, true); // (defaults to adding true)
+			result_5.get();
+	
+			try {
+				assertEquals(100, result_5.get()._2().get().intValue());
+				assertEquals(100, service.countObjects().get().intValue());					
+				
+				assertEquals(100, service.countObjectsBySpec(CrudUtils.allOf().rangeAbove("test_string", "test_string5", true)).get().intValue());
+			}
+			catch (Exception e) {}
+		}		
+		// 6) Do some testing of overridding _index and _type
+		{
+			final ElasticsearchCrudService<JsonNode> service_overrides = getTestService("testcreatemultipleobjects_json_overrides__0123456789ab", TestBean.class).getRawService();
+			final ElasticsearchCrudService<JsonNode> service_overrides_1 = getTestService("testcreatemultipleobjects_json_overrides__0123456789ab_1", TestBean.class).getRawService();
+
+			final JsonNode j1 = BeanTemplateUtils.configureMapper(Optional.empty()).createObjectNode()
+									.put("test_string", "j1")
+									.put("_id", "alex")
+									.put("_index", "testcreatemultipleobjects_json_overrides__0123456789ax") // (will fail because uui doens't match)
+									.put("_type", "test")
+									;
+			final JsonNode j2 = BeanTemplateUtils.configureMapper(Optional.empty()).createObjectNode()
+									.put("test_string", "j2")
+									//(no _id, _type)
+									.put("_index", "testcreatemultipleobjects_json_overrides__0123456789ab_1")
+									;
+
+			final JsonNode j3 = BeanTemplateUtils.configureMapper(Optional.empty()).createObjectNode()
+									.put("test_string", "j3")
+									//(no _id, _type)
+									.put("_index", "testcreatemultipleobjects_json_overrides") // (no __, will be ignored)
+									;
+			
+			final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result = service_overrides.storeObjects(Arrays.asList(j1, j2, j3));
+			assertEquals(3L, result.get()._2().get().longValue());
+			
+			assertEquals(2L, service_overrides.countObjects().get().intValue());
+			assertEquals(1L, service_overrides_1.countObjectsBySpec(CrudUtils.allOf()).get().intValue());
 		}
-		catch (Exception e) {}
+		// (same but no __ so will be ignored)
+		{
+			final ElasticsearchCrudService<JsonNode> service_overrides = getTestService("testcreatemultipleobjects_json_overrides", TestBean.class).getRawService();
+			final ElasticsearchCrudService<JsonNode> service_overrides_1 = getTestService("testcreatemultipleobjects_json_overrides_1", TestBean.class).getRawService();
+
+			final JsonNode j1 = BeanTemplateUtils.configureMapper(Optional.empty()).createObjectNode()
+									.put("test_string", "j1")
+									.put("_id", "alex")
+									.put("_index", "testcreatemultipleobjects_json_overrides") 
+									.put("_type", "test")
+									;
+			final JsonNode j2 = BeanTemplateUtils.configureMapper(Optional.empty()).createObjectNode()
+									.put("test_string", "j2")
+									//(no _id, _type)
+									.put("_index", "testcreatemultipleobjects_json_overrides_1") //(no __, ignored)
+									;
+
+			final JsonNode j3 = BeanTemplateUtils.configureMapper(Optional.empty()).createObjectNode()
+									.put("test_string", "j3")
+									//(no _id, _type)
+									.put("_index", "testcreatemultipleobjects_json_overrides") // (no __, will be ignored)
+									;
+			
+			final Future<Tuple2<Supplier<List<Object>>, Supplier<Long>>> result = service_overrides.storeObjects(Arrays.asList(j1, j2, j3));
+			assertEquals(3L, result.get()._2().get().longValue());
+			
+			assertEquals(3L, service_overrides.countObjects().get().intValue());
+			assertEquals(0L, service_overrides_1.countObjectsBySpec(CrudUtils.allOf()).get().intValue());
+		}
 		
+		//TODO: same for object deletion
 	}
 
 	
