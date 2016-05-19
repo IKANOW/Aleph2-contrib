@@ -2688,6 +2688,76 @@
             }
           },
           "children": []
+        },
+        {
+          "root": false,
+          "label": "Validation Functions",
+          "element": {
+            "enabled": true,
+            "short_name": "Validation Functions",
+            "summary": "",
+            "row": 3,
+            "col": 3,
+            "sizeX": 1,
+            "sizeY": 1,
+            "expandable": false,
+            "configurable": true,
+            "deletable": true,
+            "form_model": {
+              "pre_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n    a2_must_edit(template, errs);\n}",
+              "post_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+            },
+            "template": {
+              "display_name": "Validation Functions",
+              "form_info": "<p>Write functions to validate the fields of the forms</p>\n<p>validation_function runs before the element's children; post_validation_function runs afterwards</p>",
+              "filters": [
+                "Template/template_builder"
+              ],
+              "expandable": false,
+              "key": "local_function",
+              "categories": [
+                "Developer"
+              ],
+              "schema": [
+                {
+                  "key": "pre_fn",
+                  "type": "code_input",
+                  "templateOptions": {
+                    "label": "Validation Function",
+                    "codemirror": {
+                      "lineNumbers": true,
+                      "smartIndent": true,
+                      "mode": "javascript"
+                    }
+                  }
+                },
+                {
+                  "key": "post_fn",
+                  "type": "code_input",
+                  "defaultValue": "{\n}",
+                  "templateOptions": {
+                    "label": "Post Validation Function",
+                    "codemirror": {
+                      "lineNumbers": true,
+                      "smartIndent": true,
+                      "mode": "javascript"
+                    }
+                  }
+                }
+              ],
+              "default_model": {
+                "pre_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}",
+                "post_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+              },
+              "building_function": {
+                "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n \tcurr_obj.validation_function = {'$fn': template.element.form_model.pre_fn};\n \tcurr_obj.post_validation_function = {'$fn': template.element.form_model.post_fn}; \n}"
+              },
+              "post_building_function": {
+                "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+              }
+            }
+          },
+          "children": []
         }
       ]
     },
@@ -5280,6 +5350,76 @@
               },
               "building_function": {
                 "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n curr_obj.schema.push({template: template.element.form_model.html}); \n}"
+              },
+              "post_building_function": {
+                "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+              }
+            }
+          },
+          "children": []
+        },
+        {
+          "root": false,
+          "label": "Validation Functions",
+          "element": {
+            "enabled": true,
+            "short_name": "Validation Functions",
+            "summary": "",
+            "row": 3,
+            "col": 3,
+            "sizeX": 1,
+            "sizeY": 1,
+            "expandable": false,
+            "configurable": true,
+            "deletable": true,
+            "form_model": {
+              "pre_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n    a2_must_edit(template, errs);\n}",
+              "post_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+            },
+            "template": {
+              "display_name": "Validation Functions",
+              "form_info": "<p>Write functions to validate the fields of the forms</p>\n<p>validation_function runs before the element's children; post_validation_function runs afterwards</p>",
+              "filters": [
+                "Template/template_builder"
+              ],
+              "expandable": false,
+              "key": "local_function",
+              "categories": [
+                "Developer"
+              ],
+              "schema": [
+                {
+                  "key": "pre_fn",
+                  "type": "code_input",
+                  "templateOptions": {
+                    "label": "Validation Function",
+                    "codemirror": {
+                      "lineNumbers": true,
+                      "smartIndent": true,
+                      "mode": "javascript"
+                    }
+                  }
+                },
+                {
+                  "key": "post_fn",
+                  "type": "code_input",
+                  "defaultValue": "{\n}",
+                  "templateOptions": {
+                    "label": "Post Validation Function",
+                    "codemirror": {
+                      "lineNumbers": true,
+                      "smartIndent": true,
+                      "mode": "javascript"
+                    }
+                  }
+                }
+              ],
+              "default_model": {
+                "pre_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}",
+                "post_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+              },
+              "building_function": {
+                "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n \tcurr_obj.validation_function = {'$fn': template.element.form_model.pre_fn};\n \tcurr_obj.post_validation_function = {'$fn': template.element.form_model.post_fn}; \n}"
               },
               "post_building_function": {
                 "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
@@ -8059,6 +8199,76 @@
               },
               "building_function": {
                 "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  var obj = { templateOptions: {} };\n  obj.type = template.element.form_model.type; \n  obj.key = template.element.form_model.key;\n  obj.templateOptions.required = (true === template.element.form_model.required);\n  obj.templateOptions.label = template.element.short_name;\n  obj.templateOptions.options = template.element.form_model.options;\n  curr_obj.schema.push(obj)\n}"
+              },
+              "post_building_function": {
+                "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+              }
+            }
+          },
+          "children": []
+        },
+        {
+          "root": false,
+          "label": "Validation Functions",
+          "element": {
+            "enabled": true,
+            "short_name": "Validation Functions",
+            "summary": "",
+            "row": 4,
+            "col": 3,
+            "sizeX": 1,
+            "sizeY": 1,
+            "expandable": false,
+            "configurable": true,
+            "deletable": true,
+            "form_model": {
+              "pre_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n    a2_must_edit(template, errs);\n}",
+              "post_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+            },
+            "template": {
+              "display_name": "Validation Functions",
+              "form_info": "<p>Write functions to validate the fields of the forms</p>\n<p>validation_function runs before the element's children; post_validation_function runs afterwards</p>",
+              "filters": [
+                "Template/template_builder"
+              ],
+              "expandable": false,
+              "key": "local_function",
+              "categories": [
+                "Developer"
+              ],
+              "schema": [
+                {
+                  "key": "pre_fn",
+                  "type": "code_input",
+                  "templateOptions": {
+                    "label": "Validation Function",
+                    "codemirror": {
+                      "lineNumbers": true,
+                      "smartIndent": true,
+                      "mode": "javascript"
+                    }
+                  }
+                },
+                {
+                  "key": "post_fn",
+                  "type": "code_input",
+                  "defaultValue": "{\n}",
+                  "templateOptions": {
+                    "label": "Post Validation Function",
+                    "codemirror": {
+                      "lineNumbers": true,
+                      "smartIndent": true,
+                      "mode": "javascript"
+                    }
+                  }
+                }
+              ],
+              "default_model": {
+                "pre_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}",
+                "post_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+              },
+              "building_function": {
+                "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n \tcurr_obj.validation_function = {'$fn': template.element.form_model.pre_fn};\n \tcurr_obj.post_validation_function = {'$fn': template.element.form_model.post_fn}; \n}"
               },
               "post_building_function": {
                 "_fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"

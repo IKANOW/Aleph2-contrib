@@ -299,6 +299,12 @@
     },
     "post_building_function": {
       "$fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
+    },
+    "validation_function": {
+      "$fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n    a2_must_edit(template, errs);\n}"
+    },
+    "post_validation_function": {
+      "$fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
     }
   },
   {
@@ -607,6 +613,12 @@
     },
     "post_building_function": {
       "$fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  var lib_map = {}; var curr_job = curr_obj.jobs[curr_obj.jobs.length-1]; \n  for ( var e in curr_job.config.enrich_pipeline ) { \n    if (curr_job.config.enrich_pipeline[e].module_name_or_id) {\n      lib_map[curr_job.config.enrich_pipeline[e].module_name_or_id] = true;\n    }\n    for ( l in curr_job.config.enrich_pipeline[e].library_names_or_ids ) { \n      lib_map[curr_job.config.enrich_pipeline[e].library_names_or_ids[l]] = true;\n    }\n  } \n  curr_job.library_names_or_ids = [];\n  var libs = (template.element.form_model.library_names_or_ids || []); \n  for (var kk in libs) curr_job.library_names_or_ids.push(libs[kk]); \n  for (var k in lib_map) curr_job.library_names_or_ids.push(k); \n}"
+    },
+    "validation_function": {
+      "$fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n    a2_must_edit(template, errs);\n}"
+    },
+    "post_validation_function": {
+      "$fn": "function(errs, template, curr_obj, all_templates, root_obj, hierarchy, rows, cols) {\n  \n}"
     }
   }
 ]
