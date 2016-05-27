@@ -35,10 +35,10 @@ public class HadoopTechnologyOverrideBean implements Serializable {
 	 */
 	public Integer num_reducers() { return num_reducers; }
 
-	/** For jobs with mapping operations, determines whether to use the combiner or not (optional, defaults to true)
+	/** For jobs with mapping operations, determines whether to use the combiner or not (optional, defaults to false)
 	 * @return
 	 */
-	public  Boolean use_combiner() { return Optional.ofNullable(use_combiner).orElse(true); }
+	public  Boolean use_combiner() { return Optional.ofNullable(use_combiner).orElse(false); }
 	
 	/** Requests an optimal batch size for this job - NOTE not guaranteed to be granted
 	 * @return
