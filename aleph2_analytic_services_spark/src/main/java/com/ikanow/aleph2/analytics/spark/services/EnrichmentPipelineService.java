@@ -841,7 +841,11 @@ public class EnrichmentPipelineService implements Serializable {
 	 * @return
 	 */
 	private <T> Stream<Tuple2<T, Boolean>> createStream(final Iterator<T> it) {
-		return StreamUtils.unfold(it, itit -> {
+		return  !it.hasNext()
+		? 
+		Stream.empty()
+		: 
+		StreamUtils.unfold(it, itit -> {
 			return itit.hasNext() ? Optional.of(itit) : Optional.empty();
 		})
 		.map(itit -> Tuples._2T(itit.next(), !itit.hasNext()));		
