@@ -291,7 +291,7 @@ public class BeFileInputReader extends  RecordReader<String, Tuple2<Long, IBatch
 	private Path createArchivePath(Path currentPath) throws Exception {
 
 		final String timeGroupingFormat =
-				TimeUtils.getTimePeriod(Optionals.of(() -> _dataBucket.data_schema().storage_schema().processed().grouping_time_period()).orElse(""))
+				TimeUtils.getTimePeriod(Optionals.of(() -> _dataBucket.data_schema().storage_schema().raw().grouping_time_period()).orElse(""))
 				.validation(fail -> "", success -> TimeUtils.getTimeBasedSuffix(success,Optional.of(ChronoUnit.MINUTES)));
 		
 		final String timeGroup = timeGroupingFormat.isEmpty()
