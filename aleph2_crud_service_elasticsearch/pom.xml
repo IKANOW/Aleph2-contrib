@@ -114,6 +114,12 @@
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
+			<groupId>org.elasticsearch</groupId>
+			<artifactId>elasticsearch</artifactId>
+			<version>2.3.5</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
 			<groupId>org.apache.metamodel</groupId>
 			<artifactId>MetaModel-elasticsearch</artifactId>
 			<version>4.3.3</version>
