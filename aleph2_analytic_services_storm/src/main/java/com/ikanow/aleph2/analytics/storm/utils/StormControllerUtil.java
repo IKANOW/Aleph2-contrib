@@ -238,7 +238,7 @@ public class StormControllerUtil {
 						.filter(f -> !f.equals(""))
 						.collect(Collectors.toSet()));
 				
-				if (jars_to_merge.isEmpty()) { // special case: no aleph2 libs found, this is almost certainly because this is being run from eclipse...
+				if ( isOnlyHadoopDep(jars_to_merge)) { // special case: no aleph2 libs found, this is almost certainly because this is being run from eclipse...
 					final GlobalPropertiesBean globals = ModuleUtils.getGlobalProperties();
 					_logger.warn("WARNING: no library files found, probably because this is running from an IDE - instead taking all JARs from: " + (globals.local_root_dir() + "/lib/"));
 					try {
@@ -247,6 +247,9 @@ public class StormControllerUtil {
 								FileUtils.listFiles(new File(globals.local_root_dir() + "/lib/"), new String[] { "jar" }, false)
 									.stream()
 									.map(File::toString)
+									.filter(file -> {
+										return !(file.contains("aleph2_storm_dependencies") || file.contains("aleph2_analytical_services_storm")); //filter out storm jars because they have defaults.yaml in them which will fail job submission
+									})
 									.collect(Collectors.toList())
 									);
 					}
@@ -302,6 +305,21 @@ public class StormControllerUtil {
 		return submit_future;		
 	}
 	
+	/**
+	 * Checks if the jars to merge have no libs or only hadoop-commons,
+	 * this typically signs that the application is being run from eclipse rather than deployed
+	 * on a node.
+	 * 
+	 * @param jars_to_merge
+	 * @return
+	 */
+	private static boolean isOnlyHadoopDep(Set<String> jars_to_merge) {
+		if ( jars_to_merge.isEmpty() || 
+				(jars_to_merge.size() == 1 && jars_to_merge.stream().findFirst().get().contains("hadoop-common") ) )
+			return true;			
+		return false;
+	}
+
 	/**
 	 * Checks the jar cache to see if an entry already exists for this list of jars,
 	 * returns the path of that entry if it does exist, otherwise creates the jar, adds
